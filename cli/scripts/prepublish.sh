@@ -11,7 +11,7 @@ if [[ "$VERSION" == *-dev* || "$VERSION" == "0.0.0" ]]; then
 fi
 
 # Launcher + support code must be present.
-for f in bin/orbit.js lib/platform.mjs lib/resolve-binary.mjs lib/download.mjs scripts/postinstall.mjs; do
+for f in bin/index.js lib/platform.mjs lib/resolve-binary.mjs lib/download.mjs scripts/postinstall.sh; do
   if [[ ! -f "$f" ]]; then
     echo "ERROR: required file missing: $f" >&2
     exit 1

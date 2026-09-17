@@ -8,17 +8,17 @@ import { downloadRelease, releaseAssetUrl, verifySha256 } from "../lib/download.
 
 test("releaseAssetUrl builds the exact GitHub release asset URL", () => {
   assert.equal(
-    releaseAssetUrl("0.1.1", "orbit-macos-arm64.tar.gz"),
-    "https://github.com/frontal-labs/orbit/releases/download/v0.1.1/orbit-macos-arm64.tar.gz",
+    releaseAssetUrl("0.1.1", "frontal-code-macos-arm64.tar.gz"),
+    "https://github.com/frontal-labs/frontal-code/releases/download/v0.1.1/frontal-code-macos-arm64.tar.gz",
   );
   assert.equal(
-    releaseAssetUrl("1.2.3", "orbit-windows-x64.exe"),
-    "https://github.com/frontal-labs/orbit/releases/download/v1.2.3/orbit-windows-x64.exe",
+    releaseAssetUrl("1.2.3", "frontal-code-windows-x64.exe"),
+    "https://github.com/frontal-labs/frontal-code/releases/download/v1.2.3/frontal-code-windows-x64.exe",
   );
 });
 
 test("verifySha256 matches expected hex (case-insensitive)", () => {
-  const data = Buffer.from("orbit");
+  const data = Buffer.from("frontal-code");
   const hex = createHash("sha256").update(data).digest("hex");
   assert.equal(verifySha256(data, hex), true);
   assert.equal(verifySha256(data, hex.toUpperCase()), true);
@@ -34,7 +34,7 @@ test("downloadRelease refuses a release with no SHA-256 sidecar", async () => {
       : new Response(Buffer.from("binary"), { status: 200 });
   try {
     await assert.rejects(
-      downloadRelease({ version: "9.9.9", destDir: mkdtempSync(join(tmpdir(), "orbit-dl-")) }),
+      downloadRelease({ version: "9.9.9", destDir: mkdtempSync(join(tmpdir(), "frontal-code-dl-")) }),
       /No SHA-256 sidecar/,
       "an unverified binary must not be installed",
     );

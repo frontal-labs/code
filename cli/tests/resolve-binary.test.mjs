@@ -11,7 +11,7 @@ import {
   resolveBinary,
 } from "../lib/resolve-binary.mjs";
 
-function makeFakeBin(dir, name = "orbit") {
+function makeFakeBin(dir, name = "frontal-code") {
   const p = join(dir, name);
   writeFileSync(p, "#!/bin/sh\necho hi\n");
   chmodSync(p, 0o755);
@@ -19,7 +19,7 @@ function makeFakeBin(dir, name = "orbit") {
 }
 
 function withFakeRoot(fn) {
-  const root = mkdtempSync(join(tmpdir(), "orbit-"));
+  const root = mkdtempSync(join(tmpdir(), "frontal-code-"));
   __setPkgRootForTests(root);
   try {
     return fn(root);
@@ -29,7 +29,7 @@ function withFakeRoot(fn) {
   }
 }
 
-test("resolveVendoredBinary finds vendor/<target>/bin/orbit", () => {
+test("resolveVendoredBinary finds vendor/<target>/bin/frontal-code", () => {
   withFakeRoot((root) => {
     const { target, binName } = detectTarget();
     const vendored = join(root, "vendor", target, "bin");
@@ -39,7 +39,7 @@ test("resolveVendoredBinary finds vendor/<target>/bin/orbit", () => {
   });
 });
 
-test("resolveLocalBuild walks up to target/release/orbit", () => {
+test("resolveLocalBuild walks up to target/release/frontal-code", () => {
   withFakeRoot((root) => {
     const { binName } = detectTarget();
     const nested = join(root, "a", "b", "c");

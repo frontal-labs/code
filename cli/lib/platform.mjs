@@ -1,15 +1,15 @@
-// Platform detection and release-asset mapping for the Orbit CLI launcher.
+// Platform detection and release-asset mapping for the Frontal Code CLI launcher.
 //
 // This module maps the current Node platform/arch to the per-platform release
 // asset names produced by `.github/workflows/release.yml` (and consumed by
-// `homebrew/orbit.rb`). It deliberately has no side effects so it is unit
+// `homebrew/frontal-code.rb`). It deliberately has no side effects so it is unit
 // testable.
 
 export class UnsupportedPlatformError extends Error {
   constructor(platform, arch) {
     super(
       `Unsupported platform "${platform}/${arch}". ` +
-        `Orbit supports: macos-arm64, macos-x64, linux-x64, linux-arm64, windows-x64.`,
+        `Frontal Code supports: macos-arm64, macos-x64, linux-x64, linux-arm64, windows-x64.`,
     );
     this.name = "UnsupportedPlatformError";
     this.platform = platform;
@@ -19,7 +19,7 @@ export class UnsupportedPlatformError extends Error {
 
 // Map of "<platform>/<arch>" -> release asset descriptor.
 // `assetName` is the suffix used in the GitHub release asset
-// `orbit-<assetName>.tar.gz` (or `.exe` on Windows).
+// `frontal-code-<assetName>.tar.gz` (or `.exe` on Windows).
 const TARGETS = {
   "darwin/arm64": { target: "macos-arm64", ext: "tar.gz" },
   "darwin/x64": { target: "macos-x64", ext: "tar.gz" },
@@ -37,9 +37,9 @@ export function targetFor(platform, arch) {
   return {
     target: entry.target,
     ext: entry.ext,
-    assetName: `orbit-${entry.target}.${entry.ext}`,
+    assetName: `frontal-code-${entry.target}.${entry.ext}`,
     // Binary name inside vendor/ (and expected name of the native binary).
-    binName: platform === "win32" ? "orbit.exe" : "orbit",
+    binName: platform === "win32" ? "frontal-code.exe" : "frontal-code",
   };
 }
 

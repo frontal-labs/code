@@ -10,14 +10,14 @@ import { detectTarget, UnsupportedPlatformError } from "../lib/platform.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = resolve(__dirname, "..");
-const POSTINSTALL = join(PKG_ROOT, "scripts", "postinstall.mjs");
+const POSTINSTALL = join(PKG_ROOT, "scripts", "postinstall.sh");
 const SKIP = process.platform === "win32";
 
 // Run the real postinstall in a throwaway package copy with a fake vendored
 // binary, asserting dev-version + skip-env short-circuits without network.
-test("postinstall skips on ORBIT_SKIP_DOWNLOAD without touching network", { skip: SKIP }, () => {
+test("postinstall skips on FCODE_SKIP_DOWNLOAD without touching network", { skip: SKIP }, () => {
   const { target, binName } = detectTarget();
-  const fakeRoot = mkdtempSync(join(tmpdir(), "orbit-pi-"));
+  const fakeRoot = mkdtempSync(join(tmpdir(), "frontal-code-pi-"));
   try {
     const vendorDir = join(fakeRoot, "vendor", target, "bin");
     mkdirSync(vendorDir, { recursive: true });
@@ -28,12 +28,12 @@ test("postinstall skips on ORBIT_SKIP_DOWNLOAD without touching network", { skip
     // package.json with a dev version + a real vendored binary already present.
     writeFileSync(
       join(fakeRoot, "package.json"),
-      JSON.stringify({ name: "@frontal-labs/orbit", version: "0.0.0-dev" }),
+      JSON.stringify({ name: "@frontal-labs/frontal-code", version: "0.0.0-dev" }),
     );
 
-    const res = spawnSync("node", [POSTINSTALL], {
+    const res = spawnSync("bash", [POSTINSTALL], {
       cwd: fakeRoot,
-      env: { ...process.env, ORBIT_SKIP_DOWNLOAD: "1", PATH: process.env.PATH },
+      env: { ...process.env, FCODE_SKIP_DOWNLOAD: "1", PATH: process.env.PATH },
       encoding: "utf8",
     });
     assert.equal(res.status, 0);
@@ -44,13 +44,13 @@ test("postinstall skips on ORBIT_SKIP_DOWNLOAD without touching network", { skip
 });
 
 test("postinstall skips download for dev version (no network)", { skip: SKIP }, () => {
-  const fakeRoot = mkdtempSync(join(tmpdir(), "orbit-pi2-"));
+  const fakeRoot = mkdtempSync(join(tmpdir(), "frontal-code-pi2-"));
   try {
     writeFileSync(
       join(fakeRoot, "package.json"),
-      JSON.stringify({ name: "@frontal-labs/orbit", version: "0.0.0-dev" }),
+      JSON.stringify({ name: "@frontal-labs/frontal-code", version: "0.0.0-dev" }),
     );
-    const res = spawnSync("node", [POSTINSTALL], {
+    const res = spawnSync("bash", [POSTINSTALL], {
       cwd: fakeRoot,
       env: { ...process.env, PATH: process.env.PATH },
       encoding: "utf8",
@@ -63,16 +63,16 @@ test("postinstall skips download for dev version (no network)", { skip: SKIP }, 
 });
 
 test("postinstall fails gracefully (exit 0) when offline download fails", { skip: SKIP }, () => {
-  const fakeRoot = mkdtempSync(join(tmpdir(), "orbit-pi3-"));
+  const fakeRoot = mkdtempSync(join(tmpdir(), "frontal-code-pi3-"));
   try {
     // Real, non-dev version but no network: download will fail; must exit 0.
     writeFileSync(
       join(fakeRoot, "package.json"),
-      JSON.stringify({ name: "@frontal-labs/orbit", version: "9.9.9" }),
+      JSON.stringify({ name: "@frontal-labs/frontal-code", version: "9.9.9" }),
     );
-    const res = spawnSync("node", [POSTINSTALL], {
+    const res = spawnSync("bash", [POSTINSTALL], {
       cwd: fakeRoot,
-      env: { ...process.env, PATH: process.env.PATH, ORBIT_FORCE_DOWNLOAD: "1" },
+      env: { ...process.env, PATH: process.env.PATH, FCODE_FORCE_DOWNLOAD: "1" },
       encoding: "utf8",
       timeout: 15000,
     });

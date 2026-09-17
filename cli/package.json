@@ -1,32 +1,32 @@
 {
-  "name": "@frontal-labs/orbit",
+  "name": "@frontal-labs/frontal-code",
   "version": "0.0.0-dev",
-  "description": "Orbit CLI is a coding agent from Frontal that runs locally on your computer.",
+  "description": "Frontal Code CLI is a coding agent from Frontal that runs locally on your computer.",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/frontal-labs/orbit#readme",
+  "homepage": "https://github.com/frontal-labs/frontal-code#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/frontal-labs/orbit.git",
-    "directory": "orbit-cli"
+    "url": "git+https://github.com/frontal-labs/frontal-code.git",
+    "directory": "cli"
   },
   "bugs": {
-    "url": "https://github.com/frontal-labs/orbit/issues"
+    "url": "https://github.com/frontal-labs/frontal-code/issues"
   },
   "bin": {
-    "orbit": "bin/orbit.js"
+    "frontal-code": "bin/index.js"
   },
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "files": [
-    "bin/orbit.js",
+    "bin/index.js",
     "lib/**/*.mjs",
-    "scripts/postinstall.mjs",
+    "scripts/postinstall.sh",
     "README.md"
   ],
   "scripts": {
-    "postinstall": "node ./scripts/postinstall.mjs",
+    "postinstall": "./scripts/postinstall.sh",
     "build": "./scripts/build.sh",
     "download": "./scripts/download.sh",
     "test": "./scripts/test.sh",

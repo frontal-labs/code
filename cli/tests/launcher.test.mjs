@@ -1,14 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  rmSync,
-  chmodSync,
-  cpSync,
-} from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,13 +17,11 @@ const SKIP = process.platform === "win32";
 // passthrough without touching the real filesystem.
 test("launcher forwards argv and exit code to the resolved binary", { skip: SKIP }, () => {
   const { target, binName } = detectTarget();
-  const fakeRoot = mkdtempSync(join(tmpdir(), "orbit-launch-"));
+  const fakeRoot = mkdtempSync(join(tmpdir(), "frontal-code-launch-"));
   try {
-    // Copy package sources.
     cpSync(join(PKG_ROOT, "bin"), join(fakeRoot, "bin"), { recursive: true });
     cpSync(join(PKG_ROOT, "lib"), join(fakeRoot, "lib"), { recursive: true });
 
-    // Drop a fake vendored binary that echoes args and exits per first arg.
     const vendored = join(fakeRoot, "vendor", target, "bin");
     mkdirSync(vendored, { recursive: true });
     const fakeBin = join(vendored, binName);
@@ -40,7 +31,7 @@ test("launcher forwards argv and exit code to the resolved binary", { skip: SKIP
     );
     chmodSync(fakeBin, 0o755);
 
-    const launcher = join(fakeRoot, "bin", "orbit.js");
+    const launcher = join(fakeRoot, "bin", "index.js");
 
     const ok = spawnSync("node", [launcher, "hello", "world"], {
       encoding: "utf8",

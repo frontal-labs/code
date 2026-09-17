@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// Orbit CLI launcher.
+// Frontal Code CLI launcher.
 //
-// Resolves the native `orbit` binary (vendored download or local cargo build)
+// Resolves the native `frontal-code` binary (vendored download or local cargo build)
 // and execs it, forwarding argv, stdio, and signals. Dependency-free.
 
 import { spawn } from "node:child_process";
 import { resolveBinary } from "../lib/resolve-binary.mjs";
 
 function fail(message) {
-  process.stderr.write(`orbit: ${message}\n`);
+  process.stderr.write(`frontal-code: ${message}\n`);
   process.stderr.write(
     `\nIf this is unexpected, try:\n` +
-      `  npm rebuild @frontal-labs/orbit\n` +
+      `  npm rebuild @frontal-labs/frontal-code\n` +
       `  # or, inside the repo:\n` +
-      `  (cd orbit-cli && ./scripts/download.sh)\n`,
+      `  (cd cli && ./scripts/download.sh)\n`,
   );
   process.exit(1);
 }
@@ -21,9 +21,9 @@ function fail(message) {
 const binary = resolveBinary();
 if (!binary) {
   fail(
-    "native `orbit` binary not found.\n" +
+    "native `frontal-code` binary not found.\n" +
       "The postinstall step may have been skipped (offline/CI) or failed to download.\n" +
-      "Build it locally with `cargo build --release -p orbit-cli`, then re-run.",
+      "Build it locally with `cargo build --release -p frontal-code-cli`, then re-run.",
   );
 }
 

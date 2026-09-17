@@ -1,4 +1,4 @@
-// Downloads the native `orbit` binary from a GitHub release into vendor/.
+// Downloads the native `frontal-code` binary from a GitHub release into vendor/.
 //
 // Dependency-free: Node stdlib only, shelling out to `tar`/`shasum` on
 // macOS/Linux. Windows ships a raw `.exe` (no tarball, no sha), handled as a
@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 import { detectTarget, UnsupportedPlatformError } from "./platform.mjs";
 
 export const RELEASE_BASE =
-  "https://github.com/frontal-labs/orbit/releases/download";
+  "https://github.com/frontal-labs/frontal-code/releases/download";
 
 // Build the release asset URL for a given version + target descriptor.
 export function releaseAssetUrl(version, assetName) {
@@ -60,7 +60,7 @@ export async function fetchSha256(version, assetName) {
   }
 }
 
-// Extract a `.tar.gz` containing `bin/orbit` into `destDir/vendor/<target>/`.
+// Extract a `.tar.gz` containing `bin/frontal-code` into `destDir/vendor/<target>/`.
 // We shell out to `tar` because a from-scratch tar parser is unnecessary for
 // this single-archive use case and would add risk.
 function extractTarball(tarballPath, target, destDir) {
@@ -84,7 +84,7 @@ async function downloadTo({ version, destDir, log = () => {} }) {
       `No SHA-256 sidecar published for ${assetName}. Refusing to install an ` +
         `unverified binary. If this is a genuine release, report it as a ` +
         `packaging bug; otherwise build from source with ` +
-        `\`cargo build --release -p orbit-cli\`.`,
+        `\`cargo build --release -p frontal-code-cli\`.`,
     );
   }
   if (!verifySha256(buf, expected)) {
@@ -100,7 +100,7 @@ async function downloadTo({ version, destDir, log = () => {} }) {
     return binPath;
   }
 
-  const tmpTarball = join(destDir, ".orbit-download.tar.gz");
+  const tmpTarball = join(destDir, ".frontal-code-download.tar.gz");
   writeFileSync(tmpTarball, buf);
   try {
     extractTarball(tmpTarball, target, destDir);

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# scripts/build.sh — build the native `orbit` binary and place it where the
-# launcher (bin/orbit.js) expects it in dev: vendor/<target>/bin/orbit.
+# scripts/build.sh — build the native `frontal-code` binary and place it where the
+# launcher (bin/index.js) expects it in dev: vendor/<target>/bin/frontal-code.
 set -euo pipefail
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PKG_ROOT"
 
-# Repo root is two levels up (orbit-cli is a top-level package dir here, but the
+# Repo root is two levels up (cli is a top-level package dir here, but the
 # cargo workspace lives at the repo root one level up if nested; resolve both).
 REPO_ROOT_CANDIDATE="$(cd "$PKG_ROOT/.." && pwd)"
 if [[ -f "$REPO_ROOT_CANDIDATE/Cargo.toml" && -d "$REPO_ROOT_CANDIDATE/crates/cli" ]]; then
@@ -19,8 +19,8 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> Building orbit-cli with cargo (release)"
-( cd "$REPO_ROOT" && cargo build --release -p orbit-cli )
+echo "==> Building cli with cargo (release)"
+( cd "$REPO_ROOT" && cargo build --release -p cli )
 
 # Determine target triple dir name (mirror lib/platform.mjs: darwin/arm64 -> macos-arm64).
 OS="$(uname -s)"; ARCH="$(uname -m)"
@@ -36,8 +36,8 @@ case "$ARCH" in
 esac
 TARGET_DIR="$PLAT-$A"
 
-SRC="$REPO_ROOT/target/release/orbit"
-DEST="$PKG_ROOT/vendor/$TARGET_DIR/bin/orbit"
+SRC="$REPO_ROOT/target/release/frontal-code"
+DEST="$PKG_ROOT/vendor/$TARGET_DIR/bin/frontal-code"
 mkdir -p "$(dirname "$DEST")"
 cp "$SRC" "$DEST"
 chmod +x "$DEST"

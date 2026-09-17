@@ -1,10 +1,10 @@
-// Resolves the native `orbit` binary for the launcher.
+// Resolves the native `frontal-code` binary for the launcher.
 //
 // Resolution order:
 //   1. Vendored binary downloaded during postinstall:
-//      <pkgRoot>/vendor/<target>/bin/orbit(.exe)
+//      <pkgRoot>/vendor/<target>/bin/frontal-code(.exe)
 //   2. Local cargo build in the monorepo (dev/workspace case):
-//      walk up from <pkgRoot> looking for <repo>/target/release/orbit(.exe)
+//      walk up from <pkgRoot> looking for <repo>/target/release/frontal-code(.exe)
 //   3. Otherwise null (caller decides what to do).
 
 import { existsSync, statSync } from "node:fs";
@@ -14,7 +14,7 @@ import { detectTarget } from "./platform.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-// lib/ -> orbit-cli/
+// lib/ -> cli/
 export const PKG_ROOT = resolve(__dirname, "..");
 
 // Allow tests to override the package root without touching the filesystem.

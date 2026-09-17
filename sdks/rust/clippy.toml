@@ -1,0 +1,3 @@
+# Clippy configuration for the Frontal Code Rust SDK (frontal-code-sdk).
+# Resolved by `cargo clippy` for the crate.
+msrv = "1.80.0"

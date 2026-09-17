@@ -1,0 +1,21 @@
+package(default_visibility = ["//visibility:public"])
+
+# Aggregate of the Frontal Code SDK packages so `bazel test //sdks:all` exercises
+# both the TypeScript and Rust SDKs.
+filegroup(
+    name = "all_sdks",
+    srcs = [
+        "//sdks/typescript:typescript_sdk_srcs",
+        "//sdks/rust:rust_sdk_srcs",
+    ],
+)
+
+alias(
+    name = "typescript",
+    actual = "//sdks/typescript:test",
+)
+
+alias(
+    name = "rust",
+    actual = "//sdks/rust:test",
+)

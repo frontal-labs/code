@@ -1,3 +1,0 @@
-# Clippy configuration for the Orbit Rust SDK (orbit-sdk).
-# Resolved by `cargo clippy` for the crate.
-msrv = "1.80.0"

@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orbit-server
+  name: frontal-code-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orbit-server
+      app: frontal-code-server
   template:
     metadata:
       labels:
-        app: orbit-server
+        app: frontal-code-server
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -18,8 +18,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: orbit-server
-          image: orbit-server:v0.1.0
+        - name: frontal-code-server
+          image: frontal-code-server:v0.1.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -35,16 +35,16 @@ spec:
           workingDir: /workspace
           envFrom:
             - configMapRef:
-                name: orbit-server-config
+                name: frontal-code-server-config
             - secretRef:
-                name: orbit-server-secrets
+                name: frontal-code-server-secrets
           volumeMounts:
             - name: workspace
               mountPath: /workspace
             - name: server-state
-              mountPath: /var/lib/orbit/server
+              mountPath: /var/lib/frontal-code/server
             - name: agent-store
-              mountPath: /var/lib/orbit/agents
+              mountPath: /var/lib/frontal-code/agents
           readinessProbe:
             httpGet:
               path: /health
@@ -67,21 +67,21 @@ spec:
       volumes:
         - name: workspace
           persistentVolumeClaim:
-            claimName: orbit-workspace
+            claimName: frontal-code-workspace
         - name: server-state
           persistentVolumeClaim:
-            claimName: orbit-server-state
+            claimName: frontal-code-server-state
         - name: agent-store
           persistentVolumeClaim:
-            claimName: orbit-agent-store
+            claimName: frontal-code-agent-store
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: orbit-server
+  name: frontal-code-server
 spec:
   selector:
-    app: orbit-server
+    app: frontal-code-server
   ports:
     - name: http
       port: 8788

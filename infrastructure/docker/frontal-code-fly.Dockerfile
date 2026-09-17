@@ -15,7 +15,7 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 
-RUN cargo build --release -p orbit-server
+RUN cargo build --release -p frontal-code-server
 
 FROM debian:bookworm-slim
 
@@ -27,20 +27,20 @@ RUN apt-get update \
         libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash orbit
+RUN useradd --create-home --shell /bin/bash frontal-code
 
 WORKDIR /workspace
 
-COPY --from=builder /src/target/release/orbit-server /usr/local/bin/orbit-server
+COPY --from=builder /src/target/release/frontal-code-server /usr/local/bin/frontal-code-server
 
-RUN mkdir -p /workspace/workspaces /var/lib/orbit/server /var/lib/orbit/agents \
-    && chown -R orbit:orbit /workspace /var/lib/orbit
+RUN mkdir -p /workspace/workspaces /var/lib/frontal-code/server /var/lib/frontal-code/agents \
+    && chown -R frontal-code:frontal-code /workspace /var/lib/frontal-code
 
-USER orbit
+USER frontal-code
 
 EXPOSE 8788
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -sf http://127.0.0.1:8788/health || exit 1
 
-CMD ["orbit-server"]
+CMD ["frontal-code-server"]

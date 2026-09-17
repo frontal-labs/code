@@ -1,8 +1,8 @@
-# Create Ingress for tools.frontal.dev/orbit
-resource "kubernetes_ingress_v1" "orbit_tools" {
+# Create Ingress for tools.frontal.dev/frontal-code
+resource "kubernetes_ingress_v1" "frontal-code_tools" {
   metadata {
-    name      = "orbit-tools-ingress"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-tools-ingress"
+    namespace = var.frontal-code_service_namespace
     annotations = {
       "kubernetes.io/ingress.class"                       = "nginx"
       "cert-manager.io/cluster-issuer"                    = "letsencrypt-prod"
@@ -29,11 +29,11 @@ resource "kubernetes_ingress_v1" "orbit_tools" {
       host = "tools.frontal.dev"
       http {
         path {
-          path     = "/orbit(/|$)(.*)"
+          path     = "/frontal-code(/|$)(.*)"
           pathType = "Prefix"
           backend {
             service {
-              name = "orbit-server"
+              name = "frontal-code-server"
               port {
                 number = 8788
               }
@@ -48,13 +48,13 @@ resource "kubernetes_ingress_v1" "orbit_tools" {
 }
 
 # Create SSL certificate using cert-manager
-resource "kubernetes_manifest" "orbit_tools_certificate" {
+resource "kubernetes_manifest" "frontal-code_tools_certificate" {
   manifest = {
     apiVersion = "cert-manager.io/v1"
     kind       = "Certificate"
     metadata = {
       name      = "tools-frontal-dev"
-      namespace = var.orbit_service_namespace
+      namespace = var.frontal-code_service_namespace
     }
     spec = {
       secretName = "tools-frontal-dev-tls"
@@ -66,5 +66,5 @@ resource "kubernetes_manifest" "orbit_tools_certificate" {
     }
   }
 
-  depends_on = [kubernetes_ingress_v1.orbit_tools]
+  depends_on = [kubernetes_ingress_v1.frontal-code_tools]
 }

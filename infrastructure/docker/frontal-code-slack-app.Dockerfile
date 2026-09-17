@@ -2,12 +2,12 @@ FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
-COPY extensions/orbit-slack/package*.json ./
-COPY extensions/orbit-slack/bun.lock ./
+COPY extensions/frontal-code-slack/package*.json ./
+COPY extensions/frontal-code-slack/bun.lock ./
 
 RUN bun install --frozen-lockfile
 
-COPY extensions/orbit-slack/ ./
+COPY extensions/frontal-code-slack/ ./
 
 RUN bun build --target node src/index.ts --outdir dist
 
@@ -15,20 +15,20 @@ FROM node:20-alpine
 
 RUN apk add --no-cache dumb-init
 
-RUN addgroup -g 1001 -S orbit \
-    && adduser -S orbit -u 1001 -G orbit
+RUN addgroup -g 1001 -S frontal-code \
+    && adduser -S frontal-code -u 1001 -G frontal-code
 
 WORKDIR /app
 
-COPY extensions/orbit-slack/package*.json ./
+COPY extensions/frontal-code-slack/package*.json ./
 ENV NODE_ENV=production
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 
-RUN mkdir -p /tmp && chown -R orbit:orbit /app /tmp
+RUN mkdir -p /tmp && chown -R frontal-code:frontal-code /app /tmp
 
-USER orbit
+USER frontal-code
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/index.js"]

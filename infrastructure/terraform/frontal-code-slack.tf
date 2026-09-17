@@ -1,18 +1,18 @@
-# Deploy orbit-slack if enabled
-resource "kubernetes_config_map" "orbit_slack_config" {
-  count = var.deploy_orbit_slack ? 1 : 0
+# Deploy frontal-code-slack if enabled
+resource "kubernetes_config_map" "frontal-code_slack_config" {
+  count = var.deploy_frontal-code_slack ? 1 : 0
   metadata {
-    name      = "orbit-slack-config"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-slack-config"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-slack"
+      app         = "frontal-code-slack"
       environment = var.environment
     }
   }
 
   data = {
-    "ORBIT_API_URL"         = "http://orbit-server:8788"
-    "ORBIT_API_TIMEOUT"     = "30000"
+    "FCODE_API_URL"         = "http://frontal-code-server:8788"
+    "FCODE_API_TIMEOUT"     = "30000"
     "NODE_ENV"              = var.environment
     "LOG_LEVEL"             = "info"
     "PORT"                  = "3000"
@@ -21,23 +21,23 @@ resource "kubernetes_config_map" "orbit_slack_config" {
     "HEALTH_CHECK_INTERVAL" = "30000"
   }
 
-  depends_on = [kubernetes_namespace.orbit]
+  depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# Secrets for orbit-slack
-resource "kubernetes_secret" "orbit_slack_secrets" {
-  count = var.deploy_orbit_slack ? 1 : 0
+# Secrets for frontal-code-slack
+resource "kubernetes_secret" "frontal-code_slack_secrets" {
+  count = var.deploy_frontal-code_slack ? 1 : 0
   metadata {
-    name      = "orbit-slack-secrets"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-slack-secrets"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-slack"
+      app         = "frontal-code-slack"
       environment = var.environment
     }
   }
 
   data = {
-    "ORBIT_API_KEY"        = var.orbit_server_api_key
+    "FCODE_API_KEY"        = var.frontal-code_server_api_key
     "SLACK_BOT_TOKEN"      = var.slack_bot_token
     "SLACK_APP_TOKEN"      = var.slack_app_token
     "SLACK_SIGNING_SECRET" = var.slack_signing_secret
@@ -47,17 +47,17 @@ resource "kubernetes_secret" "orbit_slack_secrets" {
 
   type = "Opaque"
 
-  depends_on = [kubernetes_namespace.orbit]
+  depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# Deployment for orbit-slack
-resource "kubernetes_deployment" "orbit_slack" {
-  count = var.deploy_orbit_slack ? 1 : 0
+# Deployment for frontal-code-slack
+resource "kubernetes_deployment" "frontal-code_slack" {
+  count = var.deploy_frontal-code_slack ? 1 : 0
   metadata {
-    name      = "orbit-slack"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-slack"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-slack"
+      app         = "frontal-code-slack"
       environment = var.environment
     }
   }
@@ -67,14 +67,14 @@ resource "kubernetes_deployment" "orbit_slack" {
 
     selector {
       match_labels = {
-        app = "orbit-slack"
+        app = "frontal-code-slack"
       }
     }
 
     template {
       metadata {
         labels = {
-          app         = "orbit-slack"
+          app         = "frontal-code-slack"
           environment = var.environment
         }
       }
@@ -83,8 +83,8 @@ resource "kubernetes_deployment" "orbit_slack" {
         automount_service_account_token = false
 
         container {
-          name              = "orbit-slack"
-          image             = var.orbit_slack_image
+          name              = "frontal-code-slack"
+          image             = var.frontal-code_slack_image
           image_pull_policy = "IfNotPresent"
 
           security_context {
@@ -102,13 +102,13 @@ resource "kubernetes_deployment" "orbit_slack" {
 
           env_from {
             config_map_ref {
-              name = "orbit-slack-config"
+              name = "frontal-code-slack-config"
             }
           }
 
           env_from {
             secret_ref {
-              name = "orbit-slack-secrets"
+              name = "frontal-code-slack-secrets"
             }
           }
 
@@ -128,7 +128,7 @@ resource "kubernetes_deployment" "orbit_slack" {
             }
           }
 
-          # Note: orbit-slack doesn't have HTTP health endpoint, using process check
+          # Note: frontal-code-slack doesn't have HTTP health endpoint, using process check
           liveness_probe {
             exec {
               command = ["/bin/sh", "-c", "pidof node >/dev/null"]
@@ -162,7 +162,7 @@ resource "kubernetes_deployment" "orbit_slack" {
               pod_affinity_term {
                 label_selector {
                   match_labels = {
-                    app = "orbit-slack"
+                    app = "frontal-code-slack"
                   }
                 }
                 topology_key = "kubernetes.io/hostname"
@@ -175,28 +175,28 @@ resource "kubernetes_deployment" "orbit_slack" {
   }
 
   depends_on = [
-    kubernetes_namespace.orbit,
-    kubernetes_config_map.orbit_slack_config,
-    kubernetes_secret.orbit_slack_secrets,
-    kubernetes_deployment.orbit_server
+    kubernetes_namespace.frontal-code,
+    kubernetes_config_map.frontal-code_slack_config,
+    kubernetes_secret.frontal-code_slack_secrets,
+    kubernetes_deployment.frontal-code_server
   ]
 }
 
-# Service for orbit-slack
-resource "kubernetes_service" "orbit_slack" {
-  count = var.deploy_orbit_slack ? 1 : 0
+# Service for frontal-code-slack
+resource "kubernetes_service" "frontal-code_slack" {
+  count = var.deploy_frontal-code_slack ? 1 : 0
   metadata {
-    name      = "orbit-slack"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-slack"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-slack"
+      app         = "frontal-code-slack"
       environment = var.environment
     }
   }
 
   spec {
     selector = {
-      app = "orbit-slack"
+      app = "frontal-code-slack"
     }
 
     port {
@@ -208,5 +208,5 @@ resource "kubernetes_service" "orbit_slack" {
     type = "ClusterIP"
   }
 
-  depends_on = [kubernetes_deployment.orbit_slack]
+  depends_on = [kubernetes_deployment.frontal-code_slack]
 }

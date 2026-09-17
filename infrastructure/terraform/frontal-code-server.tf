@@ -1,23 +1,23 @@
-# Deploy orbit-server if enabled
-resource "kubernetes_namespace" "orbit" {
-  count = var.deploy_orbit_server || var.deploy_orbit_slack ? 1 : 0
+# Deploy frontal-code-server if enabled
+resource "kubernetes_namespace" "frontal-code" {
+  count = var.deploy_frontal-code_server || var.deploy_frontal-code_slack ? 1 : 0
   metadata {
-    name = var.orbit_service_namespace
+    name = var.frontal-code_service_namespace
     labels = {
-      name        = var.orbit_service_namespace
+      name        = var.frontal-code_service_namespace
       environment = var.environment
     }
   }
 }
 
-# Persistent Volume Claims for orbit-server
-resource "kubernetes_persistent_volume_claim" "orbit_workspace" {
-  count = var.deploy_orbit_server ? 1 : 0
+# Persistent Volume Claims for frontal-code-server
+resource "kubernetes_persistent_volume_claim" "frontal-code_workspace" {
+  count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "orbit-workspace"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-workspace"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-server"
+      app         = "frontal-code-server"
       environment = var.environment
     }
   }
@@ -32,16 +32,16 @@ resource "kubernetes_persistent_volume_claim" "orbit_workspace" {
     }
   }
 
-  depends_on = [kubernetes_namespace.orbit]
+  depends_on = [kubernetes_namespace.frontal-code]
 }
 
-resource "kubernetes_persistent_volume_claim" "orbit_server_state" {
-  count = var.deploy_orbit_server ? 1 : 0
+resource "kubernetes_persistent_volume_claim" "frontal-code_server_state" {
+  count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "orbit-server-state"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-server-state"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-server"
+      app         = "frontal-code-server"
       environment = var.environment
     }
   }
@@ -56,16 +56,16 @@ resource "kubernetes_persistent_volume_claim" "orbit_server_state" {
     }
   }
 
-  depends_on = [kubernetes_namespace.orbit]
+  depends_on = [kubernetes_namespace.frontal-code]
 }
 
-resource "kubernetes_persistent_volume_claim" "orbit_agent_store" {
-  count = var.deploy_orbit_server ? 1 : 0
+resource "kubernetes_persistent_volume_claim" "frontal-code_agent_store" {
+  count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "orbit-agent-store"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-agent-store"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-server"
+      app         = "frontal-code-server"
       environment = var.environment
     }
   }
@@ -80,57 +80,57 @@ resource "kubernetes_persistent_volume_claim" "orbit_agent_store" {
     }
   }
 
-  depends_on = [kubernetes_namespace.orbit]
+  depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# ConfigMap for orbit-server configuration
-resource "kubernetes_config_map" "orbit_server_config" {
-  count = var.deploy_orbit_server ? 1 : 0
+# ConfigMap for frontal-code-server configuration
+resource "kubernetes_config_map" "frontal-code_server_config" {
+  count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "orbit-server-config"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-server-config"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-server"
+      app         = "frontal-code-server"
       environment = var.environment
     }
   }
 
   data = {
-    "ORBIT_SERVER_HOST"                       = "0.0.0.0"
-    "ORBIT_SERVER_PORT"                       = "8788"
-    "ORBIT_SERVER_LANE_TRANSPORT"             = "tools-agent"
-    "ORBIT_SERVER_RECONCILE_INTERVAL_SECS"    = "15"
-    "ORBIT_SERVER_ORPHAN_APPROVAL_DELAY_SECS" = "0"
-    "ORBIT_SERVER_ORPHAN_AUTO_RETRY_SECS"     = "0"
-    "ORBIT_SERVER_ORPHAN_AUTO_CANCEL_SECS"    = "0"
-    "ORBIT_SERVER_ORPHAN_POLICY_RULES"        = "[]"
-    "ORBIT_SERVER_STATE_FILE"                 = "/var/lib/orbit/server/state.json"
-    "ORBIT_AGENT_STORE"                       = "/var/lib/orbit/agents"
+    "FCODE_SERVER_HOST"                       = "0.0.0.0"
+    "FCODE_SERVER_PORT"                       = "8788"
+    "FCODE_SERVER_LANE_TRANSPORT"             = "tools-agent"
+    "FCODE_SERVER_RECONCILE_INTERVAL_SECS"    = "15"
+    "FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS" = "0"
+    "FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS"     = "0"
+    "FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS"    = "0"
+    "FCODE_SERVER_ORPHAN_POLICY_RULES"        = "[]"
+    "FCODE_SERVER_STATE_FILE"                 = "/var/lib/frontal-code/server/state.json"
+    "FCODE_AGENT_STORE"                       = "/var/lib/frontal-code/agents"
     "RUST_LOG"                                = "info"
   }
 
-  depends_on = [kubernetes_namespace.orbit]
+  depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# Secrets for orbit-server
-resource "kubernetes_secret" "orbit_server_secrets" {
-  count = var.deploy_orbit_server ? 1 : 0
+# Secrets for frontal-code-server
+resource "kubernetes_secret" "frontal-code_server_secrets" {
+  count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "orbit-server-secrets"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-server-secrets"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-server"
+      app         = "frontal-code-server"
       environment = var.environment
     }
   }
 
   data = {
-    "ORBIT_SERVER_API_KEY"  = var.orbit_server_api_key
+    "FCODE_SERVER_API_KEY"  = var.frontal-code_server_api_key
     "ANTHROPIC_API_KEY"     = var.api_keys.anthropic
     "OPENAI_API_KEY"        = var.api_keys.openai
     "OPENAI_BASE_URL"       = ""
     "FRONTAL_API_KEY"       = var.api_keys.anthropic # Use Anthropic key for Frontal
-    "FRONTAL_BASE_URL"      = "https://tools.frontal.dev/orbit"
+    "FRONTAL_BASE_URL"      = "https://tools.frontal.dev/frontal-code"
     "XAI_API_KEY"           = var.api_keys.xai
     "XAI_BASE_URL"          = ""
     "AZURE_OPENAI_API_KEY"  = var.api_keys.azure
@@ -143,17 +143,17 @@ resource "kubernetes_secret" "orbit_server_secrets" {
 
   type = "Opaque"
 
-  depends_on = [kubernetes_namespace.orbit]
+  depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# Deployment for orbit-server
-resource "kubernetes_deployment" "orbit_server" {
-  count = var.deploy_orbit_server ? 1 : 0
+# Deployment for frontal-code-server
+resource "kubernetes_deployment" "frontal-code_server" {
+  count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "orbit-server"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-server"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-server"
+      app         = "frontal-code-server"
       environment = var.environment
     }
   }
@@ -163,14 +163,14 @@ resource "kubernetes_deployment" "orbit_server" {
 
     selector {
       match_labels = {
-        app = "orbit-server"
+        app = "frontal-code-server"
       }
     }
 
     template {
       metadata {
         labels = {
-          app         = "orbit-server"
+          app         = "frontal-code-server"
           environment = var.environment
         }
       }
@@ -186,8 +186,8 @@ resource "kubernetes_deployment" "orbit_server" {
         }
 
         container {
-          name              = "orbit-server"
-          image             = var.orbit_server_image
+          name              = "frontal-code-server"
+          image             = var.frontal-code_server_image
           image_pull_policy = "IfNotPresent"
 
           security_context {
@@ -204,13 +204,13 @@ resource "kubernetes_deployment" "orbit_server" {
 
           env_from {
             config_map_ref {
-              name = "orbit-server-config"
+              name = "frontal-code-server-config"
             }
           }
 
           env_from {
             secret_ref {
-              name = "orbit-server-secrets"
+              name = "frontal-code-server-secrets"
             }
           }
 
@@ -248,39 +248,39 @@ resource "kubernetes_deployment" "orbit_server" {
           }
 
           volume_mount {
-            name       = "orbit-workspace"
+            name       = "frontal-code-workspace"
             mount_path = "/workspace"
           }
 
           volume_mount {
-            name       = "orbit-server-state"
-            mount_path = "/var/lib/orbit/server"
+            name       = "frontal-code-server-state"
+            mount_path = "/var/lib/frontal-code/server"
           }
 
           volume_mount {
-            name       = "orbit-agent-store"
-            mount_path = "/var/lib/orbit/agents"
+            name       = "frontal-code-agent-store"
+            mount_path = "/var/lib/frontal-code/agents"
           }
         }
 
         volume {
-          name = "orbit-workspace"
+          name = "frontal-code-workspace"
           persistent_volume_claim {
-            claim_name = "orbit-workspace"
+            claim_name = "frontal-code-workspace"
           }
         }
 
         volume {
-          name = "orbit-server-state"
+          name = "frontal-code-server-state"
           persistent_volume_claim {
-            claim_name = "orbit-server-state"
+            claim_name = "frontal-code-server-state"
           }
         }
 
         volume {
-          name = "orbit-agent-store"
+          name = "frontal-code-agent-store"
           persistent_volume_claim {
-            claim_name = "orbit-agent-store"
+            claim_name = "frontal-code-agent-store"
           }
         }
 
@@ -291,7 +291,7 @@ resource "kubernetes_deployment" "orbit_server" {
               pod_affinity_term {
                 label_selector {
                   match_labels = {
-                    app = "orbit-server"
+                    app = "frontal-code-server"
                   }
                 }
                 topology_key = "kubernetes.io/hostname"
@@ -304,30 +304,30 @@ resource "kubernetes_deployment" "orbit_server" {
   }
 
   depends_on = [
-    kubernetes_namespace.orbit,
-    kubernetes_config_map.orbit_server_config,
-    kubernetes_secret.orbit_server_secrets,
-    kubernetes_persistent_volume_claim.orbit_workspace,
-    kubernetes_persistent_volume_claim.orbit_server_state,
-    kubernetes_persistent_volume_claim.orbit_agent_store
+    kubernetes_namespace.frontal-code,
+    kubernetes_config_map.frontal-code_server_config,
+    kubernetes_secret.frontal-code_server_secrets,
+    kubernetes_persistent_volume_claim.frontal-code_workspace,
+    kubernetes_persistent_volume_claim.frontal-code_server_state,
+    kubernetes_persistent_volume_claim.frontal-code_agent_store
   ]
 }
 
-# Service for orbit-server
-resource "kubernetes_service" "orbit_server" {
-  count = var.deploy_orbit_server ? 1 : 0
+# Service for frontal-code-server
+resource "kubernetes_service" "frontal-code_server" {
+  count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "orbit-server"
-    namespace = var.orbit_service_namespace
+    name      = "frontal-code-server"
+    namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "orbit-server"
+      app         = "frontal-code-server"
       environment = var.environment
     }
   }
 
   spec {
     selector = {
-      app = "orbit-server"
+      app = "frontal-code-server"
     }
 
     port {
@@ -339,5 +339,5 @@ resource "kubernetes_service" "orbit_server" {
     type = "ClusterIP"
   }
 
-  depends_on = [kubernetes_deployment.orbit_server]
+  depends_on = [kubernetes_deployment.frontal-code_server]
 }

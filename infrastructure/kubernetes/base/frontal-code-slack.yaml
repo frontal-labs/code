@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orbit-slack
+  name: frontal-code-slack
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orbit-slack
+      app: frontal-code-slack
   template:
     metadata:
       labels:
-        app: orbit-slack
+        app: frontal-code-slack
     spec:
       automountServiceAccountToken: false
       securityContext:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: orbit-slack
-          image: orbit-slack:v0.1.0
+        - name: frontal-code-slack
+          image: frontal-code-slack:v0.1.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -31,9 +31,9 @@ spec:
             runAsGroup: 1001
           envFrom:
             - configMapRef:
-                name: orbit-slack-config
+                name: frontal-code-slack-config
             - secretRef:
-                name: orbit-slack-secrets
+                name: frontal-code-slack-secrets
           volumeMounts:
             - name: tmp
               mountPath: /tmp

@@ -1,4 +1,4 @@
-# Multi-stage build for Orbit
+# Multi-stage build for Frontal Code
 FROM rust:1.88-bookworm AS builder
 
 # Install build dependencies
@@ -23,7 +23,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 
 # Build the application
-RUN cargo build --release -p orbit-cli -p orbit-server
+RUN cargo build --release -p cli -p frontal-code-server
 
 # Runtime stage
 FROM debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d
@@ -41,36 +41,36 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN useradd --create-home --shell /bin/bash orbit
+RUN useradd --create-home --shell /bin/bash frontal-code
 
 # Set working directory
 WORKDIR /workspace
 
 # Copy binaries from builder stage
-COPY --from=builder /workspace/target/release/orbit /usr/local/bin/orbit
-COPY --from=builder /workspace/target/release/orbit-server /usr/local/bin/orbit-server
+COPY --from=builder /workspace/target/release/frontal-code /usr/local/bin/frontal-code
+COPY --from=builder /workspace/target/release/frontal-code-server /usr/local/bin/frontal-code-server
 
 # Set permissions
-RUN chmod +x /usr/local/bin/orbit
+RUN chmod +x /usr/local/bin/frontal-code
 
 # Create necessary directories
-RUN mkdir -p /workspace/.orbit /workspace/.sandbox-home \
-    && chown -R orbit:orbit /workspace
+RUN mkdir -p /workspace/.frontal-code /workspace/.sandbox-home \
+    && chown -R frontal-code:frontal-code /workspace
 
 # Switch to non-root user
-USER orbit
+USER frontal-code
 
 # Environment variables
 ENV CARGO_TERM_COLOR=always
-ENV ORBIT_HOME=/workspace/.orbit
+ENV FCODE_HOME=/workspace/.frontal-code
 ENV SANDBOX_HOME=/workspace/.sandbox-home
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD orbit doctor || exit 1
+    CMD frontal-code doctor || exit 1
 
 # Expose port (if needed for web interface)
 EXPOSE 8080
 
 # Default command
-CMD ["orbit"]
+CMD ["frontal-code"]

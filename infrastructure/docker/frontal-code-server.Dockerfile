@@ -6,11 +6,8 @@ RUN apt-get update \
         ca-certificates \
         curl \
         git \
-        libpq-dev \
-        libsqlite3-dev \
         libssl-dev \
         pkg-config \
-        sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -18,40 +15,31 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 
-RUN cargo build --release -p orbit-cli
+RUN cargo build --release -p frontal-code-server
 
 FROM debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
-        build-essential \
         ca-certificates \
         curl \
+        docker.io \
         git \
-        libpq5 \
-        libsqlite3-0 \
         libssl3 \
-        postgresql-client \
-        python3 \
-        python3-pip \
-        sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash orbit
+RUN useradd --create-home --shell /bin/bash frontal-code
 
 WORKDIR /workspace
 
-COPY --from=builder /src/target/release/orbit /usr/local/bin/orbit
+COPY --from=builder /src/target/release/frontal-code-server /usr/local/bin/frontal-code-server
 
-RUN chmod +x /usr/local/bin/orbit \
-    && mkdir -p /workspace/.orbit /workspace/.sandbox-home \
-    && chown -R orbit:orbit /workspace
+RUN mkdir -p /workspace /var/lib/frontal-code/server /var/lib/frontal-code/agents \
+    && chown -R frontal-code:frontal-code /workspace /var/lib/frontal-code
 
-USER orbit
+USER frontal-code
 
-ENV CARGO_TERM_COLOR=always
-ENV ORBIT_HOME=/workspace/.orbit
-ENV SANDBOX_HOME=/workspace/.sandbox-home
+EXPOSE 8788
 
-CMD ["orbit", "--version"]
+CMD ["frontal-code-server"]

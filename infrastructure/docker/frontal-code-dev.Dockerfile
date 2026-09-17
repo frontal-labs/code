@@ -23,14 +23,14 @@ RUN cargo install cargo-watch --locked
 WORKDIR /workspace
 
 # Create non-root user
-RUN useradd --create-home --shell /bin/bash orbit
+RUN useradd --create-home --shell /bin/bash frontal-code
 
 # Switch to non-root user
-USER orbit
+USER frontal-code
 
 # Environment variables
 ENV CARGO_TERM_COLOR=always
-ENV ORBIT_HOME=/workspace/.orbit
+ENV FCODE_HOME=/workspace/.frontal-code
 ENV SANDBOX_HOME=/workspace/.sandbox-home
 
 # Default command with hot reload

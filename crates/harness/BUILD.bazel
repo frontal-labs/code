@@ -12,7 +12,7 @@ sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-harness",
+        "frontal-code-harness",
         "test",
     ],
     tags = [
@@ -25,7 +25,7 @@ sh_test(
     name = "fmt",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-harness",
+        "frontal-code-harness",
         "fmt-check",
     ],
     tags = [
@@ -38,7 +38,7 @@ sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-harness",
+        "frontal-code-harness",
         "clippy",
     ],
     tags = [

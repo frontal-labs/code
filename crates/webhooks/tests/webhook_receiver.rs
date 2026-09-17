@@ -1,4 +1,4 @@
-use orbit_webhooks::{WebhookAuth, WebhookConfig, WebhookReceiver};
+use frontal_code_webhooks::{WebhookAuth, WebhookConfig, WebhookReceiver};
 
 #[test]
 fn webhook_config_default() {

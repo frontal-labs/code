@@ -1,6 +1,6 @@
-//! # Orbit Integrations
+//! # `Frontal Code` Integrations
 //!
-//! This crate provides integration capabilities for the Orbit system,
+//! This crate provides integration capabilities for the `FrontalCode` system,
 //! including Model Context Protocol (MCP) server management and tool bridging.
 
 pub mod ide;

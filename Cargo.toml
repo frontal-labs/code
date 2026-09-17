@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "sdk/rust", "tools/*", "tests/*"]
+members = ["crates/*", "sdks/rust", "tools/*", "tests/*"]
 exclude = ["tools/fuzz/fuzz_targets/*"]
 resolver = "2"
 

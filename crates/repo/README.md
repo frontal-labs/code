@@ -1,10 +1,10 @@
-# Orbit Repo
+# Frontal Code Repo
 
 Repository lifecycle management and source tree preparation for hosted execution environments.
 
 ## Overview
 
-The `orbit-repo` crate provides comprehensive repository management capabilities for hosted execution scenarios. It serves as the boundary between connector/control-plane code and source-tree preparation, handling all aspects of repository lifecycle management while remaining platform-agnostic.
+The `frontal-code-repo` crate provides comprehensive repository management capabilities for hosted execution scenarios. It serves as the boundary between connector/control-plane code and source-tree preparation, handling all aspects of repository lifecycle management while remaining platform-agnostic.
 
 ## Features
 
@@ -49,7 +49,7 @@ The crate handles local checkout preparation concerns including:
 ## Usage
 
 ```rust
-use orbit_repo::{RepoManager, CheckoutConfig};
+use frontal-code_repo::{RepoManager, CheckoutConfig};
 
 let manager = RepoManager::new();
 let config = CheckoutConfig {
@@ -81,9 +81,9 @@ The crate is intentionally GitHub-agnostic and works with any Git hosting servic
 ## Integration
 
 The repo crate integrates with:
-- `orbit-server` for hosted execution workflows
-- `orbit-orchestrator` for task preparation
-- `orbit-runtime` for execution environment setup
+- `frontal-code-server` for hosted execution workflows
+- `frontal-code-orchestrator` for task preparation
+- `frontal-code-runtime` for execution environment setup
 
 ## Error Handling
 
@@ -105,7 +105,7 @@ Extensive test coverage includes:
 
 Run tests with:
 ```bash
-cargo test -p orbit-repo
+cargo test -p frontal-code-repo
 ```
 
 ## Performance Optimizations

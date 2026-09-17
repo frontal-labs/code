@@ -1,10 +1,10 @@
-# Orbit CLI
+# Frontal Code CLI
 
-Main command-line interface for the Orbit ecosystem, providing comprehensive AI-powered development workflows.
+Main command-line interface for the Frontal Code ecosystem, providing comprehensive AI-powered development workflows.
 
 ## Overview
 
-The Orbit CLI is the primary user interface for interacting with the Orbit AI assistant system. It provides interactive REPL mode, one-shot command execution, comprehensive tool integration, and multi-provider support for AI-powered development workflows.
+The Frontal Code CLI is the primary user interface for interacting with the Frontal Code AI assistant system. It provides interactive REPL mode, one-shot command execution, comprehensive tool integration, and multi-provider support for AI-powered development workflows.
 
 ## Features
 
@@ -33,13 +33,13 @@ The Orbit CLI is the primary user interface for interacting with the Orbit AI as
 
 ## Dependencies
 
-- `orbit-api` for AI provider integration and HTTP services
-- `orbit-commands` for slash command system and registry
-- `orbit-compat-harness` for testing and compatibility validation
-- `orbit-runtime` for core functionality and session management
-- `orbit-plugins` for extensibility and plugin management
-- `orbit-tools` for tool integration and execution
-- `orbit-providers` for multi-provider AI client support
+- `frontal-code-api` for AI provider integration and HTTP services
+- `frontal-code-commands` for slash command system and registry
+- `frontal-code-compat-harness` for testing and compatibility validation
+- `frontal-code-runtime` for core functionality and session management
+- `frontal-code-plugins` for extensibility and plugin management
+- `frontal-code-tools` for tool integration and execution
+- `frontal-code-providers` for multi-provider AI client support
 - `crossterm` for terminal handling and cross-platform support
 - `rustyline` for readline functionality and completion
 - `pulldown-cmark` for markdown parsing and rendering
@@ -47,77 +47,77 @@ The Orbit CLI is the primary user interface for interacting with the Orbit AI as
 
 ## Usage
 
-The main binary is named `orbit` and can be used in multiple ways:
+The main binary is named `frontal-code` and can be used in multiple ways:
 
 ### Interactive Mode
 ```bash
 # Start interactive REPL
-orbit
+frontal-code
 
 # Start with specific model
-orbit --model claude-opus-5
+frontal-code --model claude-opus-5
 
 # Start with specific permissions
-orbit --permission-mode workspace-write
+frontal-code --permission-mode workspace-write
 ```
 
 ### One-shot Commands
 ```bash
 # Simple prompt
-orbit prompt "explain this codebase"
+frontal-code prompt "explain this codebase"
 
 # With specific provider
-orbit --provider anthropic prompt "your question"
-orbit --provider openai prompt "your question"
-orbit --provider xai prompt "your question"
+frontal-code --provider anthropic prompt "your question"
+frontal-code --provider openai prompt "your question"
+frontal-code --provider xai prompt "your question"
 
 # With JSON output for automation
-orbit --output-format json prompt "summarize crates/cli/src/main.rs"
+frontal-code --output-format json prompt "summarize crates/cli/src/main.rs"
 
 # With specific permissions
-orbit --permission-mode read-only prompt "analyze this file"
+frontal-code --permission-mode read-only prompt "analyze this file"
 ```
 
 ### Direct Subcommands
 ```bash
 # Check system status
-orbit status
+frontal-code status
 
 # List available agents
-orbit agents
+frontal-code agents
 
 # Check MCP servers
-orbit mcp
+frontal-code mcp
 
 # Run system diagnostics
-orbit doctor
+frontal-code doctor
 
 # Show sandbox information
-orbit sandbox
+frontal-code sandbox
 ```
 
 ### Provider Selection
 ```bash
 # Force specific provider
-orbit --provider anthropic prompt "your question"
-orbit --provider openai prompt "your question"
-orbit --provider xai prompt "your question"
+frontal-code --provider anthropic prompt "your question"
+frontal-code --provider openai prompt "your question"
+frontal-code --provider xai prompt "your question"
 
 # With model aliases
-orbit --provider anthropic --model opus prompt "complex task"
-orbit --provider openai --model gpt-4 prompt "your question"
+frontal-code --provider anthropic --model opus prompt "complex task"
+frontal-code --provider openai --model gpt-4 prompt "your question"
 ```
 
 ### Session Management
 ```bash
 # Resume latest session
-orbit --resume latest
+frontal-code --resume latest
 
 # Resume specific session
-orbit --resume session-123
+frontal-code --resume session-123
 
 # Resume and run command
-orbit --resume latest /status
+frontal-code --resume latest /status
 ```
 
 ## Configuration
@@ -126,7 +126,7 @@ The CLI supports multiple configuration methods:
 
 ### Environment Variables
 ```bash
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
 export FRONTAL_API_KEY="frontal-..."
@@ -134,11 +134,11 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 ```
 
 ### Configuration Files
-- `~/.orbit.json` - Global user configuration
-- `~/.config/orbit/settings.json` - System configuration
-- `.orbit.json` - Workspace configuration
-- `.orbit/settings.json` - Workspace settings
-- `.orbit/settings.local.json` - Local workspace overrides
+- `~/.frontal-code/settings.json` - Global user configuration
+- `~/.config/frontal-code/settings.json` - System configuration
+- `.frontal-code/settings.json` - Workspace configuration
+- `.frontal-code/settings.json` - Workspace settings
+- `.frontal-code/settings.local.json` - Local workspace overrides
 
 ## Slash Commands
 
@@ -180,17 +180,17 @@ For development from source:
 cargo build --workspace
 
 # Run the CLI
-cargo run -p orbit-cli -- [args]
+cargo run -p cli -- [args]
 
 # Run tests
-cargo test -p orbit-cli
+cargo test -p cli
 ```
 
 ## Integration
 
 The CLI integrates with:
-- `orbit-runtime` for session management and core functionality
-- `orbit-providers` for multi-provider AI client support
-- `orbit-tools` for comprehensive tool integration
-- `orbit-plugins` for extensibility and customization
-- `orbit-memory` for semantic memory and context management
+- `frontal-code-runtime` for session management and core functionality
+- `frontal-code-providers` for multi-provider AI client support
+- `frontal-code-tools` for comprehensive tool integration
+- `frontal-code-plugins` for extensibility and customization
+- `frontal-code-memory` for semantic memory and context management

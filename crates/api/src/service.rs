@@ -48,33 +48,33 @@ impl ApiServiceConfig {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut config = Self::default();
 
-        if let Ok(host) = env::var("ORBIT_API_HOST") {
+        if let Ok(host) = env::var("FCODE_API_HOST") {
             let ip: IpAddr = host.parse()?;
             config.bind_addr = SocketAddr::new(ip, config.bind_addr.port());
         }
 
-        if let Ok(port) = env::var("ORBIT_API_PORT") {
+        if let Ok(port) = env::var("FCODE_API_PORT") {
             let parsed: u16 = port.parse()?;
             config.bind_addr = SocketAddr::new(config.bind_addr.ip(), parsed);
         }
 
-        if let Ok(bin) = env::var("ORBIT_CLI_BIN") {
+        if let Ok(bin) = env::var("FCODE_CLI_BIN") {
             if !bin.trim().is_empty() {
                 config.cli_bin = Some(PathBuf::from(bin));
             }
         }
 
-        if let Ok(workdir) = env::var("ORBIT_API_WORKDIR") {
+        if let Ok(workdir) = env::var("FCODE_API_WORKDIR") {
             if !workdir.trim().is_empty() {
                 config.working_dir = Some(PathBuf::from(workdir));
             }
         }
-        if let Ok(api_key) = env::var("ORBIT_API_KEY") {
+        if let Ok(api_key) = env::var("FCODE_API_KEY") {
             if !api_key.trim().is_empty() {
                 config.api_key = Some(api_key);
             }
         }
-        if let Ok(allowed) = env::var("ORBIT_API_ALLOWED_COMMANDS") {
+        if let Ok(allowed) = env::var("FCODE_API_ALLOWED_COMMANDS") {
             let parsed = allowed
                 .split(',')
                 .map(str::trim)
@@ -85,14 +85,14 @@ impl ApiServiceConfig {
                 config.allowed_commands = Some(parsed);
             }
         }
-        if let Ok(timeout_ms) = env::var("ORBIT_API_COMMAND_TIMEOUT_MS") {
+        if let Ok(timeout_ms) = env::var("FCODE_API_COMMAND_TIMEOUT_MS") {
             let parsed: u64 = timeout_ms.parse()?;
             config.command_timeout_ms = parsed;
         }
-        if let Ok(value) = env::var("ORBIT_API_ALLOW_INSECURE_BIND") {
+        if let Ok(value) = env::var("FCODE_API_ALLOW_INSECURE_BIND") {
             config.allow_insecure_bind = parse_bool_env(&value);
         }
-        if let Ok(value) = env::var("ORBIT_API_ALLOW_DANGEROUS_PERMISSIONS") {
+        if let Ok(value) = env::var("FCODE_API_ALLOW_DANGEROUS_PERMISSIONS") {
             config.allow_dangerous_permissions = parse_bool_env(&value);
         }
 
@@ -103,7 +103,7 @@ impl ApiServiceConfig {
         if !self.bind_addr.ip().is_loopback() && self.api_key.is_none() && !self.allow_insecure_bind
         {
             return Err(
-                "refusing to bind orbit-api to a non-loopback address without ORBIT_API_KEY; set ORBIT_API_ALLOW_INSECURE_BIND=true to override"
+                "refusing to bind frontal-code-api to a non-loopback address without FCODE_API_KEY; set FCODE_API_ALLOW_INSECURE_BIND=true to override"
                     .into(),
             );
         }
@@ -204,7 +204,7 @@ fn validate_permission_flags(
                 return Err((
                     StatusCode::FORBIDDEN,
                     Json(ErrorResponse {
-                        error: "dangerous permission overrides are disabled for orbit-api"
+                        error: "dangerous permission overrides are disabled for frontal-code-api"
                             .to_string(),
                     }),
                 ));
@@ -214,7 +214,8 @@ fn validate_permission_flags(
                     return Err((
                         StatusCode::FORBIDDEN,
                         Json(ErrorResponse {
-                            error: "danger-full-access is disabled for orbit-api".to_string(),
+                            error: "danger-full-access is disabled for frontal-code-api"
+                                .to_string(),
                         }),
                     ));
                 }
@@ -227,7 +228,8 @@ fn validate_permission_flags(
                         return Err((
                             StatusCode::FORBIDDEN,
                             Json(ErrorResponse {
-                                error: "danger-full-access is disabled for orbit-api".to_string(),
+                                error: "danger-full-access is disabled for frontal-code-api"
+                                    .to_string(),
                             }),
                         ));
                     }
@@ -269,7 +271,7 @@ pub async fn serve(
     // Report the address the OS actually assigned, not the requested one, so
     // that binding port 0 still tells the operator where the server landed.
     let local_addr = listener.local_addr()?;
-    println!("orbit-api listening on http://{local_addr} (cli: {display_cli_bin})");
+    println!("frontal-code-api listening on http://{local_addr} (cli: {display_cli_bin})");
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -333,7 +335,7 @@ async fn run_prompt(
             return Err((
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
-                    error: "danger-full-access is disabled for orbit-api".to_string(),
+                    error: "danger-full-access is disabled for frontal-code-api".to_string(),
                 }),
             ));
         }
@@ -408,7 +410,7 @@ async fn execute_cli(
     .await
     .map_err(|_| {
         format!(
-            "orbit command timed out after {}ms",
+            "frontal-code command timed out after {}ms",
             state.command_timeout_ms
         )
     })??;
@@ -447,17 +449,17 @@ fn resolve_cli_bin(configured: Option<PathBuf>) -> PathBuf {
         return path;
     }
 
-    if let Ok(path) = env::var("ORBIT_CLI_BIN") {
+    if let Ok(path) = env::var("FCODE_CLI_BIN") {
         if !path.trim().is_empty() {
             return PathBuf::from(path);
         }
     }
 
-    if let Some(path) = find_workspace_binary(Path::new("target/debug/orbit")) {
+    if let Some(path) = find_workspace_binary(Path::new("target/debug/frontal-code")) {
         return path;
     }
 
-    PathBuf::from("orbit")
+    PathBuf::from("frontal-code")
 }
 
 fn find_workspace_binary(relative: &Path) -> Option<PathBuf> {
@@ -639,7 +641,7 @@ mod tests {
             .expect_err("config should reject insecure bind");
         assert!(error
             .to_string()
-            .contains("refusing to bind orbit-api to a non-loopback address"));
+            .contains("refusing to bind frontal-code-api to a non-loopback address"));
     }
 
     #[test]
@@ -656,7 +658,7 @@ mod tests {
     #[test]
     fn dangerous_permission_overrides_are_blocked_by_default() {
         let state = AppState {
-            cli_bin: PathBuf::from("orbit"),
+            cli_bin: PathBuf::from("frontal-code"),
             working_dir: None,
             api_key: None,
             allowed_commands: None,
@@ -676,14 +678,14 @@ mod tests {
         assert_eq!(status, StatusCode::FORBIDDEN);
         assert_eq!(
             body.error,
-            "dangerous permission overrides are disabled for orbit-api"
+            "dangerous permission overrides are disabled for frontal-code-api"
         );
     }
 
     #[test]
     fn danger_full_access_mode_is_blocked_by_default() {
         let state = AppState {
-            cli_bin: PathBuf::from("orbit"),
+            cli_bin: PathBuf::from("frontal-code"),
             working_dir: None,
             api_key: None,
             allowed_commands: None,
@@ -702,6 +704,9 @@ mod tests {
 
         let (status, Json(body)) = result.expect_err("danger mode should be rejected");
         assert_eq!(status, StatusCode::FORBIDDEN);
-        assert_eq!(body.error, "danger-full-access is disabled for orbit-api");
+        assert_eq!(
+            body.error,
+            "danger-full-access is disabled for frontal-code-api"
+        );
     }
 }

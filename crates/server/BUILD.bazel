@@ -9,10 +9,10 @@ filegroup(
 )
 
 sh_binary(
-    name = "orbit-server",
+    name = "frontal-code-server",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-server",
+        "frontal-code-server",
         "run",
     ],
 )
@@ -21,7 +21,7 @@ sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-server",
+        "frontal-code-server",
         "test",
     ],
     tags = [
@@ -34,7 +34,7 @@ sh_test(
     name = "fmt",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-server",
+        "frontal-code-server",
         "fmt-check",
     ],
     tags = [
@@ -47,7 +47,7 @@ sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-server",
+        "frontal-code-server",
         "clippy",
     ],
     tags = [

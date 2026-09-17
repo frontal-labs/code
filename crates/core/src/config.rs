@@ -116,7 +116,7 @@ impl Default for ProjectConfig {
     fn default() -> Self {
         ProjectConfig {
             project: ProjectInfo {
-                name: "Orbit".to_string(),
+                name: "Frontal Code".to_string(),
                 version: "0.1.0".to_string(),
                 description: "AI-powered development environment and CLI tool".to_string(),
             },
@@ -146,12 +146,12 @@ impl Default for ProjectConfig {
                 request_timeout_seconds: 30,
             },
             paths: PathConfig {
-                config_home: "~/.orbit".to_string(),
-                home: "~/.orbit".to_string(),
+                config_home: "~/.frontal-code".to_string(),
+                home: "~/.frontal-code".to_string(),
                 codex_home: "~/.codex".to_string(),
                 sandbox_home: "/workspace/.sandbox-home".to_string(),
-                cache_dir: "~/.orbit/cache".to_string(),
-                logs_dir: "~/.orbit/logs".to_string(),
+                cache_dir: "~/.frontal-code/cache".to_string(),
+                logs_dir: "~/.frontal-code/logs".to_string(),
             },
             sandbox: SandboxConfig {
                 enable_docker: false,
@@ -167,7 +167,7 @@ impl Default for ProjectConfig {
             },
             development: DevelopmentConfig {
                 mock_parity_report_path: "/tmp/mock_parity_report.json".to_string(),
-                hosted_task_file: "/tmp/orbit_hosted_task.json".to_string(),
+                hosted_task_file: "/tmp/frontal_code_hosted_task.json".to_string(),
                 enable_debug_mode: false,
                 enable_test_endpoints: false,
             },
@@ -227,17 +227,17 @@ impl ProjectConfig {
 
     /// Get the default configuration file path
     pub fn get_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-        // Check for ORBIT_CONFIG_HOME environment variable first
-        if let Ok(config_home) = env::var("ORBIT_CONFIG_HOME") {
+        // Check for FCODE_CONFIG_HOME environment variable first
+        if let Ok(config_home) = env::var("FCODE_CONFIG_HOME") {
             let config_path = PathBuf::from(config_home).join("project.json");
             if config_path.exists() {
                 return Ok(config_path);
             }
         }
 
-        // Check for ORBIT_HOME environment variable
-        if let Ok(orbit_home) = env::var("ORBIT_HOME") {
-            let config_path = PathBuf::from(orbit_home).join("project.json");
+        // Check for FCODE_HOME environment variable
+        if let Ok(frontal_code_home) = env::var("FCODE_HOME") {
+            let config_path = PathBuf::from(frontal_code_home).join("project.json");
             if config_path.exists() {
                 return Ok(config_path);
             }
@@ -245,7 +245,9 @@ impl ProjectConfig {
 
         // Check user's home directory
         if let Ok(home_dir) = env::var("HOME") {
-            let config_path = PathBuf::from(home_dir).join(".orbit").join("project.json");
+            let config_path = PathBuf::from(home_dir)
+                .join(".frontal-code")
+                .join("project.json");
             if config_path.exists() {
                 return Ok(config_path);
             }
@@ -324,7 +326,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = ProjectConfig::default();
-        assert_eq!(config.project.name, "Orbit");
+        assert_eq!(config.project.name, "Frontal Code");
         assert_eq!(config.runtime.default_provider, "frontal");
         assert!(config.runtime.providers.anthropic.enabled);
     }

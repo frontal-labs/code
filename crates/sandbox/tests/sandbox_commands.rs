@@ -1,4 +1,4 @@
-use orbit_sandbox::{
+use frontal_code_sandbox::{
     build_docker_sandbox_command, build_linux_sandbox_command, build_macos_sandbox_command,
     build_sandbox_command, build_windows_sandbox_command, FilesystemIsolationMode, SandboxCommand,
     SandboxRequest, SandboxStatus,

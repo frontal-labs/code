@@ -1,25 +1,25 @@
-use orbit_events::render_typescript_bindings;
+use frontal_code_events::render_typescript_bindings;
 
 #[test]
 fn contains_all_interface_definitions() {
     let bindings = render_typescript_bindings();
     let interfaces = [
-        "OrbitGeneratedEventEnvelope",
-        "OrbitGeneratedEventName",
-        "OrbitGeneratedEventStatus",
-        "OrbitGeneratedEventTopic",
-        "OrbitGeneratedEventPayload",
-        "OrbitGeneratedHostedTaskEventSummary",
-        "OrbitGeneratedTaskRoutedEventPayload",
-        "OrbitGeneratedLaneSignalEventPayload",
-        "OrbitGeneratedApprovalRequestedEventPayload",
-        "OrbitGeneratedApprovalResolvedEventPayload",
-        "OrbitGeneratedTerminalEventPayload",
-        "OrbitGeneratedConnectorInteractionRequest",
-        "OrbitGeneratedConnectorInteractionResponse",
-        "OrbitGeneratedConnectorEventRequest",
-        "OrbitGeneratedConnectorEventPayload",
-        "OrbitGeneratedAppliedOrphanPolicy",
+        "FrontalCodeGeneratedEventEnvelope",
+        "FrontalCodeGeneratedEventName",
+        "FrontalCodeGeneratedEventStatus",
+        "FrontalCodeGeneratedEventTopic",
+        "FrontalCodeGeneratedEventPayload",
+        "FrontalCodeGeneratedHostedTaskEventSummary",
+        "FrontalCodeGeneratedTaskRoutedEventPayload",
+        "FrontalCodeGeneratedLaneSignalEventPayload",
+        "FrontalCodeGeneratedApprovalRequestedEventPayload",
+        "FrontalCodeGeneratedApprovalResolvedEventPayload",
+        "FrontalCodeGeneratedTerminalEventPayload",
+        "FrontalCodeGeneratedConnectorInteractionRequest",
+        "FrontalCodeGeneratedConnectorInteractionResponse",
+        "FrontalCodeGeneratedConnectorEventRequest",
+        "FrontalCodeGeneratedConnectorEventPayload",
+        "FrontalCodeGeneratedAppliedOrphanPolicy",
     ];
     for interface in &interfaces {
         assert!(
@@ -87,16 +87,16 @@ fn contains_all_event_topics() {
 #[test]
 fn contains_envelope_structure() {
     let bindings = render_typescript_bindings();
-    assert!(bindings.contains("event: OrbitGeneratedEventName"));
-    assert!(bindings.contains("status: OrbitGeneratedEventStatus"));
+    assert!(bindings.contains("event: FrontalCodeGeneratedEventName"));
+    assert!(bindings.contains("status: FrontalCodeGeneratedEventStatus"));
     assert!(bindings.contains("emittedAt: string"));
-    assert!(bindings.contains("topic: OrbitGeneratedEventTopic"));
+    assert!(bindings.contains("topic: FrontalCodeGeneratedEventTopic"));
 }
 
 #[test]
 fn contains_connector_event_payload_fields() {
     let bindings = render_typescript_bindings();
-    assert!(bindings.contains("OrbitGeneratedConnectorInteractionRequest"));
+    assert!(bindings.contains("FrontalCodeGeneratedConnectorInteractionRequest"));
     assert!(bindings.contains("action: string"));
     assert!(bindings.contains("blocks: Array<Record<string, unknown>>"));
     assert!(bindings.contains("data?: unknown"));
@@ -107,8 +107,8 @@ fn contains_event_payload_combined_interface() {
     let bindings = render_typescript_bindings();
     // The combined interface exists
     assert!(
-        bindings.contains("OrbitGeneratedEventPayload")
-            || bindings.contains("OrbitGeneratedEventPayload")
+        bindings.contains("FrontalCodeGeneratedEventPayload")
+            || bindings.contains("FrontalCodeGeneratedEventPayload")
     );
     assert!(bindings.contains("orphaned") || bindings.contains("task_status"));
 }

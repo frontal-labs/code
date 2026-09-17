@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/codegen.sh — delegate to //tools/codegen.
+# Delegate to the canonical Bazel codegen target.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec cargo run -q -p tools-codegen -- "$@"
+exec bazel run //tools/codegen:codegen -- "$@"

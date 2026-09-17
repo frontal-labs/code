@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use orbit_telemetry::{AnalyticsEvent, MemoryTelemetrySink, SessionTracer, TelemetryEvent};
+use frontal_code_telemetry::{AnalyticsEvent, MemoryTelemetrySink, SessionTracer, TelemetryEvent};
 use serde_json::{Map, Value};
 
 fn make_attrs() -> Map<String, Value> {

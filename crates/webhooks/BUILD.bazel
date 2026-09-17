@@ -12,7 +12,7 @@ sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-webhooks",
+        "frontal-code-webhooks",
         "test",
     ],
     tags = [
@@ -25,7 +25,7 @@ sh_test(
     name = "fmt",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-webhooks",
+        "frontal-code-webhooks",
         "fmt-check",
     ],
     tags = [
@@ -38,7 +38,7 @@ sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-webhooks",
+        "frontal-code-webhooks",
         "clippy",
     ],
     tags = [

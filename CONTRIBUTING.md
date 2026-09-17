@@ -1,6 +1,6 @@
-# Contributing to Frontal Orbit Code
+# Contributing to Frontal Frontal Code Code
 
-Thank you for your interest in contributing to Frontal Orbit Code! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to Frontal Frontal Code Code! This document provides guidelines and information for contributors.
 
 ## Getting Started
 
@@ -15,12 +15,12 @@ Thank you for your interest in contributing to Frontal Orbit Code! This document
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/your-username/frontal-orbit.git
-   cd frontal-orbit
+   git clone https://github.com/your-username/frontal-code.git
+   cd frontal-code
    ```
 3. Add the upstream repository:
    ```bash
-   git remote add upstream https://github.com/frontal-labs/orbit.git
+   git remote add upstream https://github.com/frontal-labs/frontal-code.git
    ```
 4. Install dependencies and build:
    ```bash
@@ -201,4 +201,4 @@ Maintainer responsibilities:
 - [Cargo Book](https://doc.rust-lang.org/cargo/)
 - [Clippy Lints](https://rust-lang.github.io/rust-clippy/)
 
-Thank you for contributing to Frontal Orbit Code!
+Thank you for contributing to Frontal Frontal Code Code!

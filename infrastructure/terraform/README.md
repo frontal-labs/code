@@ -1,6 +1,6 @@
 # Terraform Infrastructure for tools.frontal.dev
 
-This Terraform configuration sets up the complete AWS infrastructure for hosting Orbit CLI, Slack extension, and other internal tools at `tools.frontal.dev`. Designed specifically for deployment in the development account to avoid conflicts with production.
+This Terraform configuration sets up the complete AWS infrastructure for hosting Frontal Code CLI, Slack extension, and other internal tools at `tools.frontal.dev`. Designed specifically for deployment in the development account to avoid conflicts with production.
 
 ## Architecture
 
@@ -8,26 +8,26 @@ This Terraform configuration sets up the complete AWS infrastructure for hosting
 - **NGINX Ingress Controller**: Path-based routing to different services
 - **Cert-Manager**: Automatic SSL certificate management with Let's Encrypt
 - **Route53**: DNS management for `tools.frontal.dev`
-- **Kubernetes**: Complete service deployment (orbit-server, orbit-slack, proxy)
+- **Kubernetes**: Complete service deployment (frontal-code-server, frontal-code-slack, proxy)
 - **ECR**: Optional container registry for custom images
 - **EBS**: Persistent storage for workspace, server state, and agent store
 
 ## Deployed Components
 
 ### Core Services
-- **orbit-server**: Rust-based control plane (2 replicas, 2Gi RAM each)
-- **orbit-slack**: Node.js Slack integration (2 replicas, 512Mi RAM each)
+- **frontal-code-server**: Rust-based control plane (2 replicas, 2Gi RAM each)
+- **frontal-code-slack**: Node.js Slack integration (2 replicas, 512Mi RAM each)
 - **tools-proxy**: NGINX reverse proxy with SSL termination
 
 ### Storage
 - **Workspace**: 100Gi for code repositories and workspace
-- **Server State**: 10Gi for orbit-server state
+- **Server State**: 10Gi for frontal-code-server state
 - **Agent Store**: 50Gi for hosted agent artifacts
 
 ### Networking
 - **tools.frontal.dev**: Main domain with SSL
-- **/orbit**: Orbit API endpoints
-- **/orbit/webhooks**: Slack and other webhooks
+- **/frontal-code**: Frontal Code API endpoints
+- **/frontal-code/webhooks**: Slack and other webhooks
 
 ## Prerequisites
 
@@ -59,21 +59,21 @@ environment = "development"
 aws_account_id = "123456789012"  # Development account ID
 
 # EKS Cluster
-eks_cluster_name = "orbit-dev-cluster"
-eks_cluster_auth_name = "orbit-dev-cluster"
+eks_cluster_name = "frontal-code-dev-cluster"
+eks_cluster_auth_name = "frontal-code-dev-cluster"
 vpc_id = "vpc-xxxxxxxxx"
 
 # SSL Certificate
 certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 # Deployment Options
-deploy_orbit_server = true
-deploy_orbit_slack = true
+deploy_frontal-code_server = true
+deploy_frontal-code_slack = true
 
 # Container Images
-orbit_server_image = "orbit-server:v0.1.0"
-orbit_slack_image = "orbit-slack:v0.1.0"
-orbit_server_api_key = "replace-with-a-long-random-api-key"
+frontal-code_server_image = "frontal-code-server:v0.1.0"
+frontal-code_slack_image = "frontal-code-slack:v0.1.0"
+frontal-code_server_api_key = "replace-with-a-long-random-api-key"
 
 # Slack Configuration
 slack_bot_token = "xoxb-xxxxxxxxxxxx"
@@ -126,21 +126,21 @@ terraform apply
 After deployment, verify the complete stack:
 
 ```bash
-# Check all services in orbit namespace
-kubectl get pods -n orbit
-kubectl get services -n orbit
-kubectl get ingress -n orbit
+# Check all services in frontal-code namespace
+kubectl get pods -n frontal-code
+kubectl get services -n frontal-code
+kubectl get ingress -n frontal-code
 
 # Check the NLB
 kubectl get svc -n ingress-nginx
 
 # Check storage
-kubectl get pvc -n orbit
+kubectl get pvc -n frontal-code
 
 # Check logs
-kubectl logs -n orbit -l app=orbit-server
-kubectl logs -n orbit -l app=orbit-slack
-kubectl logs -n orbit -l app=tools-proxy
+kubectl logs -n frontal-code -l app=frontal-code-server
+kubectl logs -n frontal-code -l app=frontal-code-slack
+kubectl logs -n frontal-code -l app=tools-proxy
 ```
 
 ## URL Structure
@@ -148,17 +148,17 @@ kubectl logs -n orbit -l app=tools-proxy
 Once deployed, the following URLs will be available:
 
 - **Tools Landing**: `https://tools.frontal.dev`
-- **Orbit API**: `https://tools.frontal.dev/orbit/`
-- **Orbit Tasks**: `https://tools.frontal.dev/orbit/api/v1/tasks/`
-- **Webhooks**: `https://tools.frontal.dev/orbit/webhooks/`
+- **Frontal Code API**: `https://tools.frontal.dev/frontal-code/`
+- **Frontal Code Tasks**: `https://tools.frontal.dev/frontal-code/api/v1/tasks/`
+- **Webhooks**: `https://tools.frontal.dev/frontal-code/webhooks/`
 
-## Environment Variables for Orbit CLI
+## Environment Variables for Frontal Code CLI
 
-Update your Orbit CLI configuration to use the new URLs:
+Update your Frontal Code CLI configuration to use the new URLs:
 
 ```bash
-export FRONTAL_BASE_URL="https://tools.frontal.dev/orbit"
-export ORBIT_HOSTED_CALLBACK_URL="https://tools.frontal.dev/orbit/webhooks/tasks"
+export FRONTAL_BASE_URL="https://tools.frontal.dev/frontal-code"
+export FCODE_HOSTED_CALLBACK_URL="https://tools.frontal.dev/frontal-code/webhooks/tasks"
 ```
 
 ## Security Features
@@ -181,7 +181,7 @@ export ORBIT_HOSTED_CALLBACK_URL="https://tools.frontal.dev/orbit/webhooks/tasks
 
 ```bash
 # Check certificate status
-kubectl describe certificate tools-frontal-dev -n orbit
+kubectl describe certificate tools-frontal-dev -n frontal-code
 
 # Check cert-manager logs
 kubectl logs -n cert-manager deployment/cert-manager
@@ -191,7 +191,7 @@ kubectl logs -n cert-manager deployment/cert-manager
 
 ```bash
 # Check ingress status
-kubectl describe ingress orbit-tools-ingress -n orbit
+kubectl describe ingress frontal-code-tools-ingress -n frontal-code
 
 # Check NGINX ingress logs
 kubectl logs -n ingress-nginx deployment/nginx-ingress-controller

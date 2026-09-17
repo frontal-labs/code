@@ -15,7 +15,7 @@ sh_test(
     name = "core_config_example",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-core",
+        "frontal-code-core",
         "run",
         "--example",
         "core_config_example",

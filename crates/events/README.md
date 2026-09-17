@@ -1,10 +1,10 @@
-# Orbit Events
+# Frontal Code Events
 
-Event system and messaging infrastructure for the Orbit ecosystem.
+Event system and messaging infrastructure for the Frontal Code ecosystem.
 
 ## Overview
 
-The `orbit-events` crate provides the foundational event system that enables communication and coordination between different components of the Orbit ecosystem. It defines common event types, event handling patterns, and messaging primitives used throughout the workspace.
+The `frontal-code-events` crate provides the foundational event system that enables communication and coordination between different components of the Frontal Code ecosystem. It defines common event types, event handling patterns, and messaging primitives used throughout the workspace.
 
 ## Features
 
@@ -38,12 +38,12 @@ The `orbit-events` crate provides the foundational event system that enables com
 
 ## Current Status
 
-This crate is included in workspace build/test gates and currently exposes a minimal baseline surface for event evolution. The event system is designed to grow with the needs of the Orbit ecosystem.
+This crate is included in workspace build/test gates and currently exposes a minimal baseline surface for event evolution. The event system is designed to grow with the needs of the Frontal Code ecosystem.
 
 ## Usage
 
 ```rust
-use orbit_events::{Event, EventHandler, EventBus};
+use frontal-code_events::{Event, EventHandler, EventBus};
 
 // Define custom events
 #[derive(Event)]
@@ -88,10 +88,10 @@ The crate supports several common event patterns:
 ## Integration
 
 The event system integrates with:
-- `orbit-runtime` for session and tool events
-- `orbit-telemetry` for event tracking and analytics
-- `orbit-server` for distributed event handling
-- `orbit-providers` for AI provider events
+- `frontal-code-runtime` for session and tool events
+- `frontal-code-telemetry` for event tracking and analytics
+- `frontal-code-server` for distributed event handling
+- `frontal-code-providers` for AI provider events
 
 ## Performance Considerations
 
@@ -110,7 +110,7 @@ Event system tests include:
 
 Run tests with:
 ```bash
-cargo test -p orbit-events
+cargo test -p frontal-code-events
 ```
 
 ## Future Development

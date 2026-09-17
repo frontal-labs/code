@@ -1,5 +1,16 @@
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "tool_sources",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/target/**",
+            "fuzz/fuzz_targets/**/target/**",
+        ],
+    ),
+)
+
 # Shared wrapper used by every //tools/<name>:<name> sh_binary target.
 # It execs `cargo run -p tools-<name>` from the workspace checkout.
 exports_files([

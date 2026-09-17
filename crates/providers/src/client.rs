@@ -9,7 +9,7 @@ use crate::providers::openai::{self, OpenAiCompatClient};
 use crate::providers::xai;
 use crate::providers::{Provider, ProviderKind};
 use crate::types::{MessageRequest, MessageResponse, StreamEvent};
-use orbit_telemetry::SessionTracer;
+use frontal_code_telemetry::SessionTracer;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]

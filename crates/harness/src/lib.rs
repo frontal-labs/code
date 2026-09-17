@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use orbit_commands::{CommandManifestEntry, CommandRegistry, CommandSource};
-use orbit_runtime::{BootstrapPhase, BootstrapPlan};
-use orbit_tools::{ToolManifestEntry, ToolRegistry, ToolSource};
+use frontal_code_commands::{CommandManifestEntry, CommandRegistry, CommandSource};
+use frontal_code_runtime::{BootstrapPhase, BootstrapPlan};
+use frontal_code_tools::{ToolManifestEntry, ToolRegistry, ToolSource};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpstreamPaths {
@@ -70,12 +70,16 @@ fn upstream_repo_candidates(primary_repo_root: &Path) -> Vec<PathBuf> {
     }
 
     for ancestor in primary_repo_root.ancestors().take(4) {
-        candidates.push(ancestor.join("orbit"));
-        candidates.push(ancestor.join("orbit-code"));
+        candidates.push(ancestor.join("frontal-code"));
+        candidates.push(ancestor.join("frontal-code-code"));
     }
 
-    candidates.push(primary_repo_root.join("reference-source").join("orbit"));
-    candidates.push(primary_repo_root.join("vendor").join("orbit"));
+    candidates.push(
+        primary_repo_root
+            .join("reference-source")
+            .join("frontal-code"),
+    );
+    candidates.push(primary_repo_root.join("vendor").join("frontal-code"));
 
     let mut deduped = Vec::new();
     for candidate in candidates {

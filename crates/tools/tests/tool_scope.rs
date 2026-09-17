@@ -1,4 +1,4 @@
-use orbit_tools::ToolExecutionScope;
+use frontal_code_tools::ToolExecutionScope;
 
 #[test]
 fn tool_execution_scope_for_session() {

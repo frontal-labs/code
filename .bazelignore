@@ -21,7 +21,7 @@ bazel-bin
 bazel-out
 bazel-testlogs
 bazel-<module>
-bazel-frontal-orbit
+bazel-frontal-code
 
 # Coverage
 coverage/

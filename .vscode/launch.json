@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Orbit CLI",
+      "name": "Debug Frontal Code CLI",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/debug/orbit",
+      "program": "${workspaceFolder}/target/debug/frontal-code",
       "args": [],
       "cwd": "${workspaceFolder}",
       "environment": [
@@ -22,10 +22,10 @@
       "preLaunchTask": "cargo build debug"
     },
     {
-      "name": "Debug Orbit REPL",
+      "name": "Debug Frontal Code REPL",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/debug/orbit",
+      "program": "${workspaceFolder}/target/debug/frontal-code",
       "args": [
         "--model",
         "sonnet"
@@ -41,10 +41,10 @@
       "preLaunchTask": "cargo build debug"
     },
     {
-      "name": "Debug Orbit Prompt",
+      "name": "Debug Frontal Code Prompt",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/debug/orbit",
+      "program": "${workspaceFolder}/target/debug/frontal-code",
       "args": [
         "prompt",
         "summarize this repository"
@@ -63,7 +63,7 @@
       "name": "Debug Mock Parity Harness",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/debug/orbit",
+      "program": "${workspaceFolder}/target/debug/frontal-code",
       "args": [
         "--provider",
         "mock",

@@ -78,7 +78,7 @@ impl RemoteSessionContext {
                 .filter(|value| !value.is_empty())
                 .cloned(),
             base_url: env_map
-                .get("ORBIT_BASE_URL")
+                .get("FCODE_BASE_URL")
                 .filter(|value| !value.is_empty())
                 .cloned()
                 .unwrap_or_else(|| DEFAULT_REMOTE_BASE_URL.to_string()),
@@ -283,7 +283,7 @@ mod tests {
                 "session-123".to_string(),
             ),
             (
-                "ORBIT_BASE_URL".to_string(),
+                "FCODE_BASE_URL".to_string(),
                 "https://remote.test".to_string(),
             ),
         ]);
@@ -319,7 +319,7 @@ mod tests {
                 "session-123".to_string(),
             ),
             (
-                "ORBIT_BASE_URL".to_string(),
+                "FCODE_BASE_URL".to_string(),
                 "https://remote.test".to_string(),
             ),
             (

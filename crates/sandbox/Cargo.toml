@@ -1,5 +1,5 @@
 [package]
-name = "orbit-sandbox"
+name = "frontal-code-sandbox"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

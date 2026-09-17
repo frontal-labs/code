@@ -20,7 +20,7 @@
     "**/bazel-out/**",
     "**/bazel-bin/**",
     "**/dist/**",
-    "**/.orbit/**",
+    "**/.frontal-code/**",
     "**/vendor/**"
   ],
   "postUpdateOptions": ["gomodTidy", "cargoUpdateLockFile"],

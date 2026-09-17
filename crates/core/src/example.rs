@@ -32,7 +32,7 @@ pub fn load_and_use_config() {
 
     // Access path configurations
     println!("Config home: {}", config.paths.config_home);
-    println!("Orbit home: {}", config.paths.home);
+    println!("FrontalCode home: {}", config.paths.home);
 
     // Access service configurations
     println!(

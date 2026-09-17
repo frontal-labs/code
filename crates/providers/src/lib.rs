@@ -29,8 +29,8 @@ pub use types::{
     ToolChoice, ToolDefinition, ToolResultContentBlock, Usage,
 };
 
-pub use orbit_telemetry::{
+pub use frontal_code_telemetry::{
     AnalyticsEvent, AnthropicRequestProfile, ClientIdentity, JsonlTelemetrySink,
     MemoryTelemetrySink, SessionTraceRecord, SessionTracer, TelemetryEvent, TelemetrySink,
-    DEFAULT_ORBIT_VERSION,
+    DEFAULT_FCODE_VERSION,
 };

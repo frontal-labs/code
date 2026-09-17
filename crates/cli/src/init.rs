@@ -1,15 +1,18 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const STARTER_ORBIT_JSON: &str = concat!(
+const STARTER_FCODE_JSON: &str = concat!(
     "{\n",
     "  \"permissions\": {\n",
     "    \"defaultMode\": \"dontAsk\"\n",
     "  }\n",
     "}\n",
 );
-const GITIGNORE_COMMENT: &str = "# Orbit local artifacts";
-const GITIGNORE_ENTRIES: [&str; 2] = [".orbit/settings.local.json", ".orbit/sessions/"];
+const GITIGNORE_COMMENT: &str = "# FrontalCode local artifacts";
+const GITIGNORE_ENTRIES: [&str; 2] = [
+    ".frontal-code/settings.local.json",
+    ".frontal-code/sessions/",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InitStatus {
@@ -80,16 +83,16 @@ struct RepoDetection {
 pub(crate) fn initialize_repo(cwd: &Path) -> Result<InitReport, Box<dyn std::error::Error>> {
     let mut artifacts = Vec::new();
 
-    let orbit_dir = cwd.join(".orbit");
+    let frontal_code_dir = cwd.join(".frontal-code");
     artifacts.push(InitArtifact {
-        name: ".orbit/",
-        status: ensure_dir(&orbit_dir)?,
+        name: ".frontal-code/",
+        status: ensure_dir(&frontal_code_dir)?,
     });
 
-    let orbit_json = cwd.join(".orbit.json");
+    let frontal_code_json = cwd.join(".frontal-code/settings.json");
     artifacts.push(InitArtifact {
-        name: ".orbit.json",
-        status: write_file_if_missing(&orbit_json, STARTER_ORBIT_JSON)?,
+        name: ".frontal-code/settings.json",
+        status: write_file_if_missing(&frontal_code_json, STARTER_FCODE_JSON)?,
     });
 
     let gitignore = cwd.join(".gitignore");
@@ -164,7 +167,7 @@ pub(crate) fn render_init_agents_md(cwd: &Path) -> String {
     let mut lines = vec![
         "# AGENTS.md".to_string(),
         String::new(),
-        "This file provides guidance to Orbit (orbitcode.dev) when working with code in this repository.".to_string(),
+        "This file provides guidance to FrontalCode (frontal-codecode.dev) when working with code in this repository.".to_string(),
         String::new(),
     ];
 
@@ -209,7 +212,7 @@ pub(crate) fn render_init_agents_md(cwd: &Path) -> String {
 
     lines.push("## Working agreement".to_string());
     lines.push("- Prefer small, reviewable changes and keep generated bootstrap files aligned with actual repo workflows.".to_string());
-    lines.push("- Keep shared defaults in `.orbit.json`; reserve `.orbit/settings.local.json` for machine-local overrides.".to_string());
+    lines.push("- Keep shared defaults in `.frontal-code/settings.json`; reserve `.frontal-code/settings.local.json` for machine-local overrides.".to_string());
     lines.push("- Do not overwrite existing `AGENTS.md` content automatically; update it intentionally when repo workflows change.".to_string());
     lines.push(String::new());
 
@@ -347,7 +350,7 @@ mod tests {
             .as_nanos();
         let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();
-        std::env::temp_dir().join(format!("orbit-init-{pid}-{nanos}-{counter}"))
+        std::env::temp_dir().join(format!("frontal-code-init-{pid}-{nanos}-{counter}"))
     }
 
     #[test]
@@ -358,16 +361,17 @@ mod tests {
 
         let report = initialize_repo(&root).expect("init should succeed");
         let rendered = report.render();
-        assert!(rendered.contains(".orbit/"));
-        assert!(rendered.contains(".orbit.json"));
+        assert!(rendered.contains(".frontal-code/"));
+        assert!(rendered.contains(".frontal-code/settings.json"));
         assert!(rendered.contains("created"));
         assert!(rendered.contains(".gitignore"));
         assert!(rendered.contains("AGENTS.md"));
-        assert!(root.join(".orbit").is_dir());
-        assert!(root.join(".orbit.json").is_file());
+        assert!(root.join(".frontal-code").is_dir());
+        assert!(root.join(".frontal-code/settings.json").is_file());
         assert!(root.join("AGENTS.md").is_file());
         assert_eq!(
-            fs::read_to_string(root.join(".orbit.json")).expect("read orbit json"),
+            fs::read_to_string(root.join(".frontal-code/settings.json"))
+                .expect("read frontal-code json"),
             concat!(
                 "{\n",
                 "  \"permissions\": {\n",
@@ -377,8 +381,8 @@ mod tests {
             )
         );
         let gitignore = fs::read_to_string(root.join(".gitignore")).expect("read gitignore");
-        assert!(gitignore.contains(".orbit/settings.local.json"));
-        assert!(gitignore.contains(".orbit/sessions/"));
+        assert!(gitignore.contains(".frontal-code/settings.local.json"));
+        assert!(gitignore.contains(".frontal-code/sessions/"));
         let agents_md = fs::read_to_string(root.join("AGENTS.md")).expect("read agents md");
         assert!(agents_md.contains("## Working agreement"));
 
@@ -390,16 +394,19 @@ mod tests {
         let root = temp_dir();
         fs::create_dir_all(&root).expect("create root");
         fs::write(root.join("AGENTS.md"), "custom guidance\n").expect("write existing agents md");
-        fs::write(root.join(".gitignore"), ".orbit/settings.local.json\n")
-            .expect("write gitignore");
+        fs::write(
+            root.join(".gitignore"),
+            ".frontal-code/settings.local.json\n",
+        )
+        .expect("write gitignore");
 
         let first = initialize_repo(&root).expect("first init should succeed");
         assert!(first.render().contains("AGENTS.md"));
         assert!(first.render().contains("skipped (already exists)"));
         let second = initialize_repo(&root).expect("second init should succeed");
         let second_rendered = second.render();
-        assert!(second_rendered.contains(".orbit/"));
-        assert!(second_rendered.contains(".orbit.json"));
+        assert!(second_rendered.contains(".frontal-code/"));
+        assert!(second_rendered.contains(".frontal-code/settings.json"));
         assert!(second_rendered.contains("skipped (already exists)"));
         assert!(second_rendered.contains(".gitignore       skipped (already exists)"));
         assert!(second_rendered.contains("AGENTS.md"));
@@ -408,8 +415,13 @@ mod tests {
             "custom guidance\n"
         );
         let gitignore = fs::read_to_string(root.join(".gitignore")).expect("read gitignore");
-        assert_eq!(gitignore.matches(".orbit/settings.local.json").count(), 1);
-        assert_eq!(gitignore.matches(".orbit/sessions/").count(), 1);
+        assert_eq!(
+            gitignore
+                .matches(".frontal-code/settings.local.json")
+                .count(),
+            1
+        );
+        assert_eq!(gitignore.matches(".frontal-code/sessions/").count(), 1);
 
         fs::remove_dir_all(root).expect("cleanup temp dir");
     }

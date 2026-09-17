@@ -14,10 +14,10 @@ filegroup(
 )
 
 sh_binary(
-    name = "orbit-api",
+    name = "frontal-code-api",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-api",
+        "frontal-code-api",
         "run",
     ],
 )
@@ -26,7 +26,7 @@ sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-api",
+        "frontal-code-api",
         "test",
     ],
     tags = [
@@ -39,7 +39,7 @@ sh_test(
     name = "fmt",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-api",
+        "frontal-code-api",
         "fmt-check",
     ],
     tags = [
@@ -52,7 +52,7 @@ sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-api",
+        "frontal-code-api",
         "clippy",
     ],
     tags = [

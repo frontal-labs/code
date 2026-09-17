@@ -1,5 +1,5 @@
 # ============================================================================
-# Common Bazel configuration for the frontal-orbit Bzlmod monorepo.
+# Common Bazel configuration for the frontal-code Bzlmod monorepo.
 # Machine-specific overrides go in .bazelrc.project (gitignored).
 # ============================================================================
 
@@ -18,9 +18,12 @@ build --announce_rc
 # Show test failures immediately.
 test --test_output=errors
 test --test_verbose_timeout_warnings
+test --action_env=PATH
+test --action_env=HOME
 
 # Aggregate coverage into a single lcov report when requested.
 coverage --combined_report=lcov
 
 # User-local overrides (output_base, remote cache, etc.).
 try-import %workspace%/.bazelrc.project
+export PATH="/Users/gabrielfonseca/.cargo/bin:/Users/gabrielfonseca/.bun/bin:/Users/gabrielfonseca/.grok/bin:/Users/gabrielfonseca/.codeium/windsurf/bin:/Users/gabrielfonseca/bin:/Users/gabrielfonseca/.antigravity/antigravity/bin:/Users/gabrielfonseca/.antigravity/antigravity/bin:/Users/gabrielfonseca/.opencode/bin:/Users/gabrielfonseca/.antigravity/antigravity/bin:/Users/gabrielfonseca/.antigravity/antigravity/bin:/Users/gabrielfonseca/.local/bin:/Users/gabrielfonseca/.bun/bin:/Users/gabrielfonseca/.nvm/versions/node/v22.22.3/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin:/Users/gabrielfonseca/.grok/bin:/Users/gabrielfonseca/.codeium/windsurf/bin:/Users/gabrielfonseca/bin:/Users/gabrielfonseca/.antigravity/antigravity/bin:/Users/gabrielfonseca/.opencode/bin:/Users/gabrielfonseca/.local/bin:/Users/gabrielfonseca/.bun/bin:/Users/gabrielfonseca/.nvm/versions/node/v22.22.3/bin:/opt/homebrew/sbin:/Users/gabrielfonseca/Library/pnpm:/Users/gabrielfonseca/.cargo/bin:/Users/gabrielfonseca/.turso:/Users/gabrielfonseca/.turso"

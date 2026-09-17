@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::config::RuntimePluginConfig;
-use orbit_integrations::mcp::tool_bridge::{McpResourceInfo, McpToolInfo};
+use frontal_code_integrations::mcp::tool_bridge::{McpResourceInfo, McpToolInfo};
 
 fn now_secs() -> u64 {
     SystemTime::now()

@@ -1,4 +1,4 @@
-use orbit_providers::{read_base_url, OAuthTokenSet};
+use frontal_code_providers::{read_base_url, OAuthTokenSet};
 
 #[test]
 fn oauth_token_set_construction() {

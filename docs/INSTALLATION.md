@@ -1,18 +1,18 @@
 # Installation Guide
 
-This guide covers installing both the Orbit CLI tool and the Orbit server.
+This guide covers installing both the Frontal Code CLI tool and the Frontal Code server.
 
 ## CLI Installation
 
 ### Homebrew (Recommended)
 
-The easiest way to install the Orbit CLI is via Homebrew:
+The easiest way to install the Frontal Code CLI is via Homebrew:
 
 ```bash
-brew install --HEAD ./homebrew/orbit.rb
+brew install --HEAD ./homebrew/frontal-code.rb
 ```
 
-This will build and install the `orbit` binary from source.
+This will build and install the `frontal-code` binary from source.
 
 ### From Source
 
@@ -20,28 +20,28 @@ If you prefer to build from source:
 
 ```bash
 # Clone the repository
-git clone https://github.com/frontal-labs/orbit.git
-cd frontal-orbit
+git clone https://github.com/frontal-labs/frontal-code.git
+cd frontal-code
 
 # Build the workspace
 cargo build --workspace
 
 # Run the CLI
-cargo run -p orbit-cli -- ...
+cargo run -p cli -- ...
 ```
 
 ## Server Installation
 
 ### Docker (Recommended)
 
-The Orbit server is available as a Docker container:
+The Frontal Code server is available as a Docker container:
 
 ```bash
 # Build the server image
-docker build -f infrastructure/docker/orbit-server.Dockerfile -t orbit-server .
+docker build -f infrastructure/docker/frontal-code-server.Dockerfile -t frontal-code-server .
 
 # Run the server
-docker run -p 8080:8080 orbit-server
+docker run -p 8080:8080 frontal-code-server
 ```
 
 ### Docker Compose
@@ -61,10 +61,10 @@ Build and run the server directly:
 
 ```bash
 # Build the server
-cargo build -p orbit-server
+cargo build -p frontal-code-server
 
 # Run the server
-cargo run -p orbit-server
+cargo run -p frontal-code-server
 ```
 
 ## Bazel Build Foundation (Advanced)
@@ -79,7 +79,7 @@ The dev container installs Bazel via the official apt repository (keyring
 based) and layers language features (Git, Node 22, Rust 1.80, Python 3.11).
 
 1. Open the repo in a dev container (`Dev Containers: Reopen in Container`).
-2. Post-create runs `make bootstrap`, which installs pre-commit hooks and runs
+2. Post-create runs `bazel run //:bootstrap`, which installs pre-commit hooks and runs
    `bazel mod tidy` (non-fatal).
 
 ### Option B — Local machine
@@ -89,22 +89,21 @@ based) and layers language features (Git, Node 22, Rust 1.80, Python 3.11).
 2. Bootstrap:
 
    ```bash
-   make bootstrap
+   bazel run //:bootstrap
    ```
 
 ### Common Bazel commands
 
 | Command            | What it does                                  |
 |--------------------|-----------------------------------------------|
-| `make build`       | `bazel build //...`                           |
-| `make test`        | `bazel test //...`                            |
-| `make lint`        | `pre-commit run --all-files`                  |
-| `make fmt`         | `bazel run //:buildifier -- -r .`             |
-| `make tidy`        | `bazel mod tidy` (non-fatal)                  |
-| `make doctor`      | Sanity-check the toolchain / environment      |
-| `make clean`       | `bazel clean` (`EXPUNGE=1` for full expunge)  |
-| `make coverage`    | `bazel coverage //...` → `coverage/lcov.info` |
-| `make ci`          | build → test → lint                           |
+| `bazel build //...`| Build all Bazel targets                          |
+| `bazel test //...` | Run all Bazel tests                          |
+| `bazel run //:buildifier -- -r .` | Format Starlark/BUILD files |
+| `bazel mod tidy`   | Trim dependency information (non-fatal)        |
+| `bazel run //:doctor` | Sanity-check the toolchain / environment      |
+| `bazel clean`      | Clean Bazel outputs (`EXPUNGE=1` for full expunge) |
+| `bazel coverage //...` → `coverage/lcov.info` | Generate coverage report |
+| `bazel test //:ci`         | Build → test → lint (aggregate)                           |
 
 ### Local overrides
 
@@ -112,7 +111,7 @@ Never put machine-specific flags in `.bazelrc`. Add them to the gitignored
 `.bazelrc.project`, for example:
 
 ```bash
-common --output_user_root=~/.cache/bazel/frontal-orbit
+common --output_user_root=~/.cache/bazel/frontal-code
 ```
 
 #### Remote cache
@@ -137,12 +136,12 @@ build --platforms=//bazel/platforms:linux_x86_64
 After installation, configure your API credentials:
 
 ```bash
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 # Or use Frontal's OpenAI-compatible API gateway
 export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 # Or use an Anthropic proxy
-export ORBIT_BASE_URL="https://your-proxy.com"
+export FCODE_BASE_URL="https://your-proxy.com"
 ```
 
 ## Verification
@@ -151,10 +150,10 @@ Verify your installation:
 
 ```bash
 # Check CLI version
-orbit --version
+frontal-code --version
 
 # Test CLI functionality
-orbit --help
+frontal-code --help
 
 # Test server (if running)
 curl http://localhost:8080/health
@@ -162,17 +161,17 @@ curl http://localhost:8080/health
 
 ## Quick Start
 
-Once installed, you can start using Orbit:
+Once installed, you can start using Frontal Code:
 
 ```bash
 # Interactive REPL
-orbit --model claude-opus-5
+frontal-code --model claude-opus-5
 
 # One-shot prompt
-orbit prompt "explain this codebase"
+frontal-code prompt "explain this codebase"
 
 # Check status
-orbit status
+frontal-code status
 ```
 
 ## Troubleshooting
@@ -189,8 +188,8 @@ If you encounter build issues:
 
 If you get permission errors:
 
-1. Check binary permissions: `ls -la $(which orbit)`
-2. Reinstall with Homebrew: `brew reinstall --HEAD ./homebrew/orbit.rb`
+1. Check binary permissions: `ls -la $(which frontal-code)`
+2. Reinstall with Homebrew: `brew reinstall --HEAD ./homebrew/frontal-code.rb`
 
 ### Server Issues
 
@@ -198,6 +197,6 @@ If the server won't start:
 
 1. Check port availability: `lsof -i :8080`
 2. Verify Docker is running: `docker version`
-3. Check logs: `docker logs orbit-server`
+3. Check logs: `docker logs frontal-code-server`
 
 For more detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

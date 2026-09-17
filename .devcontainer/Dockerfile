@@ -1,4 +1,4 @@
-# Dev container image for the frontal-orbit Bzlmod monorepo.
+# Dev container image for the frontal-code Bzlmod monorepo.
 #
 # Rust, Node, Python and Git are provided by devcontainer "features"
 # (see devcontainer.json). This Dockerfile only installs Bazel via the

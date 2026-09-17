@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
-use orbit_telemetry::SessionTracer;
+use frontal_code_telemetry::SessionTracer;
 use serde_json::{Map, Value};
 
 use crate::compact::{
@@ -798,7 +798,7 @@ mod tests {
     use crate::session::{ContentBlock, MessageRole, Session};
     use crate::usage::TokenUsage;
     use crate::ToolError;
-    use orbit_telemetry::{MemoryTelemetrySink, SessionTracer, TelemetryEvent};
+    use frontal_code_telemetry::{MemoryTelemetrySink, SessionTracer, TelemetryEvent};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;

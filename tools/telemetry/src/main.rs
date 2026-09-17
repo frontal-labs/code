@@ -1,6 +1,6 @@
 //! `tools-telemetry` — wrap a build/CI command and emit a telemetry event.
 //!
-//! Reads the `telemetry` block of `.orbit.json` for the destination path
+//! Reads the `telemetry` block of `.frontal-code/settings.json` for the destination path
 //! (`telemetry.path`); if telemetry is disabled or the file is absent, events
 //! go to stdout. This keeps the tool usable offline while matching the
 //! project's existing telemetry configuration contract.
@@ -15,14 +15,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser)]
 #[command(
-    name = "orbit-telemetry",
+    name = "frontal-code-telemetry",
     about = "Wrap a command and emit a telemetry event"
 )]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
-    /// Path to .orbit.json (for telemetry config).
-    #[arg(long, default_value = ".orbit.json")]
+    /// Path to .frontal-code/settings.json (for telemetry config).
+    #[arg(long, default_value = ".frontal-code/settings.json")]
     config: String,
 }
 

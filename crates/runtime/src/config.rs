@@ -7,7 +7,7 @@ use crate::json::JsonValue;
 use crate::sandbox::{FilesystemIsolationMode, SandboxConfig};
 
 /// Schema name advertised by generated settings files.
-pub const ORBIT_SETTINGS_SCHEMA_NAME: &str = "SettingsSchema";
+pub const FCODE_SETTINGS_SCHEMA_NAME: &str = "SettingsSchema";
 
 /// Origin of a loaded settings file in the configuration precedence chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -170,7 +170,7 @@ pub struct McpOAuthConfig {
     pub xaa: Option<bool>,
 }
 
-/// OAuth client configuration used by the main Orbit runtime.
+/// OAuth client configuration used by the main `FrontalCode` runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OAuthConfig {
     pub client_id: String,
@@ -236,8 +236,8 @@ impl ConfigLoader {
     #[must_use]
     pub fn discover(&self) -> Vec<ConfigEntry> {
         let user_legacy_path = self.config_home.parent().map_or_else(
-            || PathBuf::from(".orbit.json"),
-            |parent| parent.join(".orbit.json"),
+            || PathBuf::from(".frontal-code/settings.json"),
+            |parent| parent.join(".frontal-code/settings.json"),
         );
         vec![
             ConfigEntry {
@@ -250,15 +250,15 @@ impl ConfigLoader {
             },
             ConfigEntry {
                 source: ConfigSource::Project,
-                path: self.cwd.join(".orbit.json"),
+                path: self.cwd.join(".frontal-code/settings.json"),
             },
             ConfigEntry {
                 source: ConfigSource::Project,
-                path: self.cwd.join(".orbit").join("settings.json"),
+                path: self.cwd.join(".frontal-code").join("settings.json"),
             },
             ConfigEntry {
                 source: ConfigSource::Local,
-                path: self.cwd.join(".orbit").join("settings.local.json"),
+                path: self.cwd.join(".frontal-code").join("settings.local.json"),
             },
         ]
     }
@@ -507,10 +507,10 @@ impl RuntimeTelemetryConfig {
 #[must_use]
 /// Returns the default per-user config directory used by the runtime.
 pub fn default_config_home() -> PathBuf {
-    std::env::var_os("ORBIT_CONFIG_HOME")
+    std::env::var_os("FCODE_CONFIG_HOME")
         .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".orbit")))
-        .unwrap_or_else(|| PathBuf::from(".orbit"))
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".frontal-code")))
+        .unwrap_or_else(|| PathBuf::from(".frontal-code"))
 }
 
 impl RuntimeHookConfig {
@@ -617,7 +617,8 @@ impl McpServerConfig {
 fn read_optional_json_object(
     path: &Path,
 ) -> Result<Option<BTreeMap<String, JsonValue>>, ConfigError> {
-    let is_legacy_config = path.file_name().and_then(|name| name.to_str()) == Some(".orbit.json");
+    let is_legacy_config =
+        path.file_name().and_then(|name| name.to_str()) == Some(".frontal-code/settings.json");
     let contents = match fs::read_to_string(path) {
         Ok(contents) => contents,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1145,7 +1146,7 @@ mod tests {
     use super::{
         deep_merge_objects, parse_permission_mode_label, ConfigLoader, ConfigSource,
         McpServerConfig, McpTransport, ResolvedPermissionMode, RuntimeHookConfig,
-        RuntimePluginConfig, ORBIT_SETTINGS_SCHEMA_NAME,
+        RuntimePluginConfig, FCODE_SETTINGS_SCHEMA_NAME,
     };
     use crate::json::JsonValue;
     use crate::sandbox::FilesystemIsolationMode;
@@ -1169,7 +1170,7 @@ mod tests {
     fn rejects_non_object_settings_files() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
+        let home = root.join("home").join(".frontal-code");
         fs::create_dir_all(&home).expect("home config dir");
         fs::create_dir_all(&cwd).expect("project dir");
         fs::write(home.join("settings.json"), "[]").expect("write bad settings");
@@ -1190,12 +1191,12 @@ mod tests {
     fn loads_and_merges_claude_code_config_files_by_precedence() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
-        fs::create_dir_all(cwd.join(".orbit")).expect("project config dir");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(
-            home.parent().expect("home parent").join(".orbit.json"),
+            home.parent().expect("home parent").join(".frontal-code/settings.json"),
             r#"{"model":"haiku","env":{"A":"1"},"mcpServers":{"home":{"command":"uvx","args":["home"]}}}"#,
         )
         .expect("write user compat config");
@@ -1205,17 +1206,17 @@ mod tests {
         )
         .expect("write user settings");
         fs::write(
-            cwd.join(".orbit.json"),
+            cwd.join(".frontal-code/settings.json"),
             r#"{"model":"project-compat","env":{"B":"2"}}"#,
         )
         .expect("write project compat config");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"env":{"C":"3"},"hooks":{"PostToolUse":["project"],"PostToolUseFailure":["project-failure"]},"permissions":{"ask":["Edit"]},"mcpServers":{"project":{"command":"uvx","args":["project"]}}}"#,
         )
         .expect("write project settings");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"model":"opus","permissionMode":"acceptEdits"}"#,
         )
         .expect("write local settings");
@@ -1224,7 +1225,7 @@ mod tests {
             .load()
             .expect("config should load");
 
-        assert_eq!(ORBIT_SETTINGS_SCHEMA_NAME, "SettingsSchema");
+        assert_eq!(FCODE_SETTINGS_SCHEMA_NAME, "SettingsSchema");
         assert_eq!(loaded.loaded_entries().len(), 5);
         assert_eq!(loaded.loaded_entries()[0].source, ConfigSource::User);
         assert_eq!(
@@ -1278,8 +1279,8 @@ mod tests {
     fn parses_telemetry_config() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
-        fs::create_dir_all(cwd.join(".orbit")).expect("project config dir");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(
@@ -1287,7 +1288,7 @@ mod tests {
             r#"{
               "telemetry": {
                 "enabled": true,
-                "path": "/tmp/orbit-telemetry.jsonl"
+                "path": "/tmp/frontal-code-telemetry.jsonl"
               }
             }"#,
         )
@@ -1300,7 +1301,7 @@ mod tests {
         assert_eq!(loaded.telemetry().enabled(), Some(true));
         assert_eq!(
             loaded.telemetry().path(),
-            Some("/tmp/orbit-telemetry.jsonl")
+            Some("/tmp/frontal-code-telemetry.jsonl")
         );
 
         fs::remove_dir_all(root).expect("cleanup temp dir");
@@ -1310,12 +1311,12 @@ mod tests {
     fn parses_sandbox_config() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
-        fs::create_dir_all(cwd.join(".orbit")).expect("project config dir");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{
               "sandbox": {
                 "enabled": true,
@@ -1348,8 +1349,8 @@ mod tests {
     fn parses_typed_mcp_and_oauth_config() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
-        fs::create_dir_all(cwd.join(".orbit")).expect("project config dir");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(
@@ -1386,7 +1387,7 @@ mod tests {
         )
         .expect("write user settings");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{
               "mcpServers": {
                 "remote-server": {
@@ -1439,7 +1440,7 @@ mod tests {
     fn infers_http_mcp_servers_from_url_only_config() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
+        let home = root.join("home").join(".frontal-code");
         fs::create_dir_all(&home).expect("home config dir");
         fs::create_dir_all(&cwd).expect("project dir");
         fs::write(
@@ -1477,8 +1478,8 @@ mod tests {
     fn parses_plugin_config_from_enabled_plugins() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
-        fs::create_dir_all(cwd.join(".orbit")).expect("project config dir");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(
@@ -1515,8 +1516,8 @@ mod tests {
     fn parses_plugin_config() {
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
-        fs::create_dir_all(cwd.join(".orbit")).expect("project config dir");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(
@@ -1568,7 +1569,7 @@ mod tests {
         // given
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
+        let home = root.join("home").join(".frontal-code");
         fs::create_dir_all(&home).expect("home config dir");
         fs::create_dir_all(&cwd).expect("project dir");
         fs::write(
@@ -1595,7 +1596,7 @@ mod tests {
         // given
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
+        let home = root.join("home").join(".frontal-code");
         fs::create_dir_all(&home).expect("home config dir");
         fs::create_dir_all(&cwd).expect("project dir");
         fs::write(home.join("settings.json"), "").expect("write empty settings");
@@ -1650,9 +1651,9 @@ mod tests {
         // given
         let root = temp_dir();
         let cwd = root.join("project");
-        let home = root.join("home").join(".orbit");
-        let project_settings = cwd.join(".orbit").join("settings.json");
-        fs::create_dir_all(cwd.join(".orbit")).expect("project config dir");
+        let home = root.join("home").join(".frontal-code");
+        let project_settings = cwd.join(".frontal-code").join("settings.json");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(

@@ -1,7 +1,7 @@
-//! MCP tool definitions and handlers for Orbit.
+//! MCP tool definitions and handlers for `FrontalCode`.
 //!
 //! This module provides the tool definitions and execution logic for
-//! MCP-related tools that can be called from within Orbit sessions.
+//! MCP-related tools that can be called from within `FrontalCode` sessions.
 
 use super::tool_bridge::McpToolRegistry;
 use serde::Deserialize;

@@ -1,6 +1,6 @@
-//! # Orbit Core
+//! # `FrontalCode` Core
 //!
-//! This crate provides core capabilities for the Orbit system.
+//! This crate provides core capabilities for the `FrontalCode` system.
 
 pub mod config;
 

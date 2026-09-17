@@ -1,4 +1,4 @@
-use orbit_repo::normalize_branch_name;
+use frontal_code_repo::normalize_branch_name;
 
 #[test]
 fn normalizes_simple_name() {
@@ -13,22 +13,22 @@ fn normalizes_with_special_characters() {
 
 #[test]
 fn empty_string_returns_fallback() {
-    assert_eq!(normalize_branch_name(""), "orbit-task");
+    assert_eq!(normalize_branch_name(""), "frontal-code-task");
 }
 
 #[test]
 fn only_separators_returns_fallback() {
-    assert_eq!(normalize_branch_name("////"), "orbit-task");
+    assert_eq!(normalize_branch_name("////"), "frontal-code-task");
 }
 
 #[test]
 fn only_special_chars_returns_fallback() {
-    assert_eq!(normalize_branch_name("!!!@@@###$$$"), "orbit-task");
+    assert_eq!(normalize_branch_name("!!!@@@###$$$"), "frontal-code-task");
 }
 
 #[test]
 fn all_separators_returns_fallback() {
-    assert_eq!(normalize_branch_name("---"), "orbit-task");
+    assert_eq!(normalize_branch_name("---"), "frontal-code-task");
 }
 
 #[test]

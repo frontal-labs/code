@@ -677,7 +677,7 @@ mod tests {
             .with_branch_id("main");
         let entity = KgEntity {
             id: "crate:memory".to_string(),
-            label: "orbit-memory".to_string(),
+            label: "frontal-code-memory".to_string(),
             entity_type: "crate".to_string(),
         };
 
@@ -782,7 +782,7 @@ mod tests {
             &scope,
             KgEntity {
                 id: "crate:tools".to_string(),
-                label: "orbit-tools".to_string(),
+                label: "frontal-code-tools".to_string(),
                 entity_type: "crate".to_string(),
             },
         );

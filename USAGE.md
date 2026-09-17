@@ -1,37 +1,37 @@
-# Orbit Usage
+# Frontal Code Usage
 
-This guide covers the current Rust workspace at the repository root and the `orbit` CLI binary. If you are brand new, make the doctor health check your first run: start `orbit`, then run `/doctor`.
+This guide covers the current Rust workspace at the repository root and the `frontal-code` CLI binary. If you are brand new, make the doctor health check your first run: start `frontal-code`, then run `/doctor`.
 
 ## Quick-start health check
 
 Run this before prompts, sessions, or automation:
 
 ```bash
-brew install --HEAD ./homebrew/orbit.rb
-orbit
+brew install --HEAD ./homebrew/frontal-code.rb
+frontal-code
 # first command inside the REPL
 /doctor
 ```
 
-`/doctor` is the built-in setup and preflight diagnostic. Once you have a saved session, you can rerun it with `orbit --resume latest /doctor`.
+`/doctor` is the built-in setup and preflight diagnostic. Once you have a saved session, you can rerun it with `frontal-code --resume latest /doctor`.
 
 ## Prerequisites
 
 - Homebrew for CLI installation, or a Rust toolchain with `cargo` for source builds
 - One of:
-  - `ORBIT_API_KEY` for direct API access
+  - `FCODE_API_KEY` for direct API access
   - `OPENAI_API_KEY` for OpenAI
   - `XAI_API_KEY` for xAI
   - `FRONTAL_API_KEY` for Frontal's OpenAI-compatible gateway
   - `BEDROCK_API_KEY` for Bedrock-compatible gateways
   - `AZURE_OPENAI_API_KEY` for Azure OpenAI-compatible gateways
   - or local `OLLAMA_BASE_URL` (defaults to `http://localhost:11434`)
-- Optional: `ORBIT_BASE_URL` when targeting a proxy or local service
+- Optional: `FCODE_BASE_URL` when targeting a proxy or local service
 - Optional: `FRONTAL_BASE_URL` when targeting a custom Frontal gateway URL
 
 ## Configuration
 
-Orbit uses a centralized configuration system that allows you to customize behavior without modifying code.
+Frontal Code uses a centralized configuration system that allows you to customize behavior without modifying code.
 
 ### Configuration File
 
@@ -48,9 +48,9 @@ The main configuration file is `config/project.json`. It contains:
 
 The system looks for `project.json` in this order:
 
-1. `$ORBIT_CONFIG_HOME/project.json` - Custom config directory
-2. `$ORBIT_HOME/project.json` - Orbit home directory  
-3. `~/.orbit/project.json` - User's home directory
+1. `$FCODE_CONFIG_HOME/project.json` - Custom config directory
+2. `$FCODE_HOME/project.json` - Frontal Code home directory  
+3. `~/.frontal-code/project.json` - User's home directory
 4. `config/project.json` - Project-local configuration
 
 ### Common Configuration Options
@@ -84,7 +84,7 @@ The system looks for `project.json` in this order:
 Run the doctor command to see your current configuration:
 
 ```bash
-orbit
+frontal-code
 /doctor
 ```
 
@@ -100,67 +100,67 @@ Environment variables take precedence over configuration file settings:
 
 ```bash
 # Override default provider
-export ORBIT_DEFAULT_PROVIDER="openai"
+export FCODE_DEFAULT_PROVIDER="openai"
 
 # Override log level
-export ORBIT_LOG_LEVEL="debug"
+export FCODE_LOG_LEVEL="debug"
 
 # Override permission mode
-export ORBIT_PERMISSION_MODE="restricted"
+export FCODE_PERMISSION_MODE="restricted"
 ```
 
 ## Install / build the workspace
 
 ```bash
 # Install the CLI with Homebrew
-brew install --HEAD ./homebrew/orbit.rb
+brew install --HEAD ./homebrew/frontal-code.rb
 
 # Or build from source
 cargo build --workspace
 ```
 
-The installed CLI is available as `orbit`. If you build from source instead, the debug binary is available at `target/debug/orbit`. Make the doctor check above your first post-build step.
+The installed CLI is available as `frontal-code`. If you build from source instead, the debug binary is available at `target/debug/frontal-code`. Make the doctor check above your first post-build step.
 
 ## Quick start
 
 ### First-run doctor check
 
 ```bash
-orbit
+frontal-code
 /doctor
 ```
 
 ### Interactive REPL
 
 ```bash
-orbit
+frontal-code
 ```
 
 ### One-shot prompt
 
 ```bash
-orbit prompt "summarize this repository"
+frontal-code prompt "summarize this repository"
 ```
 
 ### Shorthand prompt mode
 
 ```bash
-orbit "explain crates/runtime/src/lib.rs"
+frontal-code "explain crates/runtime/src/lib.rs"
 ```
 
 ### JSON output for scripting
 
 ```bash
-orbit --output-format json prompt "status"
+frontal-code --output-format json prompt "status"
 ```
 
 ## Model and permission controls
 
 ```bash
-orbit --model sonnet prompt "review this diff"
-orbit --permission-mode read-only prompt "summarize Cargo.toml"
-orbit --permission-mode workspace-write prompt "update README.md"
-orbit --allowedTools read,glob "inspect the runtime crate"
+frontal-code --model sonnet prompt "review this diff"
+frontal-code --permission-mode read-only prompt "summarize Cargo.toml"
+frontal-code --permission-mode workspace-write prompt "update README.md"
+frontal-code --allowedTools read,glob "inspect the runtime crate"
 ```
 
 Supported permission modes:
@@ -181,17 +181,17 @@ Use the `--provider` flag to force a specific AI provider:
 
 ```bash
 # Force Anthropic provider
-orbit --provider anthropic prompt "your question"
+frontal-code --provider anthropic prompt "your question"
 
 # Force OpenAI provider
-orbit --provider openai prompt "your question"
+frontal-code --provider openai prompt "your question"
 
 # Force xAI provider
-orbit --provider xai prompt "your question"
+frontal-code --provider xai prompt "your question"
 
 # Combine with model aliases
-orbit --provider anthropic --model opus prompt "complex task"
-orbit --provider openai --model gpt-4 prompt "your question"
+frontal-code --provider anthropic --model opus prompt "complex task"
+frontal-code --provider openai --model gpt-4 prompt "your question"
 ```
 
 Supported providers:
@@ -204,7 +204,7 @@ Supported providers:
 ### API key
 
 ```bash
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 # or
 export FRONTAL_API_KEY="frontal-..."
 ```
@@ -212,21 +212,21 @@ export FRONTAL_API_KEY="frontal-..."
 ## Common operational commands
 
 ```bash
-orbit status
-orbit sandbox
-orbit agents
-orbit mcp
-orbit skills
-orbit system-prompt --cwd .. --date 2026-04-04
+frontal-code status
+frontal-code sandbox
+frontal-code agents
+frontal-code mcp
+frontal-code skills
+frontal-code system-prompt --cwd .. --date 2026-04-04
 ```
 
 ## Session management
 
-REPL turns are persisted under `.orbit/sessions/` in the current workspace.
+REPL turns are persisted under `.frontal-code/sessions/` in the current workspace.
 
 ```bash
-orbit --resume latest
-orbit --resume latest /status /diff
+frontal-code --resume latest
+frontal-code --resume latest /status /diff
 ```
 
 Useful interactive commands include `/help`, `/status`, `/cost`, `/config`, `/session`, `/model`, `/permissions`, and `/export`.
@@ -235,11 +235,11 @@ Useful interactive commands include `/help`, `/status`, `/cost`, `/config`, `/se
 
 Runtime config is loaded in this order, with later entries overriding earlier ones:
 
-1. `~/.orbit.json`
-2. `~/.config/orbit/settings.json`
-3. `<repo>/.orbit.json`
-4. `<repo>/.orbit/settings.json`
-5. `<repo>/.orbit/settings.local.json`
+1. `~/.frontal-code/settings.json`
+2. `~/.config/frontal-code/settings.json`
+3. `<repo>/.frontal-code/settings.json`
+4. `<repo>/.frontal-code/settings.json`
+5. `<repo>/.frontal-code/settings.local.json`
 
 ## Mock parity harness
 
@@ -252,7 +252,7 @@ The workspace includes a deterministic Anthropic-compatible mock service and par
 Manual mock service startup:
 
 ```bash
-cargo run -p orbit-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 ## Verification
@@ -269,7 +269,7 @@ Current Rust crates:
 - `providers`
 - `commands`
 - `compat-harness`
-- `orbit-mock-gateway`
+- `frontal-code-mock-gateway`
 - `plugins`
 - `runtime`
 - `cli` (package in `crates/cli/`)

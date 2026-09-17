@@ -113,7 +113,7 @@ verify_deployment() {
     
     # Get outputs
     TOOLS_URL=$(terraform output -raw tools_domain_url)
-    ORBIT_URL=$(terraform output -raw orbit_tools_url)
+    FCODE_URL=$(terraform output -raw frontal-code_tools_url)
     NLB_DNS=$(terraform output -raw nginx_ingress_load_balancer)
     
     log_info "Waiting for DNS propagation..."
@@ -129,14 +129,14 @@ verify_deployment() {
     # Check Kubernetes resources
     log_info "Checking Kubernetes resources..."
     
-    if kubectl get ingress -n orbit orbit-tools-ingress &> /dev/null; then
+    if kubectl get ingress -n frontal-code frontal-code-tools-ingress &> /dev/null; then
         log_success "Ingress created successfully"
     else
         log_error "Ingress not found"
         return 1
     fi
     
-    if kubectl get pods -n orbit -l app=tools-proxy &> /dev/null; then
+    if kubectl get pods -n frontal-code -l app=tools-proxy &> /dev/null; then
         log_success "Proxy pods are running"
     else
         log_error "Proxy pods not found"
@@ -151,10 +151,10 @@ show_results() {
     cd "$TERRAFORM_DIR"
     
     TOOLS_URL=$(terraform output -raw tools_domain_url)
-    ORBIT_URL=$(terraform output -raw orbit_tools_url)
+    FCODE_URL=$(terraform output -raw frontal-code_tools_url)
     NLB_DNS=$(terraform output -raw nginx_ingress_load_balancer)
-    ORBIT_SERVER_DEPLOYMENT=$(terraform output -raw orbit_server_deployment)
-    ORBIT_SLACK_DEPLOYMENT=$(terraform output -raw orbit_slack_deployment)
+    FCODE_SERVER_DEPLOYMENT=$(terraform output -raw frontal-code_server_deployment)
+    FCODE_SLACK_DEPLOYMENT=$(terraform output -raw frontal-code_slack_deployment)
     ENVIRONMENT_INFO=$(terraform output -json environment_info)
     
     echo
@@ -166,16 +166,16 @@ show_results() {
     echo
     echo "URLs:"
     echo "  Tools Landing Page: $TOOLS_URL"
-    echo "  Orbit API Endpoint: $ORBIT_URL"
+    echo "  Frontal Code API Endpoint: $FCODE_URL"
     echo "  NLB DNS Name: $NLB_DNS"
     echo
     echo "Deployments:"
-    echo "  Orbit Server: $ORBIT_SERVER_DEPLOYMENT"
-    echo "  Orbit Slack: $ORBIT_SLACK_DEPLOYMENT"
+    echo "  Frontal Code Server: $FCODE_SERVER_DEPLOYMENT"
+    echo "  Frontal Code Slack: $FCODE_SLACK_DEPLOYMENT"
     echo
     
-    # Show storage info if orbit-server is deployed
-    if terraform output -raw orbit_server_deployment | grep -q "Deployed"; then
+    # Show storage info if frontal-code-server is deployed
+    if terraform output -raw frontal-code_server_deployment | grep -q "Deployed"; then
         STORAGE_INFO=$(terraform output -json storage_info)
         echo "Storage Configuration:"
         echo "  Workspace: $(echo "$STORAGE_INFO" | jq -r '.workspace_size')"
@@ -187,21 +187,21 @@ show_results() {
     
     # Show ECR repositories if created
     ECR_REPOS=$(terraform output -json ecr_repositories)
-    if [[ "$(echo "$ECR_REPOS" | jq -r '.orbit_server')" != "null" ]]; then
+    if [[ "$(echo "$ECR_REPOS" | jq -r '.frontal-code_server')" != "null" ]]; then
         echo "ECR Repositories:"
-        echo "  Orbit Server: $(echo "$ECR_REPOS" | jq -r '.orbit_server')"
-        echo "  Orbit Slack: $(echo "$ECR_REPOS" | jq -r '.orbit_slack')"
+        echo "  Frontal Code Server: $(echo "$ECR_REPOS" | jq -r '.frontal-code_server')"
+        echo "  Frontal Code Slack: $(echo "$ECR_REPOS" | jq -r '.frontal-code_slack')"
         echo
     fi
     
-    echo "Environment variables for Orbit CLI:"
-    echo "export FRONTAL_BASE_URL=\"$ORBIT_URL\""
-    echo "export ORBIT_HOSTED_CALLBACK_URL=\"$ORBIT_URL/webhooks/tasks\""
+    echo "Environment variables for Frontal Code CLI:"
+    echo "export FRONTAL_BASE_URL=\"$FCODE_URL\""
+    echo "export FCODE_HOSTED_CALLBACK_URL=\"$FCODE_URL/webhooks/tasks\""
     echo
     echo "Next steps:"
-    echo "1. Update your Orbit CLI configuration with the URLs above"
+    echo "1. Update your Frontal Code CLI configuration with the URLs above"
     echo "2. Test the deployment by visiting: $TOOLS_URL"
-    echo "3. Check the Orbit API health: $ORBIT_URL/health"
+    echo "3. Check the Frontal Code API health: $FCODE_URL/health"
     echo "4. Verify Slack integration is working (if deployed)"
     echo "5. Check Kubernetes resources:"
     echo "   kubectl get pods -n $(echo "$ENVIRONMENT_INFO" | jq -r '.namespace')"

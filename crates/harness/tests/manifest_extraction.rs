@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
-use orbit_harness::{extract_bootstrap_plan, extract_commands, extract_tools, UpstreamPaths};
+use frontal_code_harness::{
+    extract_bootstrap_plan, extract_commands, extract_tools, UpstreamPaths,
+};
 
 #[test]
 fn extract_commands_parses_imports() {
@@ -17,7 +19,7 @@ import { DiffCommand } from "./commands/diff";
     assert!(names.contains(&"StatusCommand"));
     assert!(names.contains(&"DiffCommand"));
     for entry in entries {
-        assert_eq!(entry.source, orbit_commands::CommandSource::Builtin);
+        assert_eq!(entry.source, frontal_code_commands::CommandSource::Builtin);
     }
 }
 
@@ -33,7 +35,10 @@ export const INTERNAL_ONLY_COMMANDS = [
     let entries = registry.entries();
     assert_eq!(entries.len(), 2);
     for entry in entries {
-        assert_eq!(entry.source, orbit_commands::CommandSource::InternalOnly);
+        assert_eq!(
+            entry.source,
+            frontal_code_commands::CommandSource::InternalOnly
+        );
     }
 }
 
@@ -44,7 +49,10 @@ fn extract_commands_detects_feature_gated() {
     assert!(!registry.entries().is_empty());
     let entry = &registry.entries()[0];
     assert_eq!(entry.name, "BetaFeature");
-    assert_eq!(entry.source, orbit_commands::CommandSource::FeatureGated);
+    assert_eq!(
+        entry.source,
+        frontal_code_commands::CommandSource::FeatureGated
+    );
 }
 
 #[test]
@@ -72,7 +80,7 @@ import { ReadTool } from "./tools/read";
     assert!(names.contains(&"FileEditTool"));
     assert!(names.contains(&"ReadTool"));
     for entry in entries {
-        assert_eq!(entry.source, orbit_tools::ToolSource::Base);
+        assert_eq!(entry.source, frontal_code_tools::ToolSource::Base);
     }
 }
 
@@ -94,7 +102,7 @@ fn extract_tools_detects_conditional_tools() {
     assert!(registry
         .entries()
         .iter()
-        .any(|e| e.name == "BetaTool" && e.source == orbit_tools::ToolSource::Conditional));
+        .any(|e| e.name == "BetaTool" && e.source == frontal_code_tools::ToolSource::Conditional));
 }
 
 #[test]
@@ -119,10 +127,10 @@ fn extract_bootstrap_plan_minimal() {
     let plan = extract_bootstrap_plan(source);
     let phases = plan.phases();
     assert!(!phases.is_empty());
-    assert_eq!(phases[0], orbit_runtime::BootstrapPhase::CliEntry);
+    assert_eq!(phases[0], frontal_code_runtime::BootstrapPhase::CliEntry);
     assert_eq!(
         phases[phases.len() - 1],
-        orbit_runtime::BootstrapPhase::MainRuntime
+        frontal_code_runtime::BootstrapPhase::MainRuntime
     );
 }
 
@@ -133,7 +141,7 @@ if (args.includes('--version')) { process.exit(0); }
 ";
     let plan = extract_bootstrap_plan(source);
     let phases = plan.phases();
-    assert!(phases.contains(&orbit_runtime::BootstrapPhase::FastPathVersion));
+    assert!(phases.contains(&frontal_code_runtime::BootstrapPhase::FastPathVersion));
 }
 
 #[test]
@@ -142,7 +150,7 @@ fn extract_bootstrap_plan_with_startup_profiler() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::StartupProfiler));
+        .contains(&frontal_code_runtime::BootstrapPhase::StartupProfiler));
 }
 
 #[test]
@@ -151,7 +159,7 @@ fn extract_bootstrap_plan_with_dump_system_prompt() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::SystemPromptFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::SystemPromptFastPath));
 }
 
 #[test]
@@ -160,7 +168,7 @@ fn extract_bootstrap_plan_with_chrome_mcp() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::ChromeMcpFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::ChromeMcpFastPath));
 }
 
 #[test]
@@ -169,7 +177,7 @@ fn extract_bootstrap_plan_with_daemon_worker() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::DaemonWorkerFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::DaemonWorkerFastPath));
 }
 
 #[test]
@@ -178,7 +186,7 @@ fn extract_bootstrap_plan_with_remote_control() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::BridgeFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::BridgeFastPath));
 }
 
 #[test]
@@ -187,7 +195,7 @@ fn extract_bootstrap_plan_with_daemon() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::DaemonFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::DaemonFastPath));
 }
 
 #[test]
@@ -196,7 +204,7 @@ fn extract_bootstrap_plan_with_background_session() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::BackgroundSessionFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::BackgroundSessionFastPath));
 }
 
 #[test]
@@ -205,7 +213,7 @@ fn extract_bootstrap_plan_with_template_fast_path() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::TemplateFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::TemplateFastPath));
 }
 
 #[test]
@@ -214,13 +222,13 @@ fn extract_bootstrap_plan_with_environment_runner() {
     let plan = extract_bootstrap_plan(source);
     assert!(plan
         .phases()
-        .contains(&orbit_runtime::BootstrapPhase::EnvironmentRunnerFastPath));
+        .contains(&frontal_code_runtime::BootstrapPhase::EnvironmentRunnerFastPath));
 }
 
 #[test]
 fn upstream_paths_from_repo_root() {
     let tmp = temp_dir();
-    let repo_root = tmp.join("orbit-repo");
+    let repo_root = tmp.join("frontal-code-repo");
     let paths = UpstreamPaths::from_repo_root(&repo_root);
     assert_eq!(paths.commands_path(), repo_root.join("src/commands.ts"));
     assert_eq!(paths.tools_path(), repo_root.join("src/tools.ts"));
@@ -252,7 +260,7 @@ fn temp_dir() -> PathBuf {
     let pid = std::process::id();
     let serial = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
-        "orbit-harness-test-{}-{pid}-{serial}",
+        "frontal-code-harness-test-{}-{pid}-{serial}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

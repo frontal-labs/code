@@ -8,7 +8,7 @@
 docker compose -f infrastructure/compose/docker-compose.yml up -d
 
 # View logs
-docker compose -f infrastructure/compose/docker-compose.yml logs -f orbit-server
+docker compose -f infrastructure/compose/docker-compose.yml logs -f frontal-code-server
 
 # Stop services
 docker compose -f infrastructure/compose/docker-compose.yml down
@@ -18,7 +18,7 @@ docker compose -f infrastructure/compose/docker-compose.yml down
 ```bash
 # Start development environment with hot reload
 cargo build --workspace
-cargo run -p orbit-cli -- --help
+cargo run -p cli -- --help
 ```
 
 ## Configuration
@@ -44,21 +44,21 @@ Create a `.env` file for local development:
 
 ```bash
 # AI Provider
-ORBIT_API_KEY=sk-ant-...
+FCODE_API_KEY=sk-ant-...
 
 # Database (for local development)
-DATABASE_URL=sqlite:///tmp/orbit_dev.db
+DATABASE_URL=sqlite:///tmp/frontal-code_dev.db
 
 # Optional: PostgreSQL for full server mode
-DATABASE_URL=postgresql://orbit:orbit_password@localhost:5432/orbit_db
+DATABASE_URL=postgresql://frontal-code:frontal-code_password@localhost:5432/frontal-code_db
 
 # Webhook secret for server mode
 WEBHOOK_SECRET=your_webhook_secret_here
 
 # Configuration overrides
-ORBIT_LOG_LEVEL=debug
-ORBIT_PERMISSION_MODE=permissive
-ORBIT_CONFIG_HOME=./dev-config
+FCODE_LOG_LEVEL=debug
+FCODE_PERMISSION_MODE=permissive
+FCODE_CONFIG_HOME=./dev-config
 ```
 
 ### Core Configuration Development
@@ -66,8 +66,8 @@ ORBIT_CONFIG_HOME=./dev-config
 When developing with the core configuration system:
 
 ```rust
-use orbit_core::config::ProjectConfig;
-use orbit_runtime::ConfigurationManager;
+use frontal-code_core::config::ProjectConfig;
+use frontal-code_runtime::ConfigurationManager;
 
 // In development, you can load configuration directly
 let config = ProjectConfig::load_or_default();
@@ -76,7 +76,7 @@ let config = ProjectConfig::load_or_default();
 let manager = ConfigurationManager::load_with_cwd(".")?;
 
 // Enable development-specific features
-if std::env::var("ORBIT_DEV_MODE").is_ok() {
+if std::env::var("FCODE_DEV_MODE").is_ok() {
     println!("Development mode enabled");
     println!("Telemetry: {}", config.features.enable_telemetry);
     println!("Plugins: {}", config.features.enable_plugins);
@@ -89,13 +89,13 @@ Test configuration changes without affecting your main setup:
 
 ```bash
 # Test with custom config directory
-export ORBIT_CONFIG_HOME=./test-config
-orbit /doctor
+export FCODE_CONFIG_HOME=./test-config
+frontal-code /doctor
 
 # Test with specific config file
 cp config/project.json config/test-project.json
 # Edit test-project.json
-ORBIT_CONFIG_HOME=./test-config orbit /doctor
+FCODE_CONFIG_HOME=./test-config frontal-code /doctor
 ```
 
 ## Pre-commit Hooks
@@ -126,7 +126,7 @@ cargo build --release --workspace
 cargo test --workspace
 
 # Run with logging
-RUST_LOG=debug cargo run --bin orbit
+RUST_LOG=debug cargo run --bin frontal-code
 
 # Check code
 cargo check --workspace
@@ -138,7 +138,7 @@ cargo fmt --all
 cargo clippy --workspace -- -D warnings
 
 # Run doctor check
-cargo run --bin orbit -- doctor
+cargo run --bin frontal-code -- doctor
 
 # Generate documentation
 cargo doc --workspace --no-deps --document-private-items
@@ -150,21 +150,21 @@ cargo audit
 ## Services Overview
 
 ### Core Services
-- **orbit**: Main Orbit service
+- **frontal-code**: Main Frontal Code service
 - **postgres**: PostgreSQL database for structured memory
 - **redis**: Redis for caching and session management
 - **pinecone**: Managed vector database for semantic search
 - **webhook-server**: Webhook receiver for external events
 
 ### Development Services
-- **orbit-dev**: Development environment with hot reload
+- **frontal-code-dev**: Development environment with hot reload
 
 ## Database Setup
 
 ### PostgreSQL
 ```bash
 # Connect to database
-docker-compose exec postgres psql -U orbit -d orbit_db
+docker-compose exec postgres psql -U frontal-code -d frontal-code_db
 
 # View tables
 \dt
@@ -185,12 +185,12 @@ KEYS *
 ### Pinecone
 ```bash
 # Export Pinecone settings before running memory-backed flows
-export ORBIT_MEMORY_PINECONE_URL=https://YOUR_INDEX_HOST
-export ORBIT_MEMORY_PINECONE_API_KEY=your_pinecone_api_key_here
-export ORBIT_MEMORY_PINECONE_NAMESPACE=dev
+export FCODE_MEMORY_PINECONE_URL=https://YOUR_INDEX_HOST
+export FCODE_MEMORY_PINECONE_API_KEY=your_pinecone_api_key_here
+export FCODE_MEMORY_PINECONE_NAMESPACE=dev
 
 # Run the focused tool integration test against a configured backend
-cargo test -p orbit-tools env_backed_memory_tools_route_requests_to_pinecone_and_neo4j -- --nocapture
+cargo test -p frontal-code-tools env_backed_memory_tools_route_requests_to_pinecone_and_neo4j -- --nocapture
 ```
 
 ## Testing
@@ -200,7 +200,7 @@ cargo test -p orbit-tools env_backed_memory_tools_route_requests_to_pinecone_and
 cargo test --workspace
 
 # Run specific test
-cargo test --package orbit-cli test_name
+cargo test --package cli test_name
 
 # Run tests with output
 cargo test --workspace -- --nocapture
@@ -220,8 +220,8 @@ cargo test --workspace -- --nocapture
 ### Health Checks
 
 ```bash
-# Check Orbit health
-docker-compose exec orbit orbit doctor
+# Check Frontal Code health
+docker-compose exec frontal-code frontal-code doctor
 
 # Check service status
 docker-compose ps

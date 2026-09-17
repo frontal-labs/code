@@ -1,5 +1,5 @@
 [package]
-name = "orbit-embeddings"
+name = "frontal-code-embeddings"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

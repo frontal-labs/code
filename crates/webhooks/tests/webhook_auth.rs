@@ -1,4 +1,4 @@
-use orbit_webhooks::{HmacAuthenticator, WebhookAuth};
+use frontal_code_webhooks::{HmacAuthenticator, WebhookAuth};
 
 #[test]
 fn hmac_sign_and_verify() {

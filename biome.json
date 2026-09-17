@@ -12,7 +12,7 @@
       "**/node_modules/**",
       "**/target/**",
       "**/dist/**",
-      "**/.orbit/**",
+      "**/.frontal-code/**",
       "**/coverage/**",
       "**/bazel-bin/**",
       "**/bazel-out/**",
@@ -45,7 +45,7 @@
   },
   "overrides": [
     {
-      "include": ["sdk/typescript/**", "sdk/typescript/**/*.ts"],
+      "include": ["sdks/typescript/**", "sdks/typescript/**/*.ts"],
       "linter": {
         "rules": {
           "style": {

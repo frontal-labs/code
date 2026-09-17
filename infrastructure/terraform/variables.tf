@@ -35,38 +35,38 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "orbit_service_namespace" {
-  description = "Kubernetes namespace where orbit-server is deployed"
+variable "frontal-code_service_namespace" {
+  description = "Kubernetes namespace where frontal-code-server is deployed"
   type        = string
-  default     = "orbit"
+  default     = "frontal-code"
 }
 
-variable "deploy_orbit_server" {
-  description = "Whether to deploy the orbit-server"
+variable "deploy_frontal-code_server" {
+  description = "Whether to deploy the frontal-code-server"
   type        = bool
   default     = true
 }
 
-variable "deploy_orbit_slack" {
-  description = "Whether to deploy the orbit-slack extension"
+variable "deploy_frontal-code_slack" {
+  description = "Whether to deploy the frontal-code-slack extension"
   type        = bool
   default     = true
 }
 
-variable "orbit_server_image" {
-  description = "Docker image for orbit-server"
+variable "frontal-code_server_image" {
+  description = "Docker image for frontal-code-server"
   type        = string
-  default     = "orbit-server:v0.1.0"
+  default     = "frontal-code-server:v0.1.0"
 }
 
-variable "orbit_slack_image" {
-  description = "Docker image for orbit-slack"
+variable "frontal-code_slack_image" {
+  description = "Docker image for frontal-code-slack"
   type        = string
-  default     = "orbit-slack:v0.1.0"
+  default     = "frontal-code-slack:v0.1.0"
 }
 
-variable "orbit_server_api_key" {
-  description = "Shared API key used by orbit-server control-plane routes and orbit-slack"
+variable "frontal-code_server_api_key" {
+  description = "Shared API key used by frontal-code-server control-plane routes and frontal-code-slack"
   type        = string
   sensitive   = true
 }

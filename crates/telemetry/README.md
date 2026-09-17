@@ -1,10 +1,10 @@
-# Orbit Telemetry
+# Frontal Code Telemetry
 
-Telemetry and analytics system for monitoring Orbit usage and performance.
+Telemetry and analytics system for monitoring Frontal Code usage and performance.
 
 ## Overview
 
-This crate provides comprehensive telemetry capabilities for tracking usage patterns, performance metrics, and system health across the Orbit ecosystem. It supports multiple output formats and can be configured for different monitoring needs.
+This crate provides comprehensive telemetry capabilities for tracking usage patterns, performance metrics, and system health across the Frontal Code ecosystem. It supports multiple output formats and can be configured for different monitoring needs.
 
 ## Features
 
@@ -30,4 +30,4 @@ This crate provides comprehensive telemetry capabilities for tracking usage patt
 
 ## Usage
 
-Telemetry can be configured to track various aspects of Orbit usage, from individual API calls to session-level patterns, providing insights for optimization and debugging.
+Telemetry can be configured to track various aspects of Frontal Code usage, from individual API calls to session-level patterns, providing insights for optimization and debugging.

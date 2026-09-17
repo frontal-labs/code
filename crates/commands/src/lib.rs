@@ -5,8 +5,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use orbit_plugins::{PluginError, PluginManager, PluginSummary};
-use orbit_runtime::{
+use frontal_code_plugins::{PluginError, PluginManager, PluginSummary};
+use frontal_code_runtime::{
     compact_session, CompactionConfig, ConfigLoader, ConfigSource, McpOAuthConfig, McpServerConfig,
     ScopedMcpServerConfig, Session,
 };
@@ -232,7 +232,7 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
     SlashCommandSpec {
         name: "plugin",
         aliases: &["plugins", "marketplace"],
-        summary: "Manage Orbit plugins",
+        summary: "Manage FrontalCode plugins",
         argument_hint: Some(
             "[list|install <path>|enable <name>|disable <name>|uninstall <id>|update <id>]",
         ),
@@ -1991,12 +1991,12 @@ pub struct PluginsCommandResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DefinitionSource {
-    ProjectOrbit,
+    ProjectFrontalCode,
     ProjectCodex,
     ProjectClaude,
-    UserOrbitConfigHome,
+    UserFrontalCodeConfigHome,
     UserCodexHome,
-    UserOrbit,
+    UserFrontalCode,
     UserCodex,
     UserClaude,
 }
@@ -2021,11 +2021,13 @@ impl DefinitionScope {
 impl DefinitionSource {
     fn report_scope(self) -> DefinitionScope {
         match self {
-            Self::ProjectOrbit | Self::ProjectCodex | Self::ProjectClaude => {
+            Self::ProjectFrontalCode | Self::ProjectCodex | Self::ProjectClaude => {
                 DefinitionScope::Project
             }
-            Self::UserOrbitConfigHome | Self::UserCodexHome => DefinitionScope::UserConfigHome,
-            Self::UserOrbit | Self::UserCodex | Self::UserClaude => DefinitionScope::UserHome,
+            Self::UserFrontalCodeConfigHome | Self::UserCodexHome => {
+                DefinitionScope::UserConfigHome
+            }
+            Self::UserFrontalCode | Self::UserCodex | Self::UserClaude => DefinitionScope::UserHome,
         }
     }
 
@@ -2247,7 +2249,7 @@ pub fn handle_agents_slash_command_json(args: Option<&str>, cwd: &Path) -> std::
 pub fn handle_mcp_slash_command(
     args: Option<&str>,
     cwd: &Path,
-) -> Result<String, orbit_runtime::ConfigError> {
+) -> Result<String, frontal_code_runtime::ConfigError> {
     let loader = ConfigLoader::default_for(cwd);
     render_mcp_report_for(&loader, cwd, args)
 }
@@ -2255,7 +2257,7 @@ pub fn handle_mcp_slash_command(
 pub fn handle_mcp_slash_command_json(
     args: Option<&str>,
     cwd: &Path,
-) -> Result<Value, orbit_runtime::ConfigError> {
+) -> Result<Value, frontal_code_runtime::ConfigError> {
     let loader = ConfigLoader::default_for(cwd);
     render_mcp_report_json_for(&loader, cwd, args)
 }
@@ -2446,7 +2448,7 @@ fn render_mcp_report_for(
     loader: &ConfigLoader,
     cwd: &Path,
     args: Option<&str>,
-) -> Result<String, orbit_runtime::ConfigError> {
+) -> Result<String, frontal_code_runtime::ConfigError> {
     if let Some(args) = normalize_optional_args(args) {
         if let Some(help_path) = help_path_from_args(args) {
             return Ok(match help_path.as_slice() {
@@ -2491,7 +2493,7 @@ fn render_mcp_report_json_for(
     loader: &ConfigLoader,
     cwd: &Path,
     args: Option<&str>,
-) -> Result<Value, orbit_runtime::ConfigError> {
+) -> Result<Value, frontal_code_runtime::ConfigError> {
     if let Some(args) = normalize_optional_args(args) {
         if let Some(help_path) = help_path_from_args(args) {
             return Ok(match help_path.as_slice() {
@@ -2590,8 +2592,8 @@ fn discover_definition_roots(cwd: &Path, leaf: &str) -> Vec<(DefinitionSource, P
     for ancestor in cwd.ancestors() {
         push_unique_root(
             &mut roots,
-            DefinitionSource::ProjectOrbit,
-            ancestor.join(".orbit").join(leaf),
+            DefinitionSource::ProjectFrontalCode,
+            ancestor.join(".frontal-code").join(leaf),
         );
         push_unique_root(
             &mut roots,
@@ -2605,11 +2607,11 @@ fn discover_definition_roots(cwd: &Path, leaf: &str) -> Vec<(DefinitionSource, P
         );
     }
 
-    if let Ok(orbit_config_home) = env::var("ORBIT_CONFIG_HOME") {
+    if let Ok(frontal_code_config_home) = env::var("FCODE_CONFIG_HOME") {
         push_unique_root(
             &mut roots,
-            DefinitionSource::UserOrbitConfigHome,
-            PathBuf::from(orbit_config_home).join(leaf),
+            DefinitionSource::UserFrontalCodeConfigHome,
+            PathBuf::from(frontal_code_config_home).join(leaf),
         );
     }
 
@@ -2633,8 +2635,8 @@ fn discover_definition_roots(cwd: &Path, leaf: &str) -> Vec<(DefinitionSource, P
         let home = PathBuf::from(home);
         push_unique_root(
             &mut roots,
-            DefinitionSource::UserOrbit,
-            home.join(".orbit").join(leaf),
+            DefinitionSource::UserFrontalCode,
+            home.join(".frontal-code").join(leaf),
         );
         push_unique_root(
             &mut roots,
@@ -2658,19 +2660,19 @@ fn discover_skill_roots(cwd: &Path) -> Vec<SkillRoot> {
     for ancestor in cwd.ancestors() {
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::ProjectOrbit,
-            ancestor.join(".orbit").join("skills"),
+            DefinitionSource::ProjectFrontalCode,
+            ancestor.join(".frontal-code").join("skills"),
             SkillOrigin::SkillsDir,
         );
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::ProjectOrbit,
+            DefinitionSource::ProjectFrontalCode,
             ancestor.join(".omc").join("skills"),
             SkillOrigin::SkillsDir,
         );
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::ProjectOrbit,
+            DefinitionSource::ProjectFrontalCode,
             ancestor.join(".agents").join("skills"),
             SkillOrigin::SkillsDir,
         );
@@ -2688,8 +2690,8 @@ fn discover_skill_roots(cwd: &Path) -> Vec<SkillRoot> {
         );
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::ProjectOrbit,
-            ancestor.join(".orbit").join("commands"),
+            DefinitionSource::ProjectFrontalCode,
+            ancestor.join(".frontal-code").join("commands"),
             SkillOrigin::LegacyCommandsDir,
         );
         push_unique_skill_root(
@@ -2706,18 +2708,18 @@ fn discover_skill_roots(cwd: &Path) -> Vec<SkillRoot> {
         );
     }
 
-    if let Ok(orbit_config_home) = env::var("ORBIT_CONFIG_HOME") {
-        let orbit_config_home = PathBuf::from(orbit_config_home);
+    if let Ok(frontal_code_config_home) = env::var("FCODE_CONFIG_HOME") {
+        let frontal_code_config_home = PathBuf::from(frontal_code_config_home);
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::UserOrbitConfigHome,
-            orbit_config_home.join("skills"),
+            DefinitionSource::UserFrontalCodeConfigHome,
+            frontal_code_config_home.join("skills"),
             SkillOrigin::SkillsDir,
         );
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::UserOrbitConfigHome,
-            orbit_config_home.join("commands"),
+            DefinitionSource::UserFrontalCodeConfigHome,
+            frontal_code_config_home.join("commands"),
             SkillOrigin::LegacyCommandsDir,
         );
     }
@@ -2742,20 +2744,20 @@ fn discover_skill_roots(cwd: &Path) -> Vec<SkillRoot> {
         let home = PathBuf::from(home);
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::UserOrbit,
-            home.join(".orbit").join("skills"),
+            DefinitionSource::UserFrontalCode,
+            home.join(".frontal-code").join("skills"),
             SkillOrigin::SkillsDir,
         );
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::UserOrbit,
+            DefinitionSource::UserFrontalCode,
             home.join(".omc").join("skills"),
             SkillOrigin::SkillsDir,
         );
         push_unique_skill_root(
             &mut roots,
-            DefinitionSource::UserOrbit,
-            home.join(".orbit").join("commands"),
+            DefinitionSource::UserFrontalCode,
+            home.join(".frontal-code").join("commands"),
             SkillOrigin::LegacyCommandsDir,
         );
         push_unique_skill_root(
@@ -2867,18 +2869,18 @@ fn install_skill_into(
 }
 
 fn default_skill_install_root() -> std::io::Result<PathBuf> {
-    if let Ok(orbit_config_home) = env::var("ORBIT_CONFIG_HOME") {
-        return Ok(PathBuf::from(orbit_config_home).join("skills"));
+    if let Ok(frontal_code_config_home) = env::var("FCODE_CONFIG_HOME") {
+        return Ok(PathBuf::from(frontal_code_config_home).join("skills"));
     }
     if let Ok(codex_home) = env::var("CODEX_HOME") {
         return Ok(PathBuf::from(codex_home).join("skills"));
     }
     if let Some(home) = env::var_os("HOME") {
-        return Ok(PathBuf::from(home).join(".orbit").join("skills"));
+        return Ok(PathBuf::from(home).join(".frontal-code").join("skills"));
     }
     Err(std::io::Error::new(
         std::io::ErrorKind::NotFound,
-        "unable to resolve a skills install root; set ORBIT_CONFIG_HOME or HOME",
+        "unable to resolve a skills install root; set FCODE_CONFIG_HOME or HOME",
     ))
 }
 
@@ -3569,8 +3571,8 @@ fn render_agents_usage(unexpected: Option<&str>) -> String {
     let mut lines = vec![
         "Agents".to_string(),
         "  Usage            /agents [list|help]".to_string(),
-        "  Direct CLI       orbit agents".to_string(),
-        "  Sources          .orbit/agents, ~/.orbit/agents, $ORBIT_CONFIG_HOME/agents".to_string(),
+        "  Direct CLI       frontal-code agents".to_string(),
+        "  Sources          .frontal-code/agents, ~/.frontal-code/agents, $FCODE_CONFIG_HOME/agents".to_string(),
     ];
     if let Some(args) = unexpected {
         lines.push(format!("  Unexpected       {args}"));
@@ -3584,8 +3586,8 @@ fn render_agents_usage_json(unexpected: Option<&str>) -> Value {
         "action": "help",
         "usage": {
             "slash_command": "/agents [list|help]",
-            "direct_cli": "orbit agents [list|help]",
-            "sources": [".orbit/agents", "~/.orbit/agents", "$ORBIT_CONFIG_HOME/agents"],
+            "direct_cli": "frontal-code agents [list|help]",
+            "sources": [".frontal-code/agents", "~/.frontal-code/agents", "$FCODE_CONFIG_HOME/agents"],
         },
         "unexpected": unexpected,
     })
@@ -3596,10 +3598,10 @@ fn render_skills_usage(unexpected: Option<&str>) -> String {
         "Skills".to_string(),
         "  Usage            /skills [list|install <path>|help|<skill> [args]]".to_string(),
         "  Alias            /skill".to_string(),
-        "  Direct CLI       orbit skills [list|install <path>|help|<skill> [args]]".to_string(),
+        "  Direct CLI       frontal-code skills [list|install <path>|help|<skill> [args]]".to_string(),
         "  Invoke           /skills help overview -> $help overview".to_string(),
-        "  Install root     $ORBIT_CONFIG_HOME/skills or ~/.orbit/skills".to_string(),
-        "  Sources          .orbit/skills, .omc/skills, .agents/skills, .codex/skills, .claude/skills, ~/.orbit/skills, ~/.omc/skills, ~/.claude/skills/omc-learned, ~/.codex/skills, ~/.claude/skills, legacy /commands".to_string(),
+        "  Install root     $FCODE_CONFIG_HOME/skills or ~/.frontal-code/skills".to_string(),
+        "  Sources          .frontal-code/skills, .omc/skills, .agents/skills, .codex/skills, .claude/skills, ~/.frontal-code/skills, ~/.omc/skills, ~/.claude/skills/omc-learned, ~/.codex/skills, ~/.claude/skills, legacy /commands".to_string(),
     ];
     if let Some(args) = unexpected {
         lines.push(format!("  Unexpected       {args}"));
@@ -3614,16 +3616,16 @@ fn render_skills_usage_json(unexpected: Option<&str>) -> Value {
         "usage": {
             "slash_command": "/skills [list|install <path>|help|<skill> [args]]",
             "aliases": ["/skill"],
-            "direct_cli": "orbit skills [list|install <path>|help|<skill> [args]]",
+            "direct_cli": "frontal-code skills [list|install <path>|help|<skill> [args]]",
             "invoke": "/skills help overview -> $help overview",
-            "install_root": "$ORBIT_CONFIG_HOME/skills or ~/.orbit/skills",
+            "install_root": "$FCODE_CONFIG_HOME/skills or ~/.frontal-code/skills",
             "sources": [
-                ".orbit/skills",
+                ".frontal-code/skills",
                 ".omc/skills",
                 ".agents/skills",
                 ".codex/skills",
                 ".claude/skills",
-                "~/.orbit/skills",
+                "~/.frontal-code/skills",
                 "~/.omc/skills",
                 "~/.claude/skills/omc-learned",
                 "~/.codex/skills",
@@ -3640,8 +3642,9 @@ fn render_mcp_usage(unexpected: Option<&str>) -> String {
     let mut lines = vec![
         "MCP".to_string(),
         "  Usage            /mcp [list|show <server>|help]".to_string(),
-        "  Direct CLI       orbit mcp [list|show <server>|help]".to_string(),
-        "  Sources          .orbit/settings.json, .orbit/settings.local.json".to_string(),
+        "  Direct CLI       frontal-code mcp [list|show <server>|help]".to_string(),
+        "  Sources          .frontal-code/settings.json, .frontal-code/settings.local.json"
+            .to_string(),
     ];
     if let Some(args) = unexpected {
         lines.push(format!("  Unexpected       {args}"));
@@ -3655,8 +3658,8 @@ fn render_mcp_usage_json(unexpected: Option<&str>) -> Value {
         "action": "help",
         "usage": {
             "slash_command": "/mcp [list|show <server>|help]",
-            "direct_cli": "orbit mcp [list|show <server>|help]",
-            "sources": [".orbit/settings.json", ".orbit/settings.local.json"],
+            "direct_cli": "frontal-code mcp [list|show <server>|help]",
+            "sources": [".frontal-code/settings.json", ".frontal-code/settings.local.json"],
         },
         "unexpected": unexpected,
     })
@@ -3740,15 +3743,15 @@ fn format_mcp_oauth(oauth: Option<&McpOAuthConfig>) -> String {
 
 fn definition_source_id(source: DefinitionSource) -> &'static str {
     match source {
-        DefinitionSource::ProjectOrbit
+        DefinitionSource::ProjectFrontalCode
         | DefinitionSource::ProjectCodex
-        | DefinitionSource::ProjectClaude => "project_orbit",
-        DefinitionSource::UserOrbitConfigHome | DefinitionSource::UserCodexHome => {
-            "user_orbit_config_home"
+        | DefinitionSource::ProjectClaude => "project_frontal-code",
+        DefinitionSource::UserFrontalCodeConfigHome | DefinitionSource::UserCodexHome => {
+            "user_frontal_code_config_home"
         }
-        DefinitionSource::UserOrbit
+        DefinitionSource::UserFrontalCode
         | DefinitionSource::UserCodex
-        | DefinitionSource::UserClaude => "user_orbit",
+        | DefinitionSource::UserClaude => "user_frontal-code",
     }
 }
 
@@ -3987,10 +3990,10 @@ mod tests {
         suggest_slash_commands, validate_slash_command_input, DefinitionSource, SkillOrigin,
         SkillRoot, SkillSlashDispatch, SlashCommand,
     };
-    use orbit_plugins::{
+    use frontal_code_plugins::{
         PluginKind, PluginManager, PluginManagerConfig, PluginMetadata, PluginSummary,
     };
-    use orbit_runtime::{
+    use frontal_code_runtime::{
         CompactionConfig, ConfigLoader, ContentBlock, ConversationMessage, MessageRole, Session,
     };
     use std::ffi::OsString;
@@ -4524,7 +4527,7 @@ mod tests {
 
         // then
         assert!(help.contains("/plugin"));
-        assert!(help.contains("Summary          Manage Orbit plugins"));
+        assert!(help.contains("Summary          Manage FrontalCode plugins"));
         assert!(help.contains("Aliases          /plugins, /marketplace"));
         assert!(help.contains("Category         Workspace & git"));
     }
@@ -4812,12 +4815,18 @@ mod tests {
         assert_eq!(report["agents"][1]["name"], "verifier");
         assert_eq!(report["agents"][2]["name"], "planner");
         assert_eq!(report["agents"][2]["active"], false);
-        assert_eq!(report["agents"][2]["shadowed_by"]["id"], "project_orbit");
+        assert_eq!(
+            report["agents"][2]["shadowed_by"]["id"],
+            "project_frontal-code"
+        );
 
         let help = handle_agents_slash_command_json(Some("help"), &workspace).expect("agents help");
         assert_eq!(help["kind"], "agents");
         assert_eq!(help["action"], "help");
-        assert_eq!(help["usage"]["direct_cli"], "orbit agents [list|help]");
+        assert_eq!(
+            help["usage"]["direct_cli"],
+            "frontal-code agents [list|help]"
+        );
 
         let unexpected = handle_agents_slash_command_json(Some("show planner"), &workspace)
             .expect("agents usage");
@@ -4877,8 +4886,8 @@ mod tests {
     #[test]
     fn resolves_project_skills_and_legacy_commands_from_shared_registry() {
         let workspace = temp_dir("resolve-project-skills");
-        let project_skills = workspace.join(".orbit").join("skills");
-        let legacy_commands = workspace.join(".orbit").join("commands");
+        let project_skills = workspace.join(".frontal-code").join("skills");
+        let legacy_commands = workspace.join(".frontal-code").join("commands");
 
         write_skill(&project_skills, "plan", "Project planning guidance");
         write_legacy_command(&legacy_commands, "handoff", "Legacy handoff guidance");
@@ -4931,10 +4940,13 @@ mod tests {
         assert_eq!(report["summary"]["active"], 3);
         assert_eq!(report["summary"]["shadowed"], 1);
         assert_eq!(report["skills"][0]["name"], "plan");
-        assert_eq!(report["skills"][0]["source"]["id"], "project_orbit");
+        assert_eq!(report["skills"][0]["source"]["id"], "project_frontal-code");
         assert_eq!(report["skills"][1]["name"], "deploy");
         assert_eq!(report["skills"][1]["origin"]["id"], "legacy_commands_dir");
-        assert_eq!(report["skills"][3]["shadowed_by"]["id"], "project_orbit");
+        assert_eq!(
+            report["skills"][3]["shadowed_by"]["id"],
+            "project_frontal-code"
+        );
 
         let help = handle_skills_slash_command_json(Some("help"), &workspace).expect("skills help");
         assert_eq!(help["kind"], "skills");
@@ -4942,7 +4954,7 @@ mod tests {
         assert_eq!(help["usage"]["aliases"][0], "/skill");
         assert_eq!(
             help["usage"]["direct_cli"],
-            "orbit skills [list|install <path>|help|<skill> [args]]"
+            "frontal-code skills [list|install <path>|help|<skill> [args]]"
         );
 
         let _ = fs::remove_dir_all(workspace);
@@ -4956,9 +4968,9 @@ mod tests {
         let agents_help =
             super::handle_agents_slash_command(Some("help"), &cwd).expect("agents help");
         assert!(agents_help.contains("Usage            /agents [list|help]"));
-        assert!(agents_help.contains("Direct CLI       orbit agents"));
+        assert!(agents_help.contains("Direct CLI       frontal-code agents"));
         assert!(agents_help.contains(
-            "Sources          .orbit/agents, ~/.orbit/agents, $ORBIT_CONFIG_HOME/agents"
+            "Sources          .frontal-code/agents, ~/.frontal-code/agents, $FCODE_CONFIG_HOME/agents"
         ));
 
         let agents_unexpected =
@@ -4971,9 +4983,8 @@ mod tests {
             .contains("Usage            /skills [list|install <path>|help|<skill> [args]]"));
         assert!(skills_help.contains("Alias            /skill"));
         assert!(skills_help.contains("Invoke           /skills help overview -> $help overview"));
-        assert!(
-            skills_help.contains("Install root     $ORBIT_CONFIG_HOME/skills or ~/.orbit/skills")
-        );
+        assert!(skills_help
+            .contains("Install root     $FCODE_CONFIG_HOME/skills or ~/.frontal-code/skills"));
         assert!(skills_help.contains(".omc/skills"));
         assert!(skills_help.contains(".agents/skills"));
         assert!(skills_help.contains("~/.claude/skills/omc-learned"));
@@ -5083,7 +5094,7 @@ mod tests {
 
         let help = super::handle_mcp_slash_command(Some("help"), &cwd).expect("mcp help");
         assert!(help.contains("Usage            /mcp [list|show <server>|help]"));
-        assert!(help.contains("Direct CLI       orbit mcp [list|show <server>|help]"));
+        assert!(help.contains("Direct CLI       frontal-code mcp [list|show <server>|help]"));
 
         let unexpected =
             super::handle_mcp_slash_command(Some("show alpha beta"), &cwd).expect("mcp usage");
@@ -5106,10 +5117,10 @@ mod tests {
     fn renders_mcp_reports_from_loaded_config() {
         let workspace = temp_dir("mcp-config-workspace");
         let config_home = temp_dir("mcp-config-home");
-        fs::create_dir_all(workspace.join(".orbit")).expect("workspace config dir");
+        fs::create_dir_all(workspace.join(".frontal-code")).expect("workspace config dir");
         fs::create_dir_all(&config_home).expect("config home");
         fs::write(
-            workspace.join(".orbit").join("settings.json"),
+            workspace.join(".frontal-code").join("settings.json"),
             r#"{
               "mcpServers": {
                 "alpha": {
@@ -5133,7 +5144,7 @@ mod tests {
         )
         .expect("write settings");
         fs::write(
-            workspace.join(".orbit").join("settings.local.json"),
+            workspace.join(".frontal-code").join("settings.local.json"),
             r#"{
               "mcpServers": {
                 "remote": {
@@ -5183,10 +5194,10 @@ mod tests {
     fn renders_mcp_reports_as_json() {
         let workspace = temp_dir("mcp-json-workspace");
         let config_home = temp_dir("mcp-json-home");
-        fs::create_dir_all(workspace.join(".orbit")).expect("workspace config dir");
+        fs::create_dir_all(workspace.join(".frontal-code")).expect("workspace config dir");
         fs::create_dir_all(&config_home).expect("config home");
         fs::write(
-            workspace.join(".orbit").join("settings.json"),
+            workspace.join(".frontal-code").join("settings.json"),
             r#"{
               "mcpServers": {
                 "alpha": {
@@ -5210,7 +5221,7 @@ mod tests {
         )
         .expect("write settings");
         fs::write(
-            workspace.join(".orbit").join("settings.local.json"),
+            workspace.join(".frontal-code").join("settings.local.json"),
             r#"{
               "mcpServers": {
                 "remote": {
@@ -5255,7 +5266,7 @@ mod tests {
         let help =
             render_mcp_report_json_for(&loader, &workspace, Some("help")).expect("mcp help json");
         assert_eq!(help["action"], "help");
-        assert_eq!(help["usage"]["sources"][0], ".orbit/settings.json");
+        assert_eq!(help["usage"]["sources"][0], ".frontal-code/settings.json");
 
         let _ = fs::remove_dir_all(workspace);
         let _ = fs::remove_dir_all(config_home);

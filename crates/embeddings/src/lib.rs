@@ -1,4 +1,4 @@
-//! # Orbit Embeddings
+//! # `FrontalCode` Embeddings
 //!
 //! Embedding primitives and a lightweight local embedding provider used by
 //! semantic memory and style-learning workflows.

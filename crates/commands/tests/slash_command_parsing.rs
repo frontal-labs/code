@@ -1,4 +1,4 @@
-use orbit_commands::{validate_slash_command_input, SlashCommand, SlashCommandParseError};
+use frontal_code_commands::{validate_slash_command_input, SlashCommand, SlashCommandParseError};
 
 fn parse(input: &str) -> Result<Option<SlashCommand>, SlashCommandParseError> {
     validate_slash_command_input(input)

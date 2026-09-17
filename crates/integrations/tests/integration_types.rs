@@ -1,11 +1,11 @@
-use orbit_integrations::{
+use frontal_code_integrations::{
     IntegrationConfig, IntegrationRegistry, IntegrationTools, McpClientTransport, McpServerManager,
     McpToolRegistry, ToolSpec,
 };
 
 #[test]
 fn mcp_client_transport_sdk_variant() {
-    let sdk = orbit_integrations::mcp::client::McpSdkTransport {
+    let sdk = frontal_code_integrations::mcp::client::McpSdkTransport {
         name: "test".to_string(),
     };
     drop(McpClientTransport::Sdk(sdk));
@@ -13,7 +13,7 @@ fn mcp_client_transport_sdk_variant() {
 
 #[test]
 fn mcp_client_transport_variant_debug() {
-    let sdk = orbit_integrations::mcp::client::McpSdkTransport {
+    let sdk = frontal_code_integrations::mcp::client::McpSdkTransport {
         name: "test".to_string(),
     };
     let transport = McpClientTransport::Sdk(sdk);
@@ -124,7 +124,7 @@ fn mcp_tool_registry_len_methods() {
 
 #[test]
 fn tool_spec_construction() {
-    use orbit_integrations::mcp::tools::PermissionMode;
+    use frontal_code_integrations::mcp::tools::PermissionMode;
 
     let spec = ToolSpec {
         name: "test_tool".to_string(),
@@ -138,14 +138,14 @@ fn tool_spec_construction() {
 
 #[test]
 fn tool_spec_via_mcp_tool_specs() {
-    let specs = orbit_integrations::mcp_tool_specs();
+    let specs = frontal_code_integrations::mcp_tool_specs();
     assert!(specs.len() >= 3);
     assert!(specs.iter().any(|s| s.name == "MCP"));
 }
 
 #[test]
 fn mcp_sdk_transport_construct() {
-    drop(orbit_integrations::mcp::client::McpSdkTransport {
+    drop(frontal_code_integrations::mcp::client::McpSdkTransport {
         name: "test-sdk".to_string(),
     });
 }

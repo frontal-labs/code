@@ -17,7 +17,7 @@ sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-sandbox",
+        "frontal-code-sandbox",
         "test",
     ],
     tags = [
@@ -30,7 +30,7 @@ sh_test(
     name = "fmt",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-sandbox",
+        "frontal-code-sandbox",
         "fmt-check",
     ],
     tags = [
@@ -43,7 +43,7 @@ sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-sandbox",
+        "frontal-code-sandbox",
         "clippy",
     ],
     tags = [

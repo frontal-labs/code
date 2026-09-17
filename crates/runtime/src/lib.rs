@@ -1,4 +1,4 @@
-//! Core runtime primitives for the `orbit` CLI and supporting crates.
+//! Core runtime primitives for the `frontal-code` CLI and supporting crates.
 //!
 //! This crate owns session persistence, permission evaluation, prompt assembly,
 //! MCP plumbing, tool-facing file operations, and the core conversation loop
@@ -18,7 +18,7 @@ mod hooks;
 mod json;
 mod lane_events;
 pub mod lsp_client;
-// MCP modules moved to orbit-integrations crate
+// MCP modules moved to frontal-code-integrations crate
 mod oauth;
 pub mod permission_enforcer;
 mod permissions;
@@ -55,7 +55,7 @@ pub use config::{
     McpServerConfig, McpStdioServerConfig, McpTransport, McpWebSocketServerConfig, OAuthConfig,
     ResolvedPermissionMode, RuntimeConfig, RuntimeFeatureConfig, RuntimeHookConfig,
     RuntimePermissionRuleConfig, RuntimePluginConfig, RuntimeTelemetryConfig,
-    ScopedMcpServerConfig, ORBIT_SETTINGS_SCHEMA_NAME,
+    ScopedMcpServerConfig, FCODE_SETTINGS_SCHEMA_NAME,
 };
 pub use conversation::{
     auto_compaction_threshold_from_env, ApiClient, ApiRequest, AssistantEvent, AutoCompactionEvent,
@@ -69,22 +69,15 @@ pub use file_ops::{
     GrepSearchInput, GrepSearchOutput, ReadFileOutput, StructuredPatchHunk, TextFilePayload,
     WriteFileOutput,
 };
-pub use hooks::{
-    HookAbortSignal, HookEvent, HookProgressEvent, HookProgressReporter, HookRunResult, HookRunner,
-};
-pub use lane_events::{
-    dedupe_superseded_commit_events, LaneCommitProvenance, LaneEvent, LaneEventBlocker,
-    LaneEventName, LaneEventStatus, LaneFailureClass,
-};
-pub use orbit_integrations::mcp::client::{
+pub use frontal_code_integrations::mcp::client::{
     McpClientAuth, McpClientBootstrap, McpClientTransport, McpManagedProxyTransport,
     McpRemoteTransport, McpSdkTransport, McpStdioTransport,
 };
-pub use orbit_integrations::mcp::lifecycle::{
+pub use frontal_code_integrations::mcp::lifecycle::{
     McpDegradedReport, McpErrorSurface, McpFailedServer, McpLifecyclePhase, McpLifecycleState,
     McpLifecycleValidator, McpPhaseResult,
 };
-pub use orbit_integrations::mcp::stdio::{
+pub use frontal_code_integrations::mcp::stdio::{
     spawn_mcp_stdio_process, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse,
     ManagedMcpTool, McpDiscoveryFailure, McpInitializeClientInfo, McpInitializeParams,
     McpInitializeResult, McpInitializeServerInfo, McpListResourcesParams, McpListResourcesResult,
@@ -93,16 +86,23 @@ pub use orbit_integrations::mcp::stdio::{
     McpTool, McpToolCallContent, McpToolCallParams, McpToolCallResult, McpToolDiscoveryReport,
     UnsupportedMcpServer,
 };
-pub use orbit_integrations::mcp::tool_bridge::{
+pub use frontal_code_integrations::mcp::tool_bridge::{
     McpConnectionStatus, McpServerState, McpToolRegistry,
 };
-pub use orbit_integrations::mcp::tools::{
+pub use frontal_code_integrations::mcp::tools::{
     execute_mcp_tool, mcp_tool_specs, ToolSpec as McpToolSpec,
 };
-pub use orbit_integrations::mcp::utils::{
+pub use frontal_code_integrations::mcp::utils::{
     mcp_server_signature, scoped_mcp_config_hash, unwrap_ccr_proxy_url,
 };
-pub use orbit_integrations::mcp::{mcp_tool_name, mcp_tool_prefix, normalize_name_for_mcp};
+pub use frontal_code_integrations::mcp::{mcp_tool_name, mcp_tool_prefix, normalize_name_for_mcp};
+pub use hooks::{
+    HookAbortSignal, HookEvent, HookProgressEvent, HookProgressReporter, HookRunResult, HookRunner,
+};
+pub use lane_events::{
+    dedupe_superseded_commit_events, LaneCommitProvenance, LaneEvent, LaneEventBlocker,
+    LaneEventName, LaneEventStatus, LaneFailureClass,
+};
 
 pub use oauth::{
     clear_oauth_credentials, clear_oauth_credentials_for, code_challenge_s256, credentials_path,

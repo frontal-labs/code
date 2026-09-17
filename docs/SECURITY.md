@@ -1,10 +1,10 @@
 # Security Guide
 
-This guide covers security aspects of the Orbit CLI, including permissions, sandboxing, data protection, and best practices.
+This guide covers security aspects of the Frontal Code CLI, including permissions, sandboxing, data protection, and best practices.
 
 ## Security Overview
 
-Orbit is designed with security as a primary concern, implementing multiple layers of protection:
+Frontal Code is designed with security as a primary concern, implementing multiple layers of protection:
 
 - **Permission System** - Granular control over tool access
 - **Sandboxing** - Isolated execution environments
@@ -14,12 +14,12 @@ Orbit is designed with security as a primary concern, implementing multiple laye
 
 ## Server Authentication
 
-`orbit-server` exposes a control plane that creates, cancels and completes agent
+`frontal-code-server` exposes a control plane that creates, cancels and completes agent
 tasks. Both of its authentication boundaries are closed by default.
 
 ### Control plane
 
-Set `ORBIT_SERVER_API_KEY` before starting the server. Clients present it as
+Set `FCODE_SERVER_API_KEY` before starting the server. Clients present it as
 either `x-api-key: <key>` or `Authorization: Bearer <key>`; the comparison is
 constant-time.
 
@@ -29,7 +29,7 @@ development, or a host reachable only from inside your own perimeter — opt in
 explicitly:
 
 ```bash
-ORBIT_SERVER_ALLOW_ANONYMOUS=1 orbit-server
+FCODE_SERVER_ALLOW_ANONYMOUS=1 frontal-code-server
 ```
 
 That path logs a warning naming the bind address on every start.
@@ -38,10 +38,10 @@ That path logs a warning naming the bind address on every start.
 
 `POST /v1/webhooks/<source>` sits outside the control-plane auth layer, so its
 HMAC signature is the only thing protecting it. Each source needs its own
-secret, named `ORBIT_<SOURCE>_WEBHOOK_SECRET`:
+secret, named `FCODE_<SOURCE>_WEBHOOK_SECRET`:
 
 ```bash
-export ORBIT_GITHUB_WEBHOOK_SECRET="..."
+export FCODE_GITHUB_WEBHOOK_SECRET="..."
 ```
 
 A delivery is rejected with `401` when the secret is missing or blank, when the
@@ -61,7 +61,7 @@ is no unsigned fallback. Source names are restricted to letters, digits, `-` and
 
 ```bash
 # Use with caution in trusted environments
-orbit --permission-mode danger-full-access prompt "deploy to production"
+frontal-code --permission-mode danger-full-access prompt "deploy to production"
 ```
 
 #### safe-mode
@@ -72,7 +72,7 @@ orbit --permission-mode danger-full-access prompt "deploy to production"
 
 ```bash
 # Safe mode for untrusted projects
-orbit --permission-mode safe-mode prompt "analyze this codebase"
+frontal-code --permission-mode safe-mode prompt "analyze this codebase"
 ```
 
 #### ask-permissions
@@ -83,7 +83,7 @@ orbit --permission-mode safe-mode prompt "analyze this codebase"
 
 ```bash
 # Maximum security
-orbit --permission-mode ask-permissions prompt "list files in /tmp"
+frontal-code --permission-mode ask-permissions prompt "list files in /tmp"
 ```
 
 ### Tool Permissions
@@ -147,14 +147,14 @@ orbit --permission-mode ask-permissions prompt "list files in /tmp"
 
 ### Process Sandboxing
 
-Orbit isolates tool execution in separate processes:
+Frontal Code isolates tool execution in separate processes:
 
 ```bash
 # Enable sandbox mode
-orbit --sandbox enable
+frontal-code --sandbox enable
 
 # Configure sandbox limits
-orbit --sandbox --cpu-limit 50% --memory-limit 1GB
+frontal-code --sandbox --cpu-limit 50% --memory-limit 1GB
 ```
 
 ### Sandbox Configuration
@@ -191,10 +191,10 @@ For maximum isolation, use container-based sandboxing:
 
 ```bash
 # Enable container sandbox
-orbit --sandbox container
+frontal-code --sandbox container
 
 # Use a pinned container image
-orbit --sandbox container --image orbit-sandbox:v0.1.0
+frontal-code --sandbox container --image frontal-code-sandbox:v0.1.0
 ```
 
 ## Authentication and API Keys
@@ -205,12 +205,12 @@ orbit --sandbox container --image orbit-sandbox:v0.1.0
 
 ```bash
 # Set API keys in environment
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
 
-# Use with Orbit
-orbit prompt "analyze this code"
+# Use with Frontal Code
+frontal-code prompt "analyze this code"
 ```
 
 #### Config File Storage
@@ -219,7 +219,7 @@ orbit prompt "analyze this code"
 {
   "providers": {
     "anthropic": {
-      "api_key": "${ORBIT_API_KEY}",
+      "api_key": "${FCODE_API_KEY}",
       "base_url": "https://api.anthropic.com"
     }
   }
@@ -230,13 +230,13 @@ orbit prompt "analyze this code"
 
 ```bash
 # Rotate API keys
-orbit config rotate-api-keys anthropic
+frontal-code config rotate-api-keys anthropic
 
 # Check key expiration
-orbit config check-api-keys
+frontal-code config check-api-keys
 
 # Set key expiration reminder
-orbit config set key-expiry-reminder 7d
+frontal-code config set key-expiry-reminder 7d
 ```
 
 ### API Security
@@ -245,13 +245,13 @@ orbit config set key-expiry-reminder 7d
 
 ```bash
 # Validate API key
-orbit auth validate anthropic
+frontal-code auth validate anthropic
 
 # Test API connectivity
-orbit auth test anthropic
+frontal-code auth test anthropic
 
 # Show key info (without exposing key)
-orbit auth info anthropic
+frontal-code auth info anthropic
 ```
 
 #### Rate Limiting
@@ -308,10 +308,10 @@ orbit auth info anthropic
 
 ```bash
 # Enable data sanitization
-orbit --sanitize-data prompt "process this file"
+frontal-code --sanitize-data prompt "process this file"
 
 # Configure sanitization rules
-orbit config set sanitize-patterns "password,token,key,secret"
+frontal-code config set sanitize-patterns "password,token,key,secret"
 ```
 
 #### Data Retention
@@ -352,7 +352,7 @@ orbit config set sanitize-patterns "password,token,key,secret"
     "level": "info",
     "audit_log": {
       "enabled": true,
-      "file": "~/.orbit/logs/audit.log",
+      "file": "~/.frontal-code/logs/audit.log",
       "format": "json",
       "rotation": "daily",
       "retention": "90d"
@@ -373,32 +373,32 @@ orbit config set sanitize-patterns "password,token,key,secret"
 
 ```bash
 # View security events
-orbit audit security
+frontal-code audit security
 
 # Show recent activity
-orbit audit recent --hours 24
+frontal-code audit recent --hours 24
 
 # Filter by event type
-orbit audit filter --event tool_execution
+frontal-code audit filter --event tool_execution
 
 # Export audit log
-orbit audit export --format csv --output audit.csv
+frontal-code audit export --format csv --output audit.csv
 ```
 
 ### Incident Response
 
 ```bash
 # Lock down system on security event
-orbit security lock
+frontal-code security lock
 
 # Revoke all sessions
-orbit security revoke-sessions
+frontal-code security revoke-sessions
 
 # Reset permissions to safe mode
-orbit security reset-permissions
+frontal-code security reset-permissions
 
 # Generate security report
-orbit security report
+frontal-code security report
 ```
 
 ## Network Security
@@ -467,7 +467,7 @@ orbit security report
     },
     "allowed_sources": [
       "https://github.com",
-      "https://github.com/frontal-labs/orbit"
+      "https://github.com/frontal-labs/frontal-code"
     ],
     "blocked_sources": [
       "*.malicious.com"
@@ -480,24 +480,24 @@ orbit security report
 
 ```bash
 # Enable plugin sandboxing
-orbit config set plugin-sandbox true
+frontal-code config set plugin-sandbox true
 
 # Configure plugin limits
-orbit config set plugin-cpu-limit 25%
-orbit config set plugin-memory-limit 512MB
+frontal-code config set plugin-cpu-limit 25%
+frontal-code config set plugin-memory-limit 512MB
 ```
 
 ### Plugin Verification
 
 ```bash
 # Verify plugin signature
-orbit plugin verify my-plugin
+frontal-code plugin verify my-plugin
 
 # Check plugin security
-orbit plugin security-check my-plugin
+frontal-code plugin security-check my-plugin
 
 # List trusted plugins
-orbit plugin trusted
+frontal-code plugin trusted
 ```
 
 ## Security Best Practices
@@ -505,7 +505,7 @@ orbit plugin trusted
 ### General Guidelines
 
 1. **Use least privilege** - Grant minimum necessary permissions
-2. **Regular updates** - Keep Orbit and dependencies updated
+2. **Regular updates** - Keep Frontal Code and dependencies updated
 3. **Monitor activity** - Review audit logs regularly
 4. **Secure storage** - Protect API keys and sensitive data
 5. **Network security** - Restrict network access when possible
@@ -514,41 +514,41 @@ orbit plugin trusted
 
 ```bash
 # Use dedicated user account
-useradd -m orbit
-su - orbit
+useradd -m frontal-code
+su - frontal-code
 
 # Set restrictive file permissions
-chmod 700 ~/.orbit
-chmod 600 ~/.orbit/config.json
+chmod 700 ~/.frontal-code
+chmod 600 ~/.frontal-code/config.json
 
 # Use secure shell
-ssh -i ~/.ssh/orbit_key user@server
+ssh -i ~/.ssh/frontal-code_key user@server
 ```
 
 ### Development Security
 
 ```bash
 # Use safe mode for development
-orbit --permission-mode safe-mode
+frontal-code --permission-mode safe-mode
 
 # Enable audit logging
-orbit --audit-log enable
+frontal-code --audit-log enable
 
 # Use containerized development
-docker run -it --rm orbit/cli:v0.1.0
+docker run -it --rm frontal-code/cli:v0.1.0
 ```
 
 ### Production Security
 
 ```bash
 # Use container sandbox
-orbit --sandbox container
+frontal-code --sandbox container
 
 # Enable all security features
-orbit --permission-mode ask-permissions --audit-log enable
+frontal-code --permission-mode ask-permissions --audit-log enable
 
 # Monitor security events
-orbit security monitor
+frontal-code security monitor
 ```
 
 ## Security Configuration
@@ -629,25 +629,25 @@ orbit security monitor
 
 ```bash
 # Security scan
-orbit security scan
+frontal-code security scan
 
 # Vulnerability check
-orbit security check-vulnerabilities
+frontal-code security check-vulnerabilities
 
 # Permission audit
-orbit security audit-permissions
+frontal-code security audit-permissions
 
 # Configuration security
-orbit security check-config
+frontal-code security check-config
 ```
 
 ### External Security Tools
 
 ```bash
 # Integrate with security scanners
-orbit security integrate --tool semgrep
-orbit security integrate --tool trivy
-orbit security integrate --tool bandit
+frontal-code security integrate --tool semgrep
+frontal-code security integrate --tool trivy
+frontal-code security integrate --tool bandit
 ```
 
 ## Incident Response
@@ -663,16 +663,16 @@ orbit security integrate --tool bandit
 
 ```bash
 # Immediate response
-orbit security incident --type unauthorized_access --action lock
+frontal-code security incident --type unauthorized_access --action lock
 
 # Investigation
-orbit security investigate --incident-id 12345
+frontal-code security investigate --incident-id 12345
 
 # Recovery
-orbit security recover --backup-id latest
+frontal-code security recover --backup-id latest
 
 # Post-incident review
-orbit security review --incident-id 12345
+frontal-code security review --incident-id 12345
 ```
 
 ## Security Updates
@@ -681,26 +681,26 @@ orbit security review --incident-id 12345
 
 ```bash
 # Check for security updates
-orbit security check-updates
+frontal-code security check-updates
 
 # Apply security patches
-orbit security update
+frontal-code security update
 
 # Verify update integrity
-orbit security verify-update
+frontal-code security verify-update
 ```
 
 ### Security Advisories
 
 ```bash
 # List security advisories
-orbit security advisories
+frontal-code security advisories
 
 # Check specific vulnerability
-orbit security advisory CVE-2024-12345
+frontal-code security advisory CVE-2024-12345
 
 # Subscribe to security alerts
-orbit security subscribe --email security@example.com
+frontal-code security subscribe --email security@example.com
 ```
 
 ## Compliance and Auditing
@@ -709,13 +709,13 @@ orbit security subscribe --email security@example.com
 
 ```bash
 # Generate compliance report
-orbit compliance report --standard SOC2
+frontal-code compliance report --standard SOC2
 
 # Audit trail
-orbit compliance audit-trail --start-date 2024-01-01
+frontal-code compliance audit-trail --start-date 2024-01-01
 
 # Evidence collection
-orbit compliance evidence --framework ISO27001
+frontal-code compliance evidence --framework ISO27001
 ```
 
 ### Regulatory Compliance
@@ -740,4 +740,4 @@ orbit compliance evidence --framework ISO27001
 }
 ```
 
-This security guide provides comprehensive coverage of security features and best practices for using Orbit CLI safely in various environments.
+This security guide provides comprehensive coverage of security features and best practices for using Frontal Code CLI safely in various environments.

@@ -5,8 +5,8 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use orbit_runtime::ContentBlock;
-use orbit_runtime::Session;
+use frontal_code_runtime::ContentBlock;
+use frontal_code_runtime::Session;
 use serde_json::Value;
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -29,7 +29,7 @@ fn resumed_binary_accepts_slash_commands_with_arguments() {
         .expect("session should persist");
 
     // when
-    let output = run_orbit(
+    let output = run_frontal_code(
         &temp_dir,
         &[
             "--resume",
@@ -56,7 +56,7 @@ fn resumed_binary_accepts_slash_commands_with_arguments() {
     assert!(stdout.contains("Session cleared"));
     assert!(stdout.contains("Mode             resumed session reset"));
     assert!(stdout.contains("Previous session"));
-    assert!(stdout.contains("Resume previous  orbit --resume"));
+    assert!(stdout.contains("Resume previous  frontal-code --resume"));
     assert!(stdout.contains("Backup           "));
     assert!(stdout.contains("Session file     "));
 
@@ -87,7 +87,7 @@ fn status_command_applies_cli_flags_end_to_end() {
     fs::create_dir_all(&temp_dir).expect("temp dir should exist");
 
     // when
-    let output = run_orbit(
+    let output = run_frontal_code(
         &temp_dir,
         &[
             "--model",
@@ -117,8 +117,8 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
     // given
     let temp_dir = unique_temp_dir("resume-config");
     let project_dir = temp_dir.join("project");
-    let config_home = temp_dir.join("home").join(".orbit");
-    fs::create_dir_all(project_dir.join(".orbit")).expect("project config dir should exist");
+    let config_home = temp_dir.join("home").join(".frontal-code");
+    fs::create_dir_all(project_dir.join(".frontal-code")).expect("project config dir should exist");
     fs::create_dir_all(&config_home).expect("config home should exist");
 
     let session_path = project_dir.join("session.jsonl");
@@ -130,13 +130,15 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
     fs::write(config_home.join("settings.json"), r#"{"model":"haiku"}"#)
         .expect("user config should write");
     fs::write(
-        project_dir.join(".orbit").join("settings.local.json"),
+        project_dir
+            .join(".frontal-code")
+            .join("settings.local.json"),
         r#"{"model":"opus"}"#,
     )
     .expect("local config should write");
 
     // when
-    let output = run_orbit_with_env(
+    let output = run_frontal_code_with_env(
         &project_dir,
         &[
             "--resume",
@@ -145,7 +147,7 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
             "model",
         ],
         &[(
-            "ORBIT_CONFIG_HOME",
+            "FCODE_CONFIG_HOME",
             config_home.to_str().expect("utf8 path"),
         )],
     );
@@ -169,7 +171,7 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
     ));
     assert!(stdout.contains(
         project_dir
-            .join(".orbit")
+            .join(".frontal-code")
             .join("settings.local.json")
             .to_str()
             .expect("utf8 path")
@@ -183,7 +185,7 @@ fn resume_latest_restores_the_most_recent_managed_session() {
     // given
     let temp_dir = unique_temp_dir("resume-latest");
     let project_dir = temp_dir.join("project");
-    let sessions_dir = project_dir.join(".orbit").join("sessions");
+    let sessions_dir = project_dir.join(".frontal-code").join("sessions");
     fs::create_dir_all(&sessions_dir).expect("sessions dir should exist");
 
     let older_path = sessions_dir.join("session-older.jsonl");
@@ -209,7 +211,7 @@ fn resume_latest_restores_the_most_recent_managed_session() {
         .expect("newer session should persist");
 
     // when
-    let output = run_orbit(&project_dir, &["--resume", "latest", "/status"]);
+    let output = run_frontal_code(&project_dir, &["--resume", "latest", "/status"]);
 
     // then
     assert!(
@@ -241,7 +243,7 @@ fn resumed_status_command_emits_structured_json_when_requested() {
         .expect("session should persist");
 
     // when
-    let output = run_orbit(
+    let output = run_frontal_code(
         &temp_dir,
         &[
             "--output-format",
@@ -292,7 +294,7 @@ fn resumed_sandbox_command_emits_structured_json_when_requested() {
         .expect("session should persist");
 
     // when
-    let output = run_orbit(
+    let output = run_frontal_code(
         &temp_dir,
         &[
             "--output-format",
@@ -323,17 +325,17 @@ fn resumed_sandbox_command_emits_structured_json_when_requested() {
     assert!(parsed["markers"].is_array());
 }
 
-fn run_orbit(current_dir: &Path, args: &[&str]) -> Output {
-    run_orbit_with_env(current_dir, args, &[])
+fn run_frontal_code(current_dir: &Path, args: &[&str]) -> Output {
+    run_frontal_code_with_env(current_dir, args, &[])
 }
 
-fn run_orbit_with_env(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_orbit"));
+fn run_frontal_code_with_env(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_frontal-code"));
     command.current_dir(current_dir).args(args);
     for (key, value) in envs {
         command.env(key, value);
     }
-    command.output().expect("orbit should launch")
+    command.output().expect("frontal-code should launch")
 }
 
 fn unique_temp_dir(label: &str) -> PathBuf {
@@ -343,7 +345,7 @@ fn unique_temp_dir(label: &str) -> PathBuf {
         .as_millis();
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "orbit-{label}-{}-{millis}-{counter}",
+        "frontal-code-{label}-{}-{millis}-{counter}",
         std::process::id()
     ))
 }

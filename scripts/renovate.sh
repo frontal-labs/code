@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper around `renovate` so it can run locally against the repo config.
+# Run Renovate from the repository root.
 # Requires a GitHub token with write access (RENOVATE_TOKEN or GITHUB_TOKEN).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."

@@ -1,4 +1,4 @@
-//! # Orbit Memory
+//! # `FrontalCode` Memory
 //!
 //! Semantic memory and lightweight knowledge graph primitives.
 
@@ -12,11 +12,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use frontal_code_embeddings::{cosine_similarity, EmbeddingProvider, LocalMlEmbeddingProvider};
 pub use graph_neo4j_adapter::{
     Neo4jConfig, Neo4jGraphStoreAdapter, Neo4jHttpTransportConfig, Neo4jTransport,
     ReqwestNeo4jTransport,
 };
-use orbit_embeddings::{cosine_similarity, EmbeddingProvider, LocalMlEmbeddingProvider};
 pub use persistent_metadata_store::PersistentFileMetadataStore;
 use serde::{Deserialize, Serialize};
 pub use vector_pinecone_adapter::{
@@ -24,14 +24,14 @@ pub use vector_pinecone_adapter::{
     ReqwestPineconeTransport,
 };
 
-const ORBIT_MEMORY_METADATA_PATH: &str = "ORBIT_MEMORY_METADATA_PATH";
-const ORBIT_MEMORY_PINECONE_URL: &str = "ORBIT_MEMORY_PINECONE_URL";
-const ORBIT_MEMORY_PINECONE_NAMESPACE: &str = "ORBIT_MEMORY_PINECONE_NAMESPACE";
-const ORBIT_MEMORY_PINECONE_API_KEY: &str = "ORBIT_MEMORY_PINECONE_API_KEY";
-const ORBIT_MEMORY_NEO4J_URL: &str = "ORBIT_MEMORY_NEO4J_URL";
-const ORBIT_MEMORY_NEO4J_DATABASE: &str = "ORBIT_MEMORY_NEO4J_DATABASE";
-const ORBIT_MEMORY_NEO4J_USERNAME: &str = "ORBIT_MEMORY_NEO4J_USERNAME";
-const ORBIT_MEMORY_NEO4J_PASSWORD: &str = "ORBIT_MEMORY_NEO4J_PASSWORD";
+const FCODE_MEMORY_METADATA_PATH: &str = "FCODE_MEMORY_METADATA_PATH";
+const FCODE_MEMORY_PINECONE_URL: &str = "FCODE_MEMORY_PINECONE_URL";
+const FCODE_MEMORY_PINECONE_NAMESPACE: &str = "FCODE_MEMORY_PINECONE_NAMESPACE";
+const FCODE_MEMORY_PINECONE_API_KEY: &str = "FCODE_MEMORY_PINECONE_API_KEY";
+const FCODE_MEMORY_NEO4J_URL: &str = "FCODE_MEMORY_NEO4J_URL";
+const FCODE_MEMORY_NEO4J_DATABASE: &str = "FCODE_MEMORY_NEO4J_DATABASE";
+const FCODE_MEMORY_NEO4J_USERNAME: &str = "FCODE_MEMORY_NEO4J_USERNAME";
+const FCODE_MEMORY_NEO4J_PASSWORD: &str = "FCODE_MEMORY_NEO4J_PASSWORD";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MemoryScope {
@@ -235,14 +235,14 @@ impl MemoryBackendConfig {
     #[must_use]
     pub fn from_env() -> Self {
         Self {
-            metadata_path: env_var(ORBIT_MEMORY_METADATA_PATH).map(PathBuf::from),
-            pinecone_url: env_var(ORBIT_MEMORY_PINECONE_URL),
-            pinecone_namespace: env_var(ORBIT_MEMORY_PINECONE_NAMESPACE),
-            pinecone_api_key: env_var(ORBIT_MEMORY_PINECONE_API_KEY),
-            neo4j_url: env_var(ORBIT_MEMORY_NEO4J_URL),
-            neo4j_database: env_var(ORBIT_MEMORY_NEO4J_DATABASE),
-            neo4j_username: env_var(ORBIT_MEMORY_NEO4J_USERNAME),
-            neo4j_password: env_var(ORBIT_MEMORY_NEO4J_PASSWORD),
+            metadata_path: env_var(FCODE_MEMORY_METADATA_PATH).map(PathBuf::from),
+            pinecone_url: env_var(FCODE_MEMORY_PINECONE_URL),
+            pinecone_namespace: env_var(FCODE_MEMORY_PINECONE_NAMESPACE),
+            pinecone_api_key: env_var(FCODE_MEMORY_PINECONE_API_KEY),
+            neo4j_url: env_var(FCODE_MEMORY_NEO4J_URL),
+            neo4j_database: env_var(FCODE_MEMORY_NEO4J_DATABASE),
+            neo4j_username: env_var(FCODE_MEMORY_NEO4J_USERNAME),
+            neo4j_password: env_var(FCODE_MEMORY_NEO4J_PASSWORD),
         }
     }
 }
@@ -1071,7 +1071,7 @@ fn env_var(name: &str) -> Option<String> {
 
 fn embedding_metadata_matches(
     item: &MemoryMetadata,
-    model_info: &orbit_embeddings::EmbeddingModelInfo,
+    model_info: &frontal_code_embeddings::EmbeddingModelInfo,
 ) -> bool {
     item.embedding_model == model_info.model_name
         && item.embedding_provider == model_info.provider
@@ -1100,7 +1100,9 @@ mod tests {
         MemoryBackendConfig, MemoryMetadata, MemoryMetadataStore, MemoryRerankPolicy, MemoryScope,
         MemorySearchRequest, MemoryService, MemoryVectorStore, SemanticMemoryEngine,
     };
-    use orbit_embeddings::{EmbeddingModelConfig, EmbeddingProvider, LocalMlEmbeddingProvider};
+    use frontal_code_embeddings::{
+        EmbeddingModelConfig, EmbeddingProvider, LocalMlEmbeddingProvider,
+    };
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1133,12 +1135,12 @@ mod tests {
         let memory = SemanticMemoryEngine::default();
         memory.upsert_entity(KgEntity {
             id: "crate:tools".to_string(),
-            label: "orbit-tools".to_string(),
+            label: "frontal-code-tools".to_string(),
             entity_type: "crate".to_string(),
         });
         memory.upsert_entity(KgEntity {
             id: "crate:runtime".to_string(),
-            label: "orbit-runtime".to_string(),
+            label: "frontal-code-runtime".to_string(),
             entity_type: "crate".to_string(),
         });
         memory.add_relation(KgRelation {
@@ -1209,7 +1211,7 @@ mod tests {
             &scope_a,
             KgEntity {
                 id: "crate:tools".to_string(),
-                label: "orbit-tools".to_string(),
+                label: "frontal-code-tools".to_string(),
                 entity_type: "crate".to_string(),
             },
         );
@@ -1217,7 +1219,7 @@ mod tests {
             &scope_a,
             KgEntity {
                 id: "crate:runtime".to_string(),
-                label: "orbit-runtime".to_string(),
+                label: "frontal-code-runtime".to_string(),
                 entity_type: "crate".to_string(),
             },
         );
@@ -1234,7 +1236,7 @@ mod tests {
             &scope_b,
             KgEntity {
                 id: "crate:tools".to_string(),
-                label: "orbit-tools".to_string(),
+                label: "frontal-code-tools".to_string(),
                 entity_type: "crate".to_string(),
             },
         );
@@ -1242,7 +1244,7 @@ mod tests {
             &scope_b,
             KgEntity {
                 id: "crate:runtime".to_string(),
-                label: "orbit-runtime".to_string(),
+                label: "frontal-code-runtime".to_string(),
                 entity_type: "crate".to_string(),
             },
         );
@@ -1328,12 +1330,12 @@ mod tests {
         let memory = SemanticMemoryEngine::default();
         memory.upsert_entity(KgEntity {
             id: "crate:tools".to_string(),
-            label: "orbit-tools".to_string(),
+            label: "frontal-code-tools".to_string(),
             entity_type: "crate".to_string(),
         });
         memory.upsert_entity(KgEntity {
             id: "crate:runtime".to_string(),
-            label: "orbit-runtime".to_string(),
+            label: "frontal-code-runtime".to_string(),
             entity_type: "crate".to_string(),
         });
         memory.add_relation(KgRelation {
@@ -1486,7 +1488,7 @@ mod tests {
     #[test]
     fn backend_config_persists_metadata_when_path_is_configured() {
         let path = std::env::temp_dir().join(format!(
-            "orbit-memory-backend-config-{}.tsv",
+            "frontal-code-memory-backend-config-{}.tsv",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_or(0, |duration| duration.as_nanos())

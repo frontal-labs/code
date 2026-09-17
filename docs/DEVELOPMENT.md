@@ -27,7 +27,7 @@ This guide covers how to set up a development environment, contribute to the pro
    cp .env.example .env
    
    # Edit .env with your API keys
-   export ORBIT_API_KEY="sk-ant-..."
+   export FCODE_API_KEY="sk-ant-..."
    ```
 
 ## Development Workflow
@@ -42,7 +42,7 @@ cargo build --workspace
 cargo build --release
 
 # Build specific crate
-cargo build -p orbit-cli
+cargo build -p cli
 ```
 
 ### Testing
@@ -55,20 +55,20 @@ cargo test --workspace
 cargo test --workspace -- --nocapture
 
 # Run specific test
-cargo test -p orbit-cli test_name
+cargo test -p cli test_name
 ```
 
 ### Running the CLI
 
 ```bash
 # Development build
-cargo run -p orbit-cli -- --help
+cargo run -p cli -- --help
 
 # With specific model
-cargo run -p orbit-cli -- --model claude-sonnet-4-6
+cargo run -p cli -- --model claude-sonnet-4-6
 
 # Interactive REPL
-cargo run -p orbit-cli -- repl
+cargo run -p cli -- repl
 ```
 
 ## Code Organization
@@ -84,7 +84,7 @@ The project uses a Cargo workspace with multiple crates:
 - **`crates/commands`** - Slash command definitions and parsing
 - **`crates/plugins`** - Plugin system and management
 - **`crates/api`** - Public API facade
-- **`crates/orbit-mock-gateway`** - Testing mock service
+- **`crates/frontal-code-mock-gateway`** - Testing mock service
 
 ### Adding New Features
 
@@ -108,7 +108,7 @@ cargo test -p crate-name
 The CLI crate contains integration tests that test the full command flow:
 
 ```bash
-cargo test -p orbit-cli --test integration
+cargo test -p cli --test integration
 ```
 
 ### Mock Parity Tests
@@ -120,7 +120,7 @@ The project includes a comprehensive mock testing harness:
 ./scripts/run_mock_parity_harness.sh
 
 # Run mock service manually
-cargo run -p orbit-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 ## Linting and Formatting
@@ -157,8 +157,8 @@ cargo doc --workspace --no-deps --open
 CLI help is automatically generated from argument definitions:
 
 ```bash
-cargo run -p orbit-cli -- --help
-cargo run -p orbit-cli -- help <command>
+cargo run -p cli -- --help
+cargo run -p cli -- help <command>
 ```
 
 ## Debugging
@@ -168,7 +168,7 @@ cargo run -p orbit-cli -- help <command>
 Enable debug logging:
 
 ```bash
-RUST_LOG=debug cargo run -p orbit-cli -- <command>
+RUST_LOG=debug cargo run -p cli -- <command>
 ```
 
 ### Common Issues
@@ -227,7 +227,7 @@ per-language `macros` are **placeholders** until wired to real tooling.
       constraints, config, aspects, transitions, extensions, bzlmod, ci).
 - [x] `third_party/` conventions (`repos.bzl`, `README`, `patches/`,
       `overrides/`, `archives/`, `manifests/`, `libraries/`, `tools/`).
-- [x] Dev container, CI (`ci.yml`, `lint.yml`), pre-commit, Makefile, scripts.
+- [x] Dev container, CI (`ci.yml`, `lint.yml`), pre-commit, scripts.
 - [x] Per-language `*_app()` macros and demo trees (`rust/`, `typescript/`).
 - [x] Vendored `typescript_binary` rule under `third_party/bazel_rules/rules_typescript`.
 - [x] `lint_aspect` wired to buildifier (real), with documented extension points
@@ -235,7 +235,10 @@ per-language `macros` are **placeholders** until wired to real tooling.
 - [x] `coverage_aspect` wired to `coverage_common.instrumented_files()` (real),
       with documented extension points for llvm-cov and istanbul.
 - [x] Remote cache configuration documented in `.bazelrc.project`.
-- [x] CI hardened: pinned `setup-bazel`, added `make ci` step.
+- [x] CI uses pinned `setup-bazel`, installs Rust/Bun for the shell wrappers,
+      and runs `bazel build //...` and `bazel test //...` in `ci.yml`.
+      For local aggregate checks, use `bazel test //:ci` (tests, lint,
+      formatting checks, and third-party validation; not a release build).
 
 ### Next
 
@@ -258,9 +261,9 @@ per-language `macros` are **placeholders** until wired to real tooling.
 
 ### Bazel Issues
 
-- Clear Bazel state: `make clean` (or `EXPUNGE=1 make clean` for full expunge)
+- Clear Bazel state: `bazel clean` (or `bazel clean --expunge` for full expunge)
 - Verify the Bazel version is pinned: `cat .bazelversion`
-- Run `make doctor` to check the toolchain
+- Run `bazel run //tools/doctor:doctor` to check the toolchain
 
 ### Runtime Issues
 

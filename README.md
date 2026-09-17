@@ -1,11 +1,8 @@
-# Frontal Orbit
+# Frontal Code
 
-<picture>
-  <source srcset="./banner.jpg" media="(prefers-color-scheme: dark)">
-  <img src="./banner.jpg" alt="Frontal Banner">
-</picture>
+![Frontal Banner](./banner.jpg)
 
-A high-performance Rust rewrite of the Orbit CLI agent harness. Built for speed, safety, and native tool execution.
+A high-performance Rust rewrite of the Frontal Code CLI agent harness. Built for speed, safety, and native tool execution.
 
 For a task-oriented guide with copy/paste examples, see [`./USAGE.md`](./USAGE.md).
 
@@ -13,22 +10,22 @@ For a task-oriented guide with copy/paste examples, see [`./USAGE.md`](./USAGE.m
 
 ```bash
 # Install the CLI with Homebrew
-brew install --HEAD ./homebrew/orbit.rb
+brew install --HEAD ./homebrew/frontal-code.rb
 
 # Inspect available commands
-orbit --help
+frontal-code --help
 
 # Run the interactive REPL
-orbit --model claude-opus-5
+frontal-code --model claude-opus-5
 
 # One-shot prompt
-orbit prompt "explain this codebase"
+frontal-code prompt "explain this codebase"
 
 # JSON output for automation
-orbit --output-format json prompt "summarize crates/cli/src/main.rs"
+frontal-code --output-format json prompt "summarize crates/cli/src/main.rs"
 ```
 
-If you are developing from source instead of installing the CLI, use `cargo build --workspace` and run `cargo run -p orbit-cli -- ...`.
+If you are developing from source instead of installing the CLI, use `cargo build --workspace` and run `cargo run -p cli -- ...`.
 
 ## Configuration
 
@@ -37,17 +34,17 @@ If you are developing from source instead of installing the CLI, use `cargo buil
 Set your API credentials:
 
 ```bash
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 # Or use Frontal's OpenAI-compatible API gateway
 export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 # Or use an Anthropic proxy
-export ORBIT_BASE_URL="https://your-proxy.com"
+export FCODE_BASE_URL="https://your-proxy.com"
 ```
 
 ### Core Configuration
 
-Orbit now uses a centralized configuration system located at `config/project.json`. This file contains:
+Frontal Code now uses a centralized configuration system located at `config/project.json`. This file contains:
 
 - **Project settings**: name, version, description
 - **Runtime configuration**: default AI provider, timeouts, concurrency limits
@@ -60,9 +57,9 @@ Orbit now uses a centralized configuration system located at `config/project.jso
 
 The system looks for `project.json` in this order:
 
-1. `$ORBIT_CONFIG_HOME/project.json` - Custom config directory
-2. `$ORBIT_HOME/project.json` - Orbit home directory  
-3. `~/.orbit/project.json` - User's home directory
+1. `$FCODE_CONFIG_HOME/project.json` - Custom config directory
+2. `$FCODE_HOME/project.json` - Frontal Code home directory  
+3. `~/.frontal-code/project.json` - User's home directory
 4. `config/project.json` - Project-local configuration
 
 #### Example Configuration
@@ -70,7 +67,7 @@ The system looks for `project.json` in this order:
 ```json
 {
   "project": {
-    "name": "Orbit",
+    "name": "Frontal Code",
     "version": "0.1.0",
     "description": "AI-powered development environment and CLI tool"
   },
@@ -93,7 +90,7 @@ The system looks for `project.json` in this order:
 #### Using Configuration in Code
 
 ```rust
-use orbit_core::config::ProjectConfig;
+use frontal-code_core::config::ProjectConfig;
 
 // Load configuration with fallback to defaults
 let config = ProjectConfig::load_or_default();
@@ -115,7 +112,7 @@ The workspace now includes a deterministic Anthropic-compatible mock service and
 ./scripts/run_mock_parity_harness.sh
 
 # Or start the mock service manually for ad hoc CLI runs
-cargo run -p orbit-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 Harness coverage:
@@ -152,7 +149,7 @@ Primary artifacts:
 | Todo tracking |  |
 | Notebook editing |  |
 | AGENTS.md / project memory |  |
-| Config file hierarchy (`.orbit.json` + merged config sections) |  |
+| Config file hierarchy (`.frontal-code/settings.json` + merged config sections) |  |
 | Permission system |  |
 | MCP server lifecycle + inspection |  |
 | Session persistence + resume |  |
@@ -193,7 +190,7 @@ Short names resolve to the latest model versions:
 Representative current surface:
 
 ```text
-orbit [OPTIONS] [COMMAND]
+frontal-code [OPTIONS] [COMMAND]
 
 Flags:
   --model MODEL
@@ -222,7 +219,7 @@ Top-level commands:
 The command surface is moving quickly. For the canonical live help text, run:
 
 ```bash
-cargo run -p orbit-cli -- --help
+cargo run -p cli -- --help
 ```
 
 ## Slash Commands (REPL)
@@ -237,7 +234,7 @@ The REPL now exposes a much broader surface than the original minimal shell:
 - automation / analysis: `/review`, `/advisor`, `/insights`, `/security-review`, `/subagent`, `/team`, `/telemetry`, `/providers`, `/cron`, and more
 - plugin management: `/plugin` (with aliases `/plugins`, `/marketplace`)
 
-Notable orbit-first surfaces now available directly in slash form:
+Notable frontal-code-first surfaces now available directly in slash form:
 - `/skills [list|install <path>|help]`
 - `/agents [list|help]`
 - `/mcp [list|show <server>|help]`
@@ -245,7 +242,7 @@ Notable orbit-first surfaces now available directly in slash form:
 - `/plugin [list|install <path>|enable <name>|disable <name>|uninstall <id>|update <id>]`
 - `/subagent [list|steer <target> <msg>|kill <id>]`
 
-See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p orbit-cli -- --help` for the live canonical command list.
+See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p cli -- --help` for the live canonical command list.
 
 ## Workspace Layout
 
@@ -256,7 +253,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p orbit-cl
 |   crates/
 |   |   api/                # Public API facade re-exporting provider/model APIs
 |   |   agents/             # Agent management and coordination
-|   |   cli/                # Main CLI binary (`orbit`)
+|   |   cli/                # Main CLI binary (`frontal-code`)
 |   |   commands/           # Shared slash-command registry + help rendering
 |   |   compat-harness/     # TS manifest extraction harness
 |   |   core/               # Shared core capabilities and foundational types
@@ -294,7 +291,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p orbit-cl
 - **github** - GitHub API client for PRs, issues, check runs, and repository operations
 - **integrations** - MCP server management, IDE integration, and external service bridges
 - **memory** - semantic memory, knowledge graphs, and persistent storage abstractions
-- **orbit-mock-gateway** - deterministic `/v1/messages` mock for CLI parity tests and local harness runs
+- **frontal-code-mock-gateway** - deterministic `/v1/messages` mock for CLI parity tests and local harness runs
 - **observability** - error reporting, structured logging, and agent-level observability
 - **orchestrator** - work item routing, execution planning, lane assignment, and resource management
 - **plugins** - plugin metadata, install/enable/disable/update flows, plugin tool definitions, hook integration surfaces
@@ -312,13 +309,13 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p orbit-cl
 
 - **~89K lines** of Rust
 - **21 crates** in workspace
-- **Binary name:** `orbit`
+- **Binary name:** `frontal-code`
 - **Default model:** `claude-opus-5`
 - **Default permissions:** `danger-full-access`
 
 ## Attribution
 
-Originally based on [ultraworkers/claw-code](https://github.com/ultraworkers/claw-code), a high-performance Rust rewrite of AI agent tooling. This fork has been significantly modified and rebranded as "Frontal Orbit" by Frontal Labs.
+Originally based on [ultraworkers/claw-code](https://github.com/ultraworkers/claw-code), a high-performance Rust rewrite of AI agent tooling. This fork has been significantly modified and rebranded as "Frontal Frontal Code" by Frontal Labs.
 
 ## Bazel monorepo
 
@@ -327,10 +324,10 @@ A hermetic, reproducible build foundation is provided via **Bzlmod** (no
 infrastructure lives under `bazel/` and `third_party/`.
 
 ```bash
-make bootstrap   # install pre-commit + non-fatal `bazel mod tidy`
-make build       # bazel build //...
-make test        # bazel test //...
-make lint        # pre-commit run --all-files
+bazel run //:bootstrap   # install pre-commit + non-fatal `bazel mod tidy`
+bazel build //...       # build all Bazel targets
+bazel test //...        # run all Bazel tests
+bazel test //:lint       # pre-commit run --all-files (via lint target)
 ```
 
 See [`docs/bazel/ARCHITECTURE.md`](./docs/bazel/ARCHITECTURE.md),

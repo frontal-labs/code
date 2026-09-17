@@ -1,11 +1,11 @@
-use orbit_api::service::ApiServiceConfig;
-use orbit_core::config::ProjectConfig;
+use frontal_code_api::service::ApiServiceConfig;
+use frontal_code_core::config::ProjectConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Load core configuration
     let core_config = ProjectConfig::load_or_default();
-    println!("Starting Orbit API with core configuration:");
+    println!("Starting FrontalCode API with core configuration:");
     println!(
         "  Project: {} v{}",
         core_config.project.name, core_config.project.version
@@ -24,5 +24,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let config = ApiServiceConfig::from_env()?;
-    orbit_api::service::serve(config).await
+    frontal_code_api::service::serve(config).await
 }

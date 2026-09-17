@@ -1,4 +1,4 @@
-# Orbit Embeddings
+# Frontal Code Embeddings
 
 Embedding primitives used by semantic memory and retrieval.
 
@@ -22,4 +22,4 @@ Embedding primitives used by semantic memory and retrieval.
 
 ## Usage
 
-This crate is consumed by `orbit-memory` and tool integrations for semantic search.
+This crate is consumed by `frontal-code-memory` and tool integrations for semantic search.

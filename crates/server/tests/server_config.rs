@@ -1,7 +1,7 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
-use orbit_server::{LaneTransportKind, ServerConfig};
+use frontal_code_server::{LaneTransportKind, ServerConfig};
 
 #[test]
 fn default_server_config() {

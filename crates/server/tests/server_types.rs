@@ -1,4 +1,4 @@
-use orbit_server::{
+use frontal_code_server::{
     CreateTaskRequest, EventStreamQuery, HealthResponse, HostedTaskContext, HostedTaskSnapshot,
     HostedTaskStatus, ListTasksQuery, OrphanPolicyQuery, OrphanPolicyRuleResponse, TaskCounters,
     TaskRuntimeResponse,
@@ -75,7 +75,7 @@ fn hosted_task_context_serialize_roundtrip() {
         source: Some("slack".to_string()),
         user_id: Some("U123".to_string()),
         channel_id: Some("C456".to_string()),
-        repository: Some("acme/orbit".to_string()),
+        repository: Some("acme/frontal-code".to_string()),
         priority: Some("high".to_string()),
         ..HostedTaskContext::default()
     };
@@ -88,7 +88,10 @@ fn hosted_task_context_serialize_roundtrip() {
     let deserialized: HostedTaskContext = serde_json::from_value(json).unwrap();
     assert_eq!(deserialized.source.as_deref(), Some("slack"));
     assert_eq!(deserialized.user_id.as_deref(), Some("U123"));
-    assert_eq!(deserialized.repository.as_deref(), Some("acme/orbit"));
+    assert_eq!(
+        deserialized.repository.as_deref(),
+        Some("acme/frontal-code")
+    );
 }
 
 #[test]
@@ -109,10 +112,10 @@ fn hosted_task_snapshot_serialize() {
         thread_ts: None,
         approval_message_ts: None,
         orphan_policy: None,
-        repository: Some("acme/orbit".to_string()),
-        repo_url: Some("https://github.com/acme/orbit.git".to_string()),
+        repository: Some("acme/frontal-code".to_string()),
+        repo_url: Some("https://github.com/acme/frontal-code.git".to_string()),
         base_ref: Some("main".to_string()),
-        branch: Some("orbit/test".to_string()),
+        branch: Some("frontal-code/test".to_string()),
         published_branch: None,
         published_commit_sha: None,
         published_remote: None,
@@ -335,7 +338,7 @@ fn orphan_policy_query_empty() {
 #[test]
 fn orphan_policy_rule_response_serialize() {
     let rule = OrphanPolicyRuleResponse {
-        repository: Some("acme/orbit".to_string()),
+        repository: Some("acme/frontal-code".to_string()),
         source: Some("slack".to_string()),
         priority: Some("high".to_string()),
         approval_delay_secs: Some(30),
@@ -343,7 +346,7 @@ fn orphan_policy_rule_response_serialize() {
         auto_cancel_after_secs: Some(300),
     };
     let json = serde_json::to_value(&rule).unwrap();
-    assert_eq!(json["repository"], "acme/orbit");
+    assert_eq!(json["repository"], "acme/frontal-code");
     assert_eq!(json["approval_delay_secs"], 30);
     assert!(json.get("auto_cancel_after_secs").is_some());
 }
@@ -386,8 +389,8 @@ fn task_runtime_response_serialize() {
 #[test]
 fn hosted_task_context_repo_checkout_request_with_remote_url() {
     let context = HostedTaskContext {
-        repo_url: Some("https://github.com/acme/orbit.git".to_string()),
-        repository: Some("acme/orbit".to_string()),
+        repo_url: Some("https://github.com/acme/frontal-code.git".to_string()),
+        repository: Some("acme/frontal-code".to_string()),
         base_ref: Some("main".to_string()),
         branch: Some("feature/test".to_string()),
         ..HostedTaskContext::default()
@@ -396,7 +399,7 @@ fn hosted_task_context_repo_checkout_request_with_remote_url() {
     assert!(request.is_some());
     let req = request.unwrap();
     assert_eq!(req.checkout_id, "checkout-1");
-    assert_eq!(req.repository.as_deref(), Some("acme/orbit"));
+    assert_eq!(req.repository.as_deref(), Some("acme/frontal-code"));
     assert_eq!(req.base_ref.as_deref(), Some("main"));
     assert_eq!(req.branch.as_deref(), Some("feature/test"));
 }
@@ -405,7 +408,7 @@ fn hosted_task_context_repo_checkout_request_with_remote_url() {
 fn hosted_task_context_repo_checkout_request_without_repo_url() {
     let context = HostedTaskContext {
         repo_url: None,
-        repository: Some("acme/orbit".to_string()),
+        repository: Some("acme/frontal-code".to_string()),
         ..HostedTaskContext::default()
     };
     let request = context.repo_checkout_request("/tmp/workspace", "checkout-1");

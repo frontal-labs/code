@@ -26,38 +26,37 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use futures_util::StreamExt;
-use orbit_api::{
+use frontal_code_api::{
     create_provider_client, detect_provider_kind, AnthropicClient, AuthSource, ContentBlockDelta,
     InputContentBlock, InputMessage, JsonlTelemetrySink, MessageRequest, MessageResponse,
     OutputContentBlock, PromptCache, ProviderClient, ProviderKind, SessionTracer,
     StreamEvent as ApiStreamEvent, ToolChoice, ToolDefinition, ToolResultContentBlock,
 };
+use futures_util::StreamExt;
 
-use init::initialize_repo;
-use orbit_commands::{
+use frontal_code_commands::{
     classify_skills_slash_command, handle_agents_slash_command, handle_agents_slash_command_json,
     handle_mcp_slash_command, handle_mcp_slash_command_json, handle_plugins_slash_command,
     handle_skills_slash_command, handle_skills_slash_command_json, render_slash_command_help,
     resume_supported_slash_commands, slash_command_specs, validate_slash_command_input,
     SkillSlashDispatch, SlashCommand, CONFIG_SECTION_ARGUMENT_HINT, SUPPORTED_CONFIG_SECTIONS,
 };
-use orbit_events::{EventEnvelope, HostedEventName, HostedEventStatus, HostedEventTopic};
-use orbit_harness::{extract_manifest, UpstreamPaths};
-use orbit_integrations::ide::{
+use frontal_code_events::{EventEnvelope, HostedEventName, HostedEventStatus, HostedEventTopic};
+use frontal_code_harness::{extract_manifest, UpstreamPaths};
+use frontal_code_integrations::ide::{
     collect_status as collect_ide_status, install_extension as install_ide_extension,
     install_packaged_extension as install_packaged_ide_extension,
     launch_target as launch_ide_target, package_extension as package_ide_extension,
     parse_target as parse_ide_target, set_default_target as set_default_ide_target,
     setup_editor_integration as setup_ide_editor_integration, IdeStatus, IdeTarget,
 };
-use orbit_integrations::mcp::config as integrations_mcp_config;
-use orbit_integrations::mcp::integration::{
+use frontal_code_integrations::mcp::config as integrations_mcp_config;
+use frontal_code_integrations::mcp::integration::{
     global_integration_registry, CheckRunOutput, IntegrationConfig, IntegrationTools,
 };
-use orbit_plugins::{PluginHooks, PluginManager, PluginManagerConfig, PluginRegistry};
-use orbit_repo::{push_branch, repo_status, stage_and_commit, RepoCommitRequest};
-use orbit_runtime::{
+use frontal_code_plugins::{PluginHooks, PluginManager, PluginManagerConfig, PluginRegistry};
+use frontal_code_repo::{push_branch, repo_status, stage_and_commit, RepoCommitRequest};
+use frontal_code_runtime::{
     format_usd, load_system_prompt, permission_enforcer::PermissionEnforcer, pricing_for_model,
     resolve_sandbox_status, ApiClient, ApiRequest, AssistantEvent, CompactionConfig, ConfigLoader,
     ConfigSource, ConfigurationManager, ContentBlock, ConversationMessage, ConversationRuntime,
@@ -65,9 +64,10 @@ use orbit_runtime::{
     ProjectContext, PromptCacheEvent, ResolvedPermissionMode, RuntimeError, Session, TokenUsage,
     ToolError, ToolExecutor, UsageTracker,
 };
-use orbit_tools::{
+use frontal_code_tools::{
     GlobalToolRegistry, RuntimeToolDefinition, ToolExecutionScope, ToolSearchOutput,
 };
+use init::initialize_repo;
 use render::{MarkdownStreamState, Spinner, TerminalRenderer};
 use reqwest::blocking::Client as HttpClient;
 use serde::{Deserialize, Serialize};
@@ -88,7 +88,7 @@ const DEFAULT_DATE: &str = "2026-03-31";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_TARGET: Option<&str> = option_env!("TARGET");
 const GIT_SHA: Option<&str> = option_env!("GIT_SHA");
-const ORBIT_TELEMETRY_PATH: &str = "ORBIT_TELEMETRY_PATH";
+const FCODE_TELEMETRY_PATH: &str = "FCODE_TELEMETRY_PATH";
 const INTERNAL_PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(3);
 const PRIMARY_SESSION_EXTENSION: &str = "jsonl";
 const LEGACY_SESSION_EXTENSION: &str = "json";
@@ -119,13 +119,13 @@ type RuntimePluginStateBuildOutput = (
 fn main() {
     if let Err(error) = run() {
         let message = error.to_string();
-        if message.contains("`orbit --help`") {
+        if message.contains("`frontal-code --help`") {
             eprintln!("error: {message}");
         } else {
             eprintln!(
                 "error: {message}
 
-Run `orbit --help` for usage."
+Run `frontal-code --help` for usage."
             );
         }
         std::process::exit(1);
@@ -217,9 +217,9 @@ struct TelemetryResolution {
 }
 
 fn resolve_telemetry_config(
-    runtime_config: Option<&orbit_runtime::RuntimeConfig>,
+    runtime_config: Option<&frontal_code_runtime::RuntimeConfig>,
 ) -> TelemetryResolution {
-    if let Ok(path) = env::var(ORBIT_TELEMETRY_PATH) {
+    if let Ok(path) = env::var(FCODE_TELEMETRY_PATH) {
         let trimmed = path.trim();
         if !trimmed.is_empty() {
             return TelemetryResolution {
@@ -231,7 +231,7 @@ fn resolve_telemetry_config(
         }
     }
 
-    if let Some(telemetry) = runtime_config.map(orbit_runtime::RuntimeConfig::telemetry) {
+    if let Some(telemetry) = runtime_config.map(frontal_code_runtime::RuntimeConfig::telemetry) {
         if telemetry.enabled() == Some(false) {
             return TelemetryResolution {
                 enabled: false,
@@ -259,8 +259,8 @@ fn resolve_telemetry_config(
 }
 
 fn telemetry_config_entry(
-    runtime_config: Option<&orbit_runtime::RuntimeConfig>,
-) -> Option<(orbit_runtime::ConfigSource, PathBuf)> {
+    runtime_config: Option<&frontal_code_runtime::RuntimeConfig>,
+) -> Option<(frontal_code_runtime::ConfigSource, PathBuf)> {
     let runtime_config = runtime_config?;
     runtime_config
         .loaded_entries()
@@ -278,7 +278,7 @@ fn telemetry_config_entry(
 
 fn build_cli_session_tracer(
     session_id: &str,
-    runtime_config: Option<&orbit_runtime::RuntimeConfig>,
+    runtime_config: Option<&frontal_code_runtime::RuntimeConfig>,
 ) -> Option<SessionTracer> {
     let resolution = resolve_telemetry_config(runtime_config);
     if !resolution.enabled {
@@ -786,7 +786,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 index += 1;
             }
             "-p" => {
-                // Orbit compat: -p "prompt" = one-shot prompt
+                // FrontalCode compat: -p "prompt" = one-shot prompt
                 let prompt = args[index + 1..].join(" ");
                 if prompt.trim().is_empty() {
                     return Err("-p requires a prompt string".to_string());
@@ -802,7 +802,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 });
             }
             "--print" => {
-                // Orbit compat: --print makes output non-interactive
+                // FrontalCode compat: --print makes output non-interactive
                 output_format = CliOutputFormat::Text;
                 index += 1;
             }
@@ -967,7 +967,7 @@ fn parse_hosted_cli_action(
 ) -> Result<CliAction, String> {
     if args.is_empty() {
         return Err(
-            "hosted requires a subcommand. Use `orbit hosted policy orphans` or `orbit hosted task ...`."
+            "hosted requires a subcommand. Use `frontal-code hosted policy orphans` or `frontal-code hosted task ...`."
                 .to_string(),
         );
     }
@@ -989,7 +989,8 @@ fn parse_hosted_events_cli_action(
 ) -> Result<CliAction, String> {
     if args.first().map(String::as_str) != Some("watch") {
         return Err(
-            "unsupported hosted events command. Use `orbit hosted events watch`.".to_string(),
+            "unsupported hosted events command. Use `frontal-code hosted events watch`."
+                .to_string(),
         );
     }
 
@@ -1054,7 +1055,7 @@ fn parse_hosted_tasks_cli_action(
     output_format: CliOutputFormat,
 ) -> Result<CliAction, String> {
     let Some(action) = args.first().map(String::as_str) else {
-        return Err("hosted tasks requires a subcommand. Use `orbit hosted tasks list` or `orbit hosted tasks watch`.".to_string());
+        return Err("hosted tasks requires a subcommand. Use `frontal-code hosted tasks list` or `frontal-code hosted tasks watch`.".to_string());
     };
 
     let mut query = HostedTaskListQuery::default();
@@ -1124,7 +1125,7 @@ fn parse_hosted_tasks_cli_action(
             "watch" => HostedCommand::TasksWatch { query },
             other => {
                 return Err(format!(
-                    "unsupported hosted tasks command: {other}. Use `orbit hosted tasks list` or `orbit hosted tasks watch`."
+                    "unsupported hosted tasks command: {other}. Use `frontal-code hosted tasks list` or `frontal-code hosted tasks watch`."
                 ))
             }
         },
@@ -1138,7 +1139,8 @@ fn parse_hosted_policy_cli_action(
 ) -> Result<CliAction, String> {
     if args.first().map(String::as_str) != Some("orphans") {
         return Err(
-            "unsupported hosted policy command. Use `orbit hosted policy orphans`.".to_string(),
+            "unsupported hosted policy command. Use `frontal-code hosted policy orphans`."
+                .to_string(),
         );
     }
 
@@ -1413,11 +1415,11 @@ fn bare_slash_command_guidance(command_name: &str) -> Option<String> {
         .find(|spec| spec.name == command_name)?;
     let guidance = if slash_command.resume_supported {
         format!(
-            "`orbit {command_name}` is a slash command. Use `orbit --resume SESSION.jsonl /{command_name}` or start `orbit` and run `/{command_name}`."
+            "`frontal-code {command_name}` is a slash command. Use `frontal-code --resume SESSION.jsonl /{command_name}` or start `frontal-code` and run `/{command_name}`."
         )
     } else {
         format!(
-            "`orbit {command_name}` is a slash command. Start `orbit` and run `/{command_name}` inside the REPL."
+            "`frontal-code {command_name}` is a slash command. Start `frontal-code` and run `/{command_name}` inside the REPL."
         )
     };
     Some(guidance)
@@ -1477,7 +1479,7 @@ struct TelemetryTargetStatus {
 
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn resolve_config_section(
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
     section: &str,
 ) -> ConfigSectionResolution {
     let value = match section {
@@ -1497,8 +1499,8 @@ fn resolve_config_section(
 }
 
 fn summarize_discovered_config_files(
-    discovered: &[orbit_runtime::ConfigEntry],
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    discovered: &[frontal_code_runtime::ConfigEntry],
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
 ) -> Vec<DiscoveredConfigFileSummary> {
     discovered
         .iter()
@@ -1631,7 +1633,7 @@ fn parse_direct_slash_cli_action(
         Ok(Some(command)) => Err({
             let _ = command;
             format!(
-                "`orbit {command_name}` is a slash command. Start `orbit` and run it there, or use `orbit --resume SESSION.jsonl {command_name}` / `orbit --resume {latest} {command_name}` when the command is marked [resume] in /help.",
+                "`frontal-code {command_name}` is a slash command. Start `frontal-code` and run it there, or use `frontal-code --resume SESSION.jsonl {command_name}` / `frontal-code --resume {latest} {command_name}` when the command is marked [resume] in /help.",
                 command_name = rest[0],
                 latest = LATEST_SESSION_REFERENCE,
             )
@@ -1648,7 +1650,7 @@ fn format_unknown_option(option: &str) -> String {
         message.push_str(suggestion);
         message.push('?');
     }
-    message.push_str("\nRun `orbit --help` for usage.");
+    message.push_str("\nRun `frontal-code --help` for usage.");
     message
 }
 
@@ -1663,7 +1665,9 @@ fn format_unknown_direct_slash_command(name: &str) -> String {
         message.push('\n');
         message.push_str(note);
     }
-    message.push_str("\nRun `orbit --help` for CLI usage, or start `orbit` and use /help.");
+    message.push_str(
+        "\nRun `frontal-code --help` for CLI usage, or start `frontal-code` and use /help.",
+    );
     message
 }
 
@@ -1685,7 +1689,7 @@ fn format_unknown_slash_command(name: &str) -> String {
 fn omc_compatibility_note_for_unknown_slash_command(name: &str) -> Option<&'static str> {
     name.starts_with("oh-my-claudecode:")
         .then_some(
-            "Compatibility note: `/oh-my-claudecode:*` is a Claude Code/OMC plugin command. `orbit` does not yet load plugin slash commands, Claude statusline stdin, or OMC session hooks.",
+            "Compatibility note: `/oh-my-claudecode:*` is a Claude Code/OMC plugin command. `frontal-code` does not yet load plugin slash commands, Claude statusline stdin, or OMC session hooks.",
         )
 }
 
@@ -1845,7 +1849,7 @@ fn default_permission_mode() -> PermissionMode {
 /// does not recognise, so an unparseable value falls through to the next
 /// source instead of being silently treated as permissive.
 fn project_config_permission_mode() -> Option<PermissionMode> {
-    let configured = orbit_core::config::ProjectConfig::load_or_default()
+    let configured = frontal_code_core::config::ProjectConfig::load_or_default()
         .runtime
         .permission_mode;
     normalize_permission_mode(&configured).map(permission_mode_from_label)
@@ -2110,9 +2114,9 @@ fn render_doctor_report() -> Result<DoctorReport, Box<dyn std::error::Error>> {
     // Load core configuration
     let config_manager = ConfigurationManager::load_with_cwd(&cwd).unwrap_or_else(|_| {
         // Fallback to just runtime config if core config fails
-        let empty_config = orbit_runtime::RuntimeConfig::empty();
+        let empty_config = frontal_code_runtime::RuntimeConfig::empty();
         ConfigurationManager {
-            core_config: std::sync::Arc::new(orbit_core::config::ProjectConfig::default()),
+            core_config: std::sync::Arc::new(frontal_code_core::config::ProjectConfig::default()),
             runtime_config: std::sync::Arc::new(empty_config),
         }
     });
@@ -2121,7 +2125,7 @@ fn render_doctor_report() -> Result<DoctorReport, Box<dyn std::error::Error>> {
     let (project_root, git_branch) =
         parse_git_status_metadata(project_context.git_status.as_deref());
     let git_summary = parse_git_workspace_summary(project_context.git_status.as_deref());
-    let empty_config = orbit_runtime::RuntimeConfig::empty();
+    let empty_config = frontal_code_runtime::RuntimeConfig::empty();
     let sandbox_config = config.as_ref().ok().unwrap_or(&empty_config);
     let context = StatusContext {
         cwd: cwd.clone(),
@@ -2248,8 +2252,8 @@ fn run_doctor(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::
 #[allow(clippy::too_many_lines)]
 fn check_auth_health() -> DiagnosticCheck {
     let providers = [
-        ("anthropic_api_key", "ORBIT_API_KEY"),
-        ("anthropic_auth_token", "ORBIT_AUTH_TOKEN"),
+        ("anthropic_api_key", "FCODE_API_KEY"),
+        ("anthropic_auth_token", "FCODE_AUTH_TOKEN"),
         ("openai_api_key", "OPENAI_API_KEY"),
         ("xai_api_key", "XAI_API_KEY"),
         ("frontal_api_key", "FRONTAL_API_KEY"),
@@ -2319,7 +2323,7 @@ fn check_auth_health() -> DiagnosticCheck {
 
 fn check_config_health(
     config_loader: &ConfigLoader,
-    config: Result<&orbit_runtime::RuntimeConfig, &orbit_runtime::ConfigError>,
+    config: Result<&frontal_code_runtime::RuntimeConfig, &frontal_code_runtime::ConfigError>,
 ) -> DiagnosticCheck {
     let discovered = config_loader.discover();
     let discovered_count = discovered.len();
@@ -2481,7 +2485,7 @@ fn check_workspace_health(context: &StatusContext) -> DiagnosticCheck {
     ]))
 }
 
-fn check_sandbox_health(status: &orbit_runtime::SandboxStatus) -> DiagnosticCheck {
+fn check_sandbox_health(status: &frontal_code_runtime::SandboxStatus) -> DiagnosticCheck {
     let degraded = status.enabled && !status.active;
     let mut details = vec![
         format!("Enabled          {}", status.enabled),
@@ -2546,9 +2550,9 @@ fn check_sandbox_health(status: &orbit_runtime::SandboxStatus) -> DiagnosticChec
 
 fn check_system_health(
     cwd: &Path,
-    config: Option<&orbit_runtime::RuntimeConfig>,
+    config: Option<&frontal_code_runtime::RuntimeConfig>,
 ) -> DiagnosticCheck {
-    let default_model = config.and_then(orbit_runtime::RuntimeConfig::model);
+    let default_model = config.and_then(frontal_code_runtime::RuntimeConfig::model);
     let mut details = vec![
         format!("OS               {} {}", env::consts::OS, env::consts::ARCH),
         format!("Working dir      {}", cwd.display()),
@@ -2842,7 +2846,7 @@ fn dump_manifests(output_format: CliOutputFormat) -> Result<(), Box<dyn std::err
 }
 
 fn print_bootstrap_plan(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::Error>> {
-    let phases = orbit_runtime::BootstrapPlan::claude_code_default()
+    let phases = frontal_code_runtime::BootstrapPlan::claude_code_default()
         .phases()
         .iter()
         .map(|phase| format!("{phase:?}"))
@@ -2900,7 +2904,7 @@ fn print_version(output_format: CliOutputFormat) -> Result<(), Box<dyn std::erro
 }
 
 fn render_upgrade_guidance() -> String {
-    "Upgrade\n  Preferred        Homebrew\n  Install          brew install --HEAD ./homebrew/orbit.rb\n  Update           brew upgrade --fetch-HEAD orbit\n  Fallback         git pull --ff-only\n                   brew reinstall --HEAD ./homebrew/orbit.rb"
+    "Upgrade\n  Preferred        Homebrew\n  Install          brew install --HEAD ./homebrew/frontal-code.rb\n  Update           brew upgrade --fetch-HEAD frontal-code\n  Fallback         git pull --ff-only\n                   brew reinstall --HEAD ./homebrew/frontal-code.rb"
         .to_string()
 }
 
@@ -3028,16 +3032,16 @@ fn run_hosted_command(
 }
 
 fn hosted_server_url() -> String {
-    env::var("ORBIT_SERVER_URL")
+    env::var("FCODE_SERVER_URL")
         .ok()
-        .or_else(|| env::var("ORBIT_SERVER_BASE_URL").ok())
+        .or_else(|| env::var("FCODE_SERVER_BASE_URL").ok())
         .map(|value| value.trim().trim_end_matches('/').to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| DEFAULT_HOSTED_SERVER_URL.to_string())
 }
 
 fn hosted_server_api_key() -> Option<String> {
-    env::var("ORBIT_SERVER_API_KEY")
+    env::var("FCODE_SERVER_API_KEY")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
@@ -3276,19 +3280,19 @@ fn update_hosted_task_github(
 }
 
 fn hosted_git_author_name() -> String {
-    env::var("ORBIT_GIT_AUTHOR_NAME")
+    env::var("FCODE_GIT_AUTHOR_NAME")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "Orbit".to_string())
+        .unwrap_or_else(|| "Frontal Code".to_string())
 }
 
 fn hosted_git_author_email() -> String {
-    env::var("ORBIT_GIT_AUTHOR_EMAIL")
+    env::var("FCODE_GIT_AUTHOR_EMAIL")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "orbit@localhost".to_string())
+        .unwrap_or_else(|| "frontal-code@localhost".to_string())
 }
 
 #[derive(Debug, Clone)]
@@ -3341,7 +3345,10 @@ fn summarize_hosted_prompt(prompt: &str) -> String {
 }
 
 fn default_hosted_commit_message(task_id: &str, prompt: &str) -> String {
-    format!("orbit: {} ({task_id})", summarize_hosted_prompt(prompt))
+    format!(
+        "frontal-code: {} ({task_id})",
+        summarize_hosted_prompt(prompt)
+    )
 }
 
 fn default_hosted_pr_draft(
@@ -3359,7 +3366,7 @@ fn default_hosted_pr_draft(
     Some(PrDraft {
         title: summarize_hosted_prompt(&payload.prompt),
         body: format!(
-            "Automated by Orbit hosted task `{}`.\n\nRepository: {}\nBranch: {}\nCommit: {}\n\nPrompt:\n{}\n",
+            "Automated by FrontalCode hosted task `{}`.\n\nRepository: {}\nBranch: {}\nCommit: {}\n\nPrompt:\n{}\n",
             payload.task_id,
             payload
                 .repository
@@ -3540,16 +3547,16 @@ fn report_hosted_task_to_github(
         let _ = global_integration_registry().call_github_create_check_run(
             owner,
             repo,
-            "orbit/hosted-task",
+            "frontal-code/hosted-task",
             head_sha,
             "completed",
             Some(if success { "success" } else { "failure" }),
             Some(&details_url),
             Some(&CheckRunOutput {
                 title: if success {
-                    format!("Orbit task {task_id} completed")
+                    format!("FrontalCode task {task_id} completed")
                 } else {
-                    format!("Orbit task {task_id} failed")
+                    format!("FrontalCode task {task_id} failed")
                 },
                 summary,
                 text,
@@ -3560,11 +3567,11 @@ fn report_hosted_task_to_github(
     if let Some(pr_number) = github.pr_number {
         let body = if let Some(error) = error.filter(|value| !value.trim().is_empty()) {
             format!(
-                "Orbit hosted task `{task_id}` failed.\n\nTask: {details_url}\n\nError:\n{error}\n"
+                "FrontalCode hosted task `{task_id}` failed.\n\nTask: {details_url}\n\nError:\n{error}\n"
             )
         } else {
             format!(
-                "Orbit hosted task `{task_id}` completed.\n\nTask: {details_url}\n\nSummary:\n{}\n",
+                "FrontalCode hosted task `{task_id}` completed.\n\nTask: {details_url}\n\nSummary:\n{}\n",
                 summarize_hosted_result(result, "Hosted task completed successfully.")
             )
         };
@@ -3663,8 +3670,8 @@ fn run_hosted_task_worker(
 fn load_hosted_task_worker_payload(
     task_id: &str,
 ) -> Result<HostedTaskWorkerPayload, Box<dyn std::error::Error>> {
-    let task_file = env::var("ORBIT_HOSTED_TASK_FILE")
-        .map_err(|_| "ORBIT_HOSTED_TASK_FILE must be set for hosted task runs")?;
+    let task_file = env::var("FCODE_HOSTED_TASK_FILE")
+        .map_err(|_| "FCODE_HOSTED_TASK_FILE must be set for hosted task runs")?;
     let payload: HostedTaskWorkerPayload = serde_json::from_slice(&fs::read(task_file)?)?;
     if payload.task_id != task_id {
         return Err(format!(
@@ -4667,7 +4674,7 @@ struct StatusContext {
     project_root: Option<PathBuf>,
     git_branch: Option<String>,
     git_summary: GitWorkspaceSummary,
-    sandbox_status: orbit_runtime::SandboxStatus,
+    sandbox_status: frontal_code_runtime::SandboxStatus,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -4842,7 +4849,7 @@ fn render_resume_usage() -> String {
     format!(
         "Resume
   Usage            /resume <session-path|session-id|{LATEST_SESSION_REFERENCE}>
-  Auto-save        .orbit/sessions/<session-id>.{PRIMARY_SESSION_EXTENSION}
+  Auto-save        .frontal-code/sessions/<session-id>.{PRIMARY_SESSION_EXTENSION}
   Tip              use /session list to inspect saved sessions"
     )
 }
@@ -4996,7 +5003,7 @@ fn run_resume_command(
             json: None,
         }),
         SlashCommand::Compact => {
-            let result = orbit_runtime::compact_session(
+            let result = frontal_code_runtime::compact_session(
                 session,
                 CompactionConfig {
                     max_estimated_tokens: 0,
@@ -5031,7 +5038,7 @@ fn run_resume_command(
             Ok(ResumeCommandOutcome {
                 session: cleared,
                 message: Some(format!(
-                    "Session cleared\n  Mode             resumed session reset\n  Previous session {previous_session_id}\n  Backup           {}\n  Resume previous  orbit --resume {}\n  New session      {new_session_id}\n  Session file     {}",
+                    "Session cleared\n  Mode             resumed session reset\n  Previous session {previous_session_id}\n  Backup           {}\n  Resume previous  frontal-code --resume {}\n  New session      {new_session_id}\n  Session file     {}",
                     backup_path.display(),
                     backup_path.display(),
                     session_path.display()
@@ -5103,7 +5110,7 @@ fn run_resume_command(
                     let loader = ConfigLoader::default_for(&cwd);
                     let runtime_config = loader
                         .load()
-                        .unwrap_or_else(|_| orbit_runtime::RuntimeConfig::empty());
+                        .unwrap_or_else(|_| frontal_code_runtime::RuntimeConfig::empty());
                     Ok(ResumeCommandOutcome {
                         session: session.clone(),
                         message: Some(render_telemetry_report(target.as_deref())?),
@@ -5197,11 +5204,11 @@ fn run_resume_command(
             message: Some(render_upgrade_guidance()),
             json: Some(json!({
                 "kind": "upgrade-guidance",
-                "install": "brew install --HEAD ./homebrew/orbit.rb",
-                "update": "brew upgrade --fetch-HEAD orbit",
+                "install": "brew install --HEAD ./homebrew/frontal-code.rb",
+                "update": "brew upgrade --fetch-HEAD frontal-code",
                 "fallback": [
                     "git pull --ff-only",
-                    "brew reinstall --HEAD ./homebrew/orbit.rb"
+                    "brew reinstall --HEAD ./homebrew/frontal-code.rb"
                 ],
             })),
         }),
@@ -5229,7 +5236,7 @@ fn run_resume_command(
         SlashCommand::Skills { args } => {
             if let SkillSlashDispatch::Invoke(_) = classify_skills_slash_command(args.as_deref()) {
                 return Err(
-                    "resumed /skills invocations are interactive-only; start `orbit` and run `/skills <skill>` in the REPL".into(),
+                    "resumed /skills invocations are interactive-only; start `frontal-code` and run `/skills <skill>` in the REPL".into(),
                 );
             }
             let cwd = env::current_dir()?;
@@ -5423,8 +5430,8 @@ struct LiveCli {
 }
 
 struct RuntimePluginState {
-    runtime_config: orbit_runtime::RuntimeConfig,
-    feature_config: orbit_runtime::RuntimeFeatureConfig,
+    runtime_config: frontal_code_runtime::RuntimeConfig,
+    feature_config: frontal_code_runtime::RuntimeFeatureConfig,
     tool_registry: GlobalToolRegistry,
     plugin_registry: PluginRegistry,
     mcp_state: Option<Arc<Mutex<RuntimeMcpState>>>,
@@ -5434,7 +5441,7 @@ struct RuntimeMcpState {
     runtime: tokio::runtime::Runtime,
     manager: McpServerManager,
     pending_servers: Vec<String>,
-    degraded_report: Option<orbit_runtime::McpDegradedReport>,
+    degraded_report: Option<frontal_code_runtime::McpDegradedReport>,
 }
 
 struct BuiltRuntime {
@@ -5462,7 +5469,10 @@ impl BuiltRuntime {
         }
     }
 
-    fn with_hook_abort_signal(mut self, hook_abort_signal: orbit_runtime::HookAbortSignal) -> Self {
+    fn with_hook_abort_signal(
+        mut self,
+        hook_abort_signal: frontal_code_runtime::HookAbortSignal,
+    ) -> Self {
         let runtime = self
             .runtime
             .take()
@@ -5545,9 +5555,11 @@ struct ReadMcpResourceRequest {
 
 impl RuntimeMcpState {
     fn new(
-        runtime_config: &orbit_runtime::RuntimeConfig,
-    ) -> Result<Option<(Self, orbit_runtime::McpToolDiscoveryReport)>, Box<dyn std::error::Error>>
-    {
+        runtime_config: &frontal_code_runtime::RuntimeConfig,
+    ) -> Result<
+        Option<(Self, frontal_code_runtime::McpToolDiscoveryReport)>,
+        Box<dyn std::error::Error>,
+    > {
         let integration_servers = map_runtime_mcp_servers(runtime_config.mcp().servers());
         let mut manager = McpServerManager::from_servers(&integration_servers);
         if manager.server_names().is_empty() && manager.unsupported_servers().is_empty() {
@@ -5583,11 +5595,11 @@ impl RuntimeMcpState {
         let failed_servers = discovery
             .failed_servers
             .iter()
-            .map(|failure| orbit_runtime::McpFailedServer {
+            .map(|failure| frontal_code_runtime::McpFailedServer {
                 server_name: failure.server_name.clone(),
-                phase: orbit_runtime::McpLifecyclePhase::ToolDiscovery,
-                error: orbit_runtime::McpErrorSurface::new(
-                    orbit_runtime::McpLifecyclePhase::ToolDiscovery,
+                phase: frontal_code_runtime::McpLifecyclePhase::ToolDiscovery,
+                error: frontal_code_runtime::McpErrorSurface::new(
+                    frontal_code_runtime::McpLifecyclePhase::ToolDiscovery,
                     Some(failure.server_name.clone()),
                     failure.error.clone(),
                     std::collections::BTreeMap::new(),
@@ -5595,11 +5607,11 @@ impl RuntimeMcpState {
                 ),
             })
             .chain(discovery.unsupported_servers.iter().map(|server| {
-                orbit_runtime::McpFailedServer {
+                frontal_code_runtime::McpFailedServer {
                     server_name: server.server_name.clone(),
-                    phase: orbit_runtime::McpLifecyclePhase::ServerRegistration,
-                    error: orbit_runtime::McpErrorSurface::new(
-                        orbit_runtime::McpLifecyclePhase::ServerRegistration,
+                    phase: frontal_code_runtime::McpLifecyclePhase::ServerRegistration,
+                    error: frontal_code_runtime::McpErrorSurface::new(
+                        frontal_code_runtime::McpLifecyclePhase::ServerRegistration,
                         Some(server.server_name.clone()),
                         server.reason.clone(),
                         std::collections::BTreeMap::from([(
@@ -5612,7 +5624,7 @@ impl RuntimeMcpState {
             }))
             .collect::<Vec<_>>();
         let degraded_report = (!failed_servers.is_empty()).then(|| {
-            orbit_runtime::McpDegradedReport::new(
+            frontal_code_runtime::McpDegradedReport::new(
                 working_servers,
                 failed_servers,
                 available_tools.clone(),
@@ -5640,7 +5652,7 @@ impl RuntimeMcpState {
         (!self.pending_servers.is_empty()).then(|| self.pending_servers.clone())
     }
 
-    fn degraded_report(&self) -> Option<orbit_runtime::McpDegradedReport> {
+    fn degraded_report(&self) -> Option<frontal_code_runtime::McpDegradedReport> {
         self.degraded_report.clone()
     }
 
@@ -5734,7 +5746,7 @@ impl RuntimeMcpState {
 }
 
 fn map_runtime_mcp_servers(
-    servers: &BTreeMap<String, orbit_runtime::ScopedMcpServerConfig>,
+    servers: &BTreeMap<String, frontal_code_runtime::ScopedMcpServerConfig>,
 ) -> BTreeMap<String, integrations_mcp_config::ScopedMcpServerConfig> {
     servers
         .iter()
@@ -5743,11 +5755,11 @@ fn map_runtime_mcp_servers(
                 name.clone(),
                 integrations_mcp_config::ScopedMcpServerConfig {
                     scope: match scoped.scope {
-                        orbit_runtime::ConfigSource::User
-                        | orbit_runtime::ConfigSource::Project => {
+                        frontal_code_runtime::ConfigSource::User
+                        | frontal_code_runtime::ConfigSource::Project => {
                             integrations_mcp_config::ConfigSource::Remote
                         }
-                        orbit_runtime::ConfigSource::Local => {
+                        frontal_code_runtime::ConfigSource::Local => {
                             integrations_mcp_config::ConfigSource::Local
                         }
                     },
@@ -5759,10 +5771,10 @@ fn map_runtime_mcp_servers(
 }
 
 fn map_runtime_mcp_server_config(
-    config: &orbit_runtime::McpServerConfig,
+    config: &frontal_code_runtime::McpServerConfig,
 ) -> integrations_mcp_config::McpServerConfig {
     match config {
-        orbit_runtime::McpServerConfig::Stdio(stdio) => {
+        frontal_code_runtime::McpServerConfig::Stdio(stdio) => {
             integrations_mcp_config::McpServerConfig::Stdio(
                 integrations_mcp_config::McpStdioServerConfig {
                     command: stdio.command.clone(),
@@ -5772,7 +5784,7 @@ fn map_runtime_mcp_server_config(
                 },
             )
         }
-        orbit_runtime::McpServerConfig::Sse(remote) => {
+        frontal_code_runtime::McpServerConfig::Sse(remote) => {
             integrations_mcp_config::McpServerConfig::Sse(
                 integrations_mcp_config::McpRemoteServerConfig {
                     url: remote.url.clone(),
@@ -5789,7 +5801,7 @@ fn map_runtime_mcp_server_config(
                 },
             )
         }
-        orbit_runtime::McpServerConfig::Http(remote) => {
+        frontal_code_runtime::McpServerConfig::Http(remote) => {
             integrations_mcp_config::McpServerConfig::Http(
                 integrations_mcp_config::McpRemoteServerConfig {
                     url: remote.url.clone(),
@@ -5806,19 +5818,23 @@ fn map_runtime_mcp_server_config(
                 },
             )
         }
-        orbit_runtime::McpServerConfig::Ws(ws) => integrations_mcp_config::McpServerConfig::Ws(
-            integrations_mcp_config::McpWebSocketServerConfig {
-                url: ws.url.clone(),
-                headers: ws.headers.clone(),
-                headers_helper: ws.headers_helper.clone(),
-            },
-        ),
-        orbit_runtime::McpServerConfig::Sdk(sdk) => integrations_mcp_config::McpServerConfig::Sdk(
-            integrations_mcp_config::McpSdkServerConfig {
-                name: sdk.name.clone(),
-            },
-        ),
-        orbit_runtime::McpServerConfig::ManagedProxy(proxy) => {
+        frontal_code_runtime::McpServerConfig::Ws(ws) => {
+            integrations_mcp_config::McpServerConfig::Ws(
+                integrations_mcp_config::McpWebSocketServerConfig {
+                    url: ws.url.clone(),
+                    headers: ws.headers.clone(),
+                    headers_helper: ws.headers_helper.clone(),
+                },
+            )
+        }
+        frontal_code_runtime::McpServerConfig::Sdk(sdk) => {
+            integrations_mcp_config::McpServerConfig::Sdk(
+                integrations_mcp_config::McpSdkServerConfig {
+                    name: sdk.name.clone(),
+                },
+            )
+        }
+        frontal_code_runtime::McpServerConfig::ManagedProxy(proxy) => {
             integrations_mcp_config::McpServerConfig::ManagedProxy(
                 integrations_mcp_config::McpManagedProxyServerConfig {
                     url: proxy.url.clone(),
@@ -5830,7 +5846,7 @@ fn map_runtime_mcp_server_config(
 }
 
 fn build_runtime_mcp_state(
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
 ) -> Result<RuntimePluginStateBuildOutput, Box<dyn std::error::Error>> {
     let Some((mcp_state, discovery)) = RuntimeMcpState::new(runtime_config)? else {
         return Ok((None, Vec::new()));
@@ -5848,7 +5864,9 @@ fn build_runtime_mcp_state(
     Ok((Some(Arc::new(Mutex::new(mcp_state))), runtime_tools))
 }
 
-fn mcp_runtime_tool_definition(tool: &orbit_runtime::ManagedMcpTool) -> RuntimeToolDefinition {
+fn mcp_runtime_tool_definition(
+    tool: &frontal_code_runtime::ManagedMcpTool,
+) -> RuntimeToolDefinition {
     RuntimeToolDefinition {
         name: tool.qualified_name.clone(),
         description: Some(
@@ -5944,7 +5962,7 @@ struct HookAbortMonitor {
 }
 
 impl HookAbortMonitor {
-    fn spawn(abort_signal: orbit_runtime::HookAbortSignal) -> Self {
+    fn spawn(abort_signal: frontal_code_runtime::HookAbortSignal) -> Self {
         Self::spawn_with_waiter(abort_signal, move |stop_rx, abort_signal| {
             let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -5971,11 +5989,11 @@ impl HookAbortMonitor {
     }
 
     fn spawn_with_waiter<F>(
-        abort_signal: orbit_runtime::HookAbortSignal,
+        abort_signal: frontal_code_runtime::HookAbortSignal,
         wait_for_interrupt: F,
     ) -> Self
     where
-        F: FnOnce(Receiver<()>, orbit_runtime::HookAbortSignal) + Send + 'static,
+        F: FnOnce(Receiver<()>, frontal_code_runtime::HookAbortSignal) + Send + 'static,
     {
         let (stop_tx, stop_rx) = mpsc::channel();
         let join_handle = thread::spawn(move || wait_for_interrupt(stop_rx, abort_signal));
@@ -6112,7 +6130,7 @@ impl LiveCli {
         &self,
         emit_output: bool,
     ) -> Result<(BuiltRuntime, HookAbortMonitor), Box<dyn std::error::Error>> {
-        let hook_abort_signal = orbit_runtime::HookAbortSignal::new();
+        let hook_abort_signal = frontal_code_runtime::HookAbortSignal::new();
         let runtime = build_runtime_with_provider(
             self.runtime.session().clone(),
             &self.session.id,
@@ -6220,7 +6238,7 @@ impl LiveCli {
             "estimated_cost": format_usd(
                 summary.usage.estimate_cost_usd_with_pricing(
                     pricing_for_model(&self.model)
-                        .unwrap_or_else(orbit_runtime::ModelPricing::default_sonnet_tier)
+                        .unwrap_or_else(frontal_code_runtime::ModelPricing::default_sonnet_tier)
                 ).total_cost_usd()
             )
         }))
@@ -6451,7 +6469,7 @@ impl LiveCli {
         let loader = ConfigLoader::default_for(&cwd);
         let runtime_config = loader
             .load()
-            .unwrap_or_else(|_| orbit_runtime::RuntimeConfig::empty());
+            .unwrap_or_else(|_| frontal_code_runtime::RuntimeConfig::empty());
         println!(
             "{}",
             format_sandbox_report(&resolve_sandbox_status(runtime_config.sandbox(), &cwd))
@@ -7014,7 +7032,7 @@ impl LiveCli {
 
 fn sessions_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let cwd = env::current_dir()?;
-    let path = cwd.join(".orbit").join("sessions");
+    let path = cwd.join(".frontal-code").join("sessions");
     fs::create_dir_all(&path)?;
     Ok(path)
 }
@@ -7149,13 +7167,13 @@ fn latest_managed_session() -> Result<ManagedSessionSummary, Box<dyn std::error:
 
 fn format_missing_session_reference(reference: &str) -> String {
     format!(
-        "session not found: {reference}\nHint: managed sessions live in .orbit/sessions/. Try `{LATEST_SESSION_REFERENCE}` for the most recent session or `/session list` in the REPL."
+        "session not found: {reference}\nHint: managed sessions live in .frontal-code/sessions/. Try `{LATEST_SESSION_REFERENCE}` for the most recent session or `/session list` in the REPL."
     )
 }
 
 fn format_no_managed_sessions() -> String {
     format!(
-        "no managed sessions found in .orbit/sessions/\nStart `orbit` to create a session, then rerun with `--resume {LATEST_SESSION_REFERENCE}`."
+        "no managed sessions found in .frontal-code/sessions/\nStart `frontal-code` to create a session, then rerun with `--resume {LATEST_SESSION_REFERENCE}`."
     )
 }
 
@@ -7246,7 +7264,7 @@ fn render_repl_help() -> String {
         "  Tab                  Complete commands, modes, and recent sessions".to_string(),
         "  Ctrl-C               Clear input (or exit on empty prompt)".to_string(),
         "  Shift+Enter/Ctrl+J   Insert a newline".to_string(),
-        "  Auto-save            .orbit/sessions/<session-id>.jsonl".to_string(),
+        "  Auto-save            .frontal-code/sessions/<session-id>.jsonl".to_string(),
         "  Resume latest        /resume latest".to_string(),
         "  Browse sessions      /session list".to_string(),
         String::new(),
@@ -7434,7 +7452,7 @@ fn format_status_report(
     )
 }
 
-fn format_sandbox_report(status: &orbit_runtime::SandboxStatus) -> String {
+fn format_sandbox_report(status: &frontal_code_runtime::SandboxStatus) -> String {
     format!(
         "Sandbox
   Enabled           {}
@@ -7522,8 +7540,8 @@ fn format_ide_command_report(
     target: IdeTarget,
     config_path: &Path,
     editor_config_path: &Path,
-    install_result: Result<PathBuf, orbit_integrations::ide::IdeIntegrationError>,
-    launch_result: Result<(), orbit_integrations::ide::IdeIntegrationError>,
+    install_result: Result<PathBuf, frontal_code_integrations::ide::IdeIntegrationError>,
+    launch_result: Result<(), frontal_code_integrations::ide::IdeIntegrationError>,
 ) -> String {
     let (install_status, install_detail) = match install_result {
         Ok(path) => ("ok", format!("installed {}", path.display())),
@@ -7590,7 +7608,7 @@ fn print_sandbox_status_snapshot(
     let loader = ConfigLoader::default_for(&cwd);
     let runtime_config = loader
         .load()
-        .unwrap_or_else(|_| orbit_runtime::RuntimeConfig::empty());
+        .unwrap_or_else(|_| frontal_code_runtime::RuntimeConfig::empty());
     let status = resolve_sandbox_status(runtime_config.sandbox(), &cwd);
     match output_format {
         CliOutputFormat::Text => println!("{}", format_sandbox_report(&status)),
@@ -7602,7 +7620,7 @@ fn print_sandbox_status_snapshot(
     Ok(())
 }
 
-fn sandbox_json_value(status: &orbit_runtime::SandboxStatus) -> serde_json::Value {
+fn sandbox_json_value(status: &frontal_code_runtime::SandboxStatus) -> serde_json::Value {
     json!({
         "kind": "sandbox",
         "enabled": status.enabled,
@@ -7623,7 +7641,7 @@ fn sandbox_json_value(status: &orbit_runtime::SandboxStatus) -> serde_json::Valu
 
 fn telemetry_json_value(
     resolution: &TelemetryResolution,
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
 ) -> serde_json::Value {
     let config_source_path = telemetry_config_source_path(resolution);
     let config_shadowed_by_env = telemetry_config_shadowed_by_env(resolution);
@@ -7642,7 +7660,7 @@ fn telemetry_json_value(
 }
 
 fn telemetry_status_json_value(
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
     target: Option<&str>,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let resolution = resolve_telemetry_config(Some(runtime_config));
@@ -7681,7 +7699,7 @@ fn telemetry_config_file_label(resolution: &TelemetryResolution) -> &'static str
 }
 
 fn telemetry_env_override_value() -> Option<String> {
-    env::var(ORBIT_TELEMETRY_PATH)
+    env::var(FCODE_TELEMETRY_PATH)
         .ok()
         .filter(|value| !value.trim().is_empty())
 }
@@ -7690,7 +7708,9 @@ fn telemetry_env_override_display() -> String {
     telemetry_env_override_value().unwrap_or_else(|| "<unset>".to_string())
 }
 
-fn telemetry_config_enabled_display(runtime_config: &orbit_runtime::RuntimeConfig) -> String {
+fn telemetry_config_enabled_display(
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
+) -> String {
     runtime_config
         .telemetry()
         .enabled()
@@ -7705,7 +7725,7 @@ fn telemetry_config_enabled_display(runtime_config: &orbit_runtime::RuntimeConfi
 
 fn telemetry_text_detail_lines(
     resolution: &TelemetryResolution,
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
 ) -> Vec<String> {
     vec![
         report_row("Enabled", if resolution.enabled { "yes" } else { "no" }),
@@ -7746,21 +7766,21 @@ fn telemetry_target_detail_lines(status: &TelemetryTargetStatus) -> Vec<String> 
 }
 
 fn load_runtime_config_for_current_dir(
-) -> Result<(PathBuf, orbit_runtime::RuntimeConfig), Box<dyn std::error::Error>> {
+) -> Result<(PathBuf, frontal_code_runtime::RuntimeConfig), Box<dyn std::error::Error>> {
     let cwd = env::current_dir()?;
     let loader = ConfigLoader::default_for(&cwd);
     Ok((cwd, loader.load()?))
 }
 
 fn load_runtime_config_for_current_dir_or_empty(
-) -> Result<(PathBuf, orbit_runtime::RuntimeConfig), Box<dyn std::error::Error>> {
+) -> Result<(PathBuf, frontal_code_runtime::RuntimeConfig), Box<dyn std::error::Error>> {
     let cwd = env::current_dir()?;
     let loader = ConfigLoader::default_for(&cwd);
     Ok((
         cwd,
         loader
             .load()
-            .unwrap_or_else(|_| orbit_runtime::RuntimeConfig::empty()),
+            .unwrap_or_else(|_| frontal_code_runtime::RuntimeConfig::empty()),
     ))
 }
 
@@ -7828,8 +7848,8 @@ fn rendered_json_to_serde(rendered: &str) -> serde_json::Value {
 
 fn telemetry_settings_path(cwd: &Path, target: Option<&str>) -> PathBuf {
     match target {
-        Some("local") => cwd.join(".orbit").join("settings.local.json"),
-        _ => cwd.join(".orbit").join("settings.json"),
+        Some("local") => cwd.join(".frontal-code").join("settings.local.json"),
+        _ => cwd.join(".frontal-code").join("settings.json"),
     }
 }
 
@@ -7863,7 +7883,7 @@ fn update_project_telemetry_settings(
         serde_json::Map::new()
     };
 
-    let telemetry_path = cwd.join(".orbit").join("telemetry.jsonl");
+    let telemetry_path = cwd.join(".frontal-code").join("telemetry.jsonl");
     let mut telemetry = root
         .remove("telemetry")
         .and_then(|value| match value {
@@ -7890,7 +7910,7 @@ fn update_project_telemetry_settings(
 fn telemetry_update_report(
     action: &str,
     settings_path: &Path,
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
 ) -> String {
     let resolution = resolve_telemetry_config(Some(runtime_config));
     [
@@ -7957,7 +7977,7 @@ fn print_telemetry_status(
         }
         other => match output_format {
             CliOutputFormat::Text => println!(
-                "Telemetry\n  Result           unsupported\n  Action           {other}\n  Supported        orbit telemetry [status|on|off] [project|local]"
+                "Telemetry\n  Result           unsupported\n  Action           {other}\n  Supported        frontal-code telemetry [status|on|off] [project|local]"
             ),
             CliOutputFormat::Json => println!(
                 "{}",
@@ -7988,22 +8008,22 @@ fn render_telemetry_report(target: Option<&str>) -> Result<String, Box<dyn std::
 fn render_help_topic(topic: LocalHelpTopic) -> String {
     match topic {
         LocalHelpTopic::Status => "Status
-  Usage            orbit status
+  Usage            frontal-code status
   Purpose          show the local workspace snapshot without entering the REPL
   Output           model, permissions, git state, config files, and sandbox status
-  Related          /status · orbit --resume latest /status"
+  Related          /status · frontal-code --resume latest /status"
             .to_string(),
         LocalHelpTopic::Sandbox => "Sandbox
-  Usage            orbit sandbox
+  Usage            frontal-code sandbox
   Purpose          inspect the resolved sandbox and isolation state for the current directory
   Output           namespace, network, filesystem, and fallback details
-  Related          /sandbox · orbit status"
+  Related          /sandbox · frontal-code status"
             .to_string(),
         LocalHelpTopic::Doctor => "Doctor
-  Usage            orbit doctor
+  Usage            frontal-code doctor
   Purpose          diagnose local auth, config, workspace, sandbox, and build metadata
   Output           local-only health report; no provider request or session resume required
-  Related          /doctor · orbit --resume latest /doctor"
+  Related          /doctor · frontal-code --resume latest /doctor"
             .to_string(),
     }
 }
@@ -8449,7 +8469,7 @@ fn render_version_report() -> String {
     let git_sha = GIT_SHA.unwrap_or("unknown");
     let target = BUILD_TARGET.unwrap_or("unknown");
     format!(
-        "Orbit\n  Version          {VERSION}\n  Git SHA          {git_sha}\n  Target           {target}\n  Build date       {DEFAULT_DATE}"
+        "Frontal Code\n  Version          {VERSION}\n  Git SHA          {git_sha}\n  Target           {target}\n  Build date       {DEFAULT_DATE}"
     )
 }
 
@@ -8559,7 +8579,7 @@ fn build_runtime_plugin_state() -> Result<RuntimePluginState, Box<dyn std::error
 fn build_runtime_plugin_state_with_loader(
     cwd: &Path,
     loader: &ConfigLoader,
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
 ) -> Result<RuntimePluginState, Box<dyn std::error::Error>> {
     let plugin_manager = build_plugin_manager(cwd, loader, runtime_config);
     let plugin_registry = plugin_manager.plugin_registry()?;
@@ -8584,7 +8604,7 @@ fn build_runtime_plugin_state_with_loader(
 fn build_plugin_manager(
     cwd: &Path,
     loader: &ConfigLoader,
-    runtime_config: &orbit_runtime::RuntimeConfig,
+    runtime_config: &frontal_code_runtime::RuntimeConfig,
 ) -> PluginManager {
     let plugin_settings = runtime_config.plugins();
     let mut plugin_config = PluginManagerConfig::new(loader.config_home().to_path_buf());
@@ -8617,8 +8637,10 @@ fn resolve_plugin_path(cwd: &Path, config_home: &Path, value: &str) -> PathBuf {
     }
 }
 
-fn runtime_hook_config_from_plugin_hooks(hooks: PluginHooks) -> orbit_runtime::RuntimeHookConfig {
-    orbit_runtime::RuntimeHookConfig::new(
+fn runtime_hook_config_from_plugin_hooks(
+    hooks: PluginHooks,
+) -> frontal_code_runtime::RuntimeHookConfig {
+    frontal_code_runtime::RuntimeHookConfig::new(
         hooks.pre_tool_use,
         hooks.post_tool_use,
         hooks.post_tool_use_failure,
@@ -9043,7 +9065,7 @@ fn build_runtime_with_plugin_state(
     let client = if detect_provider_kind(&model) == ProviderKind::Anthropic {
         ProviderClient::Anthropic(
             AnthropicClient::from_auth(resolve_cli_auth_source()?)
-                .with_base_url(orbit_api::read_base_url())
+                .with_base_url(frontal_code_api::read_base_url())
                 .with_prompt_cache(PromptCache::new(session_id)),
         )
     } else {
@@ -9128,7 +9150,7 @@ fn build_runtime_with_plugin_state_and_provider(
         if provider_name.eq_ignore_ascii_case("anthropic") {
             ProviderClient::Anthropic(
                 AnthropicClient::from_auth(resolve_cli_auth_source()?)
-                    .with_base_url(orbit_api::read_base_url())
+                    .with_base_url(frontal_code_api::read_base_url())
                     .with_prompt_cache(PromptCache::new(session_id)),
             )
         } else {
@@ -9180,10 +9202,10 @@ fn build_runtime_with_plugin_state_and_provider(
 
 struct CliHookProgressReporter;
 
-impl orbit_runtime::HookProgressReporter for CliHookProgressReporter {
-    fn on_event(&mut self, event: &orbit_runtime::HookProgressEvent) {
+impl frontal_code_runtime::HookProgressReporter for CliHookProgressReporter {
+    fn on_event(&mut self, event: &frontal_code_runtime::HookProgressEvent) {
         match event {
-            orbit_runtime::HookProgressEvent::Started {
+            frontal_code_runtime::HookProgressEvent::Started {
                 event,
                 tool_name,
                 command,
@@ -9191,7 +9213,7 @@ impl orbit_runtime::HookProgressReporter for CliHookProgressReporter {
                 "[hook {event_name}] {tool_name}: {command}",
                 event_name = event.as_str()
             ),
-            orbit_runtime::HookProgressEvent::Completed {
+            frontal_code_runtime::HookProgressEvent::Completed {
                 event,
                 tool_name,
                 command,
@@ -9199,7 +9221,7 @@ impl orbit_runtime::HookProgressReporter for CliHookProgressReporter {
                 "[hook done {event_name}] {tool_name}: {command}",
                 event_name = event.as_str()
             ),
-            orbit_runtime::HookProgressEvent::Cancelled {
+            frontal_code_runtime::HookProgressEvent::Cancelled {
                 event,
                 tool_name,
                 command,
@@ -9221,11 +9243,11 @@ impl CliPermissionPrompter {
     }
 }
 
-impl orbit_runtime::PermissionPrompter for CliPermissionPrompter {
+impl frontal_code_runtime::PermissionPrompter for CliPermissionPrompter {
     fn decide(
         &mut self,
-        request: &orbit_runtime::PermissionRequest,
-    ) -> orbit_runtime::PermissionPromptDecision {
+        request: &frontal_code_runtime::PermissionRequest,
+    ) -> frontal_code_runtime::PermissionPromptDecision {
         println!();
         println!("Permission approval required");
         println!("  Tool             {}", request.tool_name);
@@ -9243,9 +9265,9 @@ impl orbit_runtime::PermissionPrompter for CliPermissionPrompter {
             Ok(_) => {
                 let normalized = response.trim().to_ascii_lowercase();
                 if matches!(normalized.as_str(), "y" | "yes") {
-                    orbit_runtime::PermissionPromptDecision::Allow
+                    frontal_code_runtime::PermissionPromptDecision::Allow
                 } else {
-                    orbit_runtime::PermissionPromptDecision::Deny {
+                    frontal_code_runtime::PermissionPromptDecision::Deny {
                         reason: format!(
                             "tool '{}' denied by user approval prompt",
                             request.tool_name
@@ -9253,7 +9275,7 @@ impl orbit_runtime::PermissionPrompter for CliPermissionPrompter {
                     }
                 }
             }
-            Err(error) => orbit_runtime::PermissionPromptDecision::Deny {
+            Err(error) => frontal_code_runtime::PermissionPromptDecision::Deny {
                 reason: format!("permission approval failed: {error}"),
             },
         }
@@ -9262,7 +9284,7 @@ impl orbit_runtime::PermissionPrompter for CliPermissionPrompter {
 
 struct GenericRuntimeClient {
     runtime: tokio::runtime::Runtime,
-    client: orbit_api::ProviderClient,
+    client: frontal_code_api::ProviderClient,
     session_id: String,
     model: String,
     enable_tools: bool,
@@ -9281,7 +9303,7 @@ impl GenericRuntimeClient {
         allowed_tools: Option<AllowedToolSet>,
         tool_registry: GlobalToolRegistry,
         progress_reporter: Option<InternalPromptProgressReporter>,
-        client: orbit_api::ProviderClient,
+        client: frontal_code_api::ProviderClient,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             runtime: tokio::runtime::Runtime::new()?,
@@ -9481,7 +9503,7 @@ impl AnthropicRuntimeClient {
         Ok(Self {
             runtime: tokio::runtime::Runtime::new()?,
             client: AnthropicClient::from_auth(resolve_cli_auth_source()?)
-                .with_base_url(orbit_api::read_base_url())
+                .with_base_url(frontal_code_api::read_base_url())
                 .with_prompt_cache(PromptCache::new(session_id)),
             session_id: session_id.to_string(),
             model,
@@ -9659,7 +9681,7 @@ impl ApiClient for AnthropicRuntimeClient {
     }
 }
 
-fn format_user_visible_api_error(session_id: &str, error: &orbit_api::ApiError) -> String {
+fn format_user_visible_api_error(session_id: &str, error: &frontal_code_api::ApiError) -> String {
     if error.is_context_window_failure() {
         format_context_window_blocked_error(session_id, error)
     } else if error.is_generic_fatal_wrapper() {
@@ -9678,7 +9700,10 @@ fn format_user_visible_api_error(session_id: &str, error: &orbit_api::ApiError) 
     }
 }
 
-fn format_context_window_blocked_error(session_id: &str, error: &orbit_api::ApiError) -> String {
+fn format_context_window_blocked_error(
+    session_id: &str,
+    error: &frontal_code_api::ApiError,
+) -> String {
     let mut lines = vec![
         "Context window blocked".to_string(),
         "  Failure class    context_window_blocked".to_string(),
@@ -9690,7 +9715,7 @@ fn format_context_window_blocked_error(session_id: &str, error: &orbit_api::ApiE
     }
 
     match error {
-        orbit_api::ApiError::ContextWindowExceeded {
+        frontal_code_api::ApiError::ContextWindowExceeded {
             model,
             estimated_input_tokens,
             requested_output_tokens,
@@ -9709,7 +9734,7 @@ fn format_context_window_blocked_error(session_id: &str, error: &orbit_api::ApiE
             ));
             lines.push(format!("  Context window   {context_window_tokens} tokens"));
         }
-        orbit_api::ApiError::Api { message, body, .. } => {
+        frontal_code_api::ApiError::Api { message, body, .. } => {
             let detail = message.as_deref().unwrap_or(body).trim();
             if !detail.is_empty() {
                 lines.push(format!(
@@ -9718,9 +9743,9 @@ fn format_context_window_blocked_error(session_id: &str, error: &orbit_api::ApiE
                 ));
             }
         }
-        orbit_api::ApiError::RetriesExhausted { last_error, .. } => {
+        frontal_code_api::ApiError::RetriesExhausted { last_error, .. } => {
             let detail = match last_error.as_ref() {
-                orbit_api::ApiError::Api { message, body, .. } => {
+                frontal_code_api::ApiError::Api { message, body, .. } => {
                     message.as_deref().unwrap_or(body)
                 }
                 other => return format_context_window_blocked_error(session_id, other),
@@ -9740,7 +9765,7 @@ fn format_context_window_blocked_error(session_id: &str, error: &orbit_api::ApiE
     lines.push("Recovery".to_string());
     lines.push("  Compact          /compact".to_string());
     lines.push(format!(
-        "  Resume compact   orbit --resume {session_id} /compact"
+        "  Resume compact   frontal-code --resume {session_id} /compact"
     ));
     lines.push("  Fresh session    /clear --confirm".to_string());
     lines.push(
@@ -9752,7 +9777,7 @@ fn format_context_window_blocked_error(session_id: &str, error: &orbit_api::ApiE
     lines.join("\n")
 }
 
-fn final_assistant_text(summary: &orbit_runtime::TurnSummary) -> String {
+fn final_assistant_text(summary: &frontal_code_runtime::TurnSummary) -> String {
     summary
         .assistant_messages
         .last()
@@ -9770,7 +9795,7 @@ fn final_assistant_text(summary: &orbit_runtime::TurnSummary) -> String {
         .unwrap_or_default()
 }
 
-fn collect_tool_uses(summary: &orbit_runtime::TurnSummary) -> Vec<serde_json::Value> {
+fn collect_tool_uses(summary: &frontal_code_runtime::TurnSummary) -> Vec<serde_json::Value> {
     summary
         .assistant_messages
         .iter()
@@ -9786,7 +9811,7 @@ fn collect_tool_uses(summary: &orbit_runtime::TurnSummary) -> Vec<serde_json::Va
         .collect()
 }
 
-fn collect_tool_results(summary: &orbit_runtime::TurnSummary) -> Vec<serde_json::Value> {
+fn collect_tool_results(summary: &frontal_code_runtime::TurnSummary) -> Vec<serde_json::Value> {
     summary
         .tool_results
         .iter()
@@ -9808,7 +9833,9 @@ fn collect_tool_results(summary: &orbit_runtime::TurnSummary) -> Vec<serde_json:
         .collect()
 }
 
-fn collect_prompt_cache_events(summary: &orbit_runtime::TurnSummary) -> Vec<serde_json::Value> {
+fn collect_prompt_cache_events(
+    summary: &frontal_code_runtime::TurnSummary,
+) -> Vec<serde_json::Value> {
     summary
         .prompt_cache_events
         .iter()
@@ -10449,7 +10476,7 @@ fn push_prompt_cache_record_for_provider(
 }
 
 fn prompt_cache_record_to_runtime_event(
-    record: orbit_api::PromptCacheRecord,
+    record: frontal_code_api::PromptCacheRecord,
 ) -> Option<PromptCacheEvent> {
     let cache_break = record.cache_break?;
     Some(PromptCacheEvent {
@@ -10596,7 +10623,7 @@ impl ToolExecutor for CliToolExecutor {
 
 fn permission_policy(
     mode: PermissionMode,
-    feature_config: &orbit_runtime::RuntimeFeatureConfig,
+    feature_config: &frontal_code_runtime::RuntimeFeatureConfig,
     tool_registry: &GlobalToolRegistry,
 ) -> Result<PermissionPolicy, String> {
     Ok(tool_registry.permission_specs(None)?.into_iter().fold(
@@ -10650,56 +10677,56 @@ fn convert_messages(messages: &[ConversationMessage]) -> Vec<InputMessage> {
 
 #[allow(clippy::too_many_lines)]
 fn print_help_to(out: &mut impl Write) -> io::Result<()> {
-    writeln!(out, "orbit v{VERSION}")?;
+    writeln!(out, "frontal-code v{VERSION}")?;
     writeln!(out)?;
     writeln!(out, "Usage:")?;
     writeln!(
         out,
-        "  orbit [--model MODEL] [--allowedTools TOOL[,TOOL...]]"
+        "  frontal-code [--model MODEL] [--allowedTools TOOL[,TOOL...]]"
     )?;
     writeln!(out, "      Start the interactive REPL")?;
     writeln!(
         out,
-        "  orbit [--model MODEL] [--output-format text|json] prompt TEXT"
+        "  frontal-code [--model MODEL] [--output-format text|json] prompt TEXT"
     )?;
     writeln!(out, "      Send one prompt and exit")?;
     writeln!(
         out,
-        "  orbit [--model MODEL] [--output-format text|json] TEXT"
+        "  frontal-code [--model MODEL] [--output-format text|json] TEXT"
     )?;
     writeln!(out, "      Shorthand non-interactive prompt mode")?;
     writeln!(
         out,
-        "  orbit --resume [SESSION.jsonl|session-id|latest] [/status] [/compact] [...]"
+        "  frontal-code --resume [SESSION.jsonl|session-id|latest] [/status] [/compact] [...]"
     )?;
     writeln!(
         out,
         "      Inspect or maintain a saved session without entering the REPL"
     )?;
-    writeln!(out, "  orbit help")?;
+    writeln!(out, "  frontal-code help")?;
     writeln!(out, "      Alias for --help")?;
-    writeln!(out, "  orbit version")?;
+    writeln!(out, "  frontal-code version")?;
     writeln!(out, "      Alias for --version")?;
-    writeln!(out, "  orbit status")?;
+    writeln!(out, "  frontal-code status")?;
     writeln!(
         out,
         "      Show the current local workspace status snapshot"
     )?;
-    writeln!(out, "  orbit config {CONFIG_SECTION_ARGUMENT_HINT}")?;
+    writeln!(out, "  frontal-code config {CONFIG_SECTION_ARGUMENT_HINT}")?;
     writeln!(
         out,
         "      Inspect merged config sections with text or JSON output"
     )?;
-    writeln!(out, "  orbit sandbox")?;
+    writeln!(out, "  frontal-code sandbox")?;
     writeln!(out, "      Show the current sandbox isolation snapshot")?;
-    writeln!(out, "  orbit doctor")?;
+    writeln!(out, "  frontal-code doctor")?;
     writeln!(
         out,
         "      Diagnose local auth, config, workspace, and sandbox health"
     )?;
     writeln!(
         out,
-        "  orbit hosted policy orphans [--repository REPO] [--source SOURCE] [--priority PRIORITY]"
+        "  frontal-code hosted policy orphans [--repository REPO] [--source SOURCE] [--priority PRIORITY]"
     )?;
     writeln!(
         out,
@@ -10707,7 +10734,7 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
     )?;
     writeln!(
         out,
-        "  orbit hosted events watch [--task-id TASK_ID] [--topic TOPIC] [--event EVENT] [--status STATUS[,STATUS...]] [--limit N]"
+        "  frontal-code hosted events watch [--task-id TASK_ID] [--topic TOPIC] [--event EVENT] [--status STATUS[,STATUS...]] [--limit N]"
     )?;
     writeln!(
         out,
@@ -10715,52 +10742,52 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
     )?;
     writeln!(
         out,
-        "  orbit hosted tasks list [--status STATUS[,STATUS...]] [--source SOURCE] [--repository REPO] [--channel-id ID] [--thread-ts TS] [--needs-followup] [--limit N]"
+        "  frontal-code hosted tasks list [--status STATUS[,STATUS...]] [--source SOURCE] [--repository REPO] [--channel-id ID] [--thread-ts TS] [--needs-followup] [--limit N]"
     )?;
     writeln!(out, "      List hosted tasks with server-side filtering")?;
     writeln!(
         out,
-        "  orbit hosted tasks watch [--status STATUS[,STATUS...]] [--source SOURCE] [--repository REPO] [--channel-id ID] [--thread-ts TS] [--limit N]"
+        "  frontal-code hosted tasks watch [--status STATUS[,STATUS...]] [--source SOURCE] [--repository REPO] [--channel-id ID] [--thread-ts TS] [--limit N]"
     )?;
     writeln!(
         out,
         "      Watch live task updates for tasks matching the current filter"
     )?;
-    writeln!(out, "  orbit hosted task get TASK_ID")?;
+    writeln!(out, "  frontal-code hosted task get TASK_ID")?;
     writeln!(out, "      Inspect the current hosted task snapshot")?;
-    writeln!(out, "  orbit hosted task runtime TASK_ID")?;
+    writeln!(out, "  frontal-code hosted task runtime TASK_ID")?;
     writeln!(
         out,
         "      Inspect hosted worker runtime and orphan classification"
     )?;
-    writeln!(out, "  orbit hosted task reconcile TASK_ID")?;
+    writeln!(out, "  frontal-code hosted task reconcile TASK_ID")?;
     writeln!(
         out,
         "      Reconcile a hosted task against persisted worker artifacts"
     )?;
-    writeln!(out, "  orbit hosted task cancel TASK_ID")?;
+    writeln!(out, "  frontal-code hosted task cancel TASK_ID")?;
     writeln!(
         out,
         "      Cancel a hosted task directly through the control plane"
     )?;
     writeln!(
         out,
-        "  orbit hosted task approval TASK_ID [retry|cancel|ack] [--kind orphaned_hosted_agent|github_review_followup] [--resolved-by NAME] [--reason TEXT]"
+        "  frontal-code hosted task approval TASK_ID [retry|cancel|ack] [--kind orphaned_hosted_agent|github_review_followup] [--resolved-by NAME] [--reason TEXT]"
     )?;
     writeln!(
         out,
         "      Resolve a hosted task approval (orphaned agent or GitHub follow-up) through the control plane"
     )?;
-    writeln!(out, "  orbit dump-manifests")?;
-    writeln!(out, "  orbit bootstrap-plan")?;
-    writeln!(out, "  orbit agents")?;
-    writeln!(out, "  orbit mcp")?;
-    writeln!(out, "  orbit skills")?;
+    writeln!(out, "  frontal-code dump-manifests")?;
+    writeln!(out, "  frontal-code bootstrap-plan")?;
+    writeln!(out, "  frontal-code agents")?;
+    writeln!(out, "  frontal-code mcp")?;
+    writeln!(out, "  frontal-code skills")?;
     writeln!(
         out,
-        "  orbit system-prompt [--cwd PATH] [--date YYYY-MM-DD]"
+        "  frontal-code system-prompt [--cwd PATH] [--date YYYY-MM-DD]"
     )?;
-    writeln!(out, "  orbit init")?;
+    writeln!(out, "  frontal-code init")?;
     writeln!(out)?;
     writeln!(out, "Flags:")?;
     writeln!(
@@ -10805,7 +10832,7 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
     writeln!(out, "Session shortcuts:")?;
     writeln!(
         out,
-        "  REPL turns auto-save to .orbit/sessions/<session-id>.{PRIMARY_SESSION_EXTENSION}"
+        "  REPL turns auto-save to .frontal-code/sessions/<session-id>.{PRIMARY_SESSION_EXTENSION}"
     )?;
     writeln!(
         out,
@@ -10816,50 +10843,53 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
         "  Use /session list in the REPL to browse managed sessions"
     )?;
     writeln!(out, "Examples:")?;
-    writeln!(out, "  orbit --model claude-opus \"summarize this repo\"")?;
     writeln!(
         out,
-        "  orbit --output-format json prompt \"explain src/main.rs\""
+        "  frontal-code --model claude-opus \"summarize this repo\""
     )?;
     writeln!(
         out,
-        "  orbit --allowedTools read,glob \"summarize Cargo.toml\""
-    )?;
-    writeln!(out, "  orbit --resume {LATEST_SESSION_REFERENCE}")?;
-    writeln!(
-        out,
-        "  orbit --resume {LATEST_SESSION_REFERENCE} /status /diff /export notes.txt"
-    )?;
-    writeln!(out, "  orbit --output-format json config telemetry")?;
-    writeln!(
-        out,
-        "  orbit hosted policy orphans --repo myorg/myapp --source slack"
+        "  frontal-code --output-format json prompt \"explain src/main.rs\""
     )?;
     writeln!(
         out,
-        "  orbit hosted events watch --task-id task_123 --limit 20"
+        "  frontal-code --allowedTools read,glob \"summarize Cargo.toml\""
+    )?;
+    writeln!(out, "  frontal-code --resume {LATEST_SESSION_REFERENCE}")?;
+    writeln!(
+        out,
+        "  frontal-code --resume {LATEST_SESSION_REFERENCE} /status /diff /export notes.txt"
+    )?;
+    writeln!(out, "  frontal-code --output-format json config telemetry")?;
+    writeln!(
+        out,
+        "  frontal-code hosted policy orphans --repo myorg/myapp --source slack"
     )?;
     writeln!(
         out,
-        "  orbit hosted tasks watch --status pending,running --source slack --limit 20"
+        "  frontal-code hosted events watch --task-id task_123 --limit 20"
     )?;
     writeln!(
         out,
-        "  orbit hosted tasks list --status pending,running --source slack --limit 10"
+        "  frontal-code hosted tasks watch --status pending,running --source slack --limit 20"
     )?;
-    writeln!(out, "  orbit hosted task get task_123")?;
-    writeln!(out, "  orbit hosted task runtime task_123")?;
-    writeln!(out, "  orbit hosted task reconcile task_123")?;
-    writeln!(out, "  orbit hosted task cancel task_123")?;
     writeln!(
         out,
-        "  orbit hosted task approval task_123 retry --resolved-by operator"
+        "  frontal-code hosted tasks list --status pending,running --source slack --limit 10"
     )?;
-    writeln!(out, "  orbit agents")?;
-    writeln!(out, "  orbit mcp show my-server")?;
-    writeln!(out, "  orbit /skills")?;
-    writeln!(out, "  orbit doctor")?;
-    writeln!(out, "  orbit init")?;
+    writeln!(out, "  frontal-code hosted task get task_123")?;
+    writeln!(out, "  frontal-code hosted task runtime task_123")?;
+    writeln!(out, "  frontal-code hosted task reconcile task_123")?;
+    writeln!(out, "  frontal-code hosted task cancel task_123")?;
+    writeln!(
+        out,
+        "  frontal-code hosted task approval task_123 retry --resolved-by operator"
+    )?;
+    writeln!(out, "  frontal-code agents")?;
+    writeln!(out, "  frontal-code mcp show my-server")?;
+    writeln!(out, "  frontal-code /skills")?;
+    writeln!(out, "  frontal-code doctor")?;
+    writeln!(out, "  frontal-code init")?;
     Ok(())
 }
 
@@ -10908,18 +10938,18 @@ mod tests {
         HostedEventStatus, HostedEventTopic, HostedEventWatchQuery, HostedTaskGithubResponse,
         HostedTaskListQuery, HostedTaskWorkerPayload, InternalPromptProgressEvent,
         InternalPromptProgressState, LiveCli, LocalHelpTopic, SlashCommand, StatusUsage,
-        DEFAULT_MODEL, ORBIT_TELEMETRY_PATH,
+        DEFAULT_MODEL, FCODE_TELEMETRY_PATH,
     };
-    use orbit_api::{ApiError, MessageResponse, OutputContentBlock, Usage};
-    use orbit_events::EventIdentifiers;
-    use orbit_plugins::{
+    use frontal_code_api::{ApiError, MessageResponse, OutputContentBlock, Usage};
+    use frontal_code_events::EventIdentifiers;
+    use frontal_code_plugins::{
         PluginManager, PluginManagerConfig, PluginTool, PluginToolDefinition, PluginToolPermission,
     };
-    use orbit_runtime::{
+    use frontal_code_runtime::{
         AssistantEvent, ConfigLoader, ContentBlock, ConversationMessage, MessageRole,
         PermissionMode, Session, ToolExecutor,
     };
-    use orbit_tools::GlobalToolRegistry;
+    use frontal_code_tools::GlobalToolRegistry;
     use serde_json::json;
     use std::fs;
     use std::io::{Read, Write};
@@ -11027,7 +11057,7 @@ mod tests {
         );
         assert!(rendered.contains("Compact          /compact"), "{rendered}");
         assert!(
-            rendered.contains("Resume compact   orbit --resume session-issue-32 /compact"),
+            rendered.contains("Resume compact   frontal-code --resume session-issue-32 /compact"),
             "{rendered}"
         );
         assert!(
@@ -11098,7 +11128,7 @@ mod tests {
         );
         assert!(rendered.contains("Compact          /compact"), "{rendered}");
         assert!(
-            rendered.contains("Resume compact   orbit --resume session-issue-32 /compact"),
+            rendered.contains("Resume compact   frontal-code --resume session-issue-32 /compact"),
             "{rendered}"
         );
     }
@@ -11112,7 +11142,7 @@ mod tests {
             .expect("time should be after epoch")
             .as_nanos();
         let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!("orbit-cli-{nanos}-{unique}"))
+        std::env::temp_dir().join(format!("frontal-code-cli-{nanos}-{unique}"))
     }
 
     fn git(args: &[&str], cwd: &Path) {
@@ -11212,24 +11242,25 @@ mod tests {
         let root = temp_dir();
         let cwd = root.join("project");
         let config_home = root.join("config-home");
-        std::fs::create_dir_all(cwd.join(".orbit")).expect("project config dir should exist");
+        std::fs::create_dir_all(cwd.join(".frontal-code"))
+            .expect("project config dir should exist");
         std::fs::create_dir_all(&config_home).expect("config home should exist");
         std::fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"permissionMode":"acceptEdits"}"#,
         )
         .expect("project config should write");
 
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_permission_mode = std::env::var("RUSTY_CLAUDE_PERMISSION_MODE").ok();
-        std::env::set_var("ORBIT_CONFIG_HOME", &config_home);
+        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
 
         let resolved = with_current_dir(&cwd, super::default_permission_mode);
 
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         match original_permission_mode {
             Some(value) => std::env::set_var("RUSTY_CLAUDE_PERMISSION_MODE", value),
@@ -11246,24 +11277,25 @@ mod tests {
         let root = temp_dir();
         let cwd = root.join("project");
         let config_home = root.join("config-home");
-        std::fs::create_dir_all(cwd.join(".orbit")).expect("project config dir should exist");
+        std::fs::create_dir_all(cwd.join(".frontal-code"))
+            .expect("project config dir should exist");
         std::fs::create_dir_all(&config_home).expect("config home should exist");
         std::fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"permissionMode":"acceptEdits"}"#,
         )
         .expect("project config should write");
 
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_permission_mode = std::env::var("RUSTY_CLAUDE_PERMISSION_MODE").ok();
-        std::env::set_var("ORBIT_CONFIG_HOME", &config_home);
+        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
         std::env::set_var("RUSTY_CLAUDE_PERMISSION_MODE", "read-only");
 
         let resolved = with_current_dir(&cwd, super::default_permission_mode);
 
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         match original_permission_mode {
             Some(value) => std::env::set_var("RUSTY_CLAUDE_PERMISSION_MODE", value),
@@ -11909,21 +11941,24 @@ mod tests {
     #[test]
     fn hosted_server_url_prefers_env_and_trims_trailing_slash() {
         let _guard = env_lock();
-        std::env::set_var("ORBIT_SERVER_URL", "http://hosted.orbit.test/");
-        std::env::remove_var("ORBIT_SERVER_BASE_URL");
-        assert_eq!(hosted_server_url(), "http://hosted.orbit.test");
-        std::env::remove_var("ORBIT_SERVER_URL");
+        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
+        std::env::remove_var("FCODE_SERVER_BASE_URL");
+        assert_eq!(hosted_server_url(), "http://hosted.frontal-code.test");
+        std::env::remove_var("FCODE_SERVER_URL");
 
-        std::env::set_var("ORBIT_SERVER_BASE_URL", "http://fallback.orbit.test/");
-        assert_eq!(hosted_server_url(), "http://fallback.orbit.test");
-        std::env::remove_var("ORBIT_SERVER_BASE_URL");
+        std::env::set_var(
+            "FCODE_SERVER_BASE_URL",
+            "http://fallback.frontal-code.test/",
+        );
+        assert_eq!(hosted_server_url(), "http://fallback.frontal-code.test");
+        std::env::remove_var("FCODE_SERVER_BASE_URL");
     }
 
     #[test]
     fn load_hosted_task_worker_payload_reads_json_file_from_env() {
         let _guard = env_lock();
         let dir = std::env::temp_dir().join(format!(
-            "orbit-cli-hosted-task-payload-{}",
+            "frontal-code-cli-hosted-task-payload-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -11939,7 +11974,7 @@ mod tests {
                 repository: Some("acme/payments".to_string()),
                 repo_url: Some("https://github.com/acme/payments.git".to_string()),
                 base_ref: Some("main".to_string()),
-                branch: Some("orbit/fix-flake".to_string()),
+                branch: Some("frontal-code/fix-flake".to_string()),
                 model: Some("gpt-5.4".to_string()),
                 provider: Some("openai".to_string()),
                 permission_mode: Some("workspace-write".to_string()),
@@ -11948,7 +11983,7 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        std::env::set_var("ORBIT_HOSTED_TASK_FILE", &payload_path);
+        std::env::set_var("FCODE_HOSTED_TASK_FILE", &payload_path);
 
         let payload =
             load_hosted_task_worker_payload("task_123").expect("payload should load successfully");
@@ -11960,13 +11995,13 @@ mod tests {
             Some("https://github.com/acme/payments.git")
         );
         assert_eq!(payload.base_ref.as_deref(), Some("main"));
-        assert_eq!(payload.branch.as_deref(), Some("orbit/fix-flake"));
+        assert_eq!(payload.branch.as_deref(), Some("frontal-code/fix-flake"));
         assert_eq!(payload.model.as_deref(), Some("gpt-5.4"));
         assert_eq!(payload.provider.as_deref(), Some("openai"));
         assert_eq!(payload.permission_mode.as_deref(), Some("workspace-write"));
         assert_eq!(payload.allowed_tools, vec!["git".to_string()]);
 
-        std::env::remove_var("ORBIT_HOSTED_TASK_FILE");
+        std::env::remove_var("FCODE_HOSTED_TASK_FILE");
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -11978,21 +12013,21 @@ mod tests {
             repository: Some("acme/payments".to_string()),
             repo_url: Some("https://github.com/acme/payments.git".to_string()),
             base_ref: Some("main".to_string()),
-            branch: Some("orbit/fix-release".to_string()),
+            branch: Some("frontal-code/fix-release".to_string()),
             model: None,
             provider: None,
             permission_mode: None,
             allowed_tools: Vec::new(),
         };
 
-        let draft = default_hosted_pr_draft(&payload, "orbit/fix-release", "abc123def456")
+        let draft = default_hosted_pr_draft(&payload, "frontal-code/fix-release", "abc123def456")
             .expect("github payload should produce a PR draft");
 
         assert_eq!(
             draft.title,
             "Fix the flaky release workflow by pinning the Docker image"
         );
-        assert_eq!(draft.head, "orbit/fix-release");
+        assert_eq!(draft.head, "frontal-code/fix-release");
         assert_eq!(draft.base, "main");
         assert!(draft.draft);
         assert!(draft.body.contains("task_123"));
@@ -12004,9 +12039,9 @@ mod tests {
     fn publish_hosted_repo_changes_commits_and_pushes_branch() {
         let _guard = env_lock();
         let previous_token = std::env::var_os("GITHUB_TOKEN");
-        let previous_api_base = std::env::var_os("ORBIT_GITHUB_API_BASE");
+        let previous_api_base = std::env::var_os("FCODE_GITHUB_API_BASE");
         std::env::remove_var("GITHUB_TOKEN");
-        std::env::remove_var("ORBIT_GITHUB_API_BASE");
+        std::env::remove_var("FCODE_GITHUB_API_BASE");
 
         let remote = temp_dir();
         let repo = temp_dir();
@@ -12018,8 +12053,8 @@ mod tests {
             Path::new("."),
         );
         git(&["init", "-b", "main"], &repo);
-        git(&["config", "user.name", "Orbit Test"], &repo);
-        git(&["config", "user.email", "orbit@test.dev"], &repo);
+        git(&["config", "user.name", "FrontalCode Test"], &repo);
+        git(&["config", "user.email", "frontal-code@test.dev"], &repo);
         fs::write(repo.join("README.md"), "hello\n").expect("seed file");
         git(&["add", "README.md"], &repo);
         git(&["commit", "-m", "initial"], &repo);
@@ -12028,7 +12063,7 @@ mod tests {
             &repo,
         );
         git(&["push", "-u", "origin", "main"], &repo);
-        git(&["checkout", "-b", "orbit/task-publish"], &repo);
+        git(&["checkout", "-b", "frontal-code/task-publish"], &repo);
         fs::write(repo.join("README.md"), "hello\nworld\n").expect("updated file");
 
         let payload = HostedTaskWorkerPayload {
@@ -12037,7 +12072,7 @@ mod tests {
             repository: Some("acme/payments".to_string()),
             repo_url: Some(remote.display().to_string()),
             base_ref: Some("main".to_string()),
-            branch: Some("orbit/task-publish".to_string()),
+            branch: Some("frontal-code/task-publish".to_string()),
             model: None,
             provider: None,
             permission_mode: None,
@@ -12053,7 +12088,7 @@ mod tests {
         assert_eq!(publication.published_remote.as_deref(), Some("origin"));
         assert_eq!(
             publication.published_branch.as_deref(),
-            Some("orbit/task-publish")
+            Some("frontal-code/task-publish")
         );
         assert!(publication
             .published_commit_sha
@@ -12067,7 +12102,7 @@ mod tests {
                 remote.to_str().unwrap(),
                 "show-ref",
                 "--verify",
-                "refs/heads/orbit/task-publish",
+                "refs/heads/frontal-code/task-publish",
             ])
             .output()
             .expect("show-ref should run");
@@ -12081,8 +12116,8 @@ mod tests {
             None => std::env::remove_var("GITHUB_TOKEN"),
         }
         match previous_api_base {
-            Some(value) => std::env::set_var("ORBIT_GITHUB_API_BASE", value),
-            None => std::env::remove_var("ORBIT_GITHUB_API_BASE"),
+            Some(value) => std::env::set_var("FCODE_GITHUB_API_BASE", value),
+            None => std::env::remove_var("FCODE_GITHUB_API_BASE"),
         }
         let _ = fs::remove_dir_all(remote);
         let _ = fs::remove_dir_all(repo);
@@ -12093,7 +12128,7 @@ mod tests {
         let result = augment_hosted_result_with_publication(
             Some("Applied the requested fix.".to_string()),
             &HostedTaskGithubResponse {
-                published_branch: Some("orbit/fix-flake".to_string()),
+                published_branch: Some("frontal-code/fix-flake".to_string()),
                 published_commit_sha: Some("abc123def456".to_string()),
                 pr_url: Some("https://github.com/acme/payments/pull/42".to_string()),
                 ..HostedTaskGithubResponse::default()
@@ -12102,7 +12137,7 @@ mod tests {
         .expect("publication details should keep a result string");
 
         assert!(result.contains("Applied the requested fix."));
-        assert!(result.contains("Branch: orbit/fix-flake"));
+        assert!(result.contains("Branch: frontal-code/fix-flake"));
         assert!(result.contains("Commit: abc123def456"));
         assert!(result.contains("PR: https://github.com/acme/payments/pull/42"));
     }
@@ -12323,7 +12358,7 @@ mod tests {
         let error = parse_args(&["/status".to_string()])
             .expect_err("/status should remain REPL-only when invoked directly");
         assert!(error.contains("slash command"));
-        assert!(error.contains("orbit --resume SESSION.jsonl /status"));
+        assert!(error.contains("frontal-code --resume SESSION.jsonl /status"));
     }
 
     #[test]
@@ -12427,7 +12462,7 @@ mod tests {
         let error = parse_args(&["--resum".to_string()]).expect_err("unknown option should fail");
         assert!(error.contains("unknown option: --resum"));
         assert!(error.contains("Did you mean --resume?"));
-        assert!(error.contains("orbit --help"));
+        assert!(error.contains("frontal-code --help"));
     }
 
     #[test]
@@ -12499,7 +12534,7 @@ mod tests {
 
     #[test]
     fn permission_policy_uses_plugin_tool_permissions() {
-        let feature_config = orbit_runtime::RuntimeFeatureConfig::default();
+        let feature_config = frontal_code_runtime::RuntimeFeatureConfig::default();
         let policy = permission_policy(
             PermissionMode::ReadOnly,
             &feature_config,
@@ -12512,7 +12547,7 @@ mod tests {
 
     #[test]
     fn shared_help_uses_resume_annotation_copy() {
-        let help = orbit_commands::render_slash_command_help();
+        let help = frontal_code_commands::render_slash_command_help();
         assert!(help.contains("Slash commands"));
         assert!(help.contains("works with --resume SESSION.jsonl"));
     }
@@ -12545,7 +12580,7 @@ mod tests {
         assert!(help.contains("/agents"));
         assert!(help.contains("/skills"));
         assert!(help.contains("/exit"));
-        assert!(help.contains("Auto-save            .orbit/sessions/<session-id>.jsonl"));
+        assert!(help.contains("Auto-save            .frontal-code/sessions/<session-id>.jsonl"));
         assert!(help.contains("Resume latest        /resume latest"));
     }
 
@@ -12632,7 +12667,7 @@ mod tests {
 
     #[test]
     fn cost_report_uses_sectioned_layout() {
-        let report = format_cost_report(orbit_runtime::TokenUsage {
+        let report = format_cost_report(frontal_code_runtime::TokenUsage {
             input_tokens: 20,
             output_tokens: 8,
             cache_creation_input_tokens: 3,
@@ -12672,16 +12707,16 @@ mod tests {
         let mut help = Vec::new();
         print_help_to(&mut help).expect("help should render");
         let help = String::from_utf8(help).expect("help should be utf8");
-        assert!(help.contains("orbit help"));
-        assert!(help.contains("orbit version"));
-        assert!(help.contains("orbit status"));
-        assert!(help.contains("orbit config [env|hooks|model|telemetry|plugins]"));
-        assert!(help.contains("orbit sandbox"));
-        assert!(help.contains("orbit init"));
-        assert!(help.contains("orbit agents"));
-        assert!(help.contains("orbit mcp"));
-        assert!(help.contains("orbit skills"));
-        assert!(help.contains("orbit /skills"));
+        assert!(help.contains("frontal-code help"));
+        assert!(help.contains("frontal-code version"));
+        assert!(help.contains("frontal-code status"));
+        assert!(help.contains("frontal-code config [env|hooks|model|telemetry|plugins]"));
+        assert!(help.contains("frontal-code sandbox"));
+        assert!(help.contains("frontal-code init"));
+        assert!(help.contains("frontal-code agents"));
+        assert!(help.contains("frontal-code mcp"));
+        assert!(help.contains("frontal-code skills"));
+        assert!(help.contains("frontal-code /skills"));
     }
 
     #[test]
@@ -12709,13 +12744,13 @@ mod tests {
             StatusUsage {
                 message_count: 7,
                 turns: 3,
-                latest: orbit_runtime::TokenUsage {
+                latest: frontal_code_runtime::TokenUsage {
                     input_tokens: 5,
                     output_tokens: 4,
                     cache_creation_input_tokens: 1,
                     cache_read_input_tokens: 0,
                 },
-                cumulative: orbit_runtime::TokenUsage {
+                cumulative: frontal_code_runtime::TokenUsage {
                     input_tokens: 20,
                     output_tokens: 8,
                     cache_creation_input_tokens: 2,
@@ -12739,7 +12774,7 @@ mod tests {
                     untracked_files: 1,
                     conflicted_files: 0,
                 },
-                sandbox_status: orbit_runtime::SandboxStatus::default(),
+                sandbox_status: frontal_code_runtime::SandboxStatus::default(),
             },
         );
         assert!(status.contains("Status"));
@@ -12839,20 +12874,20 @@ mod tests {
     #[test]
     fn telemetry_resolution_prefers_env_over_config() {
         let _guard = env_lock();
-        std::env::set_var(ORBIT_TELEMETRY_PATH, "/tmp/from-env.jsonl");
-        let config = orbit_runtime::RuntimeConfig::empty();
+        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        let config = frontal_code_runtime::RuntimeConfig::empty();
 
         let resolution = resolve_telemetry_config(Some(&config));
         assert_eq!(resolution.source, "env");
         assert_eq!(resolution.path.as_deref(), Some("/tmp/from-env.jsonl"));
 
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
     }
 
     #[test]
     fn telemetry_report_uses_sectioned_layout() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let report = render_telemetry_report(None).expect("telemetry report should render");
         assert!(report.contains("Telemetry"));
         assert!(report.contains("Enabled"));
@@ -12864,16 +12899,16 @@ mod tests {
     #[test]
     fn telemetry_report_shows_highest_precedence_config_file() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"telemetry":{"enabled":true,"path":"project/log.jsonl"}}"#,
         )
         .expect("project settings");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
@@ -12882,7 +12917,7 @@ mod tests {
             render_telemetry_report(None).expect("telemetry report should render")
         });
         assert!(report.contains("Effective path   local/log.jsonl"));
-        assert!(report.contains(".orbit/settings.local.json"));
+        assert!(report.contains(".frontal-code/settings.local.json"));
 
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
@@ -12891,39 +12926,39 @@ mod tests {
     fn telemetry_report_marks_config_as_shadowed_when_env_override_is_set() {
         let _guard = env_lock();
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
-        std::env::set_var(ORBIT_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
 
         let report = with_current_dir(&cwd, || {
             render_telemetry_report(None).expect("telemetry report should render")
         });
         assert!(report.contains("Effective source env"));
         assert!(report.contains("Shadowed config"));
-        assert!(report.contains(".orbit/settings.local.json"));
+        assert!(report.contains(".frontal-code/settings.local.json"));
         assert!(report.contains("Env override     /tmp/from-env.jsonl"));
 
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
 
     #[test]
     fn telemetry_report_status_target_shows_requested_scope_details() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"telemetry":{"enabled":true,"path":"project/log.jsonl"}}"#,
         )
         .expect("project settings");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":false,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
@@ -12944,16 +12979,16 @@ mod tests {
     #[test]
     fn config_telemetry_report_shows_effective_precedence_details() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"telemetry":{"enabled":true,"path":"project/log.jsonl"}}"#,
         )
         .expect("project settings");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
@@ -12964,7 +12999,7 @@ mod tests {
         assert!(report.contains("Merged section: telemetry"));
         assert!(report.contains("Effective telemetry"));
         assert!(report.contains("Effective path   local/log.jsonl"));
-        assert!(report.contains(".orbit/settings.local.json"));
+        assert!(report.contains(".frontal-code/settings.local.json"));
 
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
@@ -12973,23 +13008,23 @@ mod tests {
     fn config_telemetry_report_marks_shadowed_config_when_env_override_is_set() {
         let _guard = env_lock();
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
-        std::env::set_var(ORBIT_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
 
         let report = with_current_dir(&cwd, || {
             render_config_report(Some("telemetry")).expect("telemetry config report should render")
         });
         assert!(report.contains("Effective source env"));
         assert!(report.contains("Shadowed config"));
-        assert!(report.contains(".orbit/settings.local.json"));
+        assert!(report.contains(".frontal-code/settings.local.json"));
         assert!(report.contains("Env override     /tmp/from-env.jsonl"));
 
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
 
@@ -12997,9 +13032,9 @@ mod tests {
     fn config_report_marks_supported_sections_as_unset_when_missing() {
         let _guard = env_lock();
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"model":"claude-sonnet-4-6"}"#,
         )
         .expect("project settings");
@@ -13018,9 +13053,9 @@ mod tests {
     fn config_report_marks_supported_sections_as_set_when_present() {
         let _guard = env_lock();
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"env":{"API_BASE_URL":"https://example.test"}}"#,
         )
         .expect("project settings");
@@ -13056,16 +13091,16 @@ mod tests {
     #[test]
     fn config_telemetry_json_includes_effective_resolution_details() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"telemetry":{"enabled":true,"path":"project/log.jsonl"}}"#,
         )
         .expect("project settings");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
@@ -13084,7 +13119,7 @@ mod tests {
         assert!(value["effective"]["config_source_path"]
             .as_str()
             .expect("config path")
-            .ends_with(".orbit/settings.local.json"));
+            .ends_with(".frontal-code/settings.local.json"));
 
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
@@ -13093,13 +13128,13 @@ mod tests {
     fn config_telemetry_json_marks_shadowed_config_when_env_override_is_set() {
         let _guard = env_lock();
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
-        std::env::set_var(ORBIT_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
 
         let value = with_current_dir(&cwd, || {
             config_json_value(Some("telemetry")).expect("telemetry config json should render")
@@ -13110,25 +13145,25 @@ mod tests {
         assert!(value["effective"]["config_source_path"]
             .as_str()
             .expect("config path")
-            .ends_with(".orbit/settings.local.json"));
+            .ends_with(".frontal-code/settings.local.json"));
 
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
 
     #[test]
     fn telemetry_status_json_includes_requested_target_details() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"telemetry":{"enabled":true,"path":"project/log.jsonl"}}"#,
         )
         .expect("project settings");
         fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"telemetry":{"enabled":false,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
@@ -13154,11 +13189,11 @@ mod tests {
     #[test]
     fn config_json_marks_supported_sections_as_unset_when_missing() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"model":"claude-sonnet-4-6"}"#,
         )
         .expect("project settings");
@@ -13199,7 +13234,7 @@ mod tests {
     #[test]
     fn telemetry_update_writes_project_settings_json() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(&cwd).expect("cwd should exist");
 
@@ -13208,11 +13243,14 @@ mod tests {
         let written = fs::read_to_string(&settings_path).expect("settings should exist");
         let parsed: serde_json::Value = serde_json::from_str(&written).expect("settings json");
 
-        assert_eq!(settings_path, cwd.join(".orbit").join("settings.json"));
+        assert_eq!(
+            settings_path,
+            cwd.join(".frontal-code").join("settings.json")
+        );
         assert_eq!(parsed["telemetry"]["enabled"], true);
         assert_eq!(
             parsed["telemetry"]["path"],
-            cwd.join(".orbit")
+            cwd.join(".frontal-code")
                 .join("telemetry.jsonl")
                 .display()
                 .to_string()
@@ -13224,17 +13262,17 @@ mod tests {
     #[test]
     fn telemetry_update_preserves_existing_path_when_disabling() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
-        fs::create_dir_all(cwd.join(".orbit")).expect("orbit dir should exist");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
-            cwd.join(".orbit").join("settings.json"),
+            cwd.join(".frontal-code").join("settings.json"),
             r#"{"telemetry":{"enabled":true,"path":"custom/log.jsonl"},"model":"claude-sonnet"}"#,
         )
         .expect("seed settings");
 
         update_project_telemetry_settings(&cwd, false, None).expect("telemetry should update");
-        let written = fs::read_to_string(cwd.join(".orbit").join("settings.json"))
+        let written = fs::read_to_string(cwd.join(".frontal-code").join("settings.json"))
             .expect("settings should exist");
         let parsed: serde_json::Value = serde_json::from_str(&written).expect("settings json");
         assert_eq!(parsed["telemetry"]["enabled"], false);
@@ -13247,7 +13285,7 @@ mod tests {
     #[test]
     fn telemetry_update_can_write_local_settings_json() {
         let _guard = env_lock();
-        std::env::remove_var(ORBIT_TELEMETRY_PATH);
+        std::env::remove_var(FCODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(&cwd).expect("cwd should exist");
 
@@ -13258,7 +13296,7 @@ mod tests {
 
         assert_eq!(
             settings_path,
-            cwd.join(".orbit").join("settings.local.json")
+            cwd.join(".frontal-code").join("settings.local.json")
         );
         assert_eq!(parsed["telemetry"]["enabled"], true);
 
@@ -13542,11 +13580,11 @@ UU conflicted.rs",
         let mut help = Vec::new();
         print_help_to(&mut help).expect("help should render");
         let help = String::from_utf8(help).expect("help should be utf8");
-        assert!(help.contains("orbit --resume [SESSION.jsonl|session-id|latest]"));
+        assert!(help.contains("frontal-code --resume [SESSION.jsonl|session-id|latest]"));
         assert!(help.contains("Use `latest` with --resume, /resume, or /session switch"));
-        assert!(help.contains("orbit --resume latest"));
-        assert!(help.contains("orbit --resume latest /status /diff /export notes.txt"));
-        assert!(help.contains("orbit --output-format json config telemetry"));
+        assert!(help.contains("frontal-code --resume latest"));
+        assert!(help.contains("frontal-code --resume latest /status /diff /export notes.txt"));
+        assert!(help.contains("frontal-code --output-format json config telemetry"));
     }
 
     #[test]
@@ -13560,7 +13598,7 @@ UU conflicted.rs",
         let handle = create_managed_session_handle("session-alpha").expect("jsonl handle");
         assert!(handle.path.ends_with("session-alpha.jsonl"));
 
-        let legacy_path = workspace.join(".orbit/sessions/legacy.json");
+        let legacy_path = workspace.join(".frontal-code/sessions/legacy.json");
         std::fs::create_dir_all(
             legacy_path
                 .parent()
@@ -13640,7 +13678,7 @@ UU conflicted.rs",
     fn resume_usage_mentions_latest_shortcut() {
         let usage = render_resume_usage();
         assert!(usage.contains("/resume <session-path|session-id|latest>"));
-        assert!(usage.contains(".orbit/sessions/<session-id>.jsonl"));
+        assert!(usage.contains(".frontal-code/sessions/<session-id>.jsonl"));
         assert!(usage.contains("/session list"));
     }
 
@@ -13659,7 +13697,7 @@ UU conflicted.rs",
             .as_nanos();
         let pid = std::process::id();
         let serial = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        std::env::temp_dir().join(format!("orbit-cli-{label}-{nanos}-{pid}-{serial}"))
+        std::env::temp_dir().join(format!("frontal-code-cli-{label}-{nanos}-{pid}-{serial}"))
     }
 
     #[test]
@@ -13863,8 +13901,8 @@ UU conflicted.rs",
             "reading src/main.rs"
         );
         assert!(
-            describe_tool_progress("bash", r#"{"command":"cargo test -p orbit-cli"}"#)
-                .contains("cargo test -p orbit-cli")
+            describe_tool_progress("bash", r#"{"command":"cargo test -p cli"}"#)
+                .contains("cargo test -p cli")
         );
         assert_eq!(
             describe_tool_progress("grep_search", r#"{"pattern":"ultraplan","path":"rust"}"#),
@@ -14242,7 +14280,7 @@ UU conflicted.rs",
         let config_home = temp_dir();
         // Inject a dummy API key so runtime construction succeeds without real credentials.
         // This test only exercises plugin lifecycle (init/shutdown), never calls the API.
-        std::env::set_var("ORBIT_API_KEY", "test-dummy-key-for-plugin-lifecycle");
+        std::env::set_var("FCODE_API_KEY", "test-dummy-key-for-plugin-lifecycle");
         let workspace = temp_dir();
         let source_root = temp_dir();
         fs::create_dir_all(&config_home).expect("config home");
@@ -14291,7 +14329,7 @@ UU conflicted.rs",
         let _ = fs::remove_dir_all(config_home);
         let _ = fs::remove_dir_all(workspace);
         let _ = fs::remove_dir_all(source_root);
-        std::env::remove_var("ORBIT_API_KEY");
+        std::env::remove_var("FCODE_API_KEY");
     }
 }
 
@@ -14397,13 +14435,13 @@ fn write_mcp_server_fixture(script_path: &Path) {
 #[cfg(test)]
 mod sandbox_report_tests {
     use super::{format_sandbox_report, HookAbortMonitor};
-    use orbit_runtime::HookAbortSignal;
+    use frontal_code_runtime::HookAbortSignal;
     use std::sync::mpsc;
     use std::time::Duration;
 
     #[test]
     fn sandbox_report_renders_expected_fields() {
-        let report = format_sandbox_report(&orbit_runtime::SandboxStatus::default());
+        let report = format_sandbox_report(&frontal_code_runtime::SandboxStatus::default());
         assert!(report.contains("Sandbox"));
         assert!(report.contains("Enabled"));
         assert!(report.contains("Filesystem mode"));

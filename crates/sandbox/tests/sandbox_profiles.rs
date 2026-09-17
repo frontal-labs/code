@@ -1,4 +1,4 @@
-use orbit_sandbox::{
+use frontal_code_sandbox::{
     build_macos_sandbox_command, FilesystemIsolationMode, SandboxRequest, SandboxStatus,
 };
 use std::path::Path;

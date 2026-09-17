@@ -1,6 +1,6 @@
-//! # Orbit Webhooks
+//! # `FrontalCode` Webhooks
 //!
-//! This crate provides webhook receiving and processing capabilities for the Orbit system,
+//! This crate provides webhook receiving and processing capabilities for the `FrontalCode` system,
 //! including custom webhook event handling and integration with external services.
 
 pub mod auth;

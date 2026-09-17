@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This guide covers common issues, debugging techniques, and solutions for problems you might encounter with the Orbit CLI.
+This guide covers common issues, debugging techniques, and solutions for problems you might encounter with the Frontal Code CLI.
 
 ## Getting Help
 
@@ -8,12 +8,12 @@ This guide covers common issues, debugging techniques, and solutions for problem
 
 ```bash
 # General help
-orbit --help
+frontal-code --help
 
 # Command-specific help
-orbit help prompt
-orbit help repl
-orbit help status
+frontal-code help prompt
+frontal-code help repl
+frontal-code help status
 
 # Slash command help
 /help
@@ -25,16 +25,16 @@ orbit help status
 
 ```bash
 # System diagnostics
-orbit doctor
+frontal-code doctor
 
 # Health check
-orbit health check
+frontal-code health check
 
 # Configuration validation
-orbit config validate
+frontal-code config validate
 
 # Performance diagnostics
-orbit diagnose performance
+frontal-code diagnose performance
 ```
 
 ## Common Issues
@@ -45,8 +45,8 @@ orbit diagnose performance
 
 **Symptoms:**
 ```
-error: failed to compile `orbit-cli v0.1.0`
-error: could not compile `orbit-cli`
+error: failed to compile `frontal-code-cli v0.1.0`
+error: could not compile `frontal-code-cli`
 ```
 
 **Solutions:**
@@ -68,40 +68,40 @@ cargo check --workspace
 
 **Symptoms:**
 ```
-zsh: command not found: orbit
+zsh: command not found: frontal-code
 ```
 
 **Solutions:**
 ```bash
 # Install with Homebrew
-brew install --HEAD ./homebrew/orbit.rb
+brew install --HEAD ./homebrew/frontal-code.rb
 
 # Verify Homebrew's bin directory is on PATH
 eval "$(brew shellenv)"
 
 # Use cargo run directly
-cargo run -p orbit-cli -- --help
+cargo run -p cli -- --help
 ```
 
 #### Problem: Permission denied
 
 **Symptoms:**
 ```
-Permission denied: ~/.orbit/config.json
+Permission denied: ~/.frontal-code/config.json
 ```
 
 **Solutions:**
 ```bash
-# Create orbit directory with proper permissions
-mkdir -p ~/.orbit
-chmod 700 ~/.orbit
+# Create frontal-code directory with proper permissions
+mkdir -p ~/.frontal-code
+chmod 700 ~/.frontal-code
 
 # Fix file permissions
-chmod 600 ~/.orbit/config.json
-chmod 700 ~/.orbit/sessions
+chmod 600 ~/.frontal-code/config.json
+chmod 700 ~/.frontal-code/sessions
 
 # Check ownership
-ls -la ~/.orbit
+ls -la ~/.frontal-code
 ```
 
 ### Authentication Issues
@@ -110,22 +110,22 @@ ls -la ~/.orbit
 
 **Symptoms:**
 ```
-Error: ORBIT_API_KEY not found
+Error: FCODE_API_KEY not found
 ```
 
 **Solutions:**
 ```bash
 # Set environment variable
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 
 # Add to shell profile
-echo 'export ORBIT_API_KEY="sk-ant-..."' >> ~/.zshrc
+echo 'export FCODE_API_KEY="sk-ant-..."' >> ~/.zshrc
 
 # Use config file
-orbit config set providers.anthropic.api_key "sk-ant-..."
+frontal-code config set providers.anthropic.api_key "sk-ant-..."
 
 # Verify key is set
-orbit auth validate anthropic
+frontal-code auth validate anthropic
 ```
 
 #### Problem: Invalid API key
@@ -138,16 +138,16 @@ Error: Invalid API key
 **Solutions:**
 ```bash
 # Verify API key format
-echo $ORBIT_API_KEY | grep -E "^sk-ant-"
+echo $FCODE_API_KEY | grep -E "^sk-ant-"
 
 # Test API connectivity
-orbit auth test anthropic
+frontal-code auth test anthropic
 
 # Regenerate API key
 # Visit https://console.anthropic.com/
 
 # Check for typos
-orbit config show providers.anthropic
+frontal-code config show providers.anthropic
 ```
 
 #### Problem: Rate limited
@@ -160,17 +160,17 @@ Error: Rate limit exceeded
 **Solutions:**
 ```bash
 # Check rate limits
-orbit auth limits anthropic
+frontal-code auth limits anthropic
 
 # Wait and retry
 sleep 60
-orbit prompt "test message"
+frontal-code prompt "test message"
 
 # Use different model
-orbit --model claude-haiku-4-5 prompt "test"
+frontal-code --model claude-haiku-4-5 prompt "test"
 
 # Configure rate limiting
-orbit config set rate_limiting.requests_per_minute 30
+frontal-code config set rate_limiting.requests_per_minute 30
 ```
 
 ### Network Issues
@@ -195,10 +195,10 @@ export HTTPS_PROXY=http://proxy.example.com:8080
 export HTTP_PROXY=http://proxy.example.com:8080
 
 # Increase timeout
-orbit config set api.timeout 600
+frontal-code config set api.timeout 600
 
 # Use different endpoint
-orbit config set providers.anthropic.base_url "https://api.anthropic.com"
+frontal-code config set providers.anthropic.base_url "https://api.anthropic.com"
 ```
 
 #### Problem: DNS resolution failed
@@ -220,8 +220,8 @@ export DNS_SERVERS="8.8.8.8,1.1.1.1"
 # Flush DNS cache
 sudo dscacheutil -flushcache
 
-# Configure DNS in Orbit
-orbit config set network.dns_servers "8.8.8.8,1.1.1.1"
+# Configure DNS in Frontal Code
+frontal-code config set network.dns_servers "8.8.8.8,1.1.1.1"
 ```
 
 ### Performance Issues
@@ -236,20 +236,20 @@ orbit config set network.dns_servers "8.8.8.8,1.1.1.1"
 **Solutions:**
 ```bash
 # Check system resources
-orbit resources monitor
+frontal-code resources monitor
 
 # Optimize configuration
-orbit config set runtime.cache_size "200MB"
-orbit config set api.connection_pool.max_connections 5
+frontal-code config set runtime.cache_size "200MB"
+frontal-code config set api.connection_pool.max_connections 5
 
 # Use faster model
-orbit --model haiku prompt "quick test"
+frontal-code --model haiku prompt "quick test"
 
 # Enable caching
-orbit config set caching.memory.enabled true
+frontal-code config set caching.memory.enabled true
 
 # Profile performance
-orbit profile cpu --duration 30s
+frontal-code profile cpu --duration 30s
 ```
 
 #### Problem: Memory leaks
@@ -262,21 +262,21 @@ orbit profile cpu --duration 30s
 **Solutions:**
 ```bash
 # Monitor memory usage
-orbit memory monitor
+frontal-code memory monitor
 
 # Reduce cache sizes
-orbit config set caching.memory.max_size "50MB"
-orbit config set runtime.memory_limit "1GB"
+frontal-code config set caching.memory.max_size "50MB"
+frontal-code config set runtime.memory_limit "1GB"
 
 # Enable garbage collection
-orbit config set runtime.gc_interval "30s"
+frontal-code config set runtime.gc_interval "30s"
 
-# Restart Orbit
-pkill orbit-cli
-orbit prompt "test"
+# Restart Frontal Code
+pkill cli
+frontal-code prompt "test"
 
 # Memory profile
-orbit profile memory --duration 60s
+frontal-code profile memory --duration 60s
 ```
 
 ### Tool Issues
@@ -291,19 +291,19 @@ Error: Tool 'bash' execution failed
 **Solutions:**
 ```bash
 # Check tool permissions
-orbit config show permissions
+frontal-code config show permissions
 
 # Test tool manually
-orbit tool test bash --command "echo test"
+frontal-code tool test bash --command "echo test"
 
 # Check tool availability
-orbit tools list
+frontal-code tools list
 
 # Enable tool
-orbit config set permissions.allowed_tools "bash,read,write"
+frontal-code config set permissions.allowed_tools "bash,read,write"
 
 # Debug tool execution
-orbit debug tool bash --command "ls -la"
+frontal-code debug tool bash --command "ls -la"
 ```
 
 #### Problem: File access denied
@@ -319,13 +319,13 @@ Error: Permission denied: /etc/hosts
 ls -la /etc/hosts
 
 # Use safe mode
-orbit --permission-mode safe-mode prompt "read /etc/hosts"
+frontal-code --permission-mode safe-mode prompt "read /etc/hosts"
 
 # Configure allowed paths
-orbit config set permissions.tool_restrictions.bash.allowed_paths "/tmp,./"
+frontal-code config set permissions.tool_restrictions.bash.allowed_paths "/tmp,./"
 
 # Run with elevated privileges (caution)
-sudo orbit prompt "read /etc/hosts"
+sudo frontal-code prompt "read /etc/hosts"
 ```
 
 ### Session Issues
@@ -340,19 +340,19 @@ Error: Session 'session-123' not found
 **Solutions:**
 ```bash
 # List available sessions
-orbit session list
+frontal-code session list
 
 # Resume latest session
-orbit --resume latest
+frontal-code --resume latest
 
 # Check session directory
-ls -la ~/.orbit/sessions
+ls -la ~/.frontal-code/sessions
 
 # Create new session
-orbit prompt "start new session"
+frontal-code prompt "start new session"
 
 # Export session
-orbit session export --session session-123 --output session.json
+frontal-code session export --session session-123 --output session.json
 ```
 
 #### Problem: Session corruption
@@ -365,16 +365,16 @@ Error: Session file corrupted
 **Solutions:**
 ```bash
 # Validate session
-orbit session validate --session session-123
+frontal-code session validate --session session-123
 
 # Repair session
-orbit session repair --session session-123
+frontal-code session repair --session session-123
 
 # Clear corrupted sessions
-orbit session clean --corrupted
+frontal-code session clean --corrupted
 
 # Start fresh session
-orbit prompt "new session after corruption"
+frontal-code prompt "new session after corruption"
 ```
 
 ### Plugin Issues
@@ -389,20 +389,20 @@ Error: Plugin 'my-plugin' failed to load
 **Solutions:**
 ```bash
 # Check plugin status
-orbit plugin list
+frontal-code plugin list
 
 # Validate plugin
-orbit plugin validate my-plugin
+frontal-code plugin validate my-plugin
 
 # Check dependencies
-orbit plugin dependencies my-plugin
+frontal-code plugin dependencies my-plugin
 
 # Reinstall plugin
-orbit plugin uninstall my-plugin
-orbit plugin install my-plugin
+frontal-code plugin uninstall my-plugin
+frontal-code plugin install my-plugin
 
 # Debug plugin loading
-orbit debug plugin my-plugin
+frontal-code debug plugin my-plugin
 ```
 
 #### Problem: Plugin permission denied
@@ -415,16 +415,16 @@ Error: Plugin permission denied
 **Solutions:**
 ```bash
 # Check plugin permissions
-orbit plugin permissions my-plugin
+frontal-code plugin permissions my-plugin
 
 # Grant required permissions
-orbit plugin grant my-plugin network
+frontal-code plugin grant my-plugin network
 
 # Configure plugin sandbox
-orbit config set plugins.sandbox false
+frontal-code config set plugins.sandbox false
 
 # Review plugin manifest
-cat ~/.orbit/plugins/my-plugin/plugin.json
+cat ~/.frontal-code/plugins/my-plugin/plugin.json
 ```
 
 ### MCP Issues
@@ -439,19 +439,19 @@ Error: MCP server 'filesystem' not running
 **Solutions:**
 ```bash
 # Check MCP server status
-orbit mcp status filesystem
+frontal-code mcp status filesystem
 
 # Start MCP server
-orbit mcp start filesystem
+frontal-code mcp start filesystem
 
 # Check server configuration
-orbit mcp config show filesystem
+frontal-code mcp config show filesystem
 
 # Debug server startup
-orbit debug mcp filesystem
+frontal-code debug mcp filesystem
 
 # Restart server
-orbit mcp restart filesystem
+frontal-code mcp restart filesystem
 ```
 
 #### Problem: MCP tools not available
@@ -464,19 +464,19 @@ Error: Tool 'filesystem/read' not found
 **Solutions:**
 ```bash
 # List available MCP tools
-orbit mcp tools
+frontal-code mcp tools
 
 # Check server tools
-orbit mcp tools filesystem
+frontal-code mcp tools filesystem
 
 # Test server connection
-orbit mcp test filesystem
+frontal-code mcp test filesystem
 
 # Reload server tools
-orbit mcp reload filesystem
+frontal-code mcp reload filesystem
 
 # Check server logs
-orbit mcp logs filesystem
+frontal-code mcp logs filesystem
 ```
 
 ## Debugging Techniques
@@ -488,52 +488,52 @@ orbit mcp logs filesystem
 export RUST_LOG=debug
 
 # Enable specific module debugging
-export RUST_LOG=orbit::cli=debug,orbit::runtime=info
+export RUST_LOG=frontal-code::cli=debug,frontal-code::runtime=info
 
 # Run with debug output
-RUST_LOG=debug orbit prompt "test message"
+RUST_LOG=debug frontal-code prompt "test message"
 
 # Save debug logs to file
-RUST_LOG=debug orbit prompt "test" 2>&1 | tee debug.log
+RUST_LOG=debug frontal-code prompt "test" 2>&1 | tee debug.log
 ```
 
 ### Verbose Mode
 
 ```bash
 # Run with verbose output
-orbit --verbose prompt "test"
+frontal-code --verbose prompt "test"
 
 # Extra verbose mode
-orbit --verbose --verbose prompt "test"
+frontal-code --verbose --verbose prompt "test"
 
 # Show configuration
-orbit config show --verbose
+frontal-code config show --verbose
 ```
 
 ### Dry Run Mode
 
 ```bash
 # Test command without execution
-orbit --dry-run prompt "delete all files"
+frontal-code --dry-run prompt "delete all files"
 
 # Validate configuration
-orbit config validate --dry-run
+frontal-code config validate --dry-run
 
 # Test plugin installation
-orbit plugin install --dry-run my-plugin
+frontal-code plugin install --dry-run my-plugin
 ```
 
 ### Step-by-Step Debugging
 
 ```bash
 # Enable step-by-step mode
-orbit --step-by-step prompt "complex task"
+frontal-code --step-by-step prompt "complex task"
 
 # Interactive debugging
-orbit debug interactive
+frontal-code debug interactive
 
 # Break on errors
-orbit debug --break-on-error prompt "risky operation"
+frontal-code debug --break-on-error prompt "risky operation"
 ```
 
 ## Error Codes
@@ -557,13 +557,13 @@ orbit debug --break-on-error prompt "risky operation"
 
 ```bash
 # Show error details
-orbit error show 12345
+frontal-code error show 12345
 
 # Error lookup
-orbit error lookup "permission denied"
+frontal-code error lookup "permission denied"
 
 # Error troubleshooting
-orbit troubleshoot --error-code 4
+frontal-code troubleshoot --error-code 4
 ```
 
 ## System Diagnostics
@@ -572,47 +572,47 @@ orbit troubleshoot --error-code 4
 
 ```bash
 # Comprehensive health check
-orbit health check --comprehensive
+frontal-code health check --comprehensive
 
 # Quick health check
-orbit health check --quick
+frontal-code health check --quick
 
 # Specific component check
-orbit health check --component api
-orbit health check --component tools
-orbit health check --component mcp
+frontal-code health check --component api
+frontal-code health check --component tools
+frontal-code health check --component mcp
 ```
 
 ### System Information
 
 ```bash
 # Show system info
-orbit system info
+frontal-code system info
 
 # Show configuration
-orbit config show
+frontal-code config show
 
 # Show environment
-orbit env show
+frontal-code env show
 
 # Show version info
-orbit version --verbose
+frontal-code version --verbose
 ```
 
 ### Performance Diagnostics
 
 ```bash
 # Performance check
-orbit performance check
+frontal-code performance check
 
 # Resource usage
-orbit resources usage
+frontal-code resources usage
 
 # Bottleneck analysis
-orbit analyze bottlenecks
+frontal-code analyze bottlenecks
 
 # Optimization suggestions
-orbit optimize suggest
+frontal-code optimize suggest
 ```
 
 ## Getting Support
@@ -621,26 +621,26 @@ orbit optimize suggest
 
 ```bash
 # Generate support bundle
-orbit support bundle --output support-bundle.tar.gz
+frontal-code support bundle --output support-bundle.tar.gz
 
 # Check for known issues
-orbit issues search "connection timeout"
+frontal-code issues search "connection timeout"
 
 # Report issue
-orbit issue report --type bug --description "Detailed description"
+frontal-code issue report --type bug --description "Detailed description"
 ```
 
 ### Contact Support
 
 ```bash
 # Generate diagnostic report
-orbit diagnostics report --output diagnostics.json
+frontal-code diagnostics report --output diagnostics.json
 
 # Export configuration
-orbit config export --output config.json
+frontal-code config export --output config.json
 
 # Export logs
-orbit logs export --days 7 --output logs.tar.gz
+frontal-code logs export --days 7 --output logs.tar.gz
 ```
 
 ## Recovery Procedures
@@ -649,48 +649,48 @@ orbit logs export --days 7 --output logs.tar.gz
 
 ```bash
 # Reset configuration
-orbit config reset
+frontal-code config reset
 
 # Restore from backup
-orbit config restore --backup config-backup.json
+frontal-code config restore --backup config-backup.json
 
 # Initialize default configuration
-orbit config init --defaults
+frontal-code config init --defaults
 
 # Validate configuration
-orbit config validate
+frontal-code config validate
 ```
 
 ### Session Recovery
 
 ```bash
 # List corrupted sessions
-orbit session list --corrupted
+frontal-code session list --corrupted
 
 # Repair sessions
-orbit session repair --all
+frontal-code session repair --all
 
 # Export sessions
-orbit session export --all
+frontal-code session export --all
 
 # Clear sessions
-orbit session clear --all
+frontal-code session clear --all
 ```
 
 ### Plugin Recovery
 
 ```bash
 # List broken plugins
-orbit plugin list --broken
+frontal-code plugin list --broken
 
 # Reinstall all plugins
-orbit plugin reinstall --all
+frontal-code plugin reinstall --all
 
 # Reset plugin registry
-orbit plugin registry reset
+frontal-code plugin registry reset
 
 # Validate plugins
-orbit plugin validate --all
+frontal-code plugin validate --all
 ```
 
 ## Prevention Tips
@@ -699,48 +699,48 @@ orbit plugin validate --all
 
 ```bash
 # Clean up old sessions
-orbit session cleanup --older-than 30d
+frontal-code session cleanup --older-than 30d
 
 # Clear cache
-orbit cache clear --all
+frontal-code cache clear --all
 
 # Update plugins
-orbit plugin update --all
+frontal-code plugin update --all
 
 # Check system health
-orbit health check
+frontal-code health check
 ```
 
 ### Monitoring
 
 ```bash
 # Enable monitoring
-orbit monitoring enable
+frontal-code monitoring enable
 
 # Set up alerts
-orbit alerts enable --type error
+frontal-code alerts enable --type error
 
 # Performance monitoring
-orbit performance monitor
+frontal-code performance monitor
 
 # Resource monitoring
-orbit resources monitor
+frontal-code resources monitor
 ```
 
 ### Backup Strategies
 
 ```bash
 # Backup configuration
-orbit config backup --output config-backup.json
+frontal-code config backup --output config-backup.json
 
 # Backup sessions
-orbit session backup --output sessions-backup.tar.gz
+frontal-code session backup --output sessions-backup.tar.gz
 
 # Backup plugins
-orbit plugin backup --output plugins-backup.tar.gz
+frontal-code plugin backup --output plugins-backup.tar.gz
 
 # Automated backup
-orbit backup schedule --daily --retain 7
+frontal-code backup schedule --daily --retain 7
 ```
 
-This troubleshooting guide provides comprehensive coverage of common issues and solutions for using Orbit CLI effectively.
+This troubleshooting guide provides comprehensive coverage of common issues and solutions for using Frontal Code CLI effectively.

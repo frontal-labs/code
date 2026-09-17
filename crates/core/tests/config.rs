@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-use orbit_core::config::{PathConfig, ProjectConfig, ProviderDetails};
+use frontal_code_core::config::{PathConfig, ProjectConfig, ProviderDetails};
 
 #[test]
 fn default_config_has_expected_values() {
     let config = ProjectConfig::default();
-    assert_eq!(config.project.name, "Orbit");
+    assert_eq!(config.project.name, "Frontal Code");
     assert_eq!(config.project.version, "0.1.0");
     assert_eq!(config.runtime.default_provider, "frontal");
     assert_eq!(config.runtime.permission_mode, "workspace-write");
@@ -85,9 +85,9 @@ fn config_serialize_minimal_json() {
             "request_timeout_seconds": 60
         },
         "paths": {
-            "config_home": "/tmp/.orbit", "home": "/tmp/.orbit",
+            "config_home": "/tmp/.frontal-code", "home": "/tmp/.frontal-code",
             "codex_home": "/tmp/.codex", "sandbox_home": "/tmp/sandbox",
-            "cache_dir": "/tmp/.orbit/cache", "logs_dir": "/tmp/.orbit/logs"
+            "cache_dir": "/tmp/.frontal-code/cache", "logs_dir": "/tmp/.frontal-code/logs"
         },
         "sandbox": {
             "enable_docker": true, "docker_image": "ubuntu:latest",
@@ -145,15 +145,15 @@ fn provider_config_customization() {
 #[test]
 fn path_config_construction() {
     let paths = PathConfig {
-        config_home: "/custom/.orbit".to_string(),
-        home: "/custom/.orbit".to_string(),
+        config_home: "/custom/.frontal-code".to_string(),
+        home: "/custom/.frontal-code".to_string(),
         codex_home: "/custom/.codex".to_string(),
         sandbox_home: "/custom/sandbox".to_string(),
-        cache_dir: "/custom/.orbit/cache".to_string(),
-        logs_dir: "/custom/.orbit/logs".to_string(),
+        cache_dir: "/custom/.frontal-code/cache".to_string(),
+        logs_dir: "/custom/.frontal-code/logs".to_string(),
     };
-    assert_eq!(paths.config_home, "/custom/.orbit");
-    assert_eq!(paths.cache_dir, "/custom/.orbit/cache");
+    assert_eq!(paths.config_home, "/custom/.frontal-code");
+    assert_eq!(paths.cache_dir, "/custom/.frontal-code/cache");
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn load_from_nonexistent_path_returns_error() {
 
 #[test]
 fn save_and_load_roundtrip() {
-    let dir = std::env::temp_dir().join("orbit_core_test_save_load");
+    let dir = std::env::temp_dir().join("frontal_code_core_test_save_load");
     let _ = std::fs::create_dir_all(&dir);
     let path = dir.join("project.json");
     let config = ProjectConfig::default();
@@ -182,21 +182,21 @@ fn save_and_load_roundtrip() {
 #[test]
 fn save_creates_parent_directories() {
     let dir = std::env::temp_dir()
-        .join("orbit_core_test_parents")
+        .join("frontal_code_core_test_parents")
         .join("nested")
         .join("deep");
     let path = dir.join("project.json");
     let config = ProjectConfig::default();
     config.save_to_path(&path).unwrap();
     assert!(path.exists());
-    let remove_dir = std::env::temp_dir().join("orbit_core_test_parents");
+    let remove_dir = std::env::temp_dir().join("frontal_code_core_test_parents");
     let _ = std::fs::remove_dir_all(&remove_dir);
 }
 
 #[test]
 fn load_or_default_falls_back_when_no_config() {
     let config = ProjectConfig::load_or_default();
-    assert_eq!(config.project.name, "Orbit");
+    assert_eq!(config.project.name, "Frontal Code");
 }
 
 #[test]

@@ -14,7 +14,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Parser)]
-#[command(name = "orbit-cache", about = "Inspect and prune Bazel/Cargo caches")]
+#[command(
+    name = "frontal-code-cache",
+    about = "Inspect and prune Bazel/Cargo caches"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

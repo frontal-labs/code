@@ -1,6 +1,6 @@
 # Configuration Guide
 
-This guide covers all configuration options for the Orbit CLI, including environment variables, config files, and runtime settings.
+This guide covers all configuration options for the Frontal Code CLI, including environment variables, config files, and runtime settings.
 
 ## Configuration Precedence
 
@@ -8,8 +8,8 @@ Settings are applied in the following order (highest to lowest priority):
 
 1. Command-line flags
 2. Environment variables
-3. Project config file (`.orbit.json`)
-4. User config file (`~/.orbit/config.json`)
+3. Project config file (`.frontal-code/settings.json`)
+4. User config file (`~/.frontal-code/config.json`)
 5. Default values
 
 ## Environment Variables
@@ -18,8 +18,8 @@ Settings are applied in the following order (highest to lowest priority):
 
 ```bash
 # Anthropic API (primary provider)
-export ORBIT_API_KEY="sk-ant-..."
-export ORBIT_BASE_URL="https://api.anthropic.com"  # optional
+export FCODE_API_KEY="sk-ant-..."
+export FCODE_BASE_URL="https://api.anthropic.com"  # optional
 
 # OpenAI-compatible API
 export OPENAI_API_KEY="sk-..."
@@ -38,38 +38,38 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 
 ```bash
 # General settings
-export ORBIT_LOG_LEVEL="info"  # debug, info, warn, error
-export ORBIT_CONFIG_DIR="$HOME/.orbit"
-export ORBIT_DATA_DIR="$HOME/.orbit/data"
+export FCODE_LOG_LEVEL="info"  # debug, info, warn, error
+export FCODE_CONFIG_DIR="$HOME/.frontal-code"
+export FCODE_DATA_DIR="$HOME/.frontal-code/data"
 
 # Provider selection
-export ORBIT_DEFAULT_PROVIDER="anthropic"  # anthropic, openai, xai
-export ORBIT_DEFAULT_MODEL="claude-opus-5"
+export FCODE_DEFAULT_PROVIDER="anthropic"  # anthropic, openai, xai
+export FCODE_DEFAULT_MODEL="claude-opus-5"
 
 # Permission settings
-export ORBIT_PERMISSION_MODE="danger-full-access"  # danger-full-access, safe-mode, ask-permissions
-export ORBIT_ALLOWED_TOOLS="bash,read,write,edit,grep"
+export FCODE_PERMISSION_MODE="danger-full-access"  # danger-full-access, safe-mode, ask-permissions
+export FCODE_ALLOWED_TOOLS="bash,read,write,edit,grep"
 
 # Session settings
-export ORBIT_SESSION_DIR="$HOME/.orbit/sessions"
-export ORBIT_AUTO_SAVE_SESSIONS="true"
-export ORBIT_MAX_SESSIONS="100"
+export FCODE_SESSION_DIR="$HOME/.frontal-code/sessions"
+export FCODE_AUTO_SAVE_SESSIONS="true"
+export FCODE_MAX_SESSIONS="100"
 
 # MCP settings
-export ORBIT_MCP_SERVERS_DIR="$HOME/.orbit/mcp-servers"
-export ORBIT_MCP_TIMEOUT="30"
+export FCODE_MCP_SERVERS_DIR="$HOME/.frontal-code/mcp-servers"
+export FCODE_MCP_TIMEOUT="30"
 ```
 
 ## Config File Format
 
-The `.orbit.json` config file uses JSON format with the following structure:
+The `.frontal-code/settings.json` config file uses JSON format with the following structure:
 
 ```json
 {
   "version": "1.0",
   "providers": {
     "anthropic": {
-      "api_key": "${ORBIT_API_KEY}",
+      "api_key": "${FCODE_API_KEY}",
       "base_url": "https://api.anthropic.com",
       "default_model": "claude-opus-5"
     },
@@ -96,17 +96,17 @@ The `.orbit.json` config file uses JSON format with the following structure:
   "session": {
     "auto_save": true,
     "max_sessions": 100,
-    "session_dir": "${ORBIT_SESSION_DIR}",
+    "session_dir": "${FCODE_SESSION_DIR}",
     "resume_last_session": false
   },
   "mcp": {
-    "servers_dir": "${ORBIT_MCP_SERVERS_DIR}",
+    "servers_dir": "${FCODE_MCP_SERVERS_DIR}",
     "timeout": 30,
     "auto_start": [],
     "enabled": true
   },
   "plugins": {
-    "plugins_dir": "${ORBIT_CONFIG_DIR}/plugins",
+    "plugins_dir": "${FCODE_CONFIG_DIR}/plugins",
     "auto_load": [],
     "enabled": true
   },
@@ -130,7 +130,7 @@ The `.orbit.json` config file uses JSON format with the following structure:
 ### Global Flags
 
 ```bash
-orbit [OPTIONS] [COMMAND]
+frontal-code [OPTIONS] [COMMAND]
 
 Options:
   -m, --model <MODEL>                 AI model to use
@@ -149,21 +149,21 @@ Options:
 
 ```bash
 # Full model names
-orbit --model claude-opus-5
-orbit --model claude-sonnet-4-6
-orbit --model claude-haiku-4-5
+frontal-code --model claude-opus-5
+frontal-code --model claude-sonnet-4-6
+frontal-code --model claude-haiku-4-5
 
 # Model aliases
-orbit --model opus      # claude-opus-5
-orbit --model sonnet     # claude-sonnet-4-6
-orbit --model haiku      # claude-haiku-4-5
+frontal-code --model opus      # claude-opus-5
+frontal-code --model sonnet     # claude-sonnet-4-6
+frontal-code --model haiku      # claude-haiku-4-5
 
 # OpenAI models
-orbit --provider openai --model gpt-4
-orbit --provider openai --model gpt-4-turbo
+frontal-code --provider openai --model gpt-4
+frontal-code --provider openai --model gpt-4-turbo
 
 # xAI models
-orbit --provider xai --model grok-3
+frontal-code --provider xai --model grok-3
 ```
 
 ## Permission Modes
@@ -203,10 +203,10 @@ orbit --provider xai --model grok-3
 
 ```bash
 # Allow specific tools only
-orbit --allowed-tools "read,grep,web_search"
+frontal-code --allowed-tools "read,grep,web_search"
 
 # Disable dangerous tools
-orbit --allowed-tools "read,write,edit,grep,glob,web_search,web_fetch"
+frontal-code --allowed-tools "read,write,edit,grep,glob,web_search,web_fetch"
 
 # Custom tool restrictions in config
 {
@@ -228,16 +228,16 @@ orbit --allowed-tools "read,write,edit,grep,glob,web_search,web_fetch"
 
 ```bash
 # Enable session persistence
-orbit --session auto-save
+frontal-code --session auto-save
 
 # Resume last session
-orbit --resume latest
+frontal-code --resume latest
 
 # Resume specific session
-orbit --resume session-123.jsonl
+frontal-code --resume session-123.jsonl
 
 # Export session
-orbit session export --format json --output session.json
+frontal-code session export --format json --output session.json
 ```
 
 ### Session Settings
@@ -247,7 +247,7 @@ orbit session export --format json --output session.json
   "session": {
     "auto_save": true,
     "max_sessions": 100,
-    "session_dir": "~/.orbit/sessions",
+    "session_dir": "~/.frontal-code/sessions",
     "compression": "gzip",
     "encryption": false,
     "metadata": {
@@ -294,13 +294,13 @@ orbit session export --format json --output session.json
 
 ```bash
 # List available MCP servers
-orbit mcp list
+frontal-code mcp list
 
 # Start specific server
-orbit mcp start filesystem
+frontal-code mcp start filesystem
 
 # Configure MCP server
-orbit mcp config filesystem --timeout 60 --auto-start
+frontal-code mcp config filesystem --timeout 60 --auto-start
 ```
 
 ## Plugin Configuration
@@ -310,11 +310,11 @@ orbit mcp config filesystem --timeout 60 --auto-start
 ```json
 {
   "plugins": {
-    "plugins_dir": "~/.orbit/plugins",
+    "plugins_dir": "~/.frontal-code/plugins",
     "auto_load": ["plugin-name"],
-    "registry_url": "https://github.com/frontal-labs/orbit",
+    "registry_url": "https://github.com/frontal-labs/frontal-code",
     "update_check_interval": "24h",
-    "trusted_sources": ["https://github.com", "https://github.com/frontal-labs/orbit"]
+    "trusted_sources": ["https://github.com", "https://github.com/frontal-labs/frontal-code"]
   }
 }
 ```
@@ -323,17 +323,17 @@ orbit mcp config filesystem --timeout 60 --auto-start
 
 ```bash
 # Install plugin
-orbit plugin install /path/to/plugin
+frontal-code plugin install /path/to/plugin
 
 # Enable/disable plugin
-orbit plugin enable plugin-name
-orbit plugin disable plugin-name
+frontal-code plugin enable plugin-name
+frontal-code plugin disable plugin-name
 
 # List plugins
-orbit plugin list
+frontal-code plugin list
 
 # Update plugin
-orbit plugin update plugin-name
+frontal-code plugin update plugin-name
 ```
 
 ## UI Configuration
@@ -359,13 +359,13 @@ orbit plugin update plugin-name
 
 ```bash
 # JSON output
-orbit --output-format json prompt "summarize this file"
+frontal-code --output-format json prompt "summarize this file"
 
 # Disable colors
-orbit --color=false prompt "explain this"
+frontal-code --color=false prompt "explain this"
 
 # Show tool calls
-orbit --show-tool-calls prompt "list files"
+frontal-code --show-tool-calls prompt "list files"
 ```
 
 ## Telemetry Configuration
@@ -376,7 +376,7 @@ orbit --show-tool-calls prompt "list files"
 {
   "telemetry": {
     "enabled": false,
-    "endpoint": "https://telemetry.orbit.ai/v1/events",
+    "endpoint": "https://telemetry.frontal-code.ai/v1/events",
     "sample_rate": 0.1,
     "batch_size": 10,
     "flush_interval": "60s",
@@ -395,13 +395,13 @@ orbit --show-tool-calls prompt "list files"
 
 ```bash
 # Disable telemetry
-export ORBIT_TELEMETRY_ENABLED=false
+export FCODE_TELEMETRY_ENABLED=false
 
 # Set sample rate
-export ORBIT_TELEMETRY_SAMPLE_RATE=0.1
+export FCODE_TELEMETRY_SAMPLE_RATE=0.1
 
 # Custom endpoint
-export ORBIT_TELEMETRY_ENDPOINT="https://my-telemetry.example.com"
+export FCODE_TELEMETRY_ENDPOINT="https://my-telemetry.example.com"
 ```
 
 ## Advanced Configuration
@@ -411,7 +411,7 @@ export ORBIT_TELEMETRY_ENDPOINT="https://my-telemetry.example.com"
 ```json
 {
   "prompts": {
-    "system": "You are Orbit, a helpful AI assistant...",
+    "system": "You are Frontal Code, a helpful AI assistant...",
     "user_context": "Current working directory: {cwd}\nGit branch: {branch}",
     "tool_use_template": "Using tool: {tool} with args: {args}"
   }
@@ -453,14 +453,14 @@ export ORBIT_TELEMETRY_ENDPOINT="https://my-telemetry.example.com"
 
 ```bash
 # Validate current configuration
-orbit config validate
+frontal-code config validate
 
 # Show effective configuration
-orbit config show
+frontal-code config show
 
 # Show specific section
-orbit config show providers
-orbit config show runtime
+frontal-code config show providers
+frontal-code config show runtime
 ```
 
 ### Common Issues
@@ -478,16 +478,16 @@ If you're currently using only environment variables, you can migrate to a confi
 
 ```bash
 # Generate config from current environment
-orbit config init --from-env
+frontal-code config init --from-env
 
-# This creates .orbit.json with current settings
+# This creates .frontal-code/settings.json with current settings
 ```
 
 ### Version Upgrades
 
-When upgrading Orbit versions:
+When upgrading Frontal Code versions:
 
-1. Backup current config: `cp .orbit.json .orbit.json.backup`
-2. Run config validation: `orbit config validate`
+1. Backup current config: `cp .frontal-code/settings.json .frontal-code/settings.json.backup`
+2. Run config validation: `frontal-code config validate`
 3. Update deprecated settings as needed
 4. Test with `--dry-run` flag before applying changes

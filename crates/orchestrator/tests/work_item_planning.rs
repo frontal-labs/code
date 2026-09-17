@@ -1,4 +1,4 @@
-use orbit_orchestrator::{
+use frontal_code_orchestrator::{
     plan_work_item, LaneRole, WorkItem, WorkItemContext, WorkItemPriority, WorkItemSource,
 };
 

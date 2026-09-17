@@ -1,10 +1,10 @@
-# Orbit Runtime
+# Frontal Code Runtime
 
-Core runtime primitives and session management for the Orbit ecosystem.
+Core runtime primitives and session management for the Frontal Code ecosystem.
 
 ## Overview
 
-This crate provides the foundational runtime components that power the Orbit CLI and supporting services. It handles session persistence, permission evaluation, prompt assembly, MCP plumbing, tool operations, and the core conversation loop.
+This crate provides the foundational runtime components that power the Frontal Code CLI and supporting services. It handles session persistence, permission evaluation, prompt assembly, MCP plumbing, tool operations, and the core conversation loop.
 
 ## Features
 
@@ -39,12 +39,12 @@ This crate provides the foundational runtime components that power the Orbit CLI
 - `glob` for file pattern handling
 - `walkdir` for file system traversal
 - `sha2` for cryptographic operations
-- `orbit-plugins` for plugin integration
-- `orbit-telemetry` for analytics
+- `frontal-code-plugins` for plugin integration
+- `frontal-code-telemetry` for analytics
 
 ## Architecture
 
-The runtime serves as the central nervous system of Orbit, coordinating between:
+The runtime serves as the central nervous system of Frontal Code, coordinating between:
 - AI provider interactions via the API layer
 - Plugin system for extensibility
 - Tool execution and file operations

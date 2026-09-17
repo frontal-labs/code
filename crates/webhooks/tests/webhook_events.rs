@@ -1,4 +1,4 @@
-use orbit_webhooks::{EventProcessor, WebhookEvent, WebhookEventType};
+use frontal_code_webhooks::{EventProcessor, WebhookEvent, WebhookEventType};
 use std::collections::BTreeMap;
 
 #[test]

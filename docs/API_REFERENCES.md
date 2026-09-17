@@ -1,6 +1,6 @@
 # API Reference
 
-This comprehensive reference covers the Orbit API for programmatic integration and automation.
+This comprehensive reference covers the Frontal Code API for programmatic integration and automation.
 
 ## Table of Contents
 
@@ -18,19 +18,19 @@ This comprehensive reference covers the Orbit API for programmatic integration a
 
 ## Overview
 
-The Orbit API provides multiple ways to integrate Orbit's capabilities into your applications:
+The Frontal Code API provides multiple ways to integrate Frontal Code's capabilities into your applications:
 
 - **REST API**: HTTP-based API for web integration
 - **WebSocket API**: Real-time streaming and events
 - **Rust API**: Native Rust library integration
-- **Python API**: Python bindings for Orbit functionality
+- **Python API**: Python bindings for Frontal Code functionality
 - **JavaScript API**: Node.js and browser support
 
 ### Base URLs
 
-- **Production**: `https://api.orbit.ai/v1`
+- **Production**: `https://api.frontal-code.ai/v1`
 - **Development**: `http://localhost:8080/v1`
-- **Staging**: `https://staging-api.orbit.ai/v1`
+- **Staging**: `https://staging-api.frontal-code.ai/v1`
 
 ## Authentication
 
@@ -40,16 +40,16 @@ All API requests require authentication using an API key:
 
 ```bash
 # Using environment variable
-export ORBIT_API_KEY="your-api-key-here"
-export ORBIT_SERVER_API_KEY="your-hosted-server-api-key"
+export FCODE_API_KEY="your-api-key-here"
+export FCODE_SERVER_API_KEY="your-hosted-server-api-key"
 
 # Using header
 curl -H "Authorization: Bearer your-api-key-here" \
-     https://api.orbit.ai/v1/completions
+     https://api.frontal-code.ai/v1/completions
 ```
 
-For self-hosted `orbit-server` deployments, set `ORBIT_SERVER_API_KEY` on the server and
-have connectors or other clients present that same shared secret as `ORBIT_API_KEY` or
+For self-hosted `frontal-code-server` deployments, set `FCODE_SERVER_API_KEY` on the server and
+have connectors or other clients present that same shared secret as `FCODE_API_KEY` or
 the `x-api-key` header when calling hosted control-plane routes.
 
 ### Token Types
@@ -64,16 +64,16 @@ the `x-api-key` header when calling hosted control-plane routes.
 
 ```bash
 # Generate session token
-orbit auth token --type session --ttl 1h
+frontal-code auth token --type session --ttl 1h
 
 # Generate API key
-orbit auth token --type api --name "My App"
+frontal-code auth token --type api --name "My App"
 
 # List tokens
-orbit auth token list
+frontal-code auth token list
 
 # Revoke token
-orbit auth token revoke <TOKEN_ID>
+frontal-code auth token revoke <TOKEN_ID>
 ```
 
 ## REST API
@@ -280,7 +280,7 @@ GET /v1/status
 Connect to the WebSocket API for real-time communication:
 
 ```javascript
-const ws = new WebSocket('wss://api.orbit.ai/v1/ws');
+const ws = new WebSocket('wss://api.frontal-code.ai/v1/ws');
 
 ws.onopen = function() {
   // Authenticate
@@ -368,7 +368,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-orbit-api = "0.1.0"
+frontal-code-api = "0.1.0"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 ```
@@ -376,14 +376,14 @@ serde = { version = "1.0", features = ["derive"] }
 ### Basic Usage
 
 ```rust
-use orbit_api::{Client, Config, CompletionRequest};
+use frontal-code_api::{Client, Config, CompletionRequest};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client
     let config = Config::builder()
         .api_key("your-api-key")
-        .base_url("https://api.orbit.ai/v1")
+        .base_url("https://api.frontal-code.ai/v1")
         .build()?;
     
     let client = Client::new(config);
@@ -407,11 +407,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Configuration API
 
-The Orbit configuration system provides type-safe configuration management:
+The Frontal Code configuration system provides type-safe configuration management:
 
 ```rust
-use orbit_core::config::ProjectConfig;
-use orbit_runtime::ConfigurationManager;
+use frontal-code_core::config::ProjectConfig;
+use frontal-code_runtime::ConfigurationManager;
 
 // Load core configuration
 let config = ProjectConfig::load_or_default();
@@ -542,7 +542,7 @@ impl ConfigurationManager {
 ### Streaming
 
 ```rust
-use orbit_api::{Client, CompletionRequest};
+use frontal-code_api::{Client, CompletionRequest};
 use futures::StreamExt;
 
 #[tokio::main]
@@ -572,7 +572,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Tool Execution
 
 ```rust
-use orbit_api::{Client, ToolRequest};
+use frontal-code_api::{Client, ToolRequest};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -597,13 +597,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Installation
 
 ```bash
-pip install orbit-api
+pip install frontal-code-api
 ```
 
 ### Basic Usage
 
 ```python
-from orbit_api import Client, CompletionRequest
+from frontal-code_api import Client, CompletionRequest
 
 # Create client
 client = Client(api_key="your-api-key")
@@ -626,7 +626,7 @@ print(response.content)
 ### Streaming
 
 ```python
-from orbit_api import Client, CompletionRequest
+from frontal-code_api import Client, CompletionRequest
 
 client = Client(api_key="your-api-key")
 
@@ -647,7 +647,7 @@ for chunk in client.completions.create_stream(request):
 
 ```python
 import asyncio
-from orbit_api import AsyncClient
+from frontal-code_api import AsyncClient
 
 async def main():
     client = AsyncClient(api_key="your-api-key")
@@ -668,18 +668,18 @@ asyncio.run(main())
 ### Installation
 
 ```bash
-npm install @orbit/api
+npm install @frontal-code/api
 ```
 
 ### Node.js Usage
 
 ```javascript
-const { OrbitClient } = require('@orbit/api');
+const { FrontalCodeClient } = require('@frontal-code/api');
 
 // Create client
-const client = new OrbitClient({
+const client = new FrontalCodeClient({
   apiKey: 'your-api-key',
-  baseURL: 'https://api.orbit.ai/v1'
+  baseURL: 'https://api.frontal-code.ai/v1'
 });
 
 // Create completion
@@ -706,11 +706,11 @@ createCompletion();
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/@orbit/api"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@frontal-code/api"></script>
 </head>
 <body>
   <script>
-    const client = new OrbitClient({
+    const client = new FrontalCodeClient({
       apiKey: 'your-api-key'
     });
     
@@ -728,9 +728,9 @@ createCompletion();
 ### Streaming
 
 ```javascript
-const { OrbitClient } = require('@orbit/api');
+const { FrontalCodeClient } = require('@frontal-code/api');
 
-const client = new OrbitClient({ apiKey: 'your-api-key' });
+const client = new FrontalCodeClient({ apiKey: 'your-api-key' });
 
 async function streamCompletion() {
   const request = {
@@ -784,7 +784,7 @@ streamCompletion();
 #### Rust
 
 ```rust
-use orbit_api::{Client, Error, CompletionRequest};
+use frontal-code_api::{Client, Error, CompletionRequest};
 
 #[tokio::main]
 async fn main() {
@@ -808,7 +808,7 @@ async fn main() {
 #### Python
 
 ```python
-from orbit_api import Client, CompletionRequest, OrbitError
+from frontal-code_api import Client, CompletionRequest, FrontalCodeError
 
 client = Client(api_key="your-api-key")
 
@@ -819,20 +819,20 @@ try:
     )
     response = client.completions.create(request)
     print(response.content)
-except OrbitError.InvalidRequest as e:
+except FrontalCodeError.InvalidRequest as e:
     print(f"Invalid request: {e}")
-except OrbitError.Authentication as e:
+except FrontalCodeError.Authentication as e:
     print(f"Authentication failed: {e}")
-except OrbitError as e:
+except FrontalCodeError as e:
     print(f"Error: {e}")
 ```
 
 #### JavaScript
 
 ```javascript
-const { OrbitClient, OrbitError } = require('@orbit/api');
+const { FrontalCodeClient, FrontalCodeError } = require('@frontal-code/api');
 
-const client = new OrbitClient({ apiKey: 'your-api-key' });
+const client = new FrontalCodeClient({ apiKey: 'your-api-key' });
 
 try {
   const response = await client.completions.create({
@@ -841,9 +841,9 @@ try {
   });
   console.log(response.content);
 } catch (error) {
-  if (error instanceof OrbitError.InvalidRequest) {
+  if (error instanceof FrontalCodeError.InvalidRequest) {
     console.error('Invalid request:', error.message);
-  } else if (error instanceof OrbitError.Authentication) {
+  } else if (error instanceof FrontalCodeError.Authentication) {
     console.error('Authentication failed:', error.message);
   } else {
     console.error('Error:', error.message);
@@ -876,7 +876,7 @@ X-RateLimit-Retry-After: 30
 #### Automatic Retry
 
 ```python
-from orbit_api import Client, CompletionRequest
+from frontal-code_api import Client, CompletionRequest
 import time
 
 client = Client(api_key="your-api-key")
@@ -885,7 +885,7 @@ def create_completion_with_retry(request, max_retries=3):
     for attempt in range(max_retries):
         try:
             return client.completions.create(request)
-        except OrbitError.RateLimited as e:
+        except FrontalCodeError.RateLimited as e:
             if attempt < max_retries - 1:
                 wait_time = e.retry_after or 30
                 print(f"Rate limited. Waiting {wait_time} seconds...")
@@ -897,10 +897,10 @@ def create_completion_with_retry(request, max_retries=3):
 #### Exponential Backoff
 
 ```javascript
-const { OrbitClient } = require('@orbit/api');
+const { FrontalCodeClient } = require('@frontal-code/api');
 
 async function createCompletionWithRetry(request, maxRetries = 3) {
-  const client = new OrbitClient({ apiKey: 'your-api-key' });
+  const client = new FrontalCodeClient({ apiKey: 'your-api-key' });
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -925,11 +925,11 @@ async function createCompletionWithRetry(request, maxRetries = 3) {
 ```javascript
 // server.js
 const express = require('express');
-const { OrbitClient } = require('@orbit/api');
+const { FrontalCodeClient } = require('@frontal-code/api');
 
 const app = express();
-const client = new OrbitClient({
-  apiKey: process.env.ORBIT_API_KEY
+const client = new FrontalCodeClient({
+  apiKey: process.env.FCODE_API_KEY
 });
 
 app.post('/api/chat', async (req, res) => {
@@ -957,14 +957,14 @@ app.listen(3000, () => {
 
 ```python
 #!/usr/bin/env python3
-# orbit-cli.py
+# cli.py
 
 import argparse
 import sys
-from orbit_api import Client, CompletionRequest
+from frontal-code_api import Client, CompletionRequest
 
 def main():
-    parser = argparse.ArgumentParser(description='Orbit CLI Tool')
+    parser = argparse.ArgumentParser(description='Frontal Code CLI Tool')
     parser.add_argument('prompt', help='Prompt to send')
     parser.add_argument('--model', default='claude-sonnet-4-6', help='Model to use')
     parser.add_argument('--stream', action='store_true', help='Stream response')
@@ -995,7 +995,7 @@ if __name__ == '__main__':
 ### Data Processing Pipeline
 
 ```rust
-use orbit_api::{Client, CompletionRequest, ToolRequest};
+use frontal-code_api::{Client, CompletionRequest, ToolRequest};
 use futures::StreamExt;
 use serde_json::json;
 
@@ -1040,8 +1040,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Orbit Chat</title>
-  <script src="https://cdn.jsdelivr.net/npm/@orbit/api"></script>
+  <title>Frontal Code Chat</title>
+  <script src="https://cdn.jsdelivr.net/npm/@frontal-code/api"></script>
   <style>
     .chat-container { max-width: 800px; margin: 0 auto; }
     .message { margin: 10px 0; padding: 10px; border-radius: 5px; }
@@ -1060,7 +1060,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   </div>
 
   <script>
-    const client = new OrbitClient({ apiKey: 'your-api-key' });
+    const client = new FrontalCodeClient({ apiKey: 'your-api-key' });
     const chatContainer = document.getElementById('chat');
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
@@ -1110,4 +1110,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 </html>
 ```
 
-This API reference provides comprehensive coverage of all Orbit API endpoints and integration methods for building powerful applications.
+This API reference provides comprehensive coverage of all Frontal Code API endpoints and integration methods for building powerful applications.

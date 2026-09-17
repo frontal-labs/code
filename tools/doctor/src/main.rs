@@ -1,7 +1,7 @@
-//! `tools-doctor` — environment and toolchain health checker for frontal-orbit.
+//! `tools-doctor` — environment and toolchain health checker for frontal-code.
 //!
 //! Checks the toolchains the monorepo depends on (Bazel, Rust, Node, Docker,
-//! Git, pre-commit), validates `.orbit.json`, and optionally probes network
+//! Git, pre-commit), validates `.frontal-code/settings.json`, and optionally probes network
 //! egress. Exits non-zero if any required check fails so it can gate CI.
 
 use anyhow::Result;
@@ -12,8 +12,8 @@ use std::process::Command;
 
 #[derive(Parser)]
 #[command(
-    name = "orbit-doctor",
-    about = "Check the frontal-orbit dev environment"
+    name = "frontal-code-doctor",
+    about = "Check the frontal-code dev environment"
 )]
 struct Cli {
     /// Output format.
@@ -109,13 +109,13 @@ fn collect_checks(root: &std::path::Path, check_network: bool) -> Vec<Check> {
         run_version("pre-commit", &["--version"]),
     ));
 
-    let orbit_json = root.join(".orbit.json");
-    let orbit_ok = if orbit_json.exists() {
-        match std::fs::read_to_string(&orbit_json) {
+    let frontal_code_json = root.join(".frontal-code/settings.json");
+    let frontal_code_ok = if frontal_code_json.exists() {
+        match std::fs::read_to_string(&frontal_code_json) {
             Ok(s) => match serde_json::from_str::<serde_json::Value>(&s) {
                 Ok(_) => {
                     checks.push(Check {
-                        name: ".orbit.json".into(),
+                        name: ".frontal-code/settings.json".into(),
                         ok: true,
                         detail: "valid JSON".into(),
                     });
@@ -123,7 +123,7 @@ fn collect_checks(root: &std::path::Path, check_network: bool) -> Vec<Check> {
                 }
                 Err(e) => {
                     checks.push(Check {
-                        name: ".orbit.json".into(),
+                        name: ".frontal-code/settings.json".into(),
                         ok: false,
                         detail: format!("invalid JSON: {e}"),
                     });
@@ -132,7 +132,7 @@ fn collect_checks(root: &std::path::Path, check_network: bool) -> Vec<Check> {
             },
             Err(e) => {
                 checks.push(Check {
-                    name: ".orbit.json".into(),
+                    name: ".frontal-code/settings.json".into(),
                     ok: false,
                     detail: e.to_string(),
                 });
@@ -141,13 +141,13 @@ fn collect_checks(root: &std::path::Path, check_network: bool) -> Vec<Check> {
         }
     } else {
         checks.push(Check {
-            name: ".orbit.json".into(),
+            name: ".frontal-code/settings.json".into(),
             ok: false,
             detail: "missing".into(),
         });
         false
     };
-    let _ = orbit_ok;
+    let _ = frontal_code_ok;
 
     let lock = root.join("Cargo.lock");
     checks.push(Check {

@@ -1,20 +1,20 @@
 [package]
-name = "orbit-tools"
+name = "frontal-code-tools"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
-orbit-api = { path = "../api" }
-orbit-commands = { path = "../commands" }
-orbit-plugins = { path = "../plugins" }
-orbit-runtime = { path = "../runtime" }
-orbit-memory = { path = "../memory" }
-orbit-training = { path = "../training" }
-orbit-telemetry = { path = "../telemetry" }
-orbit-integrations = { path = "../integrations" }
-orbit-webhooks = { path = "../webhooks" }
+frontal-code-api = { path = "../api" }
+frontal-code-commands = { path = "../commands" }
+frontal-code-plugins = { path = "../plugins" }
+frontal-code-runtime = { path = "../runtime" }
+frontal-code-memory = { path = "../memory" }
+frontal-code-training = { path = "../training" }
+frontal-code-telemetry = { path = "../telemetry" }
+frontal-code-integrations = { path = "../integrations" }
+frontal-code-webhooks = { path = "../webhooks" }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true

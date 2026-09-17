@@ -1,10 +1,10 @@
-# Orbit Compat Harness
+# Frontal Code Compat Harness
 
-Compatibility harness for ensuring backward compatibility and testing across different versions of the Orbit system.
+Compatibility harness for ensuring backward compatibility and testing across different versions of the Frontal Code system.
 
 ## Overview
 
-This crate provides testing and compatibility infrastructure to ensure that the Orbit system maintains backward compatibility and can be tested against different scenarios and configurations.
+This crate provides testing and compatibility infrastructure to ensure that the Frontal Code system maintains backward compatibility and can be tested against different scenarios and configurations.
 
 ## Features
 
@@ -15,6 +15,6 @@ This crate provides testing and compatibility infrastructure to ensure that the 
 
 ## Dependencies
 
-- `orbit-commands` for command system integration
-- `orbit-tools` for tool system compatibility
-- `orbit-runtime` for runtime compatibility testing
+- `frontal-code-commands` for command system integration
+- `frontal-code-tools` for tool system compatibility
+- `frontal-code-runtime` for runtime compatibility testing

@@ -1,10 +1,10 @@
 __pycache__/
 archive/
 .omx/
-.orbit-agents/
-.orbit/settings.local.json
-.orbit/sessions/
-.orbit/extensions/
+.frontal-code/agents/
+.frontal-code/settings.local.json
+.frontal-code/sessions/
+.frontal-code/extensions/
 target/
 
 # Environment files
@@ -29,8 +29,8 @@ bun.lockb
 # OS
 .DS_Store
 Thumbs.db
-extensions/orbit-slack/.bun-cache/
-extensions/orbit-slack/node_modules/
+extensions/frontal-code-slack/.bun-cache/
+extensions/frontal-code-slack/node_modules/
 
 # Bazel (Bzlmod)
 .bazelrc.project
@@ -38,5 +38,5 @@ coverage/
 bazel-bin
 bazel-out
 bazel-testlogs
-bazel-orbit
+bazel-frontal-code
 

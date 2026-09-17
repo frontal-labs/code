@@ -1,5 +1,5 @@
 [package]
-name = "orbit-training"
+name = "frontal-code-training"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

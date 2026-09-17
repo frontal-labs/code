@@ -1,5 +1,5 @@
 [package]
-name = "orbit-webhooks"
+name = "frontal-code-webhooks"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

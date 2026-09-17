@@ -1,4 +1,4 @@
-use orbit_providers::ApiError;
+use frontal_code_providers::ApiError;
 use reqwest::StatusCode;
 
 #[test]

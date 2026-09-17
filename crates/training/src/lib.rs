@@ -1,4 +1,4 @@
-//! # Orbit Training
+//! # `FrontalCode` Training
 //!
 //! Style-learning pipeline for coding conventions.
 

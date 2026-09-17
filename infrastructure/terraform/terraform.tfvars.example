@@ -4,8 +4,8 @@ environment = "development"
 aws_account_id = "123456789012"
 
 # EKS Cluster
-eks_cluster_name = "orbit-dev-cluster"
-eks_cluster_auth_name = "orbit-dev-cluster"
+eks_cluster_name = "frontal-code-dev-cluster"
+eks_cluster_auth_name = "frontal-code-dev-cluster"
 
 # Networking
 vpc_id = "vpc-xxxxxxxxx"
@@ -14,16 +14,16 @@ vpc_id = "vpc-xxxxxxxxx"
 certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 # Kubernetes
-orbit_service_namespace = "orbit"
+frontal-code_service_namespace = "frontal-code"
 
 # Deployment Configuration
-deploy_orbit_server = true
-deploy_orbit_slack = true
+deploy_frontal-code_server = true
+deploy_frontal-code_slack = true
 
 # Container Images
-orbit_server_image = "orbit-server:v0.1.0"
-orbit_slack_image = "orbit-slack:v0.1.0"
-orbit_server_api_key = "replace-with-a-long-random-api-key"
+frontal-code_server_image = "frontal-code-server:v0.1.0"
+frontal-code_slack_image = "frontal-code-slack:v0.1.0"
+frontal-code_server_api_key = "replace-with-a-long-random-api-key"
 
 # Slack Configuration
 slack_bot_token = "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx-xxxxxxxxxxxx"

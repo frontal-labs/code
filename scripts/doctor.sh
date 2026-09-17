@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/doctor.sh — delegate to the canonical tool //tools/doctor.
+# Delegate to the canonical Bazel doctor target.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec cargo run -q -p tools-doctor -- "$@"
+exec bazel run //tools/doctor:doctor -- "$@"

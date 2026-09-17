@@ -1,20 +1,11 @@
-name: Orbit CLI npm
+name: Frontal Code CLI npm
 
 on:
-  push:
     branches: [main]
     paths:
       - '.github/workflows/npm-cli.yml'
-      - 'orbit-cli/**'
+      - 'cli/**'
       - 'scripts/cli.sh'
-      - 'Makefile'
-  pull_request:
-    branches: [main]
-    paths:
-      - '.github/workflows/npm-cli.yml'
-      - 'orbit-cli/**'
-      - 'scripts/cli.sh'
-      - 'Makefile'
   workflow_dispatch:
 
 permissions:
@@ -26,7 +17,7 @@ concurrency:
 
 jobs:
   verify:
-    name: orbit-cli npm verify
+    name: cli npm verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,13 +27,13 @@ jobs:
           node-version: "20"
 
       - name: Install (skip postinstall download)
-        working-directory: orbit-cli
+        working-directory: cli
         # --ignore-scripts avoids the postinstall network download in CI;
         # verify.sh runs the test suite and pack dry-run checks instead.
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
       - name: Verify package (syntax, tests, pack)
-        working-directory: orbit-cli
+        working-directory: cli
         run: ./scripts/verify.sh
 
       - name: Build native binary locally (smoke test)
@@ -51,6 +42,6 @@ jobs:
         if: ${{ matrix.build-binary == true }}
         run: |
           (command -v cargo >/dev/null 2>&1 && \
-            cargo build --release -p orbit-cli && \
+            cargo build --release -p cli && \
             ./scripts/build.sh && \
-            node ./bin/orbit.js --version) || echo "cargo unavailable; skipping binary smoke test"
+            node ./bin/index.js --version) || echo "cargo unavailable; skipping binary smoke test"

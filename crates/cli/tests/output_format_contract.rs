@@ -49,14 +49,15 @@ fn status_and_sandbox_emit_json_when_requested() {
 fn config_telemetry_emits_structured_json_when_requested() {
     let root = unique_temp_dir("config-telemetry-json");
     let workspace = root.join("workspace");
-    fs::create_dir_all(workspace.join(".orbit")).expect("workspace orbit dir should exist");
+    fs::create_dir_all(workspace.join(".frontal-code"))
+        .expect("workspace frontal-code dir should exist");
     fs::write(
-        workspace.join(".orbit").join("settings.json"),
+        workspace.join(".frontal-code").join("settings.json"),
         r#"{"telemetry":{"enabled":true,"path":"project/log.jsonl"}}"#,
     )
     .expect("project settings");
     fs::write(
-        workspace.join(".orbit").join("settings.local.json"),
+        workspace.join(".frontal-code").join("settings.local.json"),
         r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
     )
     .expect("local settings");
@@ -74,21 +75,22 @@ fn config_telemetry_emits_structured_json_when_requested() {
     assert!(parsed["effective"]["config_source_path"]
         .as_str()
         .expect("config source path")
-        .ends_with(".orbit/settings.local.json"));
+        .ends_with(".frontal-code/settings.local.json"));
 }
 
 #[test]
 fn telemetry_status_with_target_emits_structured_json_when_requested() {
     let root = unique_temp_dir("telemetry-status-target-json");
     let workspace = root.join("workspace");
-    fs::create_dir_all(workspace.join(".orbit")).expect("workspace orbit dir should exist");
+    fs::create_dir_all(workspace.join(".frontal-code"))
+        .expect("workspace frontal-code dir should exist");
     fs::write(
-        workspace.join(".orbit").join("settings.json"),
+        workspace.join(".frontal-code").join("settings.json"),
         r#"{"telemetry":{"enabled":true,"path":"project/log.jsonl"}}"#,
     )
     .expect("project settings");
     fs::write(
-        workspace.join(".orbit").join("settings.local.json"),
+        workspace.join(".frontal-code").join("settings.local.json"),
         r#"{"telemetry":{"enabled":false,"path":"local/log.jsonl"}}"#,
     )
     .expect("local settings");
@@ -110,9 +112,10 @@ fn telemetry_status_with_target_emits_structured_json_when_requested() {
 fn config_sections_emit_structured_json_when_requested() {
     let root = unique_temp_dir("config-sections-json");
     let workspace = root.join("workspace");
-    fs::create_dir_all(workspace.join(".orbit")).expect("workspace orbit dir should exist");
+    fs::create_dir_all(workspace.join(".frontal-code"))
+        .expect("workspace frontal-code dir should exist");
     fs::write(
-        workspace.join(".orbit").join("settings.json"),
+        workspace.join(".frontal-code").join("settings.json"),
         r#"{
           "env": {"API_BASE_URL": "https://example.test", "FEATURE_FLAG": "on"},
           "hooks": {
@@ -170,9 +173,10 @@ fn config_sections_emit_structured_json_when_requested() {
 fn config_unset_section_emits_structured_json_when_requested() {
     let root = unique_temp_dir("config-unset-json");
     let workspace = root.join("workspace");
-    fs::create_dir_all(workspace.join(".orbit")).expect("workspace orbit dir should exist");
+    fs::create_dir_all(workspace.join(".frontal-code"))
+        .expect("workspace frontal-code dir should exist");
     fs::write(
-        workspace.join(".orbit").join("settings.json"),
+        workspace.join(".frontal-code").join("settings.json"),
         r#"{"model":"claude-sonnet-4-6"}"#,
     )
     .expect("project settings");
@@ -221,7 +225,7 @@ fn inventory_commands_emit_structured_json_when_requested() {
         &[
             ("HOME", isolated_home.to_str().expect("utf8 home")),
             (
-                "ORBIT_CONFIG_HOME",
+                "FCODE_CONFIG_HOME",
                 isolated_config.to_str().expect("utf8 config home"),
             ),
             (
@@ -286,7 +290,7 @@ fn agents_command_emits_structured_agent_entries_when_requested() {
         &[
             ("HOME", home.to_str().expect("utf8 home")),
             (
-                "ORBIT_CONFIG_HOME",
+                "FCODE_CONFIG_HOME",
                 isolated_config.to_str().expect("utf8 config home"),
             ),
             (
@@ -302,12 +306,15 @@ fn agents_command_emits_structured_agent_entries_when_requested() {
     assert_eq!(parsed["summary"]["active"], 2);
     assert_eq!(parsed["summary"]["shadowed"], 1);
     assert_eq!(parsed["agents"][0]["name"], "planner");
-    assert_eq!(parsed["agents"][0]["source"]["id"], "project_orbit");
+    assert_eq!(parsed["agents"][0]["source"]["id"], "project_frontal-code");
     assert_eq!(parsed["agents"][0]["active"], true);
     assert_eq!(parsed["agents"][1]["name"], "verifier");
     assert_eq!(parsed["agents"][2]["name"], "planner");
     assert_eq!(parsed["agents"][2]["active"], false);
-    assert_eq!(parsed["agents"][2]["shadowed_by"]["id"], "project_orbit");
+    assert_eq!(
+        parsed["agents"][2]["shadowed_by"]["id"],
+        "project_frontal-code"
+    );
 }
 
 #[test]
@@ -453,7 +460,7 @@ fn resumed_inventory_commands_emit_structured_json_when_requested() {
         ],
         &[
             (
-                "ORBIT_CONFIG_HOME",
+                "FCODE_CONFIG_HOME",
                 config_home.to_str().expect("utf8 config home"),
             ),
             ("HOME", home.to_str().expect("utf8 home")),
@@ -474,7 +481,7 @@ fn resumed_inventory_commands_emit_structured_json_when_requested() {
         ],
         &[
             (
-                "ORBIT_CONFIG_HOME",
+                "FCODE_CONFIG_HOME",
                 config_home.to_str().expect("utf8 config home"),
             ),
             ("HOME", home.to_str().expect("utf8 home")),
@@ -497,7 +504,7 @@ fn resumed_inventory_commands_emit_structured_json_when_requested() {
         ],
         &[
             (
-                "ORBIT_CONFIG_HOME",
+                "FCODE_CONFIG_HOME",
                 config_home.to_str().expect("utf8 config home"),
             ),
             ("HOME", home.to_str().expect("utf8 home")),
@@ -556,7 +563,7 @@ fn assert_json_command(current_dir: &Path, args: &[&str]) -> Value {
 }
 
 fn assert_json_command_with_env(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Value {
-    let output = run_orbit(current_dir, args, envs);
+    let output = run_frontal_code(current_dir, args, envs);
     assert!(
         output.status.success(),
         "stdout:\n{}\n\nstderr:\n{}",
@@ -566,17 +573,17 @@ fn assert_json_command_with_env(current_dir: &Path, args: &[&str], envs: &[(&str
     serde_json::from_slice(&output.stdout).expect("stdout should be valid json")
 }
 
-fn run_orbit(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_orbit"));
+fn run_frontal_code(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_frontal-code"));
     command.current_dir(current_dir).args(args);
     for (key, value) in envs {
         command.env(key, value);
     }
-    command.output().expect("orbit should launch")
+    command.output().expect("frontal-code should launch")
 }
 
 fn write_upstream_fixture(root: &Path) -> PathBuf {
-    let upstream = root.join("orbit");
+    let upstream = root.join("frontal-code");
     let src = upstream.join("src");
     let entrypoints = src.join("entrypoints");
     fs::create_dir_all(&entrypoints).expect("upstream entrypoints dir should exist");
@@ -616,7 +623,7 @@ fn unique_temp_dir(label: &str) -> PathBuf {
         .as_millis();
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "orbit-output-format-{label}-{}-{millis}-{counter}",
+        "frontal-code-output-format-{label}-{}-{millis}-{counter}",
         std::process::id()
     ))
 }

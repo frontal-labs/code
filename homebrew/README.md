@@ -1,26 +1,26 @@
-# Homebrew Formula for Orbit
+# Homebrew Formula for Frontal Code
 
-This directory contains the Homebrew formula for installing the Orbit CLI tool.
+This directory contains the Homebrew formula for installing the Frontal Code CLI tool.
 
 ## Installation
 
-Install Orbit using the local Homebrew formula:
+Install Frontal Code using the local Homebrew formula:
 
 ```bash
-brew install --HEAD ./homebrew/orbit.rb
+brew install --HEAD ./homebrew/frontal-code.rb
 ```
 
 This will:
-- Build the Orbit CLI from source using Rust
-- Install the `orbit` binary to your Homebrew prefix
+- Build the Frontal Code CLI from source using Rust
+- Install the `frontal-code` binary to your Homebrew prefix
 - Enable tab completion and shell integration
 
 ## Formula Details
 
-The `orbit.rb` formula:
+The `frontal-code.rb` formula:
 
 - **Description**: High-performance Rust AI agent harness
-- **Homepage**: https://github.com/frontal-labs/orbit
+- **Homepage**: https://github.com/frontal-labs/frontal-code
 - **License**: MIT
 - **Source**: Installs from the main git branch (`--HEAD`)
 - **Dependencies**: Rust toolchain for building
@@ -31,14 +31,14 @@ The `orbit.rb` formula:
 When developing locally, you can reinstall the formula after making changes:
 
 ```bash
-brew reinstall --HEAD ./homebrew/orbit.rb
+brew reinstall --HEAD ./homebrew/frontal-code.rb
 ```
 
 Or build directly from source:
 
 ```bash
 cargo build --workspace
-cargo run -p orbit-cli -- ...
+cargo run -p cli -- ...
 ```
 
 ## Verification
@@ -46,14 +46,14 @@ cargo run -p orbit-cli -- ...
 After installation, verify the CLI is working:
 
 ```bash
-orbit --version
-orbit --help
+frontal-code --version
+frontal-code --help
 ```
 
 ## Uninstallation
 
-Remove Orbit using Homebrew:
+Remove Frontal Code using Homebrew:
 
 ```bash
-brew uninstall orbit
+brew uninstall frontal-code
 ```

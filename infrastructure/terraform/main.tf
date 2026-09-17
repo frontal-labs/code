@@ -21,7 +21,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "orbit-tools"
+      Project     = "frontal-code-tools"
       Environment = var.environment
       ManagedBy   = "terraform"
     }
@@ -32,24 +32,24 @@ data "aws_route53_zone" "frontal_dev" {
   name = "frontal.dev."
 }
 
-data "aws_eks_cluster" "orbit" {
+data "aws_eks_cluster" "frontal-code" {
   name = var.eks_cluster_name
 }
 
-data "aws_eks_cluster_auth" "orbit" {
+data "aws_eks_cluster_auth" "frontal-code" {
   name = var.eks_cluster_auth_name
 }
 
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.orbit.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.orbit.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.orbit.token
+  host                   = data.aws_eks_cluster.frontal-code.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.frontal-code.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.frontal-code.token
 }
 
 provider "helm" {
   kubernetes {
-    host                   = data.aws_eks_cluster.orbit.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.orbit.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.orbit.token
+    host                   = data.aws_eks_cluster.frontal-code.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.frontal-code.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.frontal-code.token
   }
 }

@@ -10,14 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-04-09
 
 ### Changed
-- Updated `extensions/orbit-slack` test tooling to `vitest` 3.2.4 and pinned `vite` 6.4.2 to resolve Dependabot alerts in the lockfile.
+- Updated `extensions/frontal-code-slack` test tooling to `vitest` 3.2.4 and pinned `vite` 6.4.2 to resolve Dependabot alerts in the lockfile.
 - Removed the unused `ultracite` dependency from the Slack extension in favor of the existing Biome-based linting workflow.
 
 ### Fixed
-- Resolved vulnerable transitive `vite` and `esbuild` versions in `extensions/orbit-slack/package-lock.json`.
+- Resolved vulnerable transitive `vite` and `esbuild` versions in `extensions/frontal-code-slack/package-lock.json`.
 
 ### Added
-- **Core Configuration System**: New type-safe configuration system with `orbit-core` crate
+- **Core Configuration System**: New type-safe configuration system with `frontal-code-core` crate
 - **Project Configuration**: Centralized `config/project.json` for feature flags and internal settings
 - **Configuration Manager**: Bridge between core and runtime configuration systems
 - **Type-safe Configuration**: Rust structs for all configuration values with validation
@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandbox Configuration**: Docker and execution limit settings
 - **Configuration Documentation**: Comprehensive configuration guides and API references
 - **Configuration Examples**: Working examples demonstrating configuration usage
-- **Doctor Integration**: Core configuration status in `orbit doctor` command
+- **Doctor Integration**: Core configuration status in `frontal-code doctor` command
 - **Environment Variable Overrides**: Support for overriding configuration via environment variables
 - **Multiple Configuration Locations**: Support for user, project, and local configuration files
 - **Backward Compatibility**: Seamless integration with existing runtime configuration system
@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VS Code workspace configuration
 - PostgreSQL database schema for structured memory
 - Development documentation
-- Homebrew formula for installing the `orbit` CLI from source
+- Homebrew formula for installing the `frontal-code` CLI from source
 
 ### Changed
 - Repository structure moved to root level
@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-04-03
 
 ### Added
-- Initial Rust implementation of Orbit
+- Initial Rust implementation of Frontal Code
 - Core CLI functionality
 - Basic agent runtime
 - Tool system implementation
@@ -103,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Release Notes
 
 ### Version 0.1.0
-This marks the first stable release of Orbit with complete Rust implementation. The project has achieved full parity with the original design specifications and includes all core functionality for both local development and server deployment.
+This marks the first stable release of Frontal Code with complete Rust implementation. The project has achieved full parity with the original design specifications and includes all core functionality for both local development and server deployment.
 
 Key achievements:
 - Complete 9-lane parity implementation

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/cache.sh — delegate to //tools/cache.
+# Delegate to the canonical Bazel cache target.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec cargo run -q -p tools-cache -- "$@"
+exec bazel run //tools/cache:cache -- "$@"

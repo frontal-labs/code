@@ -1,7 +1,7 @@
-//! Model Context Protocol (MCP) integration for Orbit.
+//! Model Context Protocol (MCP) integration for `FrontalCode`.
 //!
 //! This module provides comprehensive MCP server management, tool bridging,
-//! and lifecycle handling for connecting external MCP servers to Orbit.
+//! and lifecycle handling for connecting external MCP servers to `FrontalCode`.
 
 pub mod client;
 pub mod config;

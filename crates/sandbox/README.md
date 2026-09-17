@@ -1,4 +1,4 @@
-# Orbit Sandbox
+# Frontal Code Sandbox
 
 Sandboxing and isolation capabilities for secure code execution environments.
 

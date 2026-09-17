@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use orbit_plugins::{
+use frontal_code_plugins::{
     load_plugin_from_directory, PluginCommandManifest, PluginError, PluginHooks, PluginLifecycle,
     PluginManifest, PluginPermission,
 };

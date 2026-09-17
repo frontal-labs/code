@@ -1,4 +1,4 @@
-use orbit_sandbox::{detect_container_environment_from, SandboxDetectionInputs};
+use frontal_code_sandbox::{detect_container_environment_from, SandboxDetectionInputs};
 
 #[test]
 fn not_in_container_when_no_markers() {

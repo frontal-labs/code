@@ -19,7 +19,7 @@ engineering practices.
 
 THIRD-PARTY SOFTWARE
 
-Orbit depends on numerous third-party open-source libraries and services,
+Frontal Code depends on numerous third-party open-source libraries and services,
 including but not limited to:
 
 - Rust ecosystem crates
@@ -41,7 +41,7 @@ and other improvements.
 
 TRADEMARK NOTICE
 
-Orbit and Frontal Labs are trademarks or registered trademarks of
+Frontal Code and Frontal Labs are trademarks or registered trademarks of
 Frontal Labs, Inc.
 
 All other trademarks, service marks, and product names are the property of

@@ -2,12 +2,14 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use orbit_runtime::format_usd;
-use orbit_runtime::{
+use frontal_code_runtime::format_usd;
+use frontal_code_runtime::{
     load_oauth_credentials, save_oauth_credentials, OAuthConfig, OAuthRefreshRequest,
     OAuthTokenExchangeRequest,
 };
-use orbit_telemetry::{AnalyticsEvent, AnthropicRequestProfile, ClientIdentity, SessionTracer};
+use frontal_code_telemetry::{
+    AnalyticsEvent, AnthropicRequestProfile, ClientIdentity, SessionTracer,
+};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -38,8 +40,8 @@ pub enum AuthSource {
 
 impl AuthSource {
     pub fn from_env() -> Result<Self, ApiError> {
-        let api_key = read_env_non_empty("ORBIT_API_KEY")?;
-        let auth_token = read_env_non_empty("ORBIT_AUTH_TOKEN")?;
+        let api_key = read_env_non_empty("FCODE_API_KEY")?;
+        let auth_token = read_env_non_empty("FCODE_AUTH_TOKEN")?;
         match (api_key, auth_token) {
             (Some(api_key), Some(bearer_token)) => Ok(Self::ApiKeyAndBearer {
                 api_key,
@@ -49,7 +51,7 @@ impl AuthSource {
             (None, Some(bearer_token)) => Ok(Self::BearerToken(bearer_token)),
             (None, None) => Err(ApiError::missing_credentials(
                 "Anthropic",
-                &["ORBIT_AUTH_TOKEN", "ORBIT_API_KEY"],
+                &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
             )),
         }
     }
@@ -567,8 +569,8 @@ impl AnthropicClient {
 
 impl AuthSource {
     pub fn from_env_or_saved() -> Result<Self, ApiError> {
-        if let Some(api_key) = read_env_non_empty("ORBIT_API_KEY")? {
-            return match read_env_non_empty("ORBIT_AUTH_TOKEN")? {
+        if let Some(api_key) = read_env_non_empty("FCODE_API_KEY")? {
+            return match read_env_non_empty("FCODE_AUTH_TOKEN")? {
                 Some(bearer_token) => Ok(Self::ApiKeyAndBearer {
                     api_key,
                     bearer_token,
@@ -576,7 +578,7 @@ impl AuthSource {
                 None => Ok(Self::ApiKey(api_key)),
             };
         }
-        if let Some(bearer_token) = read_env_non_empty("ORBIT_AUTH_TOKEN")? {
+        if let Some(bearer_token) = read_env_non_empty("FCODE_AUTH_TOKEN")? {
             return Ok(Self::BearerToken(bearer_token));
         }
         match load_saved_oauth_token() {
@@ -593,7 +595,7 @@ impl AuthSource {
             Ok(Some(token_set)) => Ok(Self::BearerToken(token_set.access_token)),
             Ok(None) => Err(ApiError::missing_credentials(
                 "Anthropic",
-                &["ORBIT_AUTH_TOKEN", "ORBIT_API_KEY"],
+                &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
             )),
             Err(error) => Err(error),
         }
@@ -618,8 +620,8 @@ pub fn resolve_startup_auth_source<F>(load_oauth_config: F) -> Result<AuthSource
 where
     F: FnOnce() -> Result<Option<OAuthConfig>, ApiError>,
 {
-    if let Some(api_key) = read_env_non_empty("ORBIT_API_KEY")? {
-        return match read_env_non_empty("ORBIT_AUTH_TOKEN")? {
+    if let Some(api_key) = read_env_non_empty("FCODE_API_KEY")? {
+        return match read_env_non_empty("FCODE_AUTH_TOKEN")? {
             Some(bearer_token) => Ok(AuthSource::ApiKeyAndBearer {
                 api_key,
                 bearer_token,
@@ -627,14 +629,14 @@ where
             None => Ok(AuthSource::ApiKey(api_key)),
         };
     }
-    if let Some(bearer_token) = read_env_non_empty("ORBIT_AUTH_TOKEN")? {
+    if let Some(bearer_token) = read_env_non_empty("FCODE_AUTH_TOKEN")? {
         return Ok(AuthSource::BearerToken(bearer_token));
     }
 
     let Some(token_set) = load_saved_oauth_token()? else {
         return Err(ApiError::missing_credentials(
             "Anthropic",
-            &["ORBIT_AUTH_TOKEN", "ORBIT_API_KEY"],
+            &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
         ));
     };
     if !oauth_token_is_expired(&token_set) {
@@ -683,7 +685,7 @@ fn resolve_saved_oauth_token_set(
         expires_at: refreshed.expires_at,
         scopes: refreshed.scopes,
     };
-    save_oauth_credentials(&orbit_runtime::OAuthTokenSet {
+    save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
         access_token: resolved.access_token.clone(),
         refresh_token: resolved.refresh_token.clone(),
         expires_at: resolved.expires_at,
@@ -734,20 +736,20 @@ fn read_api_key() -> Result<String, ApiError> {
         .map(ToOwned::to_owned)
         .ok_or(ApiError::missing_credentials(
             "Anthropic",
-            &["ORBIT_AUTH_TOKEN", "ORBIT_API_KEY"],
+            &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
         ))
 }
 
 #[cfg(test)]
 fn read_auth_token() -> Option<String> {
-    read_env_non_empty("ORBIT_AUTH_TOKEN")
+    read_env_non_empty("FCODE_AUTH_TOKEN")
         .ok()
         .and_then(std::convert::identity)
 }
 
 #[must_use]
 pub fn read_base_url() -> String {
-    std::env::var("ORBIT_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+    std::env::var("FCODE_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
 }
 
 fn request_id_from_headers(headers: &reqwest::header::HeaderMap) -> Option<String> {
@@ -895,7 +897,7 @@ mod tests {
     use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use orbit_runtime::{clear_oauth_credentials, save_oauth_credentials, OAuthConfig};
+    use frontal_code_runtime::{clear_oauth_credentials, save_oauth_credentials, OAuthConfig};
 
     use super::{
         now_unix_timestamp, oauth_token_is_expired, resolve_saved_oauth_token,
@@ -970,9 +972,9 @@ mod tests {
     #[test]
     fn read_api_key_requires_presence() {
         let _guard = env_lock();
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         let error = super::read_api_key().expect_err("missing key should error");
         assert!(matches!(
             error,
@@ -983,35 +985,35 @@ mod tests {
     #[test]
     fn read_api_key_requires_non_empty_value() {
         let _guard = env_lock();
-        std::env::set_var("ORBIT_AUTH_TOKEN", "");
-        std::env::remove_var("ORBIT_API_KEY");
+        std::env::set_var("FCODE_AUTH_TOKEN", "");
+        std::env::remove_var("FCODE_API_KEY");
         let error = super::read_api_key().expect_err("empty key should error");
         assert!(matches!(
             error,
             crate::error::ApiError::MissingCredentials { .. }
         ));
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
+        std::env::remove_var("FCODE_AUTH_TOKEN");
     }
 
     #[test]
     fn read_api_key_prefers_api_key_env() {
         let _guard = env_lock();
-        std::env::set_var("ORBIT_AUTH_TOKEN", "auth-token");
-        std::env::set_var("ORBIT_API_KEY", "legacy-key");
+        std::env::set_var("FCODE_AUTH_TOKEN", "auth-token");
+        std::env::set_var("FCODE_API_KEY", "legacy-key");
         assert_eq!(
             super::read_api_key().expect("api key should load"),
             "legacy-key"
         );
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
     }
 
     #[test]
     fn read_auth_token_reads_auth_token_env() {
         let _guard = env_lock();
-        std::env::set_var("ORBIT_AUTH_TOKEN", "auth-token");
+        std::env::set_var("FCODE_AUTH_TOKEN", "auth-token");
         assert_eq!(super::read_auth_token().as_deref(), Some("auth-token"));
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
+        std::env::remove_var("FCODE_AUTH_TOKEN");
     }
 
     #[test]
@@ -1029,23 +1031,23 @@ mod tests {
     #[test]
     fn auth_source_from_env_combines_api_key_and_bearer_token() {
         let _guard = env_lock();
-        std::env::set_var("ORBIT_AUTH_TOKEN", "auth-token");
-        std::env::set_var("ORBIT_API_KEY", "legacy-key");
+        std::env::set_var("FCODE_AUTH_TOKEN", "auth-token");
+        std::env::set_var("FCODE_API_KEY", "legacy-key");
         let auth = AuthSource::from_env().expect("env auth");
         assert_eq!(auth.api_key(), Some("legacy-key"));
         assert_eq!(auth.bearer_token(), Some("auth-token"));
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
     }
 
     #[test]
     fn auth_source_from_saved_oauth_when_env_absent() {
         let _guard = env_lock();
         let config_home = temp_config_home();
-        std::env::set_var("ORBIT_CONFIG_HOME", &config_home);
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
-        save_oauth_credentials(&orbit_runtime::OAuthTokenSet {
+        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
+        save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "saved-access-token".to_string(),
             refresh_token: Some("refresh".to_string()),
             expires_at: Some(now_unix_timestamp() + 300),
@@ -1057,7 +1059,7 @@ mod tests {
         assert_eq!(auth.bearer_token(), Some("saved-access-token"));
 
         clear_oauth_credentials().expect("clear credentials");
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         cleanup_temp_config_home(&config_home);
     }
 
@@ -1081,10 +1083,10 @@ mod tests {
     fn resolve_saved_oauth_token_refreshes_expired_credentials() {
         let _guard = env_lock();
         let config_home = temp_config_home();
-        std::env::set_var("ORBIT_CONFIG_HOME", &config_home);
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
-        save_oauth_credentials(&orbit_runtime::OAuthTokenSet {
+        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
+        save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "expired-access-token".to_string(),
             refresh_token: Some("refresh-token".to_string()),
             expires_at: Some(1),
@@ -1096,7 +1098,7 @@ mod tests {
             "{\"access_token\":\"refreshed-token\",\"refresh_token\":\"fresh-refresh\",\"expires_at\":9999999999,\"scopes\":[\"scope:a\"]}",
         ) else {
             clear_oauth_credentials().expect("clear credentials");
-            std::env::remove_var("ORBIT_CONFIG_HOME");
+            std::env::remove_var("FCODE_CONFIG_HOME");
             cleanup_temp_config_home(&config_home);
             return;
         };
@@ -1104,13 +1106,13 @@ mod tests {
             .expect("resolve refreshed token")
             .expect("token set present");
         assert_eq!(resolved.access_token, "refreshed-token");
-        let stored = orbit_runtime::load_oauth_credentials()
+        let stored = frontal_code_runtime::load_oauth_credentials()
             .expect("load stored credentials")
             .expect("stored token set");
         assert_eq!(stored.access_token, "refreshed-token");
 
         clear_oauth_credentials().expect("clear credentials");
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         cleanup_temp_config_home(&config_home);
     }
 
@@ -1118,10 +1120,10 @@ mod tests {
     fn resolve_startup_auth_source_uses_saved_oauth_without_loading_config() {
         let _guard = env_lock();
         let config_home = temp_config_home();
-        std::env::set_var("ORBIT_CONFIG_HOME", &config_home);
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
-        save_oauth_credentials(&orbit_runtime::OAuthTokenSet {
+        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
+        save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "saved-access-token".to_string(),
             refresh_token: Some("refresh".to_string()),
             expires_at: Some(now_unix_timestamp() + 300),
@@ -1134,7 +1136,7 @@ mod tests {
         assert_eq!(auth.bearer_token(), Some("saved-access-token"));
 
         clear_oauth_credentials().expect("clear credentials");
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         cleanup_temp_config_home(&config_home);
     }
 
@@ -1142,10 +1144,10 @@ mod tests {
     fn resolve_startup_auth_source_errors_when_refreshable_token_lacks_config() {
         let _guard = env_lock();
         let config_home = temp_config_home();
-        std::env::set_var("ORBIT_CONFIG_HOME", &config_home);
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
-        save_oauth_credentials(&orbit_runtime::OAuthTokenSet {
+        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
+        save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "expired-access-token".to_string(),
             refresh_token: Some("refresh-token".to_string()),
             expires_at: Some(1),
@@ -1159,14 +1161,14 @@ mod tests {
             matches!(error, crate::error::ApiError::Auth(message) if message.contains("runtime OAuth config is missing"))
         );
 
-        let stored = orbit_runtime::load_oauth_credentials()
+        let stored = frontal_code_runtime::load_oauth_credentials()
             .expect("load stored credentials")
             .expect("stored token set");
         assert_eq!(stored.access_token, "expired-access-token");
         assert_eq!(stored.refresh_token.as_deref(), Some("refresh-token"));
 
         clear_oauth_credentials().expect("clear credentials");
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         cleanup_temp_config_home(&config_home);
     }
 
@@ -1174,10 +1176,10 @@ mod tests {
     fn resolve_saved_oauth_token_preserves_refresh_token_when_refresh_response_omits_it() {
         let _guard = env_lock();
         let config_home = temp_config_home();
-        std::env::set_var("ORBIT_CONFIG_HOME", &config_home);
-        std::env::remove_var("ORBIT_AUTH_TOKEN");
-        std::env::remove_var("ORBIT_API_KEY");
-        save_oauth_credentials(&orbit_runtime::OAuthTokenSet {
+        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
+        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FCODE_API_KEY");
+        save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "expired-access-token".to_string(),
             refresh_token: Some("refresh-token".to_string()),
             expires_at: Some(1),
@@ -1189,7 +1191,7 @@ mod tests {
             "{\"access_token\":\"refreshed-token\",\"expires_at\":9999999999,\"scopes\":[\"scope:a\"]}",
         ) else {
             clear_oauth_credentials().expect("clear credentials");
-            std::env::remove_var("ORBIT_CONFIG_HOME");
+            std::env::remove_var("FCODE_CONFIG_HOME");
             cleanup_temp_config_home(&config_home);
             return;
         };
@@ -1198,13 +1200,13 @@ mod tests {
             .expect("token set present");
         assert_eq!(resolved.access_token, "refreshed-token");
         assert_eq!(resolved.refresh_token.as_deref(), Some("refresh-token"));
-        let stored = orbit_runtime::load_oauth_credentials()
+        let stored = frontal_code_runtime::load_oauth_credentials()
             .expect("load stored credentials")
             .expect("stored token set");
         assert_eq!(stored.refresh_token.as_deref(), Some("refresh-token"));
 
         clear_oauth_credentials().expect("clear credentials");
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         cleanup_temp_config_home(&config_home);
     }
 

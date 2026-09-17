@@ -1,4 +1,4 @@
-use orbit_commands::{CommandManifestEntry, CommandRegistry, CommandSource};
+use frontal_code_commands::{CommandManifestEntry, CommandRegistry, CommandSource};
 
 #[test]
 fn command_registry_empty_by_default() {

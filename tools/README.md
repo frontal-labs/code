@@ -1,12 +1,12 @@
 # Developer Tools (`//tools`)
 
-This directory is the canonical home for **frontal-orbit's repo-level developer
+This directory is the canonical home for **frontal-code's repo-level developer
 tooling**. It is distinct from `crates/tools/` (the *agent's* runtime tool
-system: bash/read/write/…). Nothing here ships in the `orbit` binary.
+system: bash/read/write/…). Nothing here ships in the `frontal-code` binary.
 
-Each subdirectory is a real, runnable tool wired into the build, the `Makefile`,
-pre-commit, and `.orbit.json`. `scripts/*.sh` are thin delegators that call into
-`tools/`; prefer editing logic here, not in `scripts/`.
+The runnable tools have Bazel entrypoints and are indexed in
+`.frontal-code/settings.json`; `templates` is a shared library without a CLI.
+`scripts/*.sh` are thin delegators; prefer editing tool logic here, not in `scripts/`.
 
 ## The 12 tools
 
@@ -36,8 +36,9 @@ used by the lint/format Bazel macros (`tools/lint.bzl`):
 - `lint.sh` — monorepo linter (Biome + `cargo clippy`)
 - `sdk_rust.sh` / `sdk_ts.sh` — run the Rust / TypeScript SDK toolchains
 - `lint.bzl` — Bazel macros (`biome_lint`, `rust_lint`, `rust_format`) that
-  wrap the above as `sh_test` targets so `bazel test //tools:...` and
-  `bazel test //sdk:...` run the same checks as CI.
+  wrap the above as `sh_test` targets. Use `bazel test //:lint` and
+  `bazel test //:fmt_check` for aggregate checks, or `bazel test //sdks/...`
+  for SDK targets.
 
 These are exported labels (`//tools:lint.sh`, `//tools:format.sh`, …) and are
 distinct from the 12 tool crates above.
@@ -45,18 +46,10 @@ distinct from the 12 tool crates above.
 ## Quickstart
 
 ```bash
-# via make
-make doctor
-make workspace check
-make version show
-make bench build
-
-# or directly via cargo
-cargo run -q -p tools-doctor -- --root .
-cargo run -q -p tools-workspace -- list
-
-# or via Bazel (shells out to cargo; see note below)
 bazel run //tools/doctor:doctor -- --root .
+bazel run //tools/workspace:workspace -- check
+bazel run //tools/version:version -- show
+bazel run //tools/benchmark:benchmark -- build
 ```
 
 ## Conventions
@@ -73,8 +66,8 @@ tools/<name>/
 
 - **Bazel.** Each tool is exposed as `//tools/<name>:<name>`, an `sh_binary`
   that execs `cargo run -p tools-<name>` from the workspace checkout (see
-  `tools/cargo_run.sh`). This keeps `bazel build //...` hermetic and green
-  without `rules_rust`; the migration path to native `rust_binary` is tracked in
+  `tools/cargo_run.sh`). This keeps `bazel build //...` green without
+  `rules_rust`; the migration path to native `rust_binary` is tracked in
   `docs/bazel/ROADMAP.md`.
 - **Lints.** New tools inherit the workspace lints (`unsafe_code = "forbid"`,
   clippy pedantic). Keep `cargo clippy --workspace -- -D warnings` clean.
@@ -89,8 +82,8 @@ tools/<name>/
    automatically by `cargo`. (If you used an explicit path, add it to the root
    `Cargo.toml` `members`.)
 3. Add `scripts/<name>.sh` delegating to `cargo run -q -p tools-<name>` and a
-   `make <name>` target in `Makefile`.
-4. Register it under the `devtools` key in `.orbit.json`.
+   public `//tools/<name>:<name>` Bazel entrypoint.
+4. Register it under the `devtools` key in `.frontal-code/settings.json`.
 5. Document it in `docs/TOOLS.md`.
 
 ## `third_party/tools/`

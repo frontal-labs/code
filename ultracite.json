@@ -11,7 +11,7 @@
       "**/node_modules/**",
       "**/target/**",
       "**/dist/**",
-      "**/.orbit/**",
+      "**/.frontal-code/**",
       "**/coverage/**",
       "**/bazel-bin/**",
       "**/bazel-out/**",

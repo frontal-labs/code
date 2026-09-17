@@ -1,10 +1,10 @@
 # Configuration Guide
 
-This guide covers the Orbit configuration system, including the new core configuration and legacy runtime configuration.
+This guide covers the Frontal Code configuration system, including the new core configuration and legacy runtime configuration.
 
 ## Overview
 
-Orbit uses a hierarchical configuration system:
+Frontal Code uses a hierarchical configuration system:
 
 1. **Core Configuration** (`config/project.json`) - New type-safe configuration system
 2. **Runtime Configuration** - Legacy configuration system (still supported)
@@ -22,7 +22,7 @@ The main configuration file is `config/project.json`:
 ```json
 {
   "project": {
-    "name": "Orbit",
+    "name": "Frontal Code",
     "version": "0.1.0",
     "description": "AI-powered development environment and CLI tool"
   },
@@ -48,10 +48,10 @@ The main configuration file is `config/project.json`:
     "request_timeout_seconds": 30
   },
   "paths": {
-    "config_home": "~/.orbit",
-    "home": "~/.orbit",
-    "cache_dir": "~/.orbit/cache",
-    "logs_dir": "~/.orbit/logs"
+    "config_home": "~/.frontal-code",
+    "home": "~/.frontal-code",
+    "cache_dir": "~/.frontal-code/cache",
+    "logs_dir": "~/.frontal-code/logs"
   },
   "features": {
     "auto_compaction_threshold": 100,
@@ -106,7 +106,7 @@ The main configuration file is `config/project.json`:
 
 #### Paths
 - `config_home`: Configuration directory
-- `home`: Orbit home directory
+- `home`: Frontal Code home directory
 - `cache_dir`: Cache directory
 - `logs_dir`: Logs directory
 
@@ -144,15 +144,15 @@ The main configuration file is `config/project.json`:
 
 The system looks for `project.json` in this order:
 
-1. `$ORBIT_CONFIG_HOME/project.json` - Custom config directory
-2. `$ORBIT_HOME/project.json` - Orbit home directory  
-3. `~/.orbit/project.json` - User's home directory
+1. `$FCODE_CONFIG_HOME/project.json` - Custom config directory
+2. `$FCODE_HOME/project.json` - Frontal Code home directory  
+3. `~/.frontal-code/project.json` - User's home directory
 4. `config/project.json` - Project-local configuration
 
 ### Using Core Configuration in Code
 
 ```rust
-use orbit_core::config::ProjectConfig;
+use frontal-code_core::config::ProjectConfig;
 
 // Load configuration with fallback to defaults
 let config = ProjectConfig::load_or_default();
@@ -174,7 +174,7 @@ let cache_size = config.services.memory.cache_size_mb;
 ### Using ConfigurationManager
 
 ```rust
-use orbit_runtime::ConfigurationManager;
+use frontal-code_runtime::ConfigurationManager;
 
 // Load both core and runtime configurations
 let manager = ConfigurationManager::load()?;
@@ -200,27 +200,27 @@ Environment variables override configuration file settings:
 ### Core Configuration Overrides
 ```bash
 # Runtime settings
-export ORBIT_DEFAULT_PROVIDER="openai"
+export FCODE_DEFAULT_PROVIDER="openai"
 export RUSTY_CLAUDE_PERMISSION_MODE="workspace-write"
-export ORBIT_LOG_LEVEL="debug"
+export FCODE_LOG_LEVEL="debug"
 
 # Feature flags
-export ORBIT_ENABLE_TELEMETRY="false"
-export ORBIT_ENABLE_PLUGINS="true"
-export ORBIT_ENABLE_CACHING="true"
+export FCODE_ENABLE_TELEMETRY="false"
+export FCODE_ENABLE_PLUGINS="true"
+export FCODE_ENABLE_CACHING="true"
 
 # Paths
-export ORBIT_CONFIG_HOME="/custom/config/path"
-export ORBIT_HOME="/custom/orbit/home"
-export ORBIT_CACHE_DIR="/custom/cache"
-export ORBIT_LOGS_DIR="/custom/logs"
+export FCODE_CONFIG_HOME="/custom/config/path"
+export FCODE_HOME="/custom/frontal-code/home"
+export FCODE_CACHE_DIR="/custom/cache"
+export FCODE_LOGS_DIR="/custom/logs"
 ```
 
 ### API Provider Variables
 ```bash
 # Anthropic
-export ORBIT_API_KEY="sk-ant-..."
-export ORBIT_BASE_URL="https://api.anthropic.com"
+export FCODE_API_KEY="sk-ant-..."
+export FCODE_BASE_URL="https://api.anthropic.com"
 
 # OpenAI
 export OPENAI_API_KEY="sk-..."
@@ -238,8 +238,8 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 ### Service Variables
 ```bash
 # Memory/Pinecone
-export ORBIT_MEMORY_PINECONE_URL="https://index.pinecone.io"
-export ORBIT_MEMORY_PINECONE_API_KEY="..."
+export FCODE_MEMORY_PINECONE_URL="https://index.pinecone.io"
+export FCODE_MEMORY_PINECONE_API_KEY="..."
 ```
 
 ## Legacy Runtime Configuration
@@ -247,9 +247,9 @@ export ORBIT_MEMORY_PINECONE_API_KEY="..."
 The legacy runtime configuration system is still supported for backward compatibility.
 
 ### Runtime Configuration Files
-- `~/.orbit/settings.json` - User settings
-- `.orbit/settings.json` - Project settings
-- `.orbit/local-settings.json` - Local overrides
+- `~/.frontal-code/settings.json` - User settings
+- `.frontal-code/settings.json` - Project settings
+- `.frontal-code/local-settings.json` - Local overrides
 
 ### Migration Path
 
@@ -264,7 +264,7 @@ The legacy runtime configuration system is still supported for backward compatib
 Check your configuration with the doctor command:
 
 ```bash
-orbit
+frontal-code
 /doctor
 ```
 
@@ -279,7 +279,7 @@ The doctor report includes:
 ### Configuration Validation
 
 ```rust
-use orbit_core::config::ProjectConfig;
+use frontal-code_core::config::ProjectConfig;
 
 let config = ProjectConfig::load_or_default();
 
@@ -374,7 +374,7 @@ if enabled_providers == 0 {
 1. Check file permissions on `config/project.json`
 2. Verify JSON syntax with a linter
 3. Check configuration file locations
-4. Run `orbit /doctor` for diagnostic information
+4. Run `frontal-code /doctor` for diagnostic information
 
 ### Provider Not Working
 

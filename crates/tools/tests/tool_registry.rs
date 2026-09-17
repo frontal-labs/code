@@ -1,4 +1,4 @@
-use orbit_tools::{ToolManifestEntry, ToolRegistry, ToolSource};
+use frontal_code_tools::{ToolManifestEntry, ToolRegistry, ToolSource};
 
 #[test]
 fn tool_registry_empty() {

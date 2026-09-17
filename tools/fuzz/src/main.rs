@@ -13,7 +13,7 @@ use std::process::Command;
 use tools_templates::render_file;
 
 #[derive(Parser)]
-#[command(name = "orbit-fuzz", about = "Manage fuzz targets")]
+#[command(name = "frontal-code-fuzz", about = "Manage fuzz targets")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

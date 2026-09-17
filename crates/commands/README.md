@@ -1,10 +1,10 @@
-# Orbit Commands
+# Frontal Code Commands
 
-Command registry and execution system for the Orbit CLI.
+Command registry and execution system for the Frontal Code CLI.
 
 ## Overview
 
-This crate provides the core command infrastructure for the Orbit CLI, including command registration, execution, and plugin integration. It defines the command system that powers both built-in and plugin-provided commands.
+This crate provides the core command infrastructure for the Frontal Code CLI, including command registration, execution, and plugin integration. It defines the command system that powers both built-in and plugin-provided commands.
 
 ## Features
 
@@ -23,6 +23,6 @@ This crate provides the core command infrastructure for the Orbit CLI, including
 
 ## Dependencies
 
-- `orbit-plugins` for plugin system integration
-- `orbit-runtime` for core runtime functionality
+- `frontal-code-plugins` for plugin system integration
+- `frontal-code-runtime` for core runtime functionality
 - `serde_json` for command data serialization

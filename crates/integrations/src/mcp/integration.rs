@@ -260,7 +260,7 @@ impl Default for IntegrationRegistry {
 }
 
 /// Register integrations declared in a JSON object shaped like the
-/// `mcp.integrations` block of `.orbit.json`:
+/// `mcp.integrations` block of `.frontal-code/settings.json`:
 ///
 /// ```json
 /// {

@@ -1,6 +1,6 @@
 # Architecture Guide
 
-This guide covers the architecture of the Orbit CLI, including system design, component interactions, and technical details.
+This guide covers the architecture of the Frontal Code CLI, including system design, component interactions, and technical details.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This guide covers the architecture of the Orbit CLI, including system design, co
 
 ## Overview
 
-Orbit is a modular, high-performance AI agent harness built in Rust. The architecture follows these principles:
+Frontal Code is a modular, high-performance AI agent harness built in Rust. The architecture follows these principles:
 
 - **Modularity**: Clear separation of concerns with well-defined interfaces
 - **Extensibility**: Plugin system and MCP integration for custom functionality
@@ -38,7 +38,7 @@ Orbit is a modular, high-performance AI agent harness built in Rust. The archite
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Orbit CLI Architecture                     │
+│                        Frontal Code CLI Architecture                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
@@ -321,7 +321,7 @@ pub struct ToolResult {
 
 ### Plugin System Design
 
-The plugin system allows extending Orbit with custom tools, commands, and providers.
+The plugin system allows extending Frontal Code with custom tools, commands, and providers.
 
 #### Plugin Types
 
@@ -575,7 +575,7 @@ pub struct PerformanceMetrics {
    └── Security hardening
    
 2. Application Layer
-   ├── Orbit binary
+   ├── Frontal Code binary
    ├── Configuration templates
    └── Default plugins
    
@@ -591,20 +591,20 @@ pub struct PerformanceMetrics {
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orbit-cli
+  name: cli
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: orbit-cli
+      app: cli
   template:
     metadata:
       labels:
-        app: orbit-cli
+        app: cli
     spec:
       containers:
-      - name: orbit-cli
-        image: orbit/cli:v0.1.0
+      - name: cli
+        image: frontal-code/cli:v0.1.0
         resources:
           requests:
             memory: "512Mi"
@@ -613,10 +613,10 @@ spec:
             memory: "1Gi"
             cpu: "1000m"
         env:
-        - name: ORBIT_API_KEY
+        - name: FCODE_API_KEY
           valueFrom:
             secretKeyRef:
-              name: orbit-secrets
+              name: frontal-code-secrets
               key: api-key
 ```
 
@@ -680,7 +680,7 @@ Structured error handling with:
 
 ### Bazel Monorepo Architecture
 
-This section describes the **Bazel build foundation** for Frontal Orbit. It is
+This section describes the **Bazel build foundation** for Frontal Frontal Code. It is
 deliberately decoupled from application source: all build infrastructure lives
 under `bazel/` and `third_party/`, and `MODULE.bazel` is the single source of
 truth (no `WORKSPACE` file — Bzlmod only).
@@ -698,7 +698,7 @@ truth (no `WORKSPACE` file — Bzlmod only).
 | `bazel/`                | Reusable Starlark infrastructure (no app source).           |
 | `third_party/`          | Non-registry deps, vendored rule sets, override conventions. |
 | `.devcontainer/`        | Dev container (Bazel via apt keyring + language features).   |
-| `scripts/` + `Makefile` | Thin wrappers around `bazel` / `pre-commit`.                |
+| `scripts/` + root `BUILD` | Bazel entrypoints for build, test, lint, format, and developer tools; shell wrappers delegate to Cargo/Bun or Bazel. |
 
 #### `bazel/` infrastructure library
 
@@ -758,4 +758,4 @@ subpackages:
 4. **Real-time Collaboration**: Multi-user sessions
 5. **Advanced AI**: Multi-model and ensemble approaches
 
-This architecture guide provides comprehensive coverage of Orbit's technical design and implementation decisions.
+This architecture guide provides comprehensive coverage of Frontal Code's technical design and implementation decisions.

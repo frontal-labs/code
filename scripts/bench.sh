@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/bench.sh — delegate to //tools/benchmark.
+# Delegate to the canonical Bazel benchmark target.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec cargo run -q -p tools-benchmark -- "$@"
+exec bazel run //tools/benchmark:benchmark -- "$@"

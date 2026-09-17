@@ -1,4 +1,4 @@
-use orbit_events::{
+use frontal_code_events::{
     AppliedOrphanPolicy, ApprovalRequestedEventPayload, ApprovalResolvedEventPayload,
     ConnectorEventPayload, ConnectorInteractionRequest, ConnectorInteractionResponse,
     HostedTaskEventSummary, LaneSignalEventPayload, TaskRoutedEventPayload, TerminalEventPayload,
@@ -56,7 +56,7 @@ fn connector_interaction_response_roundtrip() {
 
 #[test]
 fn connector_event_request_roundtrip() {
-    let request = orbit_events::ConnectorEventRequest {
+    let request = frontal_code_events::ConnectorEventRequest {
         event_type: "message".to_string(),
         user_id: Some("U456".to_string()),
         data: json!({"text": "hello world", "channel": "C789"}),
@@ -66,7 +66,8 @@ fn connector_event_request_roundtrip() {
     assert_eq!(json["user_id"], "U456");
     assert_eq!(json["data"]["text"], "hello world");
 
-    let deserialized: orbit_events::ConnectorEventRequest = serde_json::from_value(json).unwrap();
+    let deserialized: frontal_code_events::ConnectorEventRequest =
+        serde_json::from_value(json).unwrap();
     assert_eq!(request, deserialized);
 }
 

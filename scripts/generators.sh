@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/generators.sh — delegate to //tools/generators.
+# Delegate to the canonical Bazel generators target.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec cargo run -q -p tools-generators -- "$@"
+exec bazel run //tools/generators:generators -- "$@"

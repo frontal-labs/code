@@ -6,16 +6,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use orbit_api::{
+use frontal_code_api::{
     max_tokens_for_model, resolve_model_alias, ContentBlockDelta, InputContentBlock, InputMessage,
     MessageRequest, MessageResponse, OutputContentBlock, ProviderClient,
     StreamEvent as ApiStreamEvent, ToolChoice, ToolDefinition, ToolResultContentBlock,
 };
-use orbit_memory::{
+use frontal_code_memory::{
     KgEntity, KgRelation, MemoryBackendConfig, MemoryScope, MemorySearchRequest, MemoryService,
 };
-use orbit_plugins::PluginTool;
-use orbit_runtime::{
+use frontal_code_plugins::PluginTool;
+use frontal_code_runtime::{
     check_freshness, dedupe_superseded_commit_events, edit_file, execute_bash, glob_search,
     grep_search, load_system_prompt,
     lsp_client::LspRegistry,
@@ -31,8 +31,8 @@ use orbit_runtime::{
     LaneEventStatus, LaneFailureClass, McpDegradedReport, MessageRole, PermissionMode,
     PermissionPolicy, PromptCacheEvent, RuntimeError, Session, TaskPacket, ToolError, ToolExecutor,
 };
-use orbit_telemetry::{AnalyticsEvent, JsonlTelemetrySink, SessionTracer, TelemetrySink};
-use orbit_training::{
+use frontal_code_telemetry::{AnalyticsEvent, JsonlTelemetrySink, SessionTracer, TelemetrySink};
+use frontal_code_training::{
     InMemoryStyleProfileStore, StyleDatasetBuilder, StyleProfile, StyleProfileStore, StyleScope,
     StyleTrainingService,
 };
@@ -40,7 +40,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
-const ORBIT_TOOL_TELEMETRY_PATH: &str = "ORBIT_TOOL_TELEMETRY_PATH";
+const FCODE_TOOL_TELEMETRY_PATH: &str = "FCODE_TOOL_TELEMETRY_PATH";
 
 /// Global task registry shared across tool invocations within a session.
 fn global_lsp_registry() -> &'static LspRegistry {
@@ -135,7 +135,7 @@ impl StyleProfileStore for SharedStyleProfileStore {
     fn load_profile(
         &self,
         scope: &StyleScope,
-    ) -> Result<Option<StyleProfile>, orbit_training::StyleStoreError> {
+    ) -> Result<Option<StyleProfile>, frontal_code_training::StyleStoreError> {
         self.inner.load_profile(scope)
     }
 
@@ -143,15 +143,15 @@ impl StyleProfileStore for SharedStyleProfileStore {
         &self,
         scope: &StyleScope,
         profile: &StyleProfile,
-    ) -> Result<(), orbit_training::StyleStoreError> {
+    ) -> Result<(), frontal_code_training::StyleStoreError> {
         self.inner.save_profile(scope, profile)
     }
 
     fn save_samples(
         &self,
         scope: &StyleScope,
-        samples: &[orbit_training::StyleSample],
-    ) -> Result<(), orbit_training::StyleStoreError> {
+        samples: &[frontal_code_training::StyleSample],
+    ) -> Result<(), frontal_code_training::StyleStoreError> {
         self.inner.save_samples(scope, samples)
     }
 }
@@ -196,7 +196,7 @@ struct ToolTelemetry {
 impl ToolTelemetry {
     #[must_use]
     fn from_env() -> Self {
-        env::var(ORBIT_TOOL_TELEMETRY_PATH)
+        env::var(FCODE_TOOL_TELEMETRY_PATH)
             .ok()
             .map(|path| path.trim().to_string())
             .filter(|path| !path.is_empty())
@@ -1394,24 +1394,24 @@ pub fn mvp_tool_specs() -> Vec<ToolSpec> {
         },
     ]
     .into_iter()
-    .chain(orbit_integrations::mcp_tool_specs().into_iter().map(|spec| ToolSpec {
+    .chain(frontal_code_integrations::mcp_tool_specs().into_iter().map(|spec| ToolSpec {
         name: Box::leak(spec.name.into_boxed_str()),
         description: Box::leak(spec.description.into_boxed_str()),
         input_schema: spec.input_schema,
         required_permission: match spec.required_permission {
-            orbit_integrations::mcp::tools::PermissionMode::ReadOnly => orbit_runtime::PermissionMode::ReadOnly,
-            orbit_integrations::mcp::tools::PermissionMode::WorkspaceWrite => orbit_runtime::PermissionMode::WorkspaceWrite,
-            orbit_integrations::mcp::tools::PermissionMode::DangerFullAccess => orbit_runtime::PermissionMode::DangerFullAccess,
+            frontal_code_integrations::mcp::tools::PermissionMode::ReadOnly => frontal_code_runtime::PermissionMode::ReadOnly,
+            frontal_code_integrations::mcp::tools::PermissionMode::WorkspaceWrite => frontal_code_runtime::PermissionMode::WorkspaceWrite,
+            frontal_code_integrations::mcp::tools::PermissionMode::DangerFullAccess => frontal_code_runtime::PermissionMode::DangerFullAccess,
         },
     }))
-    .chain(orbit_webhooks::webhook_tool_specs().into_iter().map(|spec| ToolSpec {
+    .chain(frontal_code_webhooks::webhook_tool_specs().into_iter().map(|spec| ToolSpec {
         name: Box::leak(spec.name.into_boxed_str()),
         description: Box::leak(spec.description.into_boxed_str()),
         input_schema: spec.input_schema,
         required_permission: match spec.required_permission {
-            orbit_webhooks::tools::PermissionMode::ReadOnly => orbit_runtime::PermissionMode::ReadOnly,
-            orbit_webhooks::tools::PermissionMode::WorkspaceWrite => orbit_runtime::PermissionMode::WorkspaceWrite,
-            orbit_webhooks::tools::PermissionMode::DangerFullAccess => orbit_runtime::PermissionMode::DangerFullAccess,
+            frontal_code_webhooks::tools::PermissionMode::ReadOnly => frontal_code_runtime::PermissionMode::ReadOnly,
+            frontal_code_webhooks::tools::PermissionMode::WorkspaceWrite => frontal_code_runtime::PermissionMode::WorkspaceWrite,
+            frontal_code_webhooks::tools::PermissionMode::DangerFullAccess => frontal_code_runtime::PermissionMode::DangerFullAccess,
         },
     }))
     .collect()
@@ -1527,22 +1527,22 @@ fn execute_tool_with_enforcer_and_scope(
         "TestingPermission" => {
             from_value::<TestingPermissionInput>(input).and_then(run_testing_permission)
         }
-        // MCP tools from orbit-integrations
+        // MCP tools from frontal-code-integrations
         tool_name
             if tool_name.starts_with("ListMcpResources")
                 || tool_name.starts_with("ReadMcpResource")
                 || tool_name.starts_with("McpAuth")
                 || tool_name.starts_with("MCP") =>
         {
-            orbit_integrations::execute_mcp_tool(name, input)
+            frontal_code_integrations::execute_mcp_tool(name, input)
         }
-        // Webhook tools from orbit-webhooks
+        // Webhook tools from frontal-code-webhooks
         tool_name
             if tool_name.starts_with("RemoteTrigger")
                 || tool_name.starts_with("ListWebhookEvents")
                 || tool_name.starts_with("TriggerWebhook") =>
         {
-            orbit_webhooks::execute_webhook_tool(name, input)
+            frontal_code_webhooks::execute_webhook_tool(name, input)
         }
         _ => Err(format!("unsupported tool: {name}")),
     }
@@ -3389,7 +3389,7 @@ fn build_http_client() -> Result<Client, String> {
     Client::builder()
         .timeout(Duration::from_secs(20))
         .redirect(reqwest::redirect::Policy::limited(10))
-        .user_agent("orbit-rust-tools/0.1")
+        .user_agent("frontal-code-rust-tools/0.1")
         .build()
         .map_err(|error| error.to_string())
 }
@@ -3410,7 +3410,7 @@ fn normalize_fetch_url(url: &str) -> Result<String, String> {
 }
 
 fn build_search_url(query: &str) -> Result<reqwest::Url, String> {
-    if let Ok(base) = std::env::var("ORBIT_WEB_SEARCH_BASE_URL") {
+    if let Ok(base) = std::env::var("FCODE_WEB_SEARCH_BASE_URL") {
         let mut url = reqwest::Url::parse(&base).map_err(|error| error.to_string())?;
         url.query_pairs_mut().append_pair("q", query);
         return Ok(url);
@@ -3755,16 +3755,16 @@ fn validate_todos(todos: &[TodoItem]) -> Result<(), String> {
 }
 
 fn todo_store_path() -> Result<std::path::PathBuf, String> {
-    if let Ok(path) = std::env::var("ORBIT_TODO_STORE") {
+    if let Ok(path) = std::env::var("FCODE_TODO_STORE") {
         return Ok(std::path::PathBuf::from(path));
     }
     let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
-    Ok(cwd.join(".orbit-todos.json"))
+    Ok(cwd.join(".frontal-code-todos.json"))
 }
 
 fn resolve_skill_path(skill: &str) -> Result<std::path::PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
-    match orbit_commands::resolve_skill_path(&cwd, skill) {
+    match frontal_code_commands::resolve_skill_path(&cwd, skill) {
         Ok(path) => Ok(path),
         Err(_) => resolve_skill_path_from_compat_roots(skill),
     }
@@ -3804,8 +3804,11 @@ fn skill_lookup_roots() -> Vec<SkillLookupRoot> {
         push_project_skill_lookup_roots(&mut roots, &cwd);
     }
 
-    if let Ok(orbit_config_home) = std::env::var("ORBIT_CONFIG_HOME") {
-        push_prefixed_skill_lookup_roots(&mut roots, std::path::Path::new(&orbit_config_home));
+    if let Ok(frontal_code_config_home) = std::env::var("FCODE_CONFIG_HOME") {
+        push_prefixed_skill_lookup_roots(
+            &mut roots,
+            std::path::Path::new(&frontal_code_config_home),
+        );
     }
     if let Ok(codex_home) = std::env::var("CODEX_HOME") {
         push_prefixed_skill_lookup_roots(&mut roots, std::path::Path::new(&codex_home));
@@ -3833,7 +3836,7 @@ fn skill_lookup_roots() -> Vec<SkillLookupRoot> {
     }
     push_skill_lookup_root(
         &mut roots,
-        std::path::PathBuf::from("/home/bellman/.orbit/skills"),
+        std::path::PathBuf::from("/home/bellman/.frontal-code/skills"),
         SkillLookupOrigin::SkillsDir,
     );
     push_skill_lookup_root(
@@ -3849,7 +3852,7 @@ fn push_project_skill_lookup_roots(roots: &mut Vec<SkillLookupRoot>, cwd: &std::
     for ancestor in cwd.ancestors() {
         push_prefixed_skill_lookup_roots(roots, &ancestor.join(".omc"));
         push_prefixed_skill_lookup_roots(roots, &ancestor.join(".agents"));
-        push_prefixed_skill_lookup_roots(roots, &ancestor.join(".orbit"));
+        push_prefixed_skill_lookup_roots(roots, &ancestor.join(".frontal-code"));
         push_prefixed_skill_lookup_roots(roots, &ancestor.join(".codex"));
         push_prefixed_skill_lookup_roots(roots, &ancestor.join(".claude"));
     }
@@ -3857,7 +3860,7 @@ fn push_project_skill_lookup_roots(roots: &mut Vec<SkillLookupRoot>, cwd: &std::
 
 fn push_home_skill_lookup_roots(roots: &mut Vec<SkillLookupRoot>, home: &std::path::Path) {
     push_prefixed_skill_lookup_roots(roots, &home.join(".omc"));
-    push_prefixed_skill_lookup_roots(roots, &home.join(".orbit"));
+    push_prefixed_skill_lookup_roots(roots, &home.join(".frontal-code"));
     push_prefixed_skill_lookup_roots(roots, &home.join(".codex"));
     push_prefixed_skill_lookup_roots(roots, &home.join(".claude"));
     push_skill_lookup_root(
@@ -4391,7 +4394,7 @@ where
 }
 
 fn spawn_agent_job(job: AgentJob) -> Result<(), String> {
-    let thread_name = format!("orbit-agent-{}", job.manifest.agent_id);
+    let thread_name = format!("frontal-code-agent-{}", job.manifest.agent_id);
     std::thread::Builder::new()
         .name(thread_name)
         .spawn(move || {
@@ -4548,7 +4551,7 @@ fn allowed_tools_for_subagent(subagent_type: &str) -> BTreeSet<String> {
             "SendUserMessage",
             "PowerShell",
         ],
-        "orbit-guide" => vec![
+        "frontal-code-guide" => vec![
             "read_file",
             "glob_search",
             "grep_search",
@@ -4683,15 +4686,15 @@ fn maybe_report_hosted_task_completion(
 }
 
 fn read_hosted_server_url() -> Option<String> {
-    env::var("ORBIT_SERVER_URL")
+    env::var("FCODE_SERVER_URL")
         .ok()
-        .or_else(|| env::var("ORBIT_SERVER_BASE_URL").ok())
+        .or_else(|| env::var("FCODE_SERVER_BASE_URL").ok())
         .map(|value| value.trim().trim_end_matches('/').to_string())
         .filter(|value| !value.is_empty())
 }
 
 fn read_hosted_server_api_key() -> Option<String> {
-    env::var("ORBIT_SERVER_API_KEY")
+    env::var("FCODE_SERVER_API_KEY")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
@@ -5197,7 +5200,7 @@ fn push_prompt_cache_record(client: &ProviderClient, events: &mut Vec<AssistantE
 }
 
 fn prompt_cache_record_to_runtime_event(
-    record: orbit_api::PromptCacheRecord,
+    record: frontal_code_api::PromptCacheRecord,
 ) -> Option<PromptCacheEvent> {
     let cache_break = record.cache_break?;
     Some(PromptCacheEvent {
@@ -5209,7 +5212,7 @@ fn prompt_cache_record_to_runtime_event(
     })
 }
 
-fn final_assistant_text(summary: &orbit_runtime::TurnSummary) -> String {
+fn final_assistant_text(summary: &frontal_code_runtime::TurnSummary) -> String {
     summary
         .assistant_messages
         .last()
@@ -5352,14 +5355,14 @@ fn canonical_tool_token(value: &str) -> String {
 }
 
 fn agent_store_dir() -> Result<std::path::PathBuf, String> {
-    if let Ok(path) = std::env::var("ORBIT_AGENT_STORE") {
+    if let Ok(path) = std::env::var("FCODE_AGENT_STORE") {
         return Ok(std::path::PathBuf::from(path));
     }
     let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
     if let Some(workspace_root) = cwd.ancestors().nth(2) {
-        return Ok(workspace_root.join(".orbit-agents"));
+        return Ok(workspace_root.join(".frontal-code/agents"));
     }
-    Ok(cwd.join(".orbit-agents"))
+    Ok(cwd.join(".frontal-code/agents"))
 }
 
 fn make_agent_id() -> String {
@@ -5400,7 +5403,9 @@ fn normalize_subagent_type(subagent_type: Option<&str>) -> String {
         "verification" | "verificationagent" | "verify" | "verifier" => {
             String::from("Verification")
         }
-        "orbitguide" | "orbitguideagent" | "guide" => String::from("orbit-guide"),
+        "frontal-codeguide" | "frontal-codeguideagent" | "guide" => {
+            String::from("frontal-code-guide")
+        }
         "statusline" | "statuslinesetup" => String::from("statusline-setup"),
         _ => trimmed.to_string(),
     }
@@ -6093,16 +6098,16 @@ fn config_file_for_scope(scope: ConfigScope) -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
     Ok(match scope {
         ConfigScope::Global => config_home_dir()?.join("settings.json"),
-        ConfigScope::Settings => cwd.join(".orbit").join("settings.local.json"),
+        ConfigScope::Settings => cwd.join(".frontal-code").join("settings.local.json"),
     })
 }
 
 fn config_home_dir() -> Result<PathBuf, String> {
-    if let Ok(path) = std::env::var("ORBIT_CONFIG_HOME") {
+    if let Ok(path) = std::env::var("FCODE_CONFIG_HOME") {
         return Ok(PathBuf::from(path));
     }
     let home = std::env::var("HOME").map_err(|_| String::from("HOME is not set"))?;
-    Ok(PathBuf::from(home).join(".orbit"))
+    Ok(PathBuf::from(home).join(".frontal-code"))
 }
 
 fn read_json_object(path: &Path) -> Result<serde_json::Map<String, Value>, String> {
@@ -6241,7 +6246,9 @@ fn iso8601_timestamp() -> String {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn execute_powershell(input: PowerShellInput) -> std::io::Result<orbit_runtime::BashCommandOutput> {
+fn execute_powershell(
+    input: PowerShellInput,
+) -> std::io::Result<frontal_code_runtime::BashCommandOutput> {
     let _ = &input.description;
     if let Some(output) = workspace_test_branch_preflight(&input.command) {
         return Ok(output);
@@ -6282,7 +6289,7 @@ fn execute_shell_command(
     command: &str,
     timeout: Option<u64>,
     run_in_background: Option<bool>,
-) -> std::io::Result<orbit_runtime::BashCommandOutput> {
+) -> std::io::Result<frontal_code_runtime::BashCommandOutput> {
     if run_in_background.unwrap_or(false) {
         let child = std::process::Command::new(shell)
             .arg("-NoProfile")
@@ -6293,7 +6300,7 @@ fn execute_shell_command(
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()?;
-        return Ok(orbit_runtime::BashCommandOutput {
+        return Ok(frontal_code_runtime::BashCommandOutput {
             stdout: String::new(),
             stderr: String::new(),
             raw_output_path: None,
@@ -6328,7 +6335,7 @@ fn execute_shell_command(
         loop {
             if let Some(status) = child.try_wait()? {
                 let output = child.wait_with_output()?;
-                return Ok(orbit_runtime::BashCommandOutput {
+                return Ok(frontal_code_runtime::BashCommandOutput {
                     stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
                     stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
                     raw_output_path: None,
@@ -6362,7 +6369,7 @@ Command exceeded timeout of {timeout_ms} ms",
                         stderr.trim_end()
                     )
                 };
-                return Ok(orbit_runtime::BashCommandOutput {
+                return Ok(frontal_code_runtime::BashCommandOutput {
                     stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
                     stderr,
                     raw_output_path: None,
@@ -6385,7 +6392,7 @@ Command exceeded timeout of {timeout_ms} ms",
     }
 
     let output = process.output()?;
-    Ok(orbit_runtime::BashCommandOutput {
+    Ok(frontal_code_runtime::BashCommandOutput {
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         raw_output_path: None,
@@ -6492,13 +6499,13 @@ mod tests {
         GlobalToolRegistry, HostedAgentCancellationSource, HostedAgentLocator, LaneEventName,
         LaneFailureClass, SubagentToolExecutor, ToolExecutionScope,
     };
-    use orbit_api::OutputContentBlock;
-    use orbit_runtime::{
+    use frontal_code_api::OutputContentBlock;
+    use frontal_code_runtime::{
         permission_enforcer::PermissionEnforcer, ApiRequest, AssistantEvent, ConversationRuntime,
         HookAbortSignal, PermissionMode, PermissionPolicy, RuntimeError, Session, TaskPacket,
         ToolExecutor,
     };
-    use orbit_telemetry::{MemoryTelemetrySink, SessionTracer, TelemetryEvent};
+    use frontal_code_telemetry::{MemoryTelemetrySink, SessionTracer, TelemetryEvent};
     use serde_json::json;
 
     fn env_lock() -> &'static Mutex<()> {
@@ -6528,7 +6535,7 @@ mod tests {
             .as_nanos();
         let pid = std::process::id();
         let serial = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        std::env::temp_dir().join(format!("orbit-tools-{pid}-{unique}-{serial}-{name}"))
+        std::env::temp_dir().join(format!("frontal-code-tools-{pid}-{unique}-{serial}-{name}"))
     }
 
     struct EnvRestoreGuard {
@@ -6904,7 +6911,7 @@ mod tests {
                     "properties": { "text": { "type": "string" } },
                     "additionalProperties": false
                 }),
-                required_permission: orbit_runtime::PermissionMode::ReadOnly,
+                required_permission: frontal_code_runtime::PermissionMode::ReadOnly,
             }])
             .expect("runtime tools should register");
 
@@ -6925,7 +6932,7 @@ mod tests {
             permissions,
             vec![(
                 "mcp__demo__echo".to_string(),
-                orbit_runtime::PermissionMode::ReadOnly
+                frontal_code_runtime::PermissionMode::ReadOnly
             )]
         );
 
@@ -6933,13 +6940,13 @@ mod tests {
             "demo echo",
             5,
             Some(vec!["pending-server".to_string()]),
-            Some(orbit_runtime::McpDegradedReport::new(
+            Some(frontal_code_runtime::McpDegradedReport::new(
                 vec!["demo".to_string()],
-                vec![orbit_runtime::McpFailedServer {
+                vec![frontal_code_runtime::McpFailedServer {
                     server_name: "pending-server".to_string(),
-                    phase: orbit_runtime::McpLifecyclePhase::ToolDiscovery,
-                    error: orbit_runtime::McpErrorSurface::new(
-                        orbit_runtime::McpLifecyclePhase::ToolDiscovery,
+                    phase: frontal_code_runtime::McpLifecyclePhase::ToolDiscovery,
+                    error: frontal_code_runtime::McpErrorSurface::new(
+                        frontal_code_runtime::McpLifecyclePhase::ToolDiscovery,
                         Some("pending-server".to_string()),
                         "tool discovery failed",
                         BTreeMap::new(),
@@ -7062,7 +7069,7 @@ mod tests {
         }));
 
         std::env::set_var(
-            "ORBIT_WEB_SEARCH_BASE_URL",
+            "FCODE_WEB_SEARCH_BASE_URL",
             format!("http://{}/search", server.addr()),
         );
         let result = execute_tool(
@@ -7074,7 +7081,7 @@ mod tests {
             }),
         )
         .expect("WebSearch should succeed");
-        std::env::remove_var("ORBIT_WEB_SEARCH_BASE_URL");
+        std::env::remove_var("FCODE_WEB_SEARCH_BASE_URL");
 
         let output: serde_json::Value = serde_json::from_str(&result).expect("valid json");
         assert_eq!(output["query"], "rust web search");
@@ -7114,7 +7121,7 @@ mod tests {
         }));
 
         std::env::set_var(
-            "ORBIT_WEB_SEARCH_BASE_URL",
+            "FCODE_WEB_SEARCH_BASE_URL",
             format!("http://{}/fallback", server.addr()),
         );
         let result = execute_tool(
@@ -7124,7 +7131,7 @@ mod tests {
             }),
         )
         .expect("WebSearch fallback parsing should succeed");
-        std::env::remove_var("ORBIT_WEB_SEARCH_BASE_URL");
+        std::env::remove_var("FCODE_WEB_SEARCH_BASE_URL");
 
         let output: serde_json::Value = serde_json::from_str(&result).expect("valid json");
         let results = output["results"].as_array().expect("results array");
@@ -7137,10 +7144,10 @@ mod tests {
         assert_eq!(content[0]["url"], "https://example.com/one");
         assert_eq!(content[1]["url"], "https://docs.rs/tokio");
 
-        std::env::set_var("ORBIT_WEB_SEARCH_BASE_URL", "://bad-base-url");
+        std::env::set_var("FCODE_WEB_SEARCH_BASE_URL", "://bad-base-url");
         let error = execute_tool("WebSearch", &json!({ "query": "generic links" }))
             .expect_err("invalid base URL should fail");
-        std::env::remove_var("ORBIT_WEB_SEARCH_BASE_URL");
+        std::env::remove_var("FCODE_WEB_SEARCH_BASE_URL");
         assert!(error.contains("relative URL without a base") || error.contains("empty host"));
     }
 
@@ -7207,7 +7214,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let path = temp_path("todos.json");
-        std::env::set_var("ORBIT_TODO_STORE", &path);
+        std::env::set_var("FCODE_TODO_STORE", &path);
 
         let first = execute_tool(
             "TodoWrite",
@@ -7233,7 +7240,7 @@ mod tests {
             }),
         )
         .expect("TodoWrite should succeed");
-        std::env::remove_var("ORBIT_TODO_STORE");
+        std::env::remove_var("FCODE_TODO_STORE");
         let _ = std::fs::remove_file(path);
 
         let second_output: serde_json::Value = serde_json::from_str(&second).expect("valid json");
@@ -7254,7 +7261,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let path = temp_path("todos-errors.json");
-        std::env::set_var("ORBIT_TODO_STORE", &path);
+        std::env::set_var("FCODE_TODO_STORE", &path);
 
         let empty = execute_tool("TodoWrite", &json!({ "todos": [] }))
             .expect_err("empty todos should fail");
@@ -7294,7 +7301,7 @@ mod tests {
             }),
         )
         .expect("completed todos should succeed");
-        std::env::remove_var("ORBIT_TODO_STORE");
+        std::env::remove_var("FCODE_TODO_STORE");
         let _ = fs::remove_file(path);
 
         let output: serde_json::Value = serde_json::from_str(&nudge).expect("valid json");
@@ -7364,8 +7371,8 @@ mod tests {
     fn skill_resolves_project_local_skills_and_legacy_commands() {
         let _guard = env_lock().lock().expect("env lock should acquire");
         let root = temp_path("project-skills");
-        let skill_dir = root.join(".orbit").join("skills").join("plan");
-        let command_dir = root.join(".orbit").join("commands");
+        let skill_dir = root.join(".frontal-code").join("skills").join("plan");
+        let command_dir = root.join(".frontal-code").join("commands");
         fs::create_dir_all(&skill_dir).expect("skill dir should exist");
         fs::create_dir_all(&command_dir).expect("command dir should exist");
         fs::write(
@@ -7389,7 +7396,7 @@ mod tests {
         assert!(skill_output["path"]
             .as_str()
             .expect("path")
-            .ends_with(".orbit/skills/plan/SKILL.md"));
+            .ends_with(".frontal-code/skills/plan/SKILL.md"));
 
         let command_result = execute_tool("Skill", &json!({ "skill": "/handoff" }))
             .expect("legacy command should resolve");
@@ -7398,7 +7405,7 @@ mod tests {
         assert!(command_output["path"]
             .as_str()
             .expect("path")
-            .ends_with(".orbit/commands/handoff.md"));
+            .ends_with(".frontal-code/commands/handoff.md"));
 
         std::env::set_current_dir(&original_dir).expect("restore cwd");
         fs::remove_dir_all(root).expect("temp project should clean up");
@@ -7422,11 +7429,11 @@ mod tests {
         .expect("skill file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_current_dir(&nested).expect("set cwd");
 
@@ -7446,8 +7453,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7481,11 +7488,11 @@ mod tests {
         .expect("agents skill file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_current_dir(&nested).expect("set cwd");
 
@@ -7517,8 +7524,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7546,11 +7553,11 @@ mod tests {
         .expect("learned skill file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_claude_config_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_var("CLAUDE_CONFIG_DIR", &claude_config_dir);
 
@@ -7569,8 +7576,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7606,11 +7613,11 @@ mod tests {
         .expect("direct command file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_claude_config_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_var("CLAUDE_CONFIG_DIR", &claude_config_dir);
 
@@ -7642,8 +7649,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7674,11 +7681,11 @@ mod tests {
         .expect("legacy command file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_current_dir(&nested).expect("set cwd");
 
@@ -7698,8 +7705,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7747,7 +7754,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-store");
-        std::env::set_var("ORBIT_AGENT_STORE", &dir);
+        std::env::set_var("FCODE_AGENT_STORE", &dir);
         let captured = Arc::new(Mutex::new(None::<AgentJob>));
         let captured_for_spawn = Arc::clone(&captured);
 
@@ -7768,7 +7775,7 @@ mod tests {
             },
         )
         .expect("Agent should succeed");
-        std::env::remove_var("ORBIT_AGENT_STORE");
+        std::env::remove_var("FCODE_AGENT_STORE");
 
         assert_eq!(manifest.name, "ship-audit");
         assert_eq!(manifest.subagent_type.as_deref(), Some("Explore"));
@@ -7832,7 +7839,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-cancel");
-        std::env::set_var("ORBIT_AGENT_STORE", &dir);
+        std::env::set_var("FCODE_AGENT_STORE", &dir);
 
         let manifest = execute_agent_with_spawn(
             AgentInput {
@@ -7868,7 +7875,7 @@ mod tests {
         assert!(output_contents.contains("sub-agent cancelled by control plane"));
 
         unregister_hosted_agent_control(&manifest.agent_id);
-        std::env::remove_var("ORBIT_AGENT_STORE");
+        std::env::remove_var("FCODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -7878,7 +7885,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-status");
-        std::env::set_var("ORBIT_AGENT_STORE", &dir);
+        std::env::set_var("FCODE_AGENT_STORE", &dir);
 
         let manifest = execute_agent_with_spawn(
             AgentInput {
@@ -7913,7 +7920,7 @@ mod tests {
 
         let wrong_store = temp_path("agent-status-wrong-store");
         std::fs::create_dir_all(&wrong_store).expect("wrong store dir should exist");
-        std::env::set_var("ORBIT_AGENT_STORE", &wrong_store);
+        std::env::set_var("FCODE_AGENT_STORE", &wrong_store);
         let restored_from_locator = hosted_agent_status_with_locator(&HostedAgentLocator {
             agent_id: Some(manifest.agent_id.clone()),
             manifest_file: Some(manifest.manifest_file.clone()),
@@ -7937,7 +7944,7 @@ mod tests {
             Some("hosted agent manifest restored from locator path")
         );
 
-        std::env::remove_var("ORBIT_AGENT_STORE");
+        std::env::remove_var("FCODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(wrong_store);
     }
@@ -7949,7 +7956,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-status-terminal");
         std::fs::create_dir_all(&dir).expect("agent store dir should exist");
-        std::env::set_var("ORBIT_AGENT_STORE", &dir);
+        std::env::set_var("FCODE_AGENT_STORE", &dir);
 
         let manifest = AgentOutput {
             agent_id: "agent-status-terminal".to_string(),
@@ -7987,7 +7994,7 @@ mod tests {
         assert!(!restored.orphaned);
         assert_eq!(restored.status.as_deref(), Some("completed"));
 
-        std::env::remove_var("ORBIT_AGENT_STORE");
+        std::env::remove_var("FCODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -7998,7 +8005,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-cancel-fallback");
         std::fs::create_dir_all(&dir).expect("agent store dir should exist");
-        std::env::set_var("ORBIT_AGENT_STORE", &dir);
+        std::env::set_var("FCODE_AGENT_STORE", &dir);
 
         let manifest = AgentOutput {
             agent_id: "agent-cancel-fallback".to_string(),
@@ -8027,7 +8034,7 @@ mod tests {
 
         let wrong_store = temp_path("agent-cancel-fallback-wrong-store");
         std::fs::create_dir_all(&wrong_store).expect("wrong store dir should exist");
-        std::env::set_var("ORBIT_AGENT_STORE", &wrong_store);
+        std::env::set_var("FCODE_AGENT_STORE", &wrong_store);
 
         let cancellation = cancel_hosted_agent_with_locator(&HostedAgentLocator {
             agent_id: Some(manifest.agent_id.clone()),
@@ -8052,7 +8059,7 @@ mod tests {
         assert_eq!(manifest_json["derivedState"], "cancelled");
         assert!(output_contents.contains("sub-agent cancelled by control plane after restart"));
 
-        std::env::remove_var("ORBIT_AGENT_STORE");
+        std::env::remove_var("FCODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(wrong_store);
     }
@@ -8064,7 +8071,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-cancel-missing-locator");
         std::fs::create_dir_all(&dir).expect("missing locator dir should exist");
-        std::env::set_var("ORBIT_AGENT_STORE", temp_path("agent-cancel-missing-store"));
+        std::env::set_var("FCODE_AGENT_STORE", temp_path("agent-cancel-missing-store"));
 
         let cancellation = cancel_hosted_agent_with_locator(&HostedAgentLocator {
             agent_id: Some("missing-agent".to_string()),
@@ -8079,7 +8086,7 @@ mod tests {
             .detail
             .contains("no hosted agent control or manifest found"));
 
-        std::env::remove_var("ORBIT_AGENT_STORE");
+        std::env::remove_var("FCODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -8090,7 +8097,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-runner");
-        std::env::set_var("ORBIT_AGENT_STORE", &dir);
+        std::env::set_var("FCODE_AGENT_STORE", &dir);
 
         let completed = execute_agent_with_spawn(
             AgentInput {
@@ -8225,7 +8232,7 @@ mod tests {
         );
         assert_eq!(spawn_error_manifest_json["derivedState"], "truly_idle");
 
-        std::env::remove_var("ORBIT_AGENT_STORE");
+        std::env::remove_var("FCODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -8234,7 +8241,7 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::env::set_var("ORBIT_SERVER_URL", "http://hosted.orbit.test/");
+        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
         let manifest = AgentOutput {
             agent_id: "agent-success".to_string(),
             name: "hosted-report-success".to_string(),
@@ -8263,12 +8270,12 @@ mod tests {
         let request_json = serde_json::to_value(request).expect("request should serialize");
         assert_eq!(
             url,
-            "http://hosted.orbit.test/v1/tasks/task-hosted-success/complete"
+            "http://hosted.frontal-code.test/v1/tasks/task-hosted-success/complete"
         );
         assert_eq!(request_json["finish_reason"], "stop");
         assert_eq!(request_json["result"], "Hosted completion reported");
         assert!(request_json.get("error").is_none());
-        std::env::remove_var("ORBIT_SERVER_URL");
+        std::env::remove_var("FCODE_SERVER_URL");
     }
 
     #[test]
@@ -8276,7 +8283,7 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::env::set_var("ORBIT_SERVER_URL", "http://hosted.orbit.test/");
+        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
         let manifest = AgentOutput {
             agent_id: "agent-failure".to_string(),
             name: "hosted-report-failure".to_string(),
@@ -8305,7 +8312,7 @@ mod tests {
         let request_json = serde_json::to_value(request).expect("request should serialize");
         assert_eq!(
             url,
-            "http://hosted.orbit.test/v1/tasks/task-hosted-report/complete"
+            "http://hosted.frontal-code.test/v1/tasks/task-hosted-report/complete"
         );
         assert_eq!(request_json["finish_reason"], "error");
         assert_eq!(
@@ -8313,7 +8320,7 @@ mod tests {
             "tool failed: simulated hosted failure"
         );
         assert!(request_json.get("result").is_none());
-        std::env::remove_var("ORBIT_SERVER_URL");
+        std::env::remove_var("FCODE_SERVER_URL");
     }
 
     #[test]
@@ -8356,7 +8363,7 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::env::set_var("ORBIT_SERVER_URL", "http://hosted.orbit.test/");
+        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
         let manifest = AgentOutput {
             agent_id: "agent-cancelled".to_string(),
             name: "hosted-report-cancelled".to_string(),
@@ -8384,7 +8391,7 @@ mod tests {
         );
         assert!(request.is_none());
 
-        std::env::remove_var("ORBIT_SERVER_URL");
+        std::env::remove_var("FCODE_SERVER_URL");
     }
 
     #[test]
@@ -8533,7 +8540,7 @@ mod tests {
         input_path: String,
     }
 
-    impl orbit_runtime::ApiClient for MockSubagentApiClient {
+    impl frontal_code_runtime::ApiClient for MockSubagentApiClient {
         fn stream(&mut self, request: ApiRequest) -> Result<Vec<AssistantEvent>, RuntimeError> {
             self.calls += 1;
             match self.calls {
@@ -8597,7 +8604,7 @@ mod tests {
             .flat_map(|message| message.blocks.iter())
             .any(|block| matches!(
                 block,
-                orbit_runtime::ContentBlock::ToolResult { output, .. }
+                frontal_code_runtime::ContentBlock::ToolResult { output, .. }
                     if output.contains("hello from child")
             )));
 
@@ -9088,7 +9095,7 @@ mod tests {
     #[test]
     fn brief_returns_sent_message_and_attachment_metadata() {
         let attachment = std::env::temp_dir().join(format!(
-            "orbit-brief-{}.png",
+            "frontal-code-brief-{}.png",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -9119,7 +9126,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = std::env::temp_dir().join(format!(
-            "orbit-config-{}",
+            "frontal-code-config-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -9127,19 +9134,19 @@ mod tests {
         ));
         let home = root.join("home");
         let cwd = root.join("cwd");
-        std::fs::create_dir_all(home.join(".orbit")).expect("home dir");
-        std::fs::create_dir_all(cwd.join(".orbit")).expect("cwd dir");
+        std::fs::create_dir_all(home.join(".frontal-code")).expect("home dir");
+        std::fs::create_dir_all(cwd.join(".frontal-code")).expect("cwd dir");
         std::fs::write(
-            home.join(".orbit").join("settings.json"),
+            home.join(".frontal-code").join("settings.json"),
             r#"{"verbose":false}"#,
         )
         .expect("write global settings");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::set_current_dir(&cwd).expect("set cwd");
 
         let get = execute_tool("Config", &json!({"setting": "verbose"})).expect("get config");
@@ -9173,8 +9180,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         let _ = std::fs::remove_dir_all(root);
     }
@@ -9185,7 +9192,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = std::env::temp_dir().join(format!(
-            "orbit-plan-mode-{}",
+            "frontal-code-plan-mode-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -9193,19 +9200,19 @@ mod tests {
         ));
         let home = root.join("home");
         let cwd = root.join("cwd");
-        std::fs::create_dir_all(home.join(".orbit")).expect("home dir");
-        std::fs::create_dir_all(cwd.join(".orbit")).expect("cwd dir");
+        std::fs::create_dir_all(home.join(".frontal-code")).expect("home dir");
+        std::fs::create_dir_all(cwd.join(".frontal-code")).expect("cwd dir");
         std::fs::write(
-            cwd.join(".orbit").join("settings.local.json"),
+            cwd.join(".frontal-code").join("settings.local.json"),
             r#"{"permissions":{"defaultMode":"acceptEdits"}}"#,
         )
         .expect("write local settings");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::set_current_dir(&cwd).expect("set cwd");
 
         let enter = execute_tool("EnterPlanMode", &json!({})).expect("enter plan mode");
@@ -9216,12 +9223,15 @@ mod tests {
         assert_eq!(enter_output["currentLocalMode"], "plan");
 
         let local_settings =
-            std::fs::read_to_string(cwd.join(".orbit").join("settings.local.json"))
+            std::fs::read_to_string(cwd.join(".frontal-code").join("settings.local.json"))
                 .expect("local settings after enter");
         assert!(local_settings.contains(r#""defaultMode": "plan""#));
-        let state =
-            std::fs::read_to_string(cwd.join(".orbit").join("tool-state").join("plan-mode.json"))
-                .expect("plan mode state");
+        let state = std::fs::read_to_string(
+            cwd.join(".frontal-code")
+                .join("tool-state")
+                .join("plan-mode.json"),
+        )
+        .expect("plan mode state");
         assert!(state.contains(r#""hadLocalOverride": true"#));
         assert!(state.contains(r#""previousLocalMode": "acceptEdits""#));
 
@@ -9233,11 +9243,11 @@ mod tests {
         assert_eq!(exit_output["currentLocalMode"], "acceptEdits");
 
         let local_settings =
-            std::fs::read_to_string(cwd.join(".orbit").join("settings.local.json"))
+            std::fs::read_to_string(cwd.join(".frontal-code").join("settings.local.json"))
                 .expect("local settings after exit");
         assert!(local_settings.contains(r#""defaultMode": "acceptEdits""#));
         assert!(!cwd
-            .join(".orbit")
+            .join(".frontal-code")
             .join("tool-state")
             .join("plan-mode.json")
             .exists());
@@ -9248,8 +9258,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         let _ = std::fs::remove_dir_all(root);
     }
@@ -9260,7 +9270,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = std::env::temp_dir().join(format!(
-            "orbit-plan-mode-empty-{}",
+            "frontal-code-plan-mode-empty-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -9268,14 +9278,14 @@ mod tests {
         ));
         let home = root.join("home");
         let cwd = root.join("cwd");
-        std::fs::create_dir_all(home.join(".orbit")).expect("home dir");
-        std::fs::create_dir_all(cwd.join(".orbit")).expect("cwd dir");
+        std::fs::create_dir_all(home.join(".frontal-code")).expect("home dir");
+        std::fs::create_dir_all(cwd.join(".frontal-code")).expect("cwd dir");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("ORBIT_CONFIG_HOME");
+        std::env::remove_var("FCODE_CONFIG_HOME");
         std::env::set_current_dir(&cwd).expect("set cwd");
 
         let enter = execute_tool("EnterPlanMode", &json!({})).expect("enter plan mode");
@@ -9289,7 +9299,7 @@ mod tests {
         assert_eq!(exit_output["currentLocalMode"], serde_json::Value::Null);
 
         let local_settings =
-            std::fs::read_to_string(cwd.join(".orbit").join("settings.local.json"))
+            std::fs::read_to_string(cwd.join(".frontal-code").join("settings.local.json"))
                 .expect("local settings after exit");
         let local_settings_json: serde_json::Value =
             serde_json::from_str(&local_settings).expect("valid settings json");
@@ -9299,7 +9309,7 @@ mod tests {
             "permissions override should be removed on exit"
         );
         assert!(!cwd
-            .join(".orbit")
+            .join(".frontal-code")
             .join("tool-state")
             .join("plan-mode.json")
             .exists());
@@ -9310,8 +9320,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("ORBIT_CONFIG_HOME", value),
-            None => std::env::remove_var("ORBIT_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FCODE_CONFIG_HOME"),
         }
         let _ = std::fs::remove_dir_all(root);
     }
@@ -9389,7 +9399,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = std::env::temp_dir().join(format!(
-            "orbit-pwsh-bin-{}",
+            "frontal-code-pwsh-bin-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -9446,7 +9456,7 @@ printf 'pwsh:%s' "$1"
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let original_path = std::env::var("PATH").unwrap_or_default();
         let empty_dir = std::env::temp_dir().join(format!(
-            "orbit-empty-bin-{}",
+            "frontal-code-empty-bin-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -9465,11 +9475,11 @@ printf 'pwsh:%s' "$1"
     }
 
     fn read_only_registry() -> super::GlobalToolRegistry {
-        use orbit_runtime::permission_enforcer::PermissionEnforcer;
-        use orbit_runtime::PermissionPolicy;
+        use frontal_code_runtime::permission_enforcer::PermissionEnforcer;
+        use frontal_code_runtime::PermissionPolicy;
 
         let policy = mvp_tool_specs().into_iter().fold(
-            PermissionPolicy::new(orbit_runtime::PermissionMode::ReadOnly),
+            PermissionPolicy::new(frontal_code_runtime::PermissionMode::ReadOnly),
             |policy, spec| policy.with_tool_requirement(spec.name, spec.required_permission),
         );
         let mut registry = super::GlobalToolRegistry::builtin();
@@ -9564,7 +9574,7 @@ printf 'pwsh:%s' "$1"
         let result = run_task_packet(TaskPacket {
             objective: "Ship packetized runtime task".to_string(),
             scope: "runtime/task system".to_string(),
-            repo: "orbit-parity".to_string(),
+            repo: "frontal-code-parity".to_string(),
             branch_policy: "origin/main only".to_string(),
             acceptance_tests: vec![
                 "cargo build --workspace".to_string(),
@@ -9580,7 +9590,7 @@ printf 'pwsh:%s' "$1"
         assert_eq!(output["status"], "created");
         assert_eq!(output["prompt"], "Ship packetized runtime task");
         assert_eq!(output["description"], "runtime/task system");
-        assert_eq!(output["task_packet"]["repo"], "orbit-parity");
+        assert_eq!(output["task_packet"]["repo"], "frontal-code-parity");
         assert_eq!(
             output["task_packet"]["acceptance_tests"][1],
             "cargo test --workspace"
@@ -9671,7 +9681,7 @@ printf 'pwsh:%s' "$1"
             &json!({
                 "action": "upsert_entity",
                 "entity_id": "crate:memory",
-                "label": "orbit-memory",
+                "label": "frontal-code-memory",
                 "entity_type": "crate"
             }),
         )
@@ -9682,7 +9692,7 @@ printf 'pwsh:%s' "$1"
             &json!({
                 "action": "upsert_entity",
                 "entity_id": "crate:tools",
-                "label": "orbit-tools",
+                "label": "frontal-code-tools",
                 "entity_type": "crate"
             }),
         )
@@ -9722,7 +9732,7 @@ printf 'pwsh:%s' "$1"
                 &json!({
                     "action": "upsert_entity",
                     "entity_id": "crate:memory",
-                    "label": "orbit-memory",
+                    "label": "frontal-code-memory",
                     "entity_type": "crate"
                 }),
                 &scope,
@@ -9734,7 +9744,7 @@ printf 'pwsh:%s' "$1"
                 &json!({
                     "action": "upsert_entity",
                     "entity_id": "crate:tools",
-                    "label": "orbit-tools",
+                    "label": "frontal-code-tools",
                     "entity_type": "crate"
                 }),
                 &scope,
@@ -9810,7 +9820,7 @@ printf 'pwsh:%s' "$1"
                 &json!({
                     "action": "upsert_entity",
                     "entity_id": "crate:memory",
-                    "label": "orbit-memory",
+                    "label": "frontal-code-memory",
                     "entity_type": "crate"
                 }),
                 &scope,
@@ -10144,14 +10154,14 @@ printf 'pwsh:%s' "$1"
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _env = EnvRestoreGuard::capture(&[
-            "ORBIT_MEMORY_METADATA_PATH",
-            "ORBIT_MEMORY_PINECONE_URL",
-            "ORBIT_MEMORY_PINECONE_NAMESPACE",
-            "ORBIT_MEMORY_PINECONE_API_KEY",
-            "ORBIT_MEMORY_NEO4J_URL",
-            "ORBIT_MEMORY_NEO4J_DATABASE",
-            "ORBIT_MEMORY_NEO4J_USERNAME",
-            "ORBIT_MEMORY_NEO4J_PASSWORD",
+            "FCODE_MEMORY_METADATA_PATH",
+            "FCODE_MEMORY_PINECONE_URL",
+            "FCODE_MEMORY_PINECONE_NAMESPACE",
+            "FCODE_MEMORY_PINECONE_API_KEY",
+            "FCODE_MEMORY_NEO4J_URL",
+            "FCODE_MEMORY_NEO4J_DATABASE",
+            "FCODE_MEMORY_NEO4J_USERNAME",
+            "FCODE_MEMORY_NEO4J_PASSWORD",
         ]);
 
         let metadata_path = temp_path("memory-tool-backend.tsv");
@@ -10185,7 +10195,7 @@ printf 'pwsh:%s' "$1"
                     HttpResponse::json(
                         200,
                         "OK",
-                        r#"{"results":[{"columns":["n.id","n.label","n.entity_type"],"data":[{"row":["crate:tools","orbit-tools","crate"]},{"row":["crate:memory","orbit-memory","crate"]}]}],"errors":[]}"#,
+                        r#"{"results":[{"columns":["n.id","n.label","n.entity_type"],"data":[{"row":["crate:tools","frontal-code-tools","crate"]},{"row":["crate:memory","frontal-code-memory","crate"]}]}],"errors":[]}"#,
                     )
                 } else if request.body.contains("RETURN s.id, r.predicate, o.id") {
                     HttpResponse::json(
@@ -10199,23 +10209,23 @@ printf 'pwsh:%s' "$1"
             }))
         };
 
-        std::env::set_var("ORBIT_MEMORY_METADATA_PATH", &metadata_path);
+        std::env::set_var("FCODE_MEMORY_METADATA_PATH", &metadata_path);
         std::env::set_var(
-            "ORBIT_MEMORY_PINECONE_URL",
+            "FCODE_MEMORY_PINECONE_URL",
             format!("http://{}", pinecone_server.addr()),
         );
-        std::env::set_var("ORBIT_MEMORY_PINECONE_NAMESPACE", "memories");
-        if std::env::var("ORBIT_MEMORY_PINECONE_API_KEY").is_err() {
-            std::env::set_var("ORBIT_MEMORY_PINECONE_API_KEY", "pinecone-secret");
+        std::env::set_var("FCODE_MEMORY_PINECONE_NAMESPACE", "memories");
+        if std::env::var("FCODE_MEMORY_PINECONE_API_KEY").is_err() {
+            std::env::set_var("FCODE_MEMORY_PINECONE_API_KEY", "pinecone-secret");
         }
         std::env::set_var(
-            "ORBIT_MEMORY_NEO4J_URL",
+            "FCODE_MEMORY_NEO4J_URL",
             format!("http://{}", neo4j_server.addr()),
         );
-        std::env::set_var("ORBIT_MEMORY_NEO4J_DATABASE", "neo4j");
-        std::env::set_var("ORBIT_MEMORY_NEO4J_USERNAME", "neo4j");
-        if std::env::var("ORBIT_MEMORY_NEO4J_PASSWORD").is_err() {
-            std::env::set_var("ORBIT_MEMORY_NEO4J_PASSWORD", "neo4j-secret");
+        std::env::set_var("FCODE_MEMORY_NEO4J_DATABASE", "neo4j");
+        std::env::set_var("FCODE_MEMORY_NEO4J_USERNAME", "neo4j");
+        if std::env::var("FCODE_MEMORY_NEO4J_PASSWORD").is_err() {
+            std::env::set_var("FCODE_MEMORY_NEO4J_PASSWORD", "neo4j-secret");
         }
 
         let registry = GlobalToolRegistry::builtin();
@@ -10273,7 +10283,7 @@ printf 'pwsh:%s' "$1"
                 &json!({
                     "action": "upsert_entity",
                     "entity_id": "crate:tools",
-                    "label": "orbit-tools",
+                    "label": "frontal-code-tools",
                     "entity_type": "crate"
                 }),
                 &scope,
@@ -10285,7 +10295,7 @@ printf 'pwsh:%s' "$1"
                 &json!({
                     "action": "upsert_entity",
                     "entity_id": "crate:memory",
-                    "label": "orbit-memory",
+                    "label": "frontal-code-memory",
                     "entity_type": "crate"
                 }),
                 &scope,

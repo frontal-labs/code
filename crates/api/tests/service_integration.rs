@@ -25,7 +25,7 @@ impl TestServer {
     async fn start_with_env(extra_env: &[(&str, &str)]) -> Self {
         let temp_dir = make_temp_dir();
         let cli_bin = write_mock_cli(&temp_dir);
-        let api_bin = env!("CARGO_BIN_EXE_orbit-api");
+        let api_bin = env!("CARGO_BIN_EXE_frontal-code-api");
 
         // Bind port 0 and let the server tell us where it landed. Reserving a
         // port up front and handing the number to the child races: the socket
@@ -33,14 +33,14 @@ impl TestServer {
         // take it in between.
         let mut command = Command::new(api_bin);
         command
-            .env("ORBIT_CLI_BIN", &cli_bin)
-            .env("ORBIT_API_HOST", "127.0.0.1")
-            .env("ORBIT_API_PORT", "0")
+            .env("FCODE_CLI_BIN", &cli_bin)
+            .env("FCODE_API_HOST", "127.0.0.1")
+            .env("FCODE_API_PORT", "0")
             .stdout(Stdio::piped());
         for (key, value) in extra_env {
             command.env(key, value);
         }
-        let mut child = command.spawn().expect("failed to spawn orbit-api");
+        let mut child = command.spawn().expect("failed to spawn frontal-code-api");
 
         let stdout = child.stdout.take().expect("stdout should be piped");
         let base_url = read_listening_url(stdout).await;
@@ -176,7 +176,7 @@ async fn prompt_endpoint_forwards_prompt_and_options() {
 
 #[tokio::test]
 async fn auth_rejects_missing_api_key_and_accepts_valid_key() {
-    let server = TestServer::start_with_env(&[("ORBIT_API_KEY", "top-secret")]).await;
+    let server = TestServer::start_with_env(&[("FCODE_API_KEY", "top-secret")]).await;
 
     let client = reqwest::Client::new();
     let unauthorized = client
@@ -216,7 +216,7 @@ async fn cli_run_rejects_dangerous_permission_override_by_default() {
     let body: Value = response.json().await.expect("body should be JSON");
     assert_eq!(
         body["error"],
-        "dangerous permission overrides are disabled for orbit-api"
+        "dangerous permission overrides are disabled for frontal-code-api"
     );
 
     server.shutdown().await;
@@ -241,7 +241,7 @@ async fn prompt_rejects_danger_full_access_permission_mode_by_default() {
     let body: Value = response.json().await.expect("body should be JSON");
     assert_eq!(
         body["error"],
-        "danger-full-access is disabled for orbit-api"
+        "danger-full-access is disabled for frontal-code-api"
     );
 
     server.shutdown().await;
@@ -250,7 +250,7 @@ async fn prompt_rejects_danger_full_access_permission_mode_by_default() {
 #[tokio::test]
 async fn cli_run_respects_allowed_commands() {
     let server =
-        TestServer::start_with_env(&[("ORBIT_API_ALLOWED_COMMANDS", "status,version")]).await;
+        TestServer::start_with_env(&[("FCODE_API_ALLOWED_COMMANDS", "status,version")]).await;
 
     let client = reqwest::Client::new();
     let forbidden = client
@@ -280,7 +280,7 @@ async fn cli_run_respects_allowed_commands() {
 
 /// Read the server's startup banner and return the base URL it bound to.
 ///
-/// The banner looks like `orbit-api listening on http://127.0.0.1:54321 (cli: ...)`.
+/// The banner looks like `frontal-code-api listening on http://127.0.0.1:54321 (cli: ...)`.
 async fn read_listening_url(stdout: ChildStdout) -> String {
     let mut lines = BufReader::new(stdout).lines();
 
@@ -300,9 +300,9 @@ async fn read_listening_url(stdout: ChildStdout) -> String {
 
     match found {
         Ok(Some(url)) => url,
-        Ok(None) => panic!("orbit-api exited before reporting a listening address"),
+        Ok(None) => panic!("frontal-code-api exited before reporting a listening address"),
         Err(elapsed) => {
-            panic!("orbit-api did not report a listening address within {deadline:?}: {elapsed}")
+            panic!("frontal-code-api did not report a listening address within {deadline:?}: {elapsed}")
         }
     }
 }
@@ -316,13 +316,13 @@ fn make_temp_dir() -> PathBuf {
         .as_nanos();
     let pid = std::process::id();
     let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("orbit-api-test-{pid}-{now}-{serial}"));
+    let dir = std::env::temp_dir().join(format!("frontal-code-api-test-{pid}-{now}-{serial}"));
     fs::create_dir_all(&dir).expect("should create temp dir");
     dir
 }
 
 fn write_mock_cli(dir: &Path) -> PathBuf {
-    let script_path = dir.join("mock-orbit.sh");
+    let script_path = dir.join("mock-frontal-code.sh");
     let script = r#"#!/bin/sh
 set -eu
 
@@ -408,5 +408,5 @@ async fn wait_for_health(base_url: &str) {
         }
     }
 
-    panic!("orbit-api did not become healthy in time");
+    panic!("frontal-code-api did not become healthy in time");
 }

@@ -1,4 +1,4 @@
-//! Webhook tool definitions and handlers for Orbit.
+//! Webhook tool definitions and handlers for `FrontalCode`.
 
 use std::sync::{OnceLock, RwLock};
 

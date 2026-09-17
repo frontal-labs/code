@@ -81,7 +81,7 @@ pub fn sessions_dir() -> Result<PathBuf, SessionControlError> {
 pub fn managed_sessions_dir_for(
     base_dir: impl AsRef<Path>,
 ) -> Result<PathBuf, SessionControlError> {
-    let path = base_dir.as_ref().join(".orbit").join("sessions");
+    let path = base_dir.as_ref().join(".frontal-code").join("sessions");
     fs::create_dir_all(&path)?;
     Ok(path)
 }
@@ -318,13 +318,13 @@ fn session_id_from_path(path: &Path) -> Option<String> {
 
 fn format_missing_session_reference(reference: &str) -> String {
     format!(
-        "session not found: {reference}\nHint: managed sessions live in .orbit/sessions/. Try `{LATEST_SESSION_REFERENCE}` for the most recent session or `/session list` in the REPL."
+        "session not found: {reference}\nHint: managed sessions live in .frontal-code/sessions/. Try `{LATEST_SESSION_REFERENCE}` for the most recent session or `/session list` in the REPL."
     )
 }
 
 fn format_no_managed_sessions() -> String {
     format!(
-        "no managed sessions found in .orbit/sessions/\nStart `orbit` to create a session, then rerun with `--resume {LATEST_SESSION_REFERENCE}`."
+        "no managed sessions found in .frontal-code/sessions/\nStart `frontal-code` to create a session, then rerun with `--resume {LATEST_SESSION_REFERENCE}`."
     )
 }
 

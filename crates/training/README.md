@@ -1,10 +1,10 @@
-# Orbit Training
+# Frontal Code Training
 
 Machine learning and style adaptation system for customizing AI agent behavior to match repository conventions and coding patterns.
 
 ## Overview
 
-The `orbit-training` crate provides sophisticated style learning capabilities that enable Orbit AI agents to adapt their output to match the specific conventions, patterns, and preferences of individual codebases. This ensures consistent, contextually appropriate code generation and modification across different projects.
+The `frontal-code-training` crate provides sophisticated style learning capabilities that enable Frontal Code AI agents to adapt their output to match the specific conventions, patterns, and preferences of individual codebases. This ensures consistent, contextually appropriate code generation and modification across different projects.
 
 ## Features
 
@@ -46,7 +46,7 @@ The `orbit-training` crate provides sophisticated style learning capabilities th
 This crate backs the `StyleTrain` tool for train/get-profile/score workflows:
 
 ```rust
-use orbit_training::{StyleDatasetBuilder, StyleTrainer};
+use frontal-code_training::{StyleDatasetBuilder, StyleTrainer};
 
 // Build a style dataset from a repository
 let dataset = StyleDatasetBuilder::new()
@@ -64,9 +64,9 @@ let score = trainer.style_score(&profile, &candidate_code)?;
 ## Integration
 
 The training system integrates with:
-- `orbit-tools` for the StyleTrain tool interface
-- `orbit-runtime` for profile management and persistence
-- `orbit-memory` for storing learned patterns and profiles
+- `frontal-code-tools` for the StyleTrain tool interface
+- `frontal-code-runtime` for profile management and persistence
+- `frontal-code-memory` for storing learned patterns and profiles
 
 ## Machine Learning Approach
 
@@ -94,5 +94,5 @@ Comprehensive unit tests cover:
 
 Run tests with:
 ```bash
-cargo test -p orbit-training
+cargo test -p frontal-code-training
 ```

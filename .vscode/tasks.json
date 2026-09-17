@@ -151,13 +151,13 @@
       }
     },
     {
-      "label": "cargo run orbit",
+      "label": "cargo run frontal-code",
       "type": "shell",
       "command": "cargo",
       "args": [
         "run",
         "--bin",
-        "orbit"
+        "frontal-code"
       ],
       "group": "build",
       "problemMatcher": "$rustc",
@@ -170,13 +170,13 @@
       "dependsOn": "cargo build debug"
     },
     {
-      "label": "orbit doctor",
+      "label": "frontal-code doctor",
       "type": "shell",
       "command": "cargo",
       "args": [
         "run",
         "--bin",
-        "orbit",
+        "frontal-code",
         "--",
         "doctor"
       ],

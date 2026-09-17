@@ -1,28 +1,28 @@
 services:
-  orbit-server:
+  frontal-code-server:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/orbit-server.Dockerfile
-    image: orbit-server:local
+      dockerfile: infrastructure/docker/frontal-code-server.Dockerfile
+    image: frontal-code-server:local
     restart: unless-stopped
     environment:
-      ORBIT_SERVER_HOST: ${ORBIT_SERVER_HOST:-0.0.0.0}
-      ORBIT_SERVER_PORT: ${ORBIT_SERVER_PORT:-8788}
-      ORBIT_SERVER_LANE_TRANSPORT: ${ORBIT_SERVER_LANE_TRANSPORT:-tools-agent}
-      ORBIT_SERVER_API_KEY: ${ORBIT_SERVER_API_KEY:-}
-      ORBIT_SERVER_WORKSPACE_ROOT: ${ORBIT_SERVER_WORKSPACE_ROOT:-/workspace/workspaces}
-      ORBIT_SERVER_DOCKER_IMAGE: ${ORBIT_SERVER_DOCKER_IMAGE:-orbit-worker:local}
-      ORBIT_SERVER_CALLBACK_URL: ${ORBIT_SERVER_CALLBACK_URL:-http://host.docker.internal:8788}
-      ORBIT_SERVER_RECONCILE_INTERVAL_SECS: ${ORBIT_SERVER_RECONCILE_INTERVAL_SECS:-15}
-      ORBIT_SERVER_ORPHAN_APPROVAL_DELAY_SECS: ${ORBIT_SERVER_ORPHAN_APPROVAL_DELAY_SECS:-0}
-      ORBIT_SERVER_ORPHAN_AUTO_RETRY_SECS: ${ORBIT_SERVER_ORPHAN_AUTO_RETRY_SECS:-0}
-      ORBIT_SERVER_ORPHAN_AUTO_CANCEL_SECS: ${ORBIT_SERVER_ORPHAN_AUTO_CANCEL_SECS:-0}
-      ORBIT_SERVER_ORPHAN_POLICY_RULES: ${ORBIT_SERVER_ORPHAN_POLICY_RULES:-[]}
-      ORBIT_SERVER_STATE_FILE: ${ORBIT_SERVER_STATE_FILE:-/var/lib/orbit/server/state.json}
-      ORBIT_AGENT_STORE: ${ORBIT_AGENT_STORE:-/var/lib/orbit/agents}
+      FCODE_SERVER_HOST: ${FCODE_SERVER_HOST:-0.0.0.0}
+      FCODE_SERVER_PORT: ${FCODE_SERVER_PORT:-8788}
+      FCODE_SERVER_LANE_TRANSPORT: ${FCODE_SERVER_LANE_TRANSPORT:-tools-agent}
+      FCODE_SERVER_API_KEY: ${FCODE_SERVER_API_KEY:-}
+      FCODE_SERVER_WORKSPACE_ROOT: ${FCODE_SERVER_WORKSPACE_ROOT:-/workspace/workspaces}
+      FCODE_SERVER_DOCKER_IMAGE: ${FCODE_SERVER_DOCKER_IMAGE:-frontal-code-worker:local}
+      FCODE_SERVER_CALLBACK_URL: ${FCODE_SERVER_CALLBACK_URL:-http://host.docker.internal:8788}
+      FCODE_SERVER_RECONCILE_INTERVAL_SECS: ${FCODE_SERVER_RECONCILE_INTERVAL_SECS:-15}
+      FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS: ${FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS:-0}
+      FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS: ${FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS:-0}
+      FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS: ${FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS:-0}
+      FCODE_SERVER_ORPHAN_POLICY_RULES: ${FCODE_SERVER_ORPHAN_POLICY_RULES:-[]}
+      FCODE_SERVER_STATE_FILE: ${FCODE_SERVER_STATE_FILE:-/var/lib/frontal-code/server/state.json}
+      FCODE_AGENT_STORE: ${FCODE_AGENT_STORE:-/var/lib/frontal-code/agents}
       RUST_LOG: ${RUST_LOG:-info}
-      ORBIT_GITHUB_WEBHOOK_SECRET: ${ORBIT_GITHUB_WEBHOOK_SECRET:-}
-      ORBIT_API_KEY: ${ORBIT_API_KEY:-}
+      FCODE_GITHUB_WEBHOOK_SECRET: ${FCODE_GITHUB_WEBHOOK_SECRET:-}
+      FCODE_API_KEY: ${FCODE_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       FRONTAL_API_KEY: ${FRONTAL_API_KEY:-}
@@ -37,9 +37,9 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-}
     working_dir: /workspace
     volumes:
-      - orbit_workspace:/workspace
-      - orbit_server_state:/var/lib/orbit/server
-      - orbit_agent_store:/var/lib/orbit/agents
+      - frontal-code_workspace:/workspace
+      - frontal-code_server_state:/var/lib/frontal-code/server
+      - frontal-code_agent_store:/var/lib/frontal-code/agents
     tmpfs:
       - /tmp
     security_opt:
@@ -47,7 +47,7 @@ services:
     cap_drop:
       - ALL
     ports:
-      - "${ORBIT_SERVER_PUBLISH_ADDR:-127.0.0.1}:${ORBIT_SERVER_PORT:-8788}:8788"
+      - "${FCODE_SERVER_PUBLISH_ADDR:-127.0.0.1}:${FCODE_SERVER_PORT:-8788}:8788"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8788/health"]
       interval: 30s
@@ -55,25 +55,25 @@ services:
       retries: 5
       start_period: 20s
 
-  orbit-worker-image:
+  frontal-code-worker-image:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/orbit-worker.Dockerfile
-    image: orbit-worker:local
-    command: ["orbit", "--version"]
+      dockerfile: infrastructure/docker/frontal-code-worker.Dockerfile
+    image: frontal-code-worker:local
+    command: ["frontal-code", "--version"]
     restart: "no"
     profiles: ["worker-image"]
 
-  orbit-slack:
+  frontal-code-slack:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/orbit-slack.Dockerfile
-    image: orbit-slack:local
+      dockerfile: infrastructure/docker/frontal-code-slack.Dockerfile
+    image: frontal-code-slack:local
     restart: unless-stopped
     environment:
-      ORBIT_API_URL: ${ORBIT_API_URL:-http://orbit-server:8788}
-      ORBIT_API_TIMEOUT: ${ORBIT_API_TIMEOUT:-30000}
-      ORBIT_API_KEY: ${ORBIT_API_KEY:-}
+      FCODE_API_URL: ${FCODE_API_URL:-http://frontal-code-server:8788}
+      FCODE_API_TIMEOUT: ${FCODE_API_TIMEOUT:-30000}
+      FCODE_API_KEY: ${FCODE_API_KEY:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
@@ -86,7 +86,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
-      orbit-server:
+      frontal-code-server:
         condition: service_healthy
     read_only: true
     tmpfs:
@@ -103,6 +103,6 @@ services:
       start_period: 20s
 
 volumes:
-  orbit_workspace:
-  orbit_server_state:
-  orbit_agent_store:
+  frontal-code_workspace:
+  frontal-code_server_state:
+  frontal-code_agent_store:

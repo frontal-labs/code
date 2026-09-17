@@ -210,8 +210,8 @@ fn discover_instruction_files(cwd: &Path) -> std::io::Result<Vec<ContextFile>> {
         for candidate in [
             dir.join("AGENTS.md"),
             dir.join("CLAUDE.local.md"),
-            dir.join(".orbit").join("AGENTS.md"),
-            dir.join(".orbit").join("instructions.md"),
+            dir.join(".frontal-code").join("AGENTS.md"),
+            dir.join(".frontal-code").join("instructions.md"),
         ] {
             push_context_file(&mut files, candidate)?;
         }
@@ -429,7 +429,7 @@ fn render_config_section(config: &RuntimeConfig) -> String {
     let mut lines = vec!["# Runtime config".to_string()];
     if config.loaded_entries().is_empty() {
         lines.extend(prepend_bullets(vec![
-            "No Orbit settings files loaded.".to_string()
+            "No FrontalCode settings files loaded.".to_string(),
         ]));
         return lines.join("\n");
     }
@@ -537,23 +537,28 @@ mod tests {
     fn discovers_instruction_files_from_ancestor_chain() {
         let root = temp_dir();
         let nested = root.join("apps").join("api");
-        fs::create_dir_all(nested.join(".orbit")).expect("nested orbit dir");
+        fs::create_dir_all(nested.join(".frontal-code")).expect("nested frontal-code dir");
         fs::write(root.join("AGENTS.md"), "root instructions").expect("write root instructions");
         fs::write(root.join("CLAUDE.local.md"), "local instructions")
             .expect("write local instructions");
         fs::create_dir_all(root.join("apps")).expect("apps dir");
-        fs::create_dir_all(root.join("apps").join(".orbit")).expect("apps orbit dir");
+        fs::create_dir_all(root.join("apps").join(".frontal-code")).expect("apps frontal-code dir");
         fs::write(root.join("apps").join("AGENTS.md"), "apps instructions")
             .expect("write apps instructions");
         fs::write(
-            root.join("apps").join(".orbit").join("instructions.md"),
+            root.join("apps")
+                .join(".frontal-code")
+                .join("instructions.md"),
             "apps dot claude instructions",
         )
         .expect("write apps dot claude instructions");
-        fs::write(nested.join(".orbit").join("AGENTS.md"), "nested rules")
-            .expect("write nested rules");
         fs::write(
-            nested.join(".orbit").join("instructions.md"),
+            nested.join(".frontal-code").join("AGENTS.md"),
+            "nested rules",
+        )
+        .expect("write nested rules");
+        fs::write(
+            nested.join(".frontal-code").join("instructions.md"),
             "nested instructions",
         )
         .expect("write nested instructions");
@@ -613,7 +618,7 @@ mod tests {
     #[test]
     fn displays_context_paths_compactly() {
         assert_eq!(
-            display_context_path(Path::new("/tmp/project/.orbit/AGENTS.md")),
+            display_context_path(Path::new("/tmp/project/.frontal-code/AGENTS.md")),
             "AGENTS.md"
         );
     }
@@ -691,10 +696,10 @@ mod tests {
     #[test]
     fn load_system_prompt_reads_claude_files_and_config() {
         let root = temp_dir();
-        fs::create_dir_all(root.join(".orbit")).expect("orbit dir");
+        fs::create_dir_all(root.join(".frontal-code")).expect("frontal-code dir");
         fs::write(root.join("AGENTS.md"), "Project rules").expect("write instructions");
         fs::write(
-            root.join(".orbit").join("settings.json"),
+            root.join(".frontal-code").join("settings.json"),
             r#"{"permissionMode":"acceptEdits"}"#,
         )
         .expect("write settings");
@@ -703,9 +708,9 @@ mod tests {
         ensure_valid_cwd();
         let previous = std::env::current_dir().expect("cwd");
         let original_home = std::env::var("HOME").ok();
-        let original_orbit_home = std::env::var("ORBIT_CONFIG_HOME").ok();
+        let original_frontal_code_home = std::env::var("FCODE_CONFIG_HOME").ok();
         std::env::set_var("HOME", &root);
-        std::env::set_var("ORBIT_CONFIG_HOME", root.join("missing-home"));
+        std::env::set_var("FCODE_CONFIG_HOME", root.join("missing-home"));
         std::env::set_current_dir(&root).expect("change cwd");
         let prompt = super::load_system_prompt(&root, "2026-03-31", "linux", "6.8")
             .expect("system prompt should load")
@@ -720,10 +725,10 @@ mod tests {
         } else {
             std::env::remove_var("HOME");
         }
-        if let Some(value) = original_orbit_home {
-            std::env::set_var("ORBIT_CONFIG_HOME", value);
+        if let Some(value) = original_frontal_code_home {
+            std::env::set_var("FCODE_CONFIG_HOME", value);
         } else {
-            std::env::remove_var("ORBIT_CONFIG_HOME");
+            std::env::remove_var("FCODE_CONFIG_HOME");
         }
 
         assert!(prompt.contains("Project rules"));
@@ -734,10 +739,10 @@ mod tests {
     #[test]
     fn renders_claude_code_style_sections_with_project_context() {
         let root = temp_dir();
-        fs::create_dir_all(root.join(".orbit")).expect("orbit dir");
+        fs::create_dir_all(root.join(".frontal-code")).expect("frontal-code dir");
         fs::write(root.join("AGENTS.md"), "Project rules").expect("write AGENTS.md");
         fs::write(
-            root.join(".orbit").join("settings.json"),
+            root.join(".frontal-code").join("settings.json"),
             r#"{"permissionMode":"acceptEdits"}"#,
         )
         .expect("write settings");
@@ -776,9 +781,9 @@ mod tests {
     fn discovers_dot_claude_instructions_markdown() {
         let root = temp_dir();
         let nested = root.join("apps").join("api");
-        fs::create_dir_all(nested.join(".orbit")).expect("nested orbit dir");
+        fs::create_dir_all(nested.join(".frontal-code")).expect("nested frontal-code dir");
         fs::write(
-            nested.join(".orbit").join("instructions.md"),
+            nested.join(".frontal-code").join("instructions.md"),
             "instruction markdown",
         )
         .expect("write instructions.md");
@@ -787,7 +792,7 @@ mod tests {
         assert!(context
             .instruction_files
             .iter()
-            .any(|file| file.path.ends_with(".orbit/instructions.md")));
+            .any(|file| file.path.ends_with(".frontal-code/instructions.md")));
         assert!(
             render_instruction_files(&context.instruction_files).contains("instruction markdown")
         );

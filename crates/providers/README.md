@@ -1,6 +1,6 @@
-# Orbit Providers
+# Frontal Code Providers
 
-AI provider client implementations and abstractions for the Orbit ecosystem.
+AI provider client implementations and abstractions for the Frontal Code ecosystem.
 
 ## Overview
 
@@ -94,8 +94,8 @@ This crate provides unified client implementations for multiple AI providers inc
 ### Environment Variables
 ```bash
 # Anthropic
-export ORBIT_API_KEY="sk-ant-..."
-export ORBIT_BASE_URL="https://api.anthropic.com"
+export FCODE_API_KEY="sk-ant-..."
+export FCODE_BASE_URL="https://api.anthropic.com"
 
 # OpenAI
 export OPENAI_API_KEY="sk-..."
@@ -131,7 +131,7 @@ export OLLAMA_BASE_URL="http://localhost:11434"
 ## Usage
 
 ```rust
-use orbit_providers::{ProviderClient, ProviderConfig};
+use frontal-code_providers::{ProviderClient, ProviderConfig};
 
 // Create provider client
 let config = ProviderConfig::from_env()?;
@@ -196,8 +196,8 @@ while let Some(chunk) = stream.next().await {
 - `serde_json` for JSON handling
 - `thiserror` for error types
 - `tracing` for structured logging
-- `orbit-runtime` for core runtime integration
-- `orbit-telemetry` for analytics and monitoring
+- `frontal-code-runtime` for core runtime integration
+- `frontal-code-telemetry` for analytics and monitoring
 
 ## Testing
 
@@ -210,12 +210,12 @@ Comprehensive test coverage includes:
 
 Run tests with:
 ```bash
-cargo test -p orbit-providers
+cargo test -p frontal-code-providers
 ```
 
 ## Current Status
 
-This crate provides the core AI provider infrastructure and is included in workspace build/test gates. It supports all major AI providers and provides a unified interface for the Orbit ecosystem.
+This crate provides the core AI provider infrastructure and is included in workspace build/test gates. It supports all major AI providers and provides a unified interface for the Frontal Code ecosystem.
 
 ## Future Development
 

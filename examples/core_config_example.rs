@@ -1,13 +1,13 @@
 //! Example demonstrating how to use the core configuration system
 //!
-//! This example shows how to load and use the `ProjectConfig` from the orbit-core crate
-//! and the `ConfigurationManager` from the orbit-runtime crate.
+//! This example shows how to load and use the `ProjectConfig` from the frontal-code-core crate
+//! and the `ConfigurationManager` from the frontal-code-runtime crate.
 
-use orbit_core::config::ProjectConfig;
-use orbit_runtime::ConfigurationManager;
+use frontal_code_core::config::ProjectConfig;
+use frontal_code_runtime::ConfigurationManager;
 
 fn main() {
-    println!("=== Orbit Core Configuration Example ===\n");
+    println!("=== FrontalCode Core Configuration Example ===\n");
 
     // Example 1: Load core configuration directly
     println!("1. Loading core configuration directly:");

@@ -1,5 +1,5 @@
 target/
-.orbit/
+.frontal-code/
 .git/
 .github/
 .vscode/
@@ -7,7 +7,7 @@ assets/
 docs/
 examples/
 extensions/*
-!extensions/orbit-slack
+!extensions/frontal-code-slack
 homebrew/
 infrastructure/
 scripts/

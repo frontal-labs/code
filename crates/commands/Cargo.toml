@@ -1,5 +1,5 @@
 [package]
-name = "orbit-commands"
+name = "frontal-code-commands"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,6 +9,6 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-orbit-plugins = { path = "../plugins" }
-orbit-runtime = { path = "../runtime" }
+frontal-code-plugins = { path = "../plugins" }
+frontal-code-runtime = { path = "../runtime" }
 serde_json.workspace = true

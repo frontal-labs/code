@@ -1,4 +1,4 @@
-use orbit_sandbox::{FilesystemIsolationMode, SandboxConfig, SandboxRequest};
+use frontal_code_sandbox::{FilesystemIsolationMode, SandboxConfig, SandboxRequest};
 
 #[test]
 fn resolve_request_with_all_overrides() {

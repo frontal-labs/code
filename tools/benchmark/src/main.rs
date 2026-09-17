@@ -1,7 +1,7 @@
 //! `tools-benchmark` — lightweight build/CI timing harness.
 //!
 //! Measures `cargo build` wall time, reports binary sizes, and can time an
-//! arbitrary command (e.g. a one-shot `orbit` invocation) to track CLI latency
+//! arbitrary command (e.g. a one-shot `frontal-code` invocation) to track CLI latency
 //! regressions. Emits JSON so results can be diffed against a baseline.
 
 #![allow(clippy::cast_precision_loss)]
@@ -14,7 +14,7 @@ use std::process::Command;
 use std::time::Instant;
 
 #[derive(Parser)]
-#[command(name = "orbit-benchmark", about = "Build/CI timing harness")]
+#[command(name = "frontal-code-benchmark", about = "Build/CI timing harness")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

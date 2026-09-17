@@ -1,4 +1,4 @@
-# Orbit Mock Gateway
+# Frontal Code Mock Gateway
 
 A provider-agnostic mock of the **Frontal AI Gateway** (OpenAI-compatible Chat
 Completions API) used for local development and CLI parity tests.
@@ -6,7 +6,7 @@ Completions API) used for local development and CLI parity tests.
 ## Why it replaced the mock Anthropic service
 
 The previous `mock-anthropic-service` crate spoke the Anthropic `/v1/messages`
-wire format. Orbit now defaults to the **Frontal AI Gateway**, which exposes an
+wire format. Frontal Code now defaults to the **Frontal AI Gateway**, which exposes an
 **OpenAI-compatible** `/v1/chat/completions` contract. This crate is the
 redesign:
 
@@ -20,7 +20,7 @@ redesign:
 ## Usage
 
 ```bash
-cargo run -p orbit-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 The server prints `MOCK_GATEWAY_BASE_URL=http://127.0.0.1:<port>`, which you

@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::sync::{Mutex, OnceLock};
 
-use orbit_api::{
+use frontal_code_api::{
     read_azure_base_url, read_bedrock_base_url, read_frontal_base_url, read_xai_base_url, ApiError,
     AuthSource, ProviderClient, ProviderKind,
 };
@@ -36,8 +36,8 @@ fn provider_client_reports_missing_xai_credentials_for_grok_models() {
 #[test]
 fn provider_client_uses_explicit_anthropic_auth_without_env_lookup() {
     let _lock = env_lock();
-    let _anthropic_api_key = EnvVarGuard::set("ORBIT_API_KEY", None);
-    let _anthropic_auth_token = EnvVarGuard::set("ORBIT_AUTH_TOKEN", None);
+    let _anthropic_api_key = EnvVarGuard::set("FCODE_API_KEY", None);
+    let _anthropic_auth_token = EnvVarGuard::set("FCODE_AUTH_TOKEN", None);
 
     let client = ProviderClient::from_model_with_anthropic_auth(
         "claude-sonnet-4-6",

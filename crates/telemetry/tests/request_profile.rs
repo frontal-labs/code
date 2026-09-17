@@ -1,5 +1,5 @@
-use orbit_telemetry::{
-    AnthropicRequestProfile, ClientIdentity, DEFAULT_AGENTIC_BETA, DEFAULT_ORBIT_VERSION,
+use frontal_code_telemetry::{
+    AnthropicRequestProfile, ClientIdentity, DEFAULT_AGENTIC_BETA, DEFAULT_FCODE_VERSION,
     DEFAULT_PROMPT_CACHING_SCOPE_BETA,
 };
 use serde_json::{json, Map};
@@ -8,7 +8,7 @@ use serde_json::{json, Map};
 fn new_creates_profile_with_default_betas() {
     let identity = ClientIdentity::new("app", "1.0");
     let profile = AnthropicRequestProfile::new(identity);
-    assert_eq!(profile.anthropic_version, DEFAULT_ORBIT_VERSION);
+    assert_eq!(profile.anthropic_version, DEFAULT_FCODE_VERSION);
     assert_eq!(profile.betas.len(), 2);
     assert!(profile.betas.contains(&DEFAULT_AGENTIC_BETA.to_string()));
     assert!(profile
@@ -53,7 +53,7 @@ fn header_pairs_includes_version_and_user_agent() {
     let headers = profile.header_pairs();
     assert!(headers.contains(&(
         "anthropic-version".to_string(),
-        DEFAULT_ORBIT_VERSION.to_string()
+        DEFAULT_FCODE_VERSION.to_string()
     )));
     assert!(headers.contains(&("user-agent".to_string(), "cli/2.0".to_string())));
 }
@@ -75,7 +75,7 @@ fn header_pairs_includes_beta_header_when_betas_present() {
 #[test]
 fn header_pairs_empty_betas_omits_beta_header() {
     let profile = AnthropicRequestProfile {
-        anthropic_version: DEFAULT_ORBIT_VERSION.to_string(),
+        anthropic_version: DEFAULT_FCODE_VERSION.to_string(),
         client_identity: ClientIdentity::default(),
         betas: vec![],
         extra_body: Map::default(),
@@ -98,7 +98,7 @@ fn render_json_body_merges_betas_and_extra_body() {
 #[test]
 fn render_json_body_without_betas() {
     let profile = AnthropicRequestProfile {
-        anthropic_version: DEFAULT_ORBIT_VERSION.to_string(),
+        anthropic_version: DEFAULT_FCODE_VERSION.to_string(),
         client_identity: ClientIdentity::default(),
         betas: vec![],
         extra_body: Map::default(),
@@ -120,7 +120,7 @@ fn render_json_body_fails_on_non_object() {
 fn default_uses_default_client_identity() {
     let profile = AnthropicRequestProfile::default();
     assert_eq!(profile.client_identity, ClientIdentity::default());
-    assert_eq!(profile.anthropic_version, DEFAULT_ORBIT_VERSION);
+    assert_eq!(profile.anthropic_version, DEFAULT_FCODE_VERSION);
 }
 
 #[test]

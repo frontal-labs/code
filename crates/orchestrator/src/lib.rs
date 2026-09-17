@@ -1,4 +1,4 @@
-//! # Orbit Orchestrator
+//! # `FrontalCode` Orchestrator
 //! Provides routing, execution plan creation, and lane assignment for hosted work items.
 
 mod plan;

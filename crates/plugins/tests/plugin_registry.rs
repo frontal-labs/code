@@ -1,4 +1,4 @@
-use orbit_plugins::{builtin_plugins, Plugin, PluginKind, PluginRegistry, RegisteredPlugin};
+use frontal_code_plugins::{builtin_plugins, Plugin, PluginKind, PluginRegistry, RegisteredPlugin};
 
 #[test]
 fn empty_registry() {

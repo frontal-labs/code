@@ -2,7 +2,7 @@
 resource "kubernetes_deployment" "tools_proxy" {
   metadata {
     name      = "tools-proxy"
-    namespace = var.orbit_service_namespace
+    namespace = var.frontal-code_service_namespace
     labels = {
       app = "tools-proxy"
     }
@@ -138,7 +138,7 @@ resource "kubernetes_deployment" "tools_proxy" {
 resource "kubernetes_config_map" "tools_proxy_config" {
   metadata {
     name      = "tools-proxy-config"
-    namespace = var.orbit_service_namespace
+    namespace = var.frontal-code_service_namespace
   }
 
   data = {
@@ -150,7 +150,7 @@ resource "kubernetes_config_map" "tools_proxy_config" {
 resource "kubernetes_service" "tools_proxy" {
   metadata {
     name      = "tools-proxy"
-    namespace = var.orbit_service_namespace
+    namespace = var.frontal-code_service_namespace
     labels = {
       app = "tools-proxy"
     }

@@ -1,7 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-# Shell scripts in this directory are also invoked directly by the Makefile
-# and CI; exporting them makes them usable as Bazel labels (e.g. test srcs).
+# Shell scripts are Bazel entrypoints for local development and CI.
 exports_files([
     "bootstrap.sh",
     "build.sh",
@@ -14,6 +13,7 @@ exports_files([
     "ci.sh",
     "coverage.sh",
     "third_party_check.sh",
+    "changeset_check.sh",
     "cache.sh",
     "workspace.sh",
     "version.sh",
@@ -23,4 +23,23 @@ exports_files([
     "generators.sh",
     "remote.sh",
     "fuzz.sh",
+    "cli.sh",
+    "changeset.sh",
+    "renovate.sh",
 ])
+
+sh_test(
+    name = "third_party_check",
+    srcs = ["third_party_check.sh"],
+    tags = ["check"],
+)
+
+sh_test(
+    name = "changeset_check",
+    srcs = ["changeset_check.sh"],
+    tags = ["check"],
+)
+
+sh_binary(name = "cli", srcs = ["cli.sh"])
+sh_binary(name = "changeset", srcs = ["changeset.sh"])
+sh_binary(name = "renovate", srcs = ["renovate.sh"])

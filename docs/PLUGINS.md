@@ -1,10 +1,10 @@
 # Plugin System Guide
 
-This guide covers the Orbit plugin system, including how to use, develop, and distribute plugins.
+This guide covers the Frontal Code plugin system, including how to use, develop, and distribute plugins.
 
 ## Overview
 
-The Orbit plugin system allows extending the CLI with custom tools, commands, and functionality. Plugins can:
+The Frontal Code plugin system allows extending the CLI with custom tools, commands, and functionality. Plugins can:
 
 - Add new tools to the tool ecosystem
 - Define custom slash commands
@@ -36,7 +36,7 @@ The `plugin.json` file defines plugin metadata:
 {
   "name": "my-plugin",
   "version": "1.0.0",
-  "description": "A custom plugin for Orbit",
+  "description": "A custom plugin for Frontal Code",
   "author": {
     "name": "Your Name",
     "email": "your.email@example.com"
@@ -44,8 +44,8 @@ The `plugin.json` file defines plugin metadata:
   "license": "MIT",
   "homepage": "https://github.com/yourname/my-plugin",
   "repository": "https://github.com/yourname/my-plugin.git",
-  "keywords": ["orbit", "plugin", "tools"],
-  "orbit_version": ">=0.1.0",
+  "keywords": ["frontal-code", "plugin", "tools"],
+  "frontal-code_version": ">=0.1.0",
   "type": "tool",
   "entry_point": "lib/libmy_plugin.so",
   "dependencies": [],
@@ -81,52 +81,52 @@ The `plugin.json` file defines plugin metadata:
 
 ```bash
 # Install from local directory
-orbit plugin install /path/to/my-plugin
+frontal-code plugin install /path/to/my-plugin
 
 # Install from Git repository
-orbit plugin install https://github.com/username/my-plugin.git
+frontal-code plugin install https://github.com/username/my-plugin.git
 
 # Install from plugin registry
-orbit plugin install my-plugin
+frontal-code plugin install my-plugin
 
 # Install specific version
-orbit plugin install my-plugin@1.2.3
+frontal-code plugin install my-plugin@1.2.3
 ```
 
 ### Managing Plugins
 
 ```bash
 # List installed plugins
-orbit plugin list
+frontal-code plugin list
 
 # Show plugin details
-orbit plugin show my-plugin
+frontal-code plugin show my-plugin
 
 # Enable/disable plugin
-orbit plugin enable my-plugin
-orbit plugin disable my-plugin
+frontal-code plugin enable my-plugin
+frontal-code plugin disable my-plugin
 
 # Update plugin
-orbit plugin update my-plugin
+frontal-code plugin update my-plugin
 
 # Uninstall plugin
-orbit plugin uninstall my-plugin
+frontal-code plugin uninstall my-plugin
 
 # Check for updates
-orbit plugin check-updates
+frontal-code plugin check-updates
 ```
 
 ### Plugin Configuration
 
 ```bash
 # Configure plugin
-orbit plugin config my-plugin --set key=value
+frontal-code plugin config my-plugin --set key=value
 
 # Show plugin config
-orbit plugin config my-plugin --show
+frontal-code plugin config my-plugin --show
 
 # Reset plugin config
-orbit plugin config my-plugin --reset
+frontal-code plugin config my-plugin --reset
 ```
 
 ## Built-in Plugins
@@ -137,7 +137,7 @@ Provides enhanced file system operations:
 
 ```bash
 # Install filesystem plugin
-orbit plugin install filesystem
+frontal-code plugin install filesystem
 
 # Use filesystem tools
 /filesystem/watch /path/to/directory
@@ -151,7 +151,7 @@ Database connectivity and operations:
 
 ```bash
 # Install database plugin
-orbit plugin install database
+frontal-code plugin install database
 
 # Connect to database
 /database connect postgresql://user:pass@localhost/db
@@ -167,7 +167,7 @@ Cloud service integrations:
 
 ```bash
 # Install cloud plugin
-orbit plugin install cloud
+frontal-code plugin install cloud
 
 # AWS operations
 /cloud aws s3 list-buckets
@@ -187,7 +187,7 @@ Add new tools to the tool ecosystem:
 
 ```rust
 // src/lib.rs
-use orbit_tools::{Tool, ToolResult, ToolContext};
+use frontal-code_tools::{Tool, ToolResult, ToolContext};
 
 pub struct MyTool;
 
@@ -217,7 +217,7 @@ pub extern "C" fn get_tools() -> Vec<Box<dyn Tool>> {
 Add custom slash commands:
 
 ```rust
-use orbit_commands::{Command, CommandResult, CommandContext};
+use frontal-code_commands::{Command, CommandResult, CommandContext};
 
 pub struct MyCommand;
 
@@ -241,7 +241,7 @@ impl Command for MyCommand {
 Add new AI providers:
 
 ```rust
-use orbit_providers::{Provider, ProviderConfig, CompletionResult};
+use frontal-code_providers::{Provider, ProviderConfig, CompletionResult};
 
 pub struct MyProvider;
 
@@ -267,13 +267,13 @@ impl Provider for MyProvider {
 
 2. **Initialize plugin**
    ```bash
-   orbit plugin init --type tool --name my-plugin
+   frontal-code plugin init --type tool --name my-plugin
    ```
 
 3. **Write plugin code**
    ```rust
    // src/lib.rs
-   use orbit_tools::prelude::*;
+   use frontal-code_tools::prelude::*;
 
    #[derive(Debug)]
    pub struct MyCustomTool;
@@ -328,7 +328,7 @@ impl Provider for MyProvider {
      "description": "A custom tool plugin",
      "type": "tool",
      "entry_point": "target/libmy_custom_tool.so",
-     "orbit_version": ">=0.1.0",
+     "frontal-code_version": ">=0.1.0",
      "permissions": ["network", "file_read"]
    }
    ```
@@ -340,8 +340,8 @@ impl Provider for MyProvider {
 
 6. **Test plugin**
    ```bash
-   orbit plugin install .
-   orbit plugin test my-custom-tool
+   frontal-code plugin install .
+   frontal-code plugin test my-custom-tool
    ```
 
 ### Plugin Testing
@@ -369,13 +369,13 @@ mod tests {
 
 ```bash
 # Test plugin installation
-orbit plugin test-install my-plugin
+frontal-code plugin test-install my-plugin
 
 # Test plugin functionality
-orbit plugin test my-plugin
+frontal-code plugin test my-plugin
 
 # Run plugin in test mode
-orbit --plugin-test ./my-plugin prompt "test my tool"
+frontal-code --plugin-test ./my-plugin prompt "test my tool"
 ```
 
 ### Plugin Distribution
@@ -384,16 +384,16 @@ orbit --plugin-test ./my-plugin prompt "test my tool"
 
 ```bash
 # Build plugin for distribution
-orbit plugin build --release
+frontal-code plugin build --release
 
 # Publish to registry
-orbit plugin publish
+frontal-code plugin publish
 
 # Publish specific version
-orbit plugin publish --version 1.2.3
+frontal-code plugin publish --version 1.2.3
 
 # Publish as beta
-orbit plugin publish --tag beta
+frontal-code plugin publish --tag beta
 ```
 
 #### GitHub Distribution
@@ -404,17 +404,17 @@ git tag v1.2.3
 git push origin v1.2.3
 
 # Install from GitHub
-orbit plugin install https://github.com/username/my-plugin.git
+frontal-code plugin install https://github.com/username/my-plugin.git
 ```
 
 #### Local Distribution
 
 ```bash
 # Create plugin package
-orbit plugin package --output my-plugin-1.2.3.tar.gz
+frontal-code plugin package --output my-plugin-1.2.3.tar.gz
 
 # Install from package
-orbit plugin install my-plugin-1.2.3.tar.gz
+frontal-code plugin install my-plugin-1.2.3.tar.gz
 ```
 
 ## Plugin API Reference
@@ -571,7 +571,7 @@ impl Tool for HttpClientTool {
 1. **Plugin fails to load**
    - Check plugin manifest syntax
    - Verify entry point path
-   - Check Orbit version compatibility
+   - Check Frontal Code version compatibility
 
 2. **Permission denied**
    - Review plugin permissions
@@ -587,13 +587,13 @@ impl Tool for HttpClientTool {
 
 ```bash
 # Enable plugin debug logging
-RUST_LOG=orbit_plugins=debug orbit plugin list
+RUST_LOG=frontal-code_plugins=debug frontal-code plugin list
 
 # Test plugin in isolation
-orbit plugin test my-plugin --debug
+frontal-code plugin test my-plugin --debug
 
 # Show plugin diagnostics
-orbit plugin doctor my-plugin
+frontal-code plugin doctor my-plugin
 ```
 
 ## Plugin Registry
@@ -602,8 +602,8 @@ orbit plugin doctor my-plugin
 
 The official plugin registry hosts community plugins:
 
-- **URL**: https://github.com/frontal-labs/orbit
-- **Search**: `orbit plugin search <keyword>`
+- **URL**: https://github.com/frontal-labs/frontal-code
+- **Search**: `frontal-code plugin search <keyword>`
 - **Categories**: Tools, Commands, Providers, Themes
 
 ### Community Plugins

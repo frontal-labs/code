@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub use orbit_memory::{MemoryMetadata, MemoryMetadataStore, MemoryScope};
+pub use frontal_code_memory::{MemoryMetadata, MemoryMetadataStore, MemoryScope};
 
 #[path = "../src/persistent_metadata_store.rs"]
 mod persistent_metadata_store;
@@ -20,7 +20,9 @@ fn temp_file_path(label: &str) -> PathBuf {
         .as_nanos();
     let pid = std::process::id();
     let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("orbit-memory-{label}-{pid}-{stamp}-{serial}.tsv"))
+    std::env::temp_dir().join(format!(
+        "frontal-code-memory-{label}-{pid}-{stamp}-{serial}.tsv"
+    ))
 }
 
 #[test]

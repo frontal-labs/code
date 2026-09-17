@@ -66,31 +66,31 @@ jobs:
           echo "TARGET=${{ matrix.target }}" >> "$GITHUB_ENV"
           echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
-      - name: Build orbit (CLI)
+      - name: Build frontal-code (CLI)
         shell: bash
-        run: cargo build --release -p orbit-cli --target "${{ matrix.target }}"
+        run: cargo build --release -p cli --target "${{ matrix.target }}"
 
-      - name: Build orbit-server
+      - name: Build frontal-code-server
         if: ${{ matrix.name == 'linux-x64' }}
         shell: bash
         run: |
-          cargo build --release -p orbit-server --target "${{ matrix.target }}"
+          cargo build --release -p frontal-code-server --target "${{ matrix.target }}"
 
       - name: Package CLI artifact
         shell: bash
         run: |
           mkdir -p dist/package/bin
-          bin="orbit${{ matrix.ext }}"
+          bin="frontal-code${{ matrix.ext }}"
           cp "target/${{ matrix.target }}/release/${bin}" "dist/package/bin/${bin}"
 
           if [[ -n "${{ matrix.ext }}" ]]; then
-            cp "dist/package/bin/${bin}" "dist/orbit-${{ matrix.name }}${{ matrix.ext }}"
-            shasum -a 256 "dist/orbit-${{ matrix.name }}${{ matrix.ext }}" \
-              > "dist/orbit-${{ matrix.name }}${{ matrix.ext }}.sha256"
+            cp "dist/package/bin/${bin}" "dist/frontal-code-${{ matrix.name }}${{ matrix.ext }}"
+            shasum -a 256 "dist/frontal-code-${{ matrix.name }}${{ matrix.ext }}" \
+              > "dist/frontal-code-${{ matrix.name }}${{ matrix.ext }}.sha256"
           else
             chmod +x "dist/package/bin/${bin}"
-            tar -C dist/package -czf "dist/orbit-${{ matrix.name }}.tar.gz" .
-            shasum -a 256 "dist/orbit-${{ matrix.name }}.tar.gz" > "dist/orbit-${{ matrix.name }}.tar.gz.sha256"
+            tar -C dist/package -czf "dist/frontal-code-${{ matrix.name }}.tar.gz" .
+            shasum -a 256 "dist/frontal-code-${{ matrix.name }}.tar.gz" > "dist/frontal-code-${{ matrix.name }}.tar.gz.sha256"
           fi
 
       - name: Package server artifact (linux only)
@@ -98,22 +98,22 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/server/package/bin
-          cp "target/${{ matrix.target }}/release/orbit-server" "dist/server/package/bin/orbit-server"
-          chmod +x "dist/server/package/bin/orbit-server"
-          tar -C dist/server/package -czf "dist/orbit-server-${{ matrix.name }}.tar.gz" .
-          shasum -a 256 "dist/orbit-server-${{ matrix.name }}.tar.gz" > "dist/orbit-server-${{ matrix.name }}.tar.gz.sha256"
+          cp "target/${{ matrix.target }}/release/frontal-code-server" "dist/server/package/bin/frontal-code-server"
+          chmod +x "dist/server/package/bin/frontal-code-server"
+          tar -C dist/server/package -czf "dist/frontal-code-server-${{ matrix.name }}.tar.gz" .
+          shasum -a 256 "dist/frontal-code-server-${{ matrix.name }}.tar.gz" > "dist/frontal-code-server-${{ matrix.name }}.tar.gz.sha256"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: dist/orbit-*
+          path: dist/frontal-code-*
 
       - name: Upload release assets
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/orbit-*
+          files: dist/frontal-code-*
           fail_on_unmatched_files: true
           generate_release_notes: true
 
@@ -169,7 +169,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/${{ github.repository }}/orbit-server
+          images: ghcr.io/${{ github.repository }}/frontal-code-server
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -178,12 +178,44 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: infrastructure/docker/orbit-fly.Dockerfile
+          file: infrastructure/docker/frontal-code-fly.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ── Publish CLI npm package to GHCR ───────────────────────
+  npm-cli:
+    name: Publish CLI npm package
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+
+      - name: Build TypeScript SDK (CLI dependency)
+        run: |
+          bun install
+          bun run --filter @frontal-labs/frontal-code-sdk build
+
+      - name: Verify CLI package
+        working-directory: cli
+        run: ./scripts/verify.sh
+
+      - name: Publish CLI to GitHub Packages (npm)
+        working-directory: cli
+        run: npm publish --access public --registry https://npm.pkg.github.com
+        env:
+          NODE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── Update Homebrew formula sha256s ─────────────────────────────────────
   homebrew:
@@ -205,21 +237,21 @@ jobs:
       - name: Update sha256 placeholders in formula
         shell: bash
         run: |
-          arm64_sha=$(cat orbit-macos-arm64.tar.gz.sha256 | awk '{print $1}')
-          x64_sha=$(cat orbit-macos-x64.tar.gz.sha256 | awk '{print $1}')
+          arm64_sha=$(cat frontal-code-macos-arm64.tar.gz.sha256 | awk '{print $1}')
+          x64_sha=$(cat frontal-code-macos-x64.tar.gz.sha256 | awk '{print $1}')
 
-          sed -i "s/<INSERT_ARM64_SHA256>/${arm64_sha}/" homebrew/orbit.rb
-          sed -i "s/<INSERT_X64_SHA256>/${x64_sha}/" homebrew/orbit.rb
+          sed -i "s/<INSERT_ARM64_SHA256>/${arm64_sha}/" homebrew/frontal-code.rb
+          sed -i "s/<INSERT_X64_SHA256>/${x64_sha}/" homebrew/frontal-code.rb
 
       - name: Commit and push formula update
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet homebrew/orbit.rb; then
+          if git diff --quiet homebrew/frontal-code.rb; then
             echo "No sha256 changes; skipping commit."
             exit 0
           fi
-          git add homebrew/orbit.rb
+          git add homebrew/frontal-code.rb
           git commit -m "chore: update Homebrew sha256 for ${GITHUB_REF#refs/tags/}"
           git push origin main

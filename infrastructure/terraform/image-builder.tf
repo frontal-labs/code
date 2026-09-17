@@ -1,25 +1,25 @@
 # Optional: Build and push Docker images using Terraform
 # This is useful for CI/CD pipelines
 
-resource "terraform_data" "build_orbit_server_image" {
-  count = var.deploy_orbit_server ? 1 : 0
+resource "terraform_data" "build_frontal-code_server_image" {
+  count = var.deploy_frontal-code_server ? 1 : 0
 
   triggers_replace = [
-    var.orbit_server_image
+    var.frontal-code_server_image
   ]
 
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Building orbit-server image: ${var.orbit_server_image}"
+      echo "Building frontal-code-server image: ${var.frontal-code_server_image}"
       
       # Build the image
-      docker build -f infrastructure/docker/orbit-server.Dockerfile -t ${var.orbit_server_image} .
+      docker build -f infrastructure/docker/frontal-code-server.Dockerfile -t ${var.frontal-code_server_image} .
       
       # Tag for ECR if needed
-      if [[ "${var.orbit_server_image}" == *"amazonaws.com"* ]]; then
+      if [[ "${var.frontal-code_server_image}" == *"amazonaws.com"* ]]; then
         # Extract ECR details
-        ECR_REGISTRY=$(echo "${var.orbit_server_image}" | cut -d'/' -f1)
-        REPOSITORY_NAME=$(echo "${var.orbit_server_image}" | cut -d'/' -f2 | cut -d':' -f1)
+        ECR_REGISTRY=$(echo "${var.frontal-code_server_image}" | cut -d'/' -f1)
+        REPOSITORY_NAME=$(echo "${var.frontal-code_server_image}" | cut -d'/' -f2 | cut -d':' -f1)
         
         # Login to ECR
         aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY
@@ -29,7 +29,7 @@ resource "terraform_data" "build_orbit_server_image" {
           aws ecr create-repository --repository-name $REPOSITORY_NAME --region ${var.aws_region}
         
         # Push the image
-        docker push ${var.orbit_server_image}
+        docker push ${var.frontal-code_server_image}
       fi
     EOT
 
@@ -37,25 +37,25 @@ resource "terraform_data" "build_orbit_server_image" {
   }
 }
 
-resource "terraform_data" "build_orbit_slack_image" {
-  count = var.deploy_orbit_slack ? 1 : 0
+resource "terraform_data" "build_frontal-code_slack_image" {
+  count = var.deploy_frontal-code_slack ? 1 : 0
 
   triggers_replace = [
-    var.orbit_slack_image
+    var.frontal-code_slack_image
   ]
 
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Building orbit-slack image: ${var.orbit_slack_image}"
+      echo "Building frontal-code-slack image: ${var.frontal-code_slack_image}"
       
       # Build the image
-      docker build -f infrastructure/docker/orbit-slack-app.Dockerfile -t ${var.orbit_slack_image} .
+      docker build -f infrastructure/docker/frontal-code-slack-app.Dockerfile -t ${var.frontal-code_slack_image} .
       
       # Tag for ECR if needed
-      if [[ "${var.orbit_slack_image}" == *"amazonaws.com"* ]]; then
+      if [[ "${var.frontal-code_slack_image}" == *"amazonaws.com"* ]]; then
         # Extract ECR details
-        ECR_REGISTRY=$(echo "${var.orbit_slack_image}" | cut -d'/' -f1)
-        REPOSITORY_NAME=$(echo "${var.orbit_slack_image}" | cut -d'/' -f2 | cut -d':' -f1)
+        ECR_REGISTRY=$(echo "${var.frontal-code_slack_image}" | cut -d'/' -f1)
+        REPOSITORY_NAME=$(echo "${var.frontal-code_slack_image}" | cut -d'/' -f2 | cut -d':' -f1)
         
         # Login to ECR
         aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY
@@ -65,7 +65,7 @@ resource "terraform_data" "build_orbit_slack_image" {
           aws ecr create-repository --repository-name $REPOSITORY_NAME --region ${var.aws_region}
         
         # Push the image
-        docker push ${var.orbit_slack_image}
+        docker push ${var.frontal-code_slack_image}
       fi
     EOT
 
@@ -74,9 +74,9 @@ resource "terraform_data" "build_orbit_slack_image" {
 }
 
 # ECR Repository resources (optional - for managed repositories)
-resource "aws_ecr_repository" "orbit_server" {
-  count                = var.deploy_orbit_server && length(regexall("amazonaws\\.com", var.orbit_server_image)) > 0 ? 1 : 0
-  name                 = "orbit-server"
+resource "aws_ecr_repository" "frontal-code_server" {
+  count                = var.deploy_frontal-code_server && length(regexall("amazonaws\\.com", var.frontal-code_server_image)) > 0 ? 1 : 0
+  name                 = "frontal-code-server"
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
@@ -85,13 +85,13 @@ resource "aws_ecr_repository" "orbit_server" {
 
   tags = {
     Environment = var.environment
-    Project     = "orbit-tools"
+    Project     = "frontal-code-tools"
   }
 }
 
-resource "aws_ecr_repository" "orbit_slack" {
-  count                = var.deploy_orbit_slack && length(regexall("amazonaws\\.com", var.orbit_slack_image)) > 0 ? 1 : 0
-  name                 = "orbit-slack"
+resource "aws_ecr_repository" "frontal-code_slack" {
+  count                = var.deploy_frontal-code_slack && length(regexall("amazonaws\\.com", var.frontal-code_slack_image)) > 0 ? 1 : 0
+  name                 = "frontal-code-slack"
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
@@ -100,14 +100,14 @@ resource "aws_ecr_repository" "orbit_slack" {
 
   tags = {
     Environment = var.environment
-    Project     = "orbit-tools"
+    Project     = "frontal-code-tools"
   }
 }
 
 # ECR Lifecycle policies
-resource "aws_ecr_lifecycle_policy" "orbit_server" {
-  count      = var.deploy_orbit_server && length(regexall("amazonaws\\.com", var.orbit_server_image)) > 0 ? 1 : 0
-  repository = aws_ecr_repository.orbit_server[0].name
+resource "aws_ecr_lifecycle_policy" "frontal-code_server" {
+  count      = var.deploy_frontal-code_server && length(regexall("amazonaws\\.com", var.frontal-code_server_image)) > 0 ? 1 : 0
+  repository = aws_ecr_repository.frontal-code_server[0].name
 
   policy = jsonencode({
     rules = [
@@ -140,9 +140,9 @@ resource "aws_ecr_lifecycle_policy" "orbit_server" {
   })
 }
 
-resource "aws_ecr_lifecycle_policy" "orbit_slack" {
-  count      = var.deploy_orbit_slack && length(regexall("amazonaws\\.com", var.orbit_slack_image)) > 0 ? 1 : 0
-  repository = aws_ecr_repository.orbit_slack[0].name
+resource "aws_ecr_lifecycle_policy" "frontal-code_slack" {
+  count      = var.deploy_frontal-code_slack && length(regexall("amazonaws\\.com", var.frontal-code_slack_image)) > 0 ? 1 : 0
+  repository = aws_ecr_repository.frontal-code_slack[0].name
 
   policy = jsonencode({
     rules = [

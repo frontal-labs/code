@@ -1,6 +1,6 @@
 # Release Notes
 
-## Version 0.1.0 - "Orbit Prime"
+## Version 0.1.0 - "Frontal Code Prime"
 
 Released: 2026-04-03
 
@@ -86,7 +86,7 @@ Released: 2026-04-03
 1. **Update Repository**: Pull latest changes from main
 2. **Install Dependencies**: Use new setup scripts
 3. **Update Configuration**: Migrate to new config format
-4. **Verify Setup**: Run `orbit doctor` health check
+4. **Verify Setup**: Run `frontal-code doctor` health check
 
 #### Development Environment
 1. **Install VS Code Extensions**: Recommended extensions will be prompted
@@ -232,10 +232,10 @@ Released: 2026-04-03
 ## Upgrade Instructions
 
 ### For New Users
-1. **Clone Repository**: `git clone https://github.com/frontal-labs/orbit`
+1. **Clone Repository**: `git clone https://github.com/frontal-labs/frontal-code`
 2. **Install Dependencies**: Follow setup guide in DEVELOPMENT.md
 3. **Configure**: Set up API keys and database
-4. **Verify**: Run `orbit doctor` to verify setup
+4. **Verify**: Run `frontal-code doctor` to verify setup
 
 ### For Existing Users
 1. **Update Repository**: `git pull origin main`
@@ -260,8 +260,8 @@ Released: 2026-04-03
 - **PARITY.md**: Implementation status and roadmap
 
 ### Community
-- **GitHub Issues**: https://github.com/frontal-labs/orbit/issues
-- **Issues**: https://github.com/frontal-labs/orbit/issues
+- **GitHub Issues**: https://github.com/frontal-labs/frontal-code/issues
+- **Issues**: https://github.com/frontal-labs/frontal-code/issues
 
 ### Professional Support
 - **Email**: support@frontal.dev
@@ -270,4 +270,4 @@ Released: 2026-04-03
 
 ---
 
-*This release represents a significant milestone in the development of Orbit, providing a solid foundation for both local development and autonomous server deployment. Thank you to all contributors and community members who made this release possible.*
+*This release represents a significant milestone in the development of Frontal Code, providing a solid foundation for both local development and autonomous server deployment. Thank you to all contributors and community members who made this release possible.*

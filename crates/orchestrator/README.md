@@ -1,10 +1,10 @@
-# Orbit Orchestrator
+# Frontal Code Orchestrator
 
-Orchestration and workflow management system for the Orbit ecosystem, providing intelligent routing, execution planning, and resource allocation for AI agent workflows.
+Orchestration and workflow management system for the Frontal Code ecosystem, providing intelligent routing, execution planning, and resource allocation for AI agent workflows.
 
 ## Overview
 
-The `orbit-orchestrator` crate provides the core orchestration capabilities that enable complex AI agent workflows to be executed efficiently and reliably. It handles work item routing, execution planning, lane assignment, and resource management across the Orbit ecosystem.
+The `frontal-code-orchestrator` crate provides the core orchestration capabilities that enable complex AI agent workflows to be executed efficiently and reliably. It handles work item routing, execution planning, lane assignment, and resource management across the Frontal Code ecosystem.
 
 ## Features
 
@@ -44,7 +44,7 @@ This crate now exposes the minimal planning API used by the hosted server: typed
 ## Usage
 
 ```rust
-use orbit_orchestrator::{WorkItem, WorkSource, Priority, LaneAssignment};
+use frontal-code_orchestrator::{WorkItem, WorkSource, Priority, LaneAssignment};
 
 let work_item = WorkItem {
     id: "task_123".to_string(),
@@ -71,12 +71,12 @@ The orchestrator follows a modular architecture with clear separation of concern
 The crate includes comprehensive routing tests and planning validation:
 
 ```bash
-cargo test -p orbit-orchestrator
+cargo test -p frontal-code-orchestrator
 ```
 
 ## Integration
 
 The orchestrator integrates with:
-- `orbit-runtime` for execution coordination
-- `orbit-telemetry` for performance monitoring
-- `orbit-server` for hosted workflow management
+- `frontal-code-runtime` for execution coordination
+- `frontal-code-telemetry` for performance monitoring
+- `frontal-code-server` for hosted workflow management

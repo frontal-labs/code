@@ -1,4 +1,4 @@
-use orbit_webhooks::{execute_webhook_tool, webhook_tool_specs};
+use frontal_code_webhooks::{execute_webhook_tool, webhook_tool_specs};
 use serde_json::json;
 
 #[test]

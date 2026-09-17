@@ -1,8 +1,8 @@
 {
   "project": {
-    "name": "Orbit",
+    "name": "Frontal Code",
     "version": "0.1.1",
-    "description": "Frontal Orbit is an internal agentic engineering system"
+    "description": "Frontal Frontal Code is an internal agentic engineering system"
   },
   "runtime": {
     "default_provider": "frontal",
@@ -30,11 +30,11 @@
     "request_timeout_seconds": 30
   },
   "paths": {
-    "config_home": "~/.orbit",
-    "home": "~/.orbit",
+    "config_home": "~/.frontal-code",
+    "home": "~/.frontal-code",
     "sandbox_home": "/workspace/.sandbox-home",
-    "cache_dir": "~/.orbit/cache",
-    "logs_dir": "~/.orbit/logs"
+    "cache_dir": "~/.frontal-code/cache",
+    "logs_dir": "~/.frontal-code/logs"
   },
   "sandbox": {
     "enable_docker": false,
@@ -50,7 +50,7 @@
   },
   "development": {
     "mock_parity_report_path": "/tmp/mock_parity_report.json",
-    "hosted_task_file": "/tmp/orbit_hosted_task.json",
+    "hosted_task_file": "/tmp/frontal-code_hosted_task.json",
     "enable_debug_mode": false,
     "enable_test_endpoints": false
   },

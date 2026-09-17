@@ -1,4 +1,4 @@
-use orbit_plugins::{HookRunResult, HookRunner, PluginHooks};
+use frontal_code_plugins::{HookRunResult, HookRunner, PluginHooks};
 
 #[test]
 fn empty_hooks_returns_allow() {

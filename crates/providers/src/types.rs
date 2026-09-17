@@ -1,4 +1,4 @@
-use orbit_runtime::{pricing_for_model, TokenUsage, UsageCostEstimate};
+use frontal_code_runtime::{pricing_for_model, TokenUsage, UsageCostEstimate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -247,7 +247,7 @@ pub enum StreamEvent {
 
 #[cfg(test)]
 mod tests {
-    use orbit_runtime::format_usd;
+    use frontal_code_runtime::format_usd;
 
     use super::{MessageResponse, Usage};
 

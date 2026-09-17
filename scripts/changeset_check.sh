@@ -16,6 +16,6 @@ fi
 
 # Source/src changes require a changeset entry.
 if [ -z "$(ls .changeset/*.md 2>/dev/null | grep -v README)" ]; then
-  echo "No .changeset entry found. Run: make changeset (or npx changeset)" >&2
+  echo "No .changeset entry found. Run: bazel run //:changeset" >&2
   exit 1
 fi

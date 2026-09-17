@@ -309,14 +309,14 @@ impl PluginTool {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .env("ORBIT_PLUGIN_ID", &self.plugin_id)
-            .env("ORBIT_PLUGIN_NAME", &self.plugin_name)
-            .env("ORBIT_TOOL_NAME", &self.definition.name)
-            .env("ORBIT_TOOL_INPUT", &input_json);
+            .env("FCODE_PLUGIN_ID", &self.plugin_id)
+            .env("FCODE_PLUGIN_NAME", &self.plugin_name)
+            .env("FCODE_TOOL_NAME", &self.definition.name)
+            .env("FCODE_TOOL_INPUT", &input_json);
         if let Some(root) = &self.root {
             process
                 .current_dir(root)
-                .env("ORBIT_PLUGIN_ROOT", root.display().to_string());
+                .env("FCODE_PLUGIN_ROOT", root.display().to_string());
         }
 
         let mut child = process.spawn()?;
@@ -1619,15 +1619,15 @@ fn detect_claude_code_manifest_contract_gaps(
     for (field, detail) in [
         (
             "skills",
-            "plugin manifest field `skills` uses the Claude Code plugin contract; `orbit` does not load plugin-managed skills and instead discovers skills from local roots such as `.orbit/skills`, `.omc/skills`, `.agents/skills`, `~/.omc/skills`, and `~/.claude/skills/omc-learned`.",
+            "plugin manifest field `skills` uses the Claude Code plugin contract; `frontal-code` does not load plugin-managed skills and instead discovers skills from local roots such as `.frontal-code/skills`, `.omc/skills`, `.agents/skills`, `~/.omc/skills`, and `~/.claude/skills/omc-learned`.",
         ),
         (
             "mcpServers",
-            "plugin manifest field `mcpServers` uses the Claude Code plugin contract; `orbit` does not import MCP servers from plugin manifests.",
+            "plugin manifest field `mcpServers` uses the Claude Code plugin contract; `frontal-code` does not import MCP servers from plugin manifests.",
         ),
         (
             "agents",
-            "plugin manifest field `agents` uses the Claude Code plugin contract; `orbit` does not load plugin-managed agent markdown catalogs from plugin manifests.",
+            "plugin manifest field `agents` uses the Claude Code plugin contract; `frontal-code` does not load plugin-managed agent markdown catalogs from plugin manifests.",
         ),
     ] {
         if root.contains_key(field) {
@@ -1643,7 +1643,7 @@ fn detect_claude_code_manifest_contract_gaps(
         .is_some_and(|commands| commands.iter().any(Value::is_string))
     {
         errors.push(PluginManifestValidationError::UnsupportedManifestContract {
-            detail: "plugin manifest field `commands` uses Claude Code-style directory globs; `orbit` slash dispatch is still built-in and does not load plugin slash command markdown files.".to_string(),
+            detail: "plugin manifest field `commands` uses Claude Code-style directory globs; `frontal-code` slash dispatch is still built-in and does not load plugin slash command markdown files.".to_string(),
         });
     }
 
@@ -1655,7 +1655,7 @@ fn detect_claude_code_manifest_contract_gaps(
             ) {
                 errors.push(PluginManifestValidationError::UnsupportedManifestContract {
                     detail: format!(
-                        "plugin hook `{hook_name}` uses the Claude Code lifecycle contract; `orbit` plugins currently support only PreToolUse, PostToolUse, and PostToolUseFailure."
+                        "plugin hook `{hook_name}` uses the Claude Code lifecycle contract; `frontal-code` plugins currently support only PreToolUse, PostToolUse, and PostToolUseFailure."
                     ),
                 });
             }
@@ -2422,7 +2422,7 @@ mod tests {
         let script_path = root.join("tools").join("echo-json.sh");
         write_file(
             &script_path,
-            "#!/bin/sh\nINPUT=$(cat)\nprintf '{\"plugin\":\"%s\",\"tool\":\"%s\",\"input\":%s}\\n' \"$ORBIT_PLUGIN_ID\" \"$ORBIT_TOOL_NAME\" \"$INPUT\"\n",
+            "#!/bin/sh\nINPUT=$(cat)\nprintf '{\"plugin\":\"%s\",\"tool\":\"%s\",\"input\":%s}\\n' \"$FCODE_PLUGIN_ID\" \"$FCODE_TOOL_NAME\" \"$INPUT\"\n",
         );
         #[cfg(unix)]
         {

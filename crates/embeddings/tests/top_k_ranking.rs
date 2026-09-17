@@ -1,4 +1,4 @@
-use orbit_embeddings::top_k_by_similarity;
+use frontal_code_embeddings::top_k_by_similarity;
 
 #[test]
 fn ranks_candidates_by_similarity() {

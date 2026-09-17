@@ -1,4 +1,4 @@
-use orbit_training::{StyleProfile, StyleTrainer};
+use frontal_code_training::{StyleProfile, StyleTrainer};
 
 #[test]
 fn style_score_with_matching_profile() {

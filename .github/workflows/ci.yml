@@ -12,7 +12,7 @@ on:
       - 'third_party/**'
       - 'tools/**'
       - 'scripts/**'
-      - 'sdk/**'
+      - 'sdks/**'
       - 'biome.json'
       - 'ultracite.json'
       - 'bunfig.toml'
@@ -60,6 +60,3 @@ jobs:
 
       - name: Bazel test //...
         run: bazel test //...
-
-      - name: Makefile CI (build + test + lint)
-        run: make ci

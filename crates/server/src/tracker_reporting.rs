@@ -1,5 +1,5 @@
 use crate::HostedTaskContext;
-use orbit_integrations::mcp::integration::global_integration_registry;
+use frontal_code_integrations::mcp::integration::global_integration_registry;
 
 #[derive(Debug)]
 pub enum TrackerEvent<'a> {
@@ -44,15 +44,15 @@ fn render_message(task_id: &str, event: &TrackerEvent<'_>) -> String {
     match event {
         TrackerEvent::Completed { result } => match result {
             Some(result) if !result.is_empty() => {
-                format!("Orbit task {task_id} completed successfully.\n\nResult:\n{result}")
+                format!("FrontalCode task {task_id} completed successfully.\n\nResult:\n{result}")
             }
-            _ => format!("Orbit task {task_id} completed successfully."),
+            _ => format!("FrontalCode task {task_id} completed successfully."),
         },
         TrackerEvent::Failed { error } => match error {
             Some(error) if !error.is_empty() => {
-                format!("Orbit task {task_id} failed.\n\nError:\n{error}")
+                format!("FrontalCode task {task_id} failed.\n\nError:\n{error}")
             }
-            _ => format!("Orbit task {task_id} failed."),
+            _ => format!("FrontalCode task {task_id} failed."),
         },
     }
 }

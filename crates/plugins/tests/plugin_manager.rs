@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
-use orbit_plugins::{builtin_plugins, Plugin, PluginKind, PluginManager, PluginManagerConfig};
+use frontal_code_plugins::{
+    builtin_plugins, Plugin, PluginKind, PluginManager, PluginManagerConfig,
+};
 
 #[test]
 fn config_new_sets_config_home() {
-    let config = PluginManagerConfig::new("/tmp/orbit");
-    assert_eq!(config.config_home, PathBuf::from("/tmp/orbit"));
+    let config = PluginManagerConfig::new("/tmp/frontal-code");
+    assert_eq!(config.config_home, PathBuf::from("/tmp/frontal-code"));
     assert!(config.enabled_plugins.is_empty());
     assert!(config.external_dirs.is_empty());
     assert!(config.install_root.is_none());
@@ -23,15 +25,15 @@ fn manager_new_stores_config() {
 
 #[test]
 fn install_root_defaults_to_config_home_plugins_installed() {
-    let config = PluginManagerConfig::new("/tmp/orbit-home");
+    let config = PluginManagerConfig::new("/tmp/frontal-code-home");
     let manager = PluginManager::new(config);
-    let expected = PathBuf::from("/tmp/orbit-home/plugins/installed");
+    let expected = PathBuf::from("/tmp/frontal-code-home/plugins/installed");
     assert_eq!(manager.install_root(), expected);
 }
 
 #[test]
 fn install_root_respects_custom_value() {
-    let mut config = PluginManagerConfig::new("/tmp/orbit-home");
+    let mut config = PluginManagerConfig::new("/tmp/frontal-code-home");
     config.install_root = Some(PathBuf::from("/custom/install"));
     let manager = PluginManager::new(config);
     assert_eq!(manager.install_root(), PathBuf::from("/custom/install"));
@@ -39,15 +41,15 @@ fn install_root_respects_custom_value() {
 
 #[test]
 fn registry_path_defaults_to_config_home_plugins_installed_json() {
-    let config = PluginManagerConfig::new("/tmp/orbit-home");
+    let config = PluginManagerConfig::new("/tmp/frontal-code-home");
     let manager = PluginManager::new(config);
-    let expected = PathBuf::from("/tmp/orbit-home/plugins/installed.json");
+    let expected = PathBuf::from("/tmp/frontal-code-home/plugins/installed.json");
     assert_eq!(manager.registry_path(), expected);
 }
 
 #[test]
 fn registry_path_respects_custom_value() {
-    let mut config = PluginManagerConfig::new("/tmp/orbit-home");
+    let mut config = PluginManagerConfig::new("/tmp/frontal-code-home");
     config.registry_path = Some(PathBuf::from("/custom/registry.json"));
     let manager = PluginManager::new(config);
     assert_eq!(
@@ -58,11 +60,11 @@ fn registry_path_respects_custom_value() {
 
 #[test]
 fn settings_path_is_config_home_settings_json() {
-    let config = PluginManagerConfig::new("/tmp/orbit-home");
+    let config = PluginManagerConfig::new("/tmp/frontal-code-home");
     let manager = PluginManager::new(config);
     assert_eq!(
         manager.settings_path(),
-        PathBuf::from("/tmp/orbit-home/settings.json")
+        PathBuf::from("/tmp/frontal-code-home/settings.json")
     );
 }
 
@@ -75,7 +77,7 @@ fn bundled_root_returns_cargo_manifest_dir_bundled() {
 
 #[test]
 fn manager_uses_custom_bundled_root() {
-    let mut config = PluginManagerConfig::new("/tmp/orbit-home");
+    let mut config = PluginManagerConfig::new("/tmp/frontal-code-home");
     config.bundled_root = Some(PathBuf::from("/custom/bundled"));
     let manager = PluginManager::new(config);
     // bundled_root is used internally; we verify it doesn't crash
@@ -104,7 +106,7 @@ fn builtin_plugins_have_correct_kind() {
 
 #[test]
 fn config_supports_enabled_plugins() {
-    let mut config = PluginManagerConfig::new("/tmp/orbit-home");
+    let mut config = PluginManagerConfig::new("/tmp/frontal-code-home");
     config
         .enabled_plugins
         .insert("my-plugin@external".to_string(), true);
@@ -117,7 +119,7 @@ fn config_supports_enabled_plugins() {
 
 #[test]
 fn config_supports_external_dirs() {
-    let mut config = PluginManagerConfig::new("/tmp/orbit-home");
+    let mut config = PluginManagerConfig::new("/tmp/frontal-code-home");
     config.external_dirs.push(PathBuf::from("/custom/plugins"));
     assert_eq!(config.external_dirs.len(), 1);
 }

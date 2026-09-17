@@ -1,16 +1,16 @@
-# Orbit Integrations
+# Frontal Code Integrations
 
-External integration modules providing MCP interoperability and native IDE integration for the Orbit ecosystem.
+External integration modules providing MCP interoperability and native IDE integration for the Frontal Code ecosystem.
 
 ## Overview
 
-The `orbit-integrations` crate serves as the bridge between Orbit and external systems, including Model Context Protocol (MCP) servers and various IDE environments. It provides the infrastructure needed for seamless integration with popular development tools and external services.
+The `frontal-code-integrations` crate serves as the bridge between Frontal Code and external systems, including Model Context Protocol (MCP) servers and various IDE environments. It provides the infrastructure needed for seamless integration with popular development tools and external services.
 
 ## Features
 
 ### MCP Integration
 - **MCP Server Management**: Configuration, lifecycle, and stdio management
-- **Tool Bridge**: Bidirectional tool execution between Orbit and MCP servers
+- **Tool Bridge**: Bidirectional tool execution between Frontal Code and MCP servers
 - **Protocol Handling**: Full MCP protocol implementation with error handling
 - **Server Discovery**: Automatic detection and connection to MCP servers
 - **Resource Sharing**: Resource access and sharing between systems
@@ -49,8 +49,8 @@ This crate is active in the workspace and provides comprehensive integration cap
 ### IDE Features
 - `/ide` target parsing and command handling
 - Workspace-local config persistence and management
-- Per-editor config wiring (`.vscode/orbit.json` / `.cursor/orbit.json` / `.antigravity/orbit.json` / `.windsurf/orbit.json`)
-- `.vsix` packaging from `extensions/orbit-ide`
+- Per-editor config wiring (`.vscode/frontal-code.json` / `.cursor/frontal-code.json` / `.antigravity/frontal-code.json` / `.windsurf/frontal-code.json`)
+- `.vsix` packaging from `extensions/frontal-code-ide`
 - Extension install via editor CLI
 - Editor launching and detection
 
@@ -58,7 +58,7 @@ This crate is active in the workspace and provides comprehensive integration cap
 
 ### MCP Integration
 ```rust
-use orbit_integrations::{McpServer, McpConfig};
+use frontal-code_integrations::{McpServer, McpConfig};
 
 let config = McpConfig::new("server-name", "/path/to/server");
 let server = McpServer::start(config)?;
@@ -67,7 +67,7 @@ server.connect_tools()?;
 
 ### IDE Integration
 ```rust
-use orbit_integrations::{IdeManager, IdeConfig};
+use frontal-code_integrations::{IdeManager, IdeConfig};
 
 let manager = IdeManager::new();
 let ide = manager.detect_ide()?;
@@ -86,10 +86,10 @@ manager.launch_editor(&config)?;
 ## Configuration Files
 
 The crate manages several configuration files:
-- `.vscode/orbit.json` - VS Code specific settings
-- `.cursor/orbit.json` - Cursor specific settings
-- `.windsurf/orbit.json` - Windsurf specific settings
-- `.antigravity/orbit.json` - Antigravity specific settings
+- `.vscode/frontal-code.json` - VS Code specific settings
+- `.cursor/frontal-code.json` - Cursor specific settings
+- `.windsurf/frontal-code.json` - Windsurf specific settings
+- `.antigravity/frontal-code.json` - Antigravity specific settings
 
 ## MCP Protocol Support
 
@@ -117,7 +117,7 @@ Comprehensive test coverage includes:
 
 Run tests with:
 ```bash
-cargo test -p orbit-integrations
+cargo test -p frontal-code-integrations
 ```
 
 ## Dependencies

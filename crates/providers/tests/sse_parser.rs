@@ -1,4 +1,4 @@
-use orbit_providers::SseParser;
+use frontal_code_providers::SseParser;
 
 #[test]
 fn sse_parser_new_is_empty() {

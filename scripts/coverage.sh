@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/coverage.sh — delegate to the canonical tool //tools/coverage.
+# Delegate to the canonical Bazel coverage target.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec ./tools/coverage/coverage.sh "$@"
+exec bazel run //tools/coverage:coverage -- "$@"

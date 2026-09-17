@@ -633,7 +633,9 @@ mod tests {
             .as_nanos();
         let pid = std::process::id();
         let serial = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        std::env::temp_dir().join(format!("orbit-native-{name}-{unique}-{pid}-{serial}"))
+        std::env::temp_dir().join(format!(
+            "frontal-code-native-{name}-{unique}-{pid}-{serial}"
+        ))
     }
 
     #[test]

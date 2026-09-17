@@ -1,5 +1,5 @@
 {
-  "name": "frontal-orbit",
+  "name": "frontal-code",
   "version": "0.0.0",
   "private": true,
   "devDependencies": {
@@ -11,7 +11,7 @@
     "changeset:publish": "changeset publish"
   },
   "workspaces": [
-    "sdk/typescript",
-    "orbit-cli"
+    "sdks/typescript",
+    "cli"
   ]
 }

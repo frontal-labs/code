@@ -1,6 +1,6 @@
-# Orbit Server
+# Frontal Code Server
 
-Hosted control-plane services for Orbit tasks, lane execution, event streaming, approvals, and policy-driven recovery.
+Hosted control-plane services for Frontal Code tasks, lane execution, event streaming, approvals, and policy-driven recovery.
 
 ## Current Surface
 
@@ -9,7 +9,7 @@ The server currently provides:
 - hosted task APIs for create, list, inspect, cancel, reconcile, approve, and complete flows
 - a filterable WebSocket event stream at `/v1/events/ws`
 - persisted task and event state for restart recovery
-- local-Docker lane execution that prepares per-task repo checkouts and launches `orbit hosted task run TASK_ID` inside worker containers
+- local-Docker lane execution that prepares per-task repo checkouts and launches `frontal-code hosted task run TASK_ID` inside worker containers
 - hosted-agent runtime inspection and reconciliation from manifest artifacts
 - orphaned hosted-agent policy with timed retry, approval, and cancel behavior
 - a read-only orphan policy inspection endpoint at `/v1/policies/orphans`
@@ -57,12 +57,12 @@ The control plane can apply timed policy to orphaned hosted lanes when a persist
 
 Global policy environment variables:
 
-- `ORBIT_SERVER_ORPHAN_APPROVAL_DELAY_SECS`
-- `ORBIT_SERVER_ORPHAN_AUTO_RETRY_SECS`
-- `ORBIT_SERVER_ORPHAN_AUTO_CANCEL_SECS`
-- `ORBIT_SERVER_ORPHAN_POLICY_RULES`
+- `FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS`
+- `FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS`
+- `FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS`
+- `FCODE_SERVER_ORPHAN_POLICY_RULES`
 
-`ORBIT_SERVER_ORPHAN_POLICY_RULES` is a JSON array of ordered match rules. The first matching rule wins.
+`FCODE_SERVER_ORPHAN_POLICY_RULES` is a JSON array of ordered match rules. The first matching rule wins.
 
 Example:
 
@@ -95,16 +95,16 @@ curl "http://127.0.0.1:8788/v1/policies/orphans?repository=repo-prod&priority=hi
 
 The server can run hosted lanes in sibling Docker containers by setting:
 
-- `ORBIT_SERVER_LANE_TRANSPORT=local-docker`
-- `ORBIT_SERVER_WORKSPACE_ROOT=/path/to/server/workspaces`
-- `ORBIT_SERVER_DOCKER_IMAGE=orbit-worker:local`
-- `ORBIT_SERVER_CALLBACK_URL=http://host.docker.internal:8788`
+- `FCODE_SERVER_LANE_TRANSPORT=local-docker`
+- `FCODE_SERVER_WORKSPACE_ROOT=/path/to/server/workspaces`
+- `FCODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
+- `FCODE_SERVER_CALLBACK_URL=http://host.docker.internal:8788`
 
 In that mode, the control plane:
 
-1. prepares an isolated repo checkout under `ORBIT_SERVER_WORKSPACE_ROOT`
-2. writes `.orbit-hosted/task.json` into the checkout
-3. launches `orbit hosted task run TASK_ID` inside the worker image
+1. prepares an isolated repo checkout under `FCODE_SERVER_WORKSPACE_ROOT`
+2. writes `.frontal-code-hosted/task.json` into the checkout
+3. launches `frontal-code hosted task run TASK_ID` inside the worker image
 4. expects the worker container to call `POST /v1/tasks/:task_id/complete` back to the server
 
 For the local hosted stack and worker-image build flow, see `infrastructure/README.md`.
@@ -114,7 +114,7 @@ For the local hosted stack and worker-image build flow, see `infrastructure/READ
 Run the server tests with:
 
 ```bash
-cargo test -p orbit-server
+cargo test -p frontal-code-server
 ```
 
 For a step-by-step operator runbook covering hosted task inspection, orphan recovery, approvals, and policy tuning, see `docs/hosted-task-operations.md`.

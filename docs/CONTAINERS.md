@@ -1,6 +1,6 @@
 # Containers Guide
 
-This guide covers containerization and deployment of Orbit CLI using Docker, Kubernetes, and other container technologies.
+This guide covers containerization and deployment of Frontal Code CLI using Docker, Kubernetes, and other container technologies.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This guide covers containerization and deployment of Orbit CLI using Docker, Kub
 
 ## Overview
 
-Orbit CLI provides official container images for easy deployment and scaling. Containerization offers:
+Frontal Code CLI provides official container images for easy deployment and scaling. Containerization offers:
 
 - **Consistency**: Same environment across development, staging, and production
 - **Portability**: Run on any platform supporting containers
@@ -36,7 +36,7 @@ Orbit CLI provides official container images for easy deployment and scaling. Co
 
 ### Official Images
 
-Orbit provides official Docker images on multiple registries:
+Frontal Code provides official Docker images on multiple registries:
 
 Pin an explicit release tag or digest in production. Avoid mutable aliases like `latest`.
 
@@ -44,33 +44,33 @@ Pin an explicit release tag or digest in production. Avoid mutable aliases like 
 
 ```bash
 # Pinned release
-docker pull orbit/cli:v0.1.0
+docker pull frontal-code/cli:v0.1.0
 
 # Specific version
-docker pull orbit/cli:v0.1.0
+docker pull frontal-code/cli:v0.1.0
 
 # Alpine variant (smaller size)
-docker pull orbit/cli:alpine
+docker pull frontal-code/cli:alpine
 
 # Development version
-docker pull orbit/cli:dev
+docker pull frontal-code/cli:dev
 ```
 
 #### GitHub Container Registry
 
 ```bash
 # Pinned release
-docker pull ghcr.io/orbit-org/cli:v0.1.0
+docker pull ghcr.io/frontal-code-org/cli:v0.1.0
 
 # Specific version
-docker pull ghcr.io/orbit-org/cli:v0.1.0
+docker pull ghcr.io/frontal-code-org/cli:v0.1.0
 ```
 
 #### Amazon ECR
 
 ```bash
 # Public ECR
-docker pull public.ecr.aws/orbit/cli:v0.1.0
+docker pull public.ecr.aws/frontal-code/cli:v0.1.0
 ```
 
 ### Image Variants
@@ -85,10 +85,10 @@ docker pull public.ecr.aws/orbit/cli:v0.1.0
 ### Image Layers
 
 ```
-orbit/cli:v0.1.0
+frontal-code/cli:v0.1.0
 ├── rust:1.75-alpine          # Base runtime
 ├── ca-certificates             # SSL certificates
-├── orbit-cli-binary           # Compiled Orbit binary
+├── frontal-code-cli-binary           # Compiled Frontal Code binary
 ├── configuration-templates     # Default config files
 ├── plugins                   # Built-in plugins
 └── entrypoint-scripts        # Startup and health scripts
@@ -105,7 +105,7 @@ FROM rust:1.75-alpine AS builder
 # Install dependencies
 RUN apk add --no-cache musl-dev
 
-# Build Orbit
+# Build Frontal Code
 WORKDIR /app
 COPY . .
 RUN cargo build --release --target x86_64-unknown-linux-musl
@@ -120,30 +120,30 @@ RUN apk add --no-cache \
     bash
 
 # Create non-root user
-RUN addgroup -g 1000 orbit && \
-    adduser -D -s /bin/sh -u 1000 -G orbit orbit
+RUN addgroup -g 1000 frontal-code && \
+    adduser -D -s /bin/sh -u 1000 -G frontal-code frontal-code
 
 # Copy binary and set permissions
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/orbit /usr/local/bin/
-RUN chmod +x /usr/local/bin/orbit
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/frontal-code /usr/local/bin/
+RUN chmod +x /usr/local/bin/frontal-code
 
 # Set up directories
-RUN mkdir -p /home/orbit/.orbit && \
-    chown -R orbit:orbit /home/orbit
+RUN mkdir -p /home/frontal-code/.frontal-code && \
+    chown -R frontal-code:frontal-code /home/frontal-code
 
 # Switch to non-root user
-USER orbit
+USER frontal-code
 
 # Set environment
-ENV ORBIT_DATA_DIR=/home/orbit/.orbit
+ENV FCODE_DATA_DIR=/home/frontal-code/.frontal-code
 ENV PATH=/usr/local/bin:$PATH
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD orbit status || exit 1
+    CMD frontal-code status || exit 1
 
 # Entry point
-ENTRYPOINT ["orbit"]
+ENTRYPOINT ["frontal-code"]
 CMD ["--help"]
 ```
 
@@ -151,13 +151,13 @@ CMD ["--help"]
 
 ```bash
 # Build image
-docker build -t orbit/cli:custom .
+docker build -t frontal-code/cli:custom .
 
 # Tag for registry
-docker tag orbit/cli:custom ghcr.io/orbit-org/cli:custom
+docker tag frontal-code/cli:custom ghcr.io/frontal-code-org/cli:custom
 
 # Push to registry
-docker push ghcr.io/orbit-org/cli:custom
+docker push ghcr.io/frontal-code-org/cli:custom
 ```
 
 ### Multi-Architecture Builds
@@ -174,11 +174,11 @@ FROM --platform=linux/amd64 alpine:3.20
 # ... copy from builder-amd64
 
 # Create manifest
-docker manifest create orbit/cli:multiarch \
-    orbit/cli:amd64 \
-    orbit/cli:arm64
+docker manifest create frontal-code/cli:multiarch \
+    frontal-code/cli:amd64 \
+    frontal-code/cli:arm64
 
-docker manifest push orbit/cli:multiarch
+docker manifest push frontal-code/cli:multiarch
 ```
 
 ## Docker Compose
@@ -190,25 +190,25 @@ docker manifest push orbit/cli:multiarch
 version: '3.8'
 
 services:
-  orbit:
+  frontal-code:
     build:
       context: .
-      dockerfile: infrastructure/docker/orbit-dev.Dockerfile
+      dockerfile: infrastructure/docker/frontal-code-dev.Dockerfile
     ports:
       - "8080:8080"
     volumes:
       - ./:/app
-      - orbit-data:/home/orbit/.orbit
+      - frontal-code-data:/home/frontal-code/.frontal-code
     environment:
-      - ORBIT_LOG_LEVEL=debug
-      - ORBIT_API_KEY=${ORBIT_API_KEY}
-      - ORBIT_DEFAULT_MODEL=claude-sonnet-4-6
+      - FCODE_LOG_LEVEL=debug
+      - FCODE_API_KEY=${FCODE_API_KEY}
+      - FCODE_DEFAULT_MODEL=claude-sonnet-4-6
     working_dir: /app
     command: repl
     restart: unless-stopped
 
 volumes:
-  orbit-data:
+  frontal-code-data:
     driver: local
 ```
 
@@ -222,8 +222,8 @@ Keep it off the default development path and add it explicitly for trusted local
 version: '3.8'
 
 services:
-  orbit:
-    image: orbit/cli:v0.1.0
+  frontal-code:
+    image: frontal-code/cli:v0.1.0
     deploy:
       replicas: 3
       resources:
@@ -238,19 +238,19 @@ services:
         delay: 5s
         max_attempts: 3
     environment:
-      - ORBIT_LOG_LEVEL=info
-      - ORBIT_API_KEY=${ORBIT_API_KEY}
-      - ORBIT_PERMISSION_MODE=safe-mode
+      - FCODE_LOG_LEVEL=info
+      - FCODE_API_KEY=${FCODE_API_KEY}
+      - FCODE_PERMISSION_MODE=safe-mode
     volumes:
-      - orbit-config:/home/orbit/.orbit
-      - orbit-sessions:/home/orbit/.orbit/sessions
+      - frontal-code-config:/home/frontal-code/.frontal-code
+      - frontal-code-sessions:/home/frontal-code/.frontal-code/sessions
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "orbit", "status"]
+      test: ["CMD", "frontal-code", "status"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -268,9 +268,9 @@ services:
     command: redis-server --appendonly yes
 
 volumes:
-  orbit-config:
+  frontal-code-config:
     driver: local
-  orbit-sessions:
+  frontal-code-sessions:
     driver: local
   redis-data:
     driver: local
@@ -283,11 +283,11 @@ volumes:
 version: '3.8'
 
 services:
-  orbit:
-    image: orbit/cli:v0.1.0
+  frontal-code:
+    image: frontal-code/cli:v0.1.0
     environment:
-      - ORBIT_TELEMETRY_ENABLED=true
-      - ORBIT_TELEMETRY_ENDPOINT=http://prometheus:9090/metrics
+      - FCODE_TELEMETRY_ENABLED=true
+      - FCODE_TELEMETRY_ENDPOINT=http://prometheus:9090/metrics
     depends_on:
       - prometheus
       - grafana
@@ -329,24 +329,24 @@ volumes:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: orbit
+  name: frontal-code
   labels:
-    name: orbit
+    name: frontal-code
 
 ---
 # rbac.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: orbit-sa
-  namespace: orbit
+  name: frontal-code-sa
+  namespace: frontal-code
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: orbit-role
-  namespace: orbit
+  name: frontal-code-role
+  namespace: frontal-code
 rules:
 - apiGroups: [""]
   resources: ["pods", "services", "configmaps"]
@@ -356,15 +356,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: orbit-rolebinding
-  namespace: orbit
+  name: frontal-code-rolebinding
+  namespace: frontal-code
 subjects:
 - kind: ServiceAccount
-  name: orbit-sa
-  namespace: orbit
+  name: frontal-code-sa
+  namespace: frontal-code
 roleRef:
   kind: Role
-  name: orbit-role
+  name: frontal-code-role
 ```
 
 ### Deployment Configuration
@@ -374,10 +374,10 @@ roleRef:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orbit-cli
-  namespace: orbit
+  name: cli
+  namespace: frontal-code
   labels:
-    app: orbit-cli
+    app: cli
     version: v1.0.0
 spec:
   replicas: 3
@@ -388,42 +388,42 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: orbit-cli
+      app: cli
   template:
     metadata:
       labels:
-        app: orbit-cli
+        app: cli
         version: v1.0.0
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: orbit-sa
+      serviceAccountName: frontal-code-sa
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
       containers:
-      - name: orbit-cli
-        image: orbit/cli:v0.1.0
+      - name: cli
+        image: frontal-code/cli:v0.1.0
         imagePullPolicy: Always
         ports:
         - name: http
           containerPort: 8080
           protocol: TCP
         env:
-        - name: ORBIT_LOG_LEVEL
+        - name: FCODE_LOG_LEVEL
           value: "info"
-        - name: ORBIT_API_KEY
+        - name: FCODE_API_KEY
           valueFrom:
             secretKeyRef:
-              name: orbit-secrets
+              name: frontal-code-secrets
               key: anthropic-api-key
-        - name: ORBIT_DEFAULT_MODEL
+        - name: FCODE_DEFAULT_MODEL
           value: "claude-sonnet-4-6"
-        - name: ORBIT_PERMISSION_MODE
+        - name: FCODE_PERMISSION_MODE
           value: "safe-mode"
         resources:
           requests:
@@ -449,19 +449,19 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 3
         volumeMounts:
-        - name: orbit-config
-          mountPath: /home/orbit/.orbit
+        - name: frontal-code-config
+          mountPath: /home/frontal-code/.frontal-code
           readOnly: false
-        - name: orbit-sessions
-          mountPath: /home/orbit/.orbit/sessions
+        - name: frontal-code-sessions
+          mountPath: /home/frontal-code/.frontal-code/sessions
           readOnly: false
       volumes:
-      - name: orbit-config
+      - name: frontal-code-config
         persistentVolumeClaim:
-          claimName: orbit-config-pvc
-      - name: orbit-sessions
+          claimName: frontal-code-config-pvc
+      - name: frontal-code-sessions
         persistentVolumeClaim:
-          claimName: orbit-sessions-pvc
+          claimName: frontal-code-sessions-pvc
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
 ```
@@ -473,10 +473,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: orbit-service
-  namespace: orbit
+  name: frontal-code-service
+  namespace: frontal-code
   labels:
-    app: orbit-cli
+    app: cli
 spec:
   type: ClusterIP
   ports:
@@ -485,15 +485,15 @@ spec:
     targetPort: 8080
     protocol: TCP
   selector:
-    app: orbit-cli
+    app: cli
 
 ---
 # ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: orbit-ingress
-  namespace: orbit
+  name: frontal-code-ingress
+  namespace: frontal-code
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -501,17 +501,17 @@ metadata:
 spec:
   tls:
   - hosts:
-    - orbit.example.com
-    secretName: orbit-tls
+    - frontal-code.example.com
+    secretName: frontal-code-tls
   rules:
-  - host: orbit.example.com
+  - host: frontal-code.example.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: orbit-service
+            name: frontal-code-service
             port:
               number: 80
 ```
@@ -523,8 +523,8 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: orbit-config-pvc
-  namespace: orbit
+  name: frontal-code-config-pvc
+  namespace: frontal-code
 spec:
   accessModes:
     - ReadWriteOnce
@@ -537,8 +537,8 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: orbit-sessions-pvc
-  namespace: orbit
+  name: frontal-code-sessions-pvc
+  namespace: frontal-code
 spec:
   accessModes:
     - ReadWriteOnce
@@ -555,13 +555,13 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: orbit-hpa
-  namespace: orbit
+  name: frontal-code-hpa
+  namespace: frontal-code
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: orbit-cli
+    name: cli
   minReplicas: 2
   maxReplicas: 10
   metrics:
@@ -600,22 +600,22 @@ spec:
 
 ```dockerfile
 # Create non-root user
-RUN addgroup -g 1000 orbit && \
-    adduser -D -s /bin/sh -u 1000 -G orbit orbit
+RUN addgroup -g 1000 frontal-code && \
+    adduser -D -s /bin/sh -u 1000 -G frontal-code frontal-code
 
 # Use non-root user
-USER orbit
+USER frontal-code
 ```
 
 #### Read-Only Filesystem
 
 ```dockerfile
 # Copy as read-only
-COPY --chown=orbit:orbit . /app
+COPY --chown=frontal-code:frontal-code . /app
 RUN chmod -R 755 /app
 
 # Mount read-only where possible
-VOLUME ["/home/orbit/.orbit:rw"]
+VOLUME ["/home/frontal-code/.frontal-code:rw"]
 ```
 
 #### Minimal Attack Surface
@@ -658,7 +658,7 @@ securityContext:
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
-  name: orbit-psp
+  name: frontal-code-psp
 spec:
   privileged: false
   allowPrivilegeEscalation: false
@@ -686,8 +686,8 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: orbit-secrets
-  namespace: orbit
+  name: frontal-code-secrets
+  namespace: frontal-code
 type: Opaque
 data:
   anthropic-api-key: <base64-encoded-key>
@@ -699,8 +699,8 @@ data:
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
-  name: orbit-secrets
-  namespace: orbit
+  name: frontal-code-secrets
+  namespace: frontal-code
 spec:
   encryptedData:
     anthropic-api-key: <encrypted-key>
@@ -741,11 +741,11 @@ resources:
 
 ```yaml
 env:
-  - name: ORBIT_CONNECTION_POOL_SIZE
+  - name: FCODE_CONNECTION_POOL_SIZE
     value: "10"
-  - name: ORBIT_CONNECTION_TIMEOUT
+  - name: FCODE_CONNECTION_TIMEOUT
     value: "30"
-  - name: ORBIT_KEEP_ALIVE
+  - name: FCODE_KEEP_ALIVE
     value: "true"
 ```
 
@@ -757,7 +757,7 @@ FROM rust:1.75-alpine AS builder
 # ... build steps ...
 
 FROM scratch
-COPY --from=builder /app/target/release/orbit /orbit
+COPY --from=builder /app/target/release/frontal-code /frontal-code
 # No additional layers for minimal size
 ```
 
@@ -767,7 +767,7 @@ COPY --from=builder /app/target/release/orbit /orbit
 
 ```dockerfile
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD orbit status --json || exit 1
+    CMD frontal-code status --json || exit 1
 ```
 
 ### Metrics Collection
@@ -778,9 +778,9 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'orbit'
+  - job_name: 'frontal-code'
     static_configs:
-      - targets: ['orbit:8080']
+      - targets: ['frontal-code:8080']
     metrics_path: /metrics
     scrape_interval: 5s
 ```
@@ -805,7 +805,7 @@ scrape_configs:
   @type elasticsearch
   host elasticsearch
   port 9200
-  index_name orbit-logs
+  index_name frontal-code-logs
   type_name _doc
 </match>
 ```
@@ -863,11 +863,11 @@ jobs:
       run: |
         docker buildx build \
           --platform linux/amd64,linux/arm64 \
-          --tag orbit/cli:${{ github.sha }} \
+          --tag frontal-code/cli:${{ github.sha }} \
           --load .
     - name: Test Docker image
       run: |
-        docker run --rm orbit/cli:${{ github.sha }} --version
+        docker run --rm frontal-code/cli:${{ github.sha }} --version
 
   build-and-push:
     needs: test
@@ -887,7 +887,7 @@ jobs:
       run: |
         docker buildx build \
           --platform linux/amd64,linux/arm64 \
-          --tag ghcr.io/orbit-org/cli:${{ github.sha }} \
+          --tag ghcr.io/frontal-code-org/cli:${{ github.sha }} \
           --push .
 ```
 
@@ -910,8 +910,8 @@ services:
 test:
   stage: test
   script:
-    - docker build -t orbit/cli:test .
-    - docker run --rm orbit/cli:test --version
+    - docker build -t frontal-code/cli:test .
+    - docker run --rm frontal-code/cli:test --version
 
 build:
   stage: build
@@ -924,8 +924,8 @@ build:
 deploy:
   stage: deploy
   script:
-    - kubectl set image deployment/orbit-cli orbit=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-    - kubectl rollout status deployment/orbit-cli
+    - kubectl set image deployment/cli frontal-code=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - kubectl rollout status deployment/cli
   only:
     - main
 ```
@@ -937,17 +937,17 @@ deploy:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: orbit-cli
+  name: cli
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: https://github.com/orbit-org/orbit-k8s.git
+    repoURL: https://github.com/frontal-code-org/frontal-code-k8s.git
     targetRevision: HEAD
     path: manifests
   destination:
     server: https://kubernetes.default.svc
-    namespace: orbit
+    namespace: frontal-code
   syncPolicy:
     automated:
       prune: true
@@ -970,65 +970,65 @@ spec:
 
 ```bash
 # Check logs
-docker logs orbit-container
+docker logs frontal-code-container
 
 # Check health status
-docker inspect orbit-container --format='{{.State.Health.Status}}'
+docker inspect frontal-code-container --format='{{.State.Health.Status}}'
 
 # Debug with interactive shell
-docker run -it --entrypoint /bin/sh orbit/cli:v0.1.0
+docker run -it --entrypoint /bin/sh frontal-code/cli:v0.1.0
 ```
 
 #### Permission Issues
 
 ```bash
 # Check user permissions
-docker run orbit/cli:v0.1.0 id
+docker run frontal-code/cli:v0.1.0 id
 
 # Fix volume permissions
-docker run --user 1000:1000 -v $(pwd):/app orbit/cli:v0.1.0
+docker run --user 1000:1000 -v $(pwd):/app frontal-code/cli:v0.1.0
 
 # Use security context
-docker run --security-opt no-new-privileges orbit/cli:v0.1.0
+docker run --security-opt no-new-privileges frontal-code/cli:v0.1.0
 ```
 
 #### Resource Issues
 
 ```bash
 # Monitor resource usage
-docker stats orbit-container
+docker stats frontal-code-container
 
 # Check limits
-docker inspect orbit-container --format='{{.HostConfig.Resources}}'
+docker inspect frontal-code-container --format='{{.HostConfig.Resources}}'
 
 # Adjust limits
-docker update --memory=2g --cpus=2 orbit-container
+docker update --memory=2g --cpus=2 frontal-code-container
 ```
 
 ### Debugging Tools
 
 ```bash
 # Enter running container
-docker exec -it orbit-container /bin/sh
+docker exec -it frontal-code-container /bin/sh
 
 # Monitor network traffic
-docker run --network container:orbit-container nicolaka/netshoot
+docker run --network container:frontal-code-container nicolaka/netshoot
 
 # Check filesystem
-docker run --volumes-from orbit-container busybox ls -la /home/orbit/.orbit
+docker run --volumes-from frontal-code-container busybox ls -la /home/frontal-code/.frontal-code
 ```
 
 ### Performance Debugging
 
 ```bash
 # Profile with perf
-docker run --privileged -v /usr/local/bin/perf:/usr/local/bin/perf orbit/cli:v0.1.0
+docker run --privileged -v /usr/local/bin/perf:/usr/local/bin/perf frontal-code/cli:v0.1.0
 
 # Memory profiling
-docker run --memory=512m --memory-swap=512m orbit/cli:v0.1.0
+docker run --memory=512m --memory-swap=512m frontal-code/cli:v0.1.0
 
 # CPU profiling
-docker run --cpus=0.5 orbit/cli:v0.1.0
+docker run --cpus=0.5 frontal-code/cli:v0.1.0
 ```
 
-This containers guide provides comprehensive coverage of deploying and managing Orbit CLI in containerized environments.
+This containers guide provides comprehensive coverage of deploying and managing Frontal Code CLI in containerized environments.

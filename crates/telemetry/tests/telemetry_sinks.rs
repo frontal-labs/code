@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use orbit_telemetry::{AnalyticsEvent, MemoryTelemetrySink, TelemetryEvent, TelemetrySink};
+use frontal_code_telemetry::{AnalyticsEvent, MemoryTelemetrySink, TelemetryEvent, TelemetrySink};
 use serde_json::{Map, Value};
 
 #[test]
@@ -132,7 +132,7 @@ fn telemetry_event_http_request_failed() {
 
 #[test]
 fn telemetry_event_session_trace() {
-    let event = TelemetryEvent::SessionTrace(orbit_telemetry::SessionTraceRecord {
+    let event = TelemetryEvent::SessionTrace(frontal_code_telemetry::SessionTraceRecord {
         session_id: "sess-1".to_string(),
         sequence: 0,
         name: "trace".to_string(),

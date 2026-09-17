@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: orbit-workspace
+  name: frontal-code-workspace
 spec:
   accessModes:
     - ReadWriteOnce
@@ -12,7 +12,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: orbit-server-state
+  name: frontal-code-server-state
 spec:
   accessModes:
     - ReadWriteOnce
@@ -23,7 +23,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: orbit-agent-store
+  name: frontal-code-agent-store
 spec:
   accessModes:
     - ReadWriteOnce

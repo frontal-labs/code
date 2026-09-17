@@ -26,12 +26,12 @@
   },
   "files.watcherExclude": {
     "**/target/**": true,
-    "**/.orbit/**": true,
+    "**/.frontal-code/**": true,
     "**/.sandbox-home/**": true
   },
   "search.exclude": {
     "**/target": true,
-    "**/.orbit": true,
+    "**/.frontal-code": true,
     "**/.sandbox-home": true,
     "**/Cargo.lock": true
   },
@@ -62,7 +62,7 @@
     "git",
     "libc",
     "mock",
-    "orbit",
+    "frontal-code",
     "postgres",
     "postgresql",
     "qdrant",
@@ -84,7 +84,7 @@
   ],
   "cSpell.ignorePaths": [
     "target/**",
-    ".orbit/**",
+    ".frontal-code/**",
     ".sandbox-home/**",
     "*.lock",
     "*.sum"

@@ -12,7 +12,7 @@ sh_binary(
     name = "mock-gateway",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-mock-gateway",
+        "frontal-code-mock-gateway",
         "run",
     ],
 )
@@ -21,7 +21,7 @@ sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-mock-gateway",
+        "frontal-code-mock-gateway",
         "test",
     ],
     tags = [
@@ -34,7 +34,7 @@ sh_test(
     name = "fmt",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-mock-gateway",
+        "frontal-code-mock-gateway",
         "fmt-check",
     ],
     tags = [
@@ -47,7 +47,7 @@ sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
     args = [
-        "orbit-mock-gateway",
+        "frontal-code-mock-gateway",
         "clippy",
     ],
     tags = [

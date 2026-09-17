@@ -1,4 +1,4 @@
-use orbit_events::{
+use frontal_code_events::{
     EventEnvelope, EventIdentifiers, HostedEventName, HostedEventStatus, HostedEventTopic,
 };
 use serde_json::{json, Map, Value};

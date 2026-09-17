@@ -1,4 +1,4 @@
-use orbit_repo::{
+use frontal_code_repo::{
     PreparedRepo, RepoCheckoutRequest, RepoCommitRequest, RepoCommitResult, RepoPrepError,
     RepoSource, RepoStatus,
 };

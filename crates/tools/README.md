@@ -1,10 +1,10 @@
-# Orbit Tools
+# Frontal Code Tools
 
-Comprehensive tool system and external service integration for the Orbit ecosystem.
+Comprehensive tool system and external service integration for the Frontal Code ecosystem.
 
 ## Overview
 
-This crate provides the tool integration layer that allows Orbit to interact with external systems, execute commands, and provide extended functionality through a unified tool interface. It bridges the gap between AI reasoning and real-world system interactions, enabling Orbit to perform actual work beyond text generation.
+This crate provides the tool integration layer that allows Frontal Code to interact with external systems, execute commands, and provide extended functionality through a unified tool interface. It bridges the gap between AI reasoning and real-world system interactions, enabling Frontal Code to perform actual work beyond text generation.
 
 ## Features
 
@@ -115,7 +115,7 @@ Software development support:
 
 ### Basic Tool Usage
 ```rust
-use orbit_tools::{ToolRegistry, ToolExecutor};
+use frontal-code_tools::{ToolRegistry, ToolExecutor};
 
 // Create tool registry
 let registry = ToolRegistry::new();
@@ -127,7 +127,7 @@ let result = executor.execute_tool("ReadFile", &args).await?;
 
 ### Custom Tool Development
 ```rust
-use orbit_tools::{Tool, ToolResult, ToolError};
+use frontal-code_tools::{Tool, ToolResult, ToolError};
 
 struct MyCustomTool;
 
@@ -145,7 +145,7 @@ impl Tool for MyCustomTool {
 
 ### Plugin Integration
 ```rust
-use orbit_tools::PluginManager;
+use frontal-code_tools::PluginManager;
 
 let plugin_manager = PluginManager::new();
 plugin_manager.load_plugin("/path/to/plugin")?;
@@ -194,10 +194,10 @@ let tools = plugin_manager.get_available_tools();
 
 ## Dependencies
 
-- `orbit-api` for external API communication
-- `orbit-commands` for command system integration
-- `orbit-plugins` for plugin-based tools
-- `orbit-runtime` for core runtime functionality
+- `frontal-code-api` for external API communication
+- `frontal-code-commands` for command system integration
+- `frontal-code-plugins` for plugin-based tools
+- `frontal-code-runtime` for core runtime functionality
 - `reqwest` for HTTP client operations
 - `tokio` for async execution
 - `serde` for tool data serialization
@@ -246,12 +246,12 @@ Comprehensive test coverage includes:
 
 Run tests with:
 ```bash
-cargo test -p orbit-tools
+cargo test -p frontal-code-tools
 ```
 
 ## Current Status
 
-This crate provides the comprehensive tool system for the Orbit ecosystem and is actively maintained with new tools and capabilities being added regularly.
+This crate provides the comprehensive tool system for the Frontal Code ecosystem and is actively maintained with new tools and capabilities being added regularly.
 
 ## Future Development
 

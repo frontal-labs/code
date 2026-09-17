@@ -1,15 +1,15 @@
-# Orbit Core
+# Frontal Code Core
 
-Shared core capabilities and foundational types for the Orbit ecosystem.
+Shared core capabilities and foundational types for the Frontal Code ecosystem.
 
 ## Overview
 
-The `orbit-core` crate provides essential shared types, traits, and utilities that form the foundation for all Orbit components. It serves as the central collection of common functionality used across the entire workspace, ensuring consistency and reducing code duplication.
+The `frontal-code-core` crate provides essential shared types, traits, and utilities that form the foundation for all Frontal Code components. It serves as the central collection of common functionality used across the entire workspace, ensuring consistency and reducing code duplication.
 
 ## Features
 
 - **Configuration Management**: JSON-based project configuration with type-safe access
-- **Shared Types**: Common data structures used across Orbit components
+- **Shared Types**: Common data structures used across Frontal Code components
 - **Foundation Traits**: Core traits for component integration
 - **Utility Functions**: Essential helper functions and macros
 - **Error Types**: Base error handling and common error variants
@@ -45,14 +45,14 @@ The `orbit-core` crate provides essential shared types, traits, and utilities th
 
 ## Current Status
 
-This crate is included in workspace build/test gates and provides a minimal baseline surface with room for additional shared primitives. As the Orbit ecosystem grows, this crate will expand to include more common functionality.
+This crate is included in workspace build/test gates and provides a minimal baseline surface with room for additional shared primitives. As the Frontal Code ecosystem grows, this crate will expand to include more common functionality.
 
 ## Usage
 
 ### Configuration Management
 
 ```rust
-use orbit_core::config::ProjectConfig;
+use frontal-code_core::config::ProjectConfig;
 
 // Load configuration from default location (falls back to defaults if not found)
 let config = ProjectConfig::load_or_default();
@@ -79,7 +79,7 @@ if config.features.enable_telemetry {
 ### General Usage
 
 ```rust
-use orbit_core::{SharedType, CoreTrait, core_utility};
+use frontal-code_core::{SharedType, CoreTrait, core_utility};
 
 // Use shared types across components
 let data = SharedType::new();
@@ -106,9 +106,9 @@ The core crate follows these principles:
 
 The configuration system looks for `project.json` in the following locations (in order):
 
-1. `$ORBIT_CONFIG_HOME/project.json` - Custom config directory
-2. `$ORBIT_HOME/project.json` - Orbit home directory  
-3. `~/.orbit/project.json` - User's home directory
+1. `$FCODE_CONFIG_HOME/project.json` - Custom config directory
+2. `$FCODE_HOME/project.json` - Frontal Code home directory  
+3. `~/.frontal-code/project.json` - User's home directory
 4. `config/project.json` - Project-local configuration
 
 If no configuration file is found, the system falls back to sensible defaults.
@@ -124,7 +124,7 @@ The core crate has minimal external dependencies to keep it lightweight and fast
 
 Run core tests with:
 ```bash
-cargo test -p orbit-core
+cargo test -p frontal-code-core
 ```
 
 ## Future Expansion

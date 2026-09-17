@@ -1,11 +1,11 @@
 use std::fs;
 use std::path::PathBuf;
 
-use orbit_harness::UpstreamPaths;
+use frontal_code_harness::UpstreamPaths;
 
 #[test]
 fn from_repo_root_sets_paths() {
-    let root = "/tmp/orbit-test/repo";
+    let root = "/tmp/frontal-code-test/repo";
     let paths = UpstreamPaths::from_repo_root(root);
     assert_eq!(
         paths.commands_path(),
@@ -82,7 +82,7 @@ fn temp_dir() -> PathBuf {
     let pid = std::process::id();
     let serial = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
-        "orbit-upstream-paths-test-{}-{pid}-{serial}",
+        "frontal-code-upstream-paths-test-{}-{pid}-{serial}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

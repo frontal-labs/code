@@ -1,10 +1,10 @@
 # MCP (Model Context Protocol) Guide
 
-This guide covers the Model Context Protocol (MCP) integration in Orbit, including setup, configuration, and usage.
+This guide covers the Model Context Protocol (MCP) integration in Frontal Code, including setup, configuration, and usage.
 
 ## Overview
 
-MCP is a protocol for connecting AI models to external tools and data sources. Orbit includes full MCP support, allowing you to:
+MCP is a protocol for connecting AI models to external tools and data sources. Frontal Code includes full MCP support, allowing you to:
 
 - Connect to MCP servers for additional tools
 - Use MCP-provided data sources
@@ -15,7 +15,7 @@ MCP is a protocol for connecting AI models to external tools and data sources. O
 
 ### Components
 
-- **MCP Client**: Built into Orbit, handles communication with servers
+- **MCP Client**: Built into Frontal Code, handles communication with servers
 - **MCP Servers**: External processes that provide tools and resources
 - **MCP Protocol**: JSON-RPC based communication protocol
 - **MCP Registry**: Directory of available MCP servers
@@ -23,7 +23,7 @@ MCP is a protocol for connecting AI models to external tools and data sources. O
 ### Communication Flow
 
 ```
-Orbit CLI -> MCP Client -> MCP Server -> External Service
+Frontal Code CLI -> MCP Client -> MCP Server -> External Service
 ```
 
 ## Built-in MCP Servers
@@ -34,7 +34,7 @@ Provides enhanced file system operations:
 
 ```bash
 # Start filesystem server
-orbit mcp start filesystem
+frontal-code mcp start filesystem
 
 # Use filesystem tools
 /filesystem/read /path/to/file
@@ -49,7 +49,7 @@ Integrates with GitHub API:
 
 ```bash
 # Start GitHub server
-orbit mcp start github
+frontal-code mcp start github
 
 # Use GitHub tools
 /github/repo list
@@ -64,7 +64,7 @@ Database connectivity:
 
 ```bash
 # Start database server
-orbit mcp start database
+frontal-code mcp start database
 
 # Use database tools
 /database/connect postgresql://user:pass@localhost/db
@@ -76,7 +76,7 @@ orbit mcp start database
 
 ### Server Configuration
 
-Configure MCP servers in `.orbit.json`:
+Configure MCP servers in `.frontal-code/settings.json`:
 
 ```json
 {
@@ -122,7 +122,7 @@ Configure MCP servers in `.orbit.json`:
 ```json
 {
   "mcp": {
-    "servers_dir": "~/.orbit/mcp-servers",
+    "servers_dir": "~/.frontal-code/mcp-servers",
     "timeout": 30,
     "auto_start": ["filesystem"],
     "enabled": true,
@@ -140,57 +140,57 @@ Configure MCP servers in `.orbit.json`:
 
 ```bash
 # List available MCP servers
-orbit mcp list
+frontal-code mcp list
 
 # List running servers
-orbit mcp list --running
+frontal-code mcp list --running
 
 # Start specific server
-orbit mcp start filesystem
+frontal-code mcp start filesystem
 
 # Stop server
-orbit mcp stop filesystem
+frontal-code mcp stop filesystem
 
 # Restart server
-orbit mcp restart filesystem
+frontal-code mcp restart filesystem
 
 # Show server status
-orbit mcp status filesystem
+frontal-code mcp status filesystem
 
 # Show server details
-orbit mcp show filesystem
+frontal-code mcp show filesystem
 ```
 
 ### Server Configuration
 
 ```bash
 # Configure server
-orbit mcp config filesystem --timeout 60 --auto-start
+frontal-code mcp config filesystem --timeout 60 --auto-start
 
 # Add new server
-orbit mcp add my-server --command "npx" --args "-y" "@my/mcp-server"
+frontal-code mcp add my-server --command "npx" --args "-y" "@my/mcp-server"
 
 # Remove server
-orbit mcp remove my-server
+frontal-code mcp remove my-server
 
 # Test server connection
-orbit mcp test filesystem
+frontal-code mcp test filesystem
 ```
 
 ### Tool Management
 
 ```bash
 # List available MCP tools
-orbit mcp tools
+frontal-code mcp tools
 
 # List tools from specific server
-orbit mcp tools filesystem
+frontal-code mcp tools filesystem
 
 # Show tool schema
-orbit mcp tool schema filesystem/read
+frontal-code mcp tool schema filesystem/read
 
 # Test tool
-orbit mcp tool test filesystem/read --arg path="/tmp/test"
+frontal-code mcp tool test filesystem/read --arg path="/tmp/test"
 ```
 
 ## Using MCP Tools
@@ -199,45 +199,45 @@ orbit mcp tool test filesystem/read --arg path="/tmp/test"
 
 ```bash
 # Read file
-orbit prompt "Use filesystem to read /etc/hosts"
+frontal-code prompt "Use filesystem to read /etc/hosts"
 
 # Write file
-orbit prompt "Use filesystem to write hello world to /tmp/test.txt"
+frontal-code prompt "Use filesystem to write hello world to /tmp/test.txt"
 
 # List directory
-orbit prompt "Use filesystem to list contents of /Users/gabriel/Downloads"
+frontal-code prompt "Use filesystem to list contents of /Users/gabriel/Downloads"
 
 # Watch directory
-orbit prompt "Use filesystem to watch /tmp for changes"
+frontal-code prompt "Use filesystem to watch /tmp for changes"
 ```
 
 ### GitHub Integration
 
 ```bash
 # List repositories
-orbit prompt "Use GitHub to list my repositories"
+frontal-code prompt "Use GitHub to list my repositories"
 
 # Get repository information
-orbit prompt "Use GitHub to get information about frontal-labs/orbit"
+frontal-code prompt "Use GitHub to get information about frontal-labs/frontal-code"
 
 # List issues
-orbit prompt "Use GitHub to list open issues in frontal-labs/orbit"
+frontal-code prompt "Use GitHub to list open issues in frontal-labs/frontal-code"
 
 # Create issue
-orbit prompt "Use GitHub to create an issue in frontal-labs/orbit with title 'Bug found'"
+frontal-code prompt "Use GitHub to create an issue in frontal-labs/frontal-code with title 'Bug found'"
 ```
 
 ### Database Operations
 
 ```bash
 # Connect to database
-orbit prompt "Use database to connect to postgresql://user:pass@localhost/mydb"
+frontal-code prompt "Use database to connect to postgresql://user:pass@localhost/mydb"
 
 # Run query
-orbit prompt "Use database to run query SELECT * FROM users LIMIT 10"
+frontal-code prompt "Use database to run query SELECT * FROM users LIMIT 10"
 
 # Show schema
-orbit prompt "Use database to show the schema of the users table"
+frontal-code prompt "Use database to show the schema of the users table"
 ```
 
 ## Custom MCP Servers
@@ -302,7 +302,7 @@ orbit prompt "Use database to show the schema of the users table"
    server.connect(transport);
    ```
 
-3. **Configure in Orbit**
+3. **Configure in Frontal Code**
    ```json
    {
      "mcp": {
@@ -477,26 +477,26 @@ MCP servers run in isolated processes with:
 
 ```bash
 # Enable MCP debug logging
-RUST_LOG=orbit_mcp=debug orbit mcp list
+RUST_LOG=frontal-code_mcp=debug frontal-code mcp list
 
 # Test server connection
-orbit mcp test filesystem --debug
+frontal-code mcp test filesystem --debug
 
 # Show server logs
-orbit mcp logs filesystem
+frontal-code mcp logs filesystem
 ```
 
 ### Health Checks
 
 ```bash
 # Check server health
-orbit mcp health filesystem
+frontal-code mcp health filesystem
 
 # Check all servers
-orbit mcp health --all
+frontal-code mcp health --all
 
 # Continuous monitoring
-orbit mcp health --watch
+frontal-code mcp health --watch
 ```
 
 ## Performance Optimization
@@ -525,13 +525,13 @@ orbit mcp health --watch
 
 ```bash
 # Enable tool result caching
-orbit mcp config filesystem --cache-enabled true
+frontal-code mcp config filesystem --cache-enabled true
 
 # Set cache TTL
-orbit mcp config filesystem --cache-ttl 300
+frontal-code mcp config filesystem --cache-ttl 300
 
 # Clear cache
-orbit mcp cache clear filesystem
+frontal-code mcp cache clear filesystem
 ```
 
 ### Load Balancing
@@ -570,13 +570,13 @@ orbit mcp cache clear filesystem
 
 ```bash
 # Search MCP registry
-orbit mcp search filesystem
+frontal-code mcp search filesystem
 
 # List popular servers
-orbit mcp list --popular
+frontal-code mcp list --popular
 
 # Show server details
-orbit mcp info @modelcontextprotocol/server-filesystem
+frontal-code mcp info @modelcontextprotocol/server-filesystem
 ```
 
 ## MCP Roadmap
@@ -602,40 +602,40 @@ orbit mcp info @modelcontextprotocol/server-filesystem
 
 ```bash
 # Start relevant MCP servers
-orbit mcp start filesystem
-orbit mcp start github
+frontal-code mcp start filesystem
+frontal-code mcp start github
 
 # Use in development
-orbit prompt "Use filesystem to create a new React component and GitHub to create a pull request"
+frontal-code prompt "Use filesystem to create a new React component and GitHub to create a pull request"
 ```
 
 ### Data Analysis Workflow
 
 ```bash
 # Start database and analysis servers
-orbit mcp start postgres
-orbit mcp start pandas
+frontal-code mcp start postgres
+frontal-code mcp start pandas
 
 # Analyze data
-orbit prompt "Use database to query user data and pandas to analyze trends"
+frontal-code prompt "Use database to query user data and pandas to analyze trends"
 ```
 
 ### DevOps Workflow
 
 ```bash
 # Start infrastructure servers
-orbit mcp start kubernetes
-orbit mcp start docker
+frontal-code mcp start kubernetes
+frontal-code mcp start docker
 
 # Deploy application
-orbit prompt "Use Kubernetes to deploy the application and Docker to build the container"
+frontal-code prompt "Use Kubernetes to deploy the application and Docker to build the container"
 ```
 
-This MCP guide provides comprehensive coverage of MCP integration in Orbit, from basic usage to advanced custom server development.
+This MCP guide provides comprehensive coverage of MCP integration in Frontal Code, from basic usage to advanced custom server development.
 
 ## Native Integrations (GitHub, Linear, Graphite, Slack)
 
-Orbit has **no hardcoded integrations**. Every external tracker (GitHub PRs, Linear
+Frontal Code has **no hardcoded integrations**. Every external tracker (GitHub PRs, Linear
 issues, Graphite stacks, Slack messages) is reached exclusively through an MCP server.
 The server acts as an **MCP client**: it resolves a logical integration name
 (`github`, `linear`, `graphite`, `slack`) to a configured MCP server and invokes that
@@ -643,7 +643,7 @@ server's tools. Adding a new provider requires **no code changes** — only conf
 
 ### Configuration
 
-Integrations are declared under `mcp.integrations` in `.orbit.json`, mapping each
+Integrations are declared under `mcp.integrations` in `.frontal-code/settings.json`, mapping each
 logical name to an MCP `server` plus the tool names it exposes and optional OAuth:
 
 ```json
@@ -668,8 +668,8 @@ logical name to an MCP `server` plus the tool names it exposes and optional OAut
           "auth_url": "https://github.com/login/oauth/authorize",
           "token_url": "https://github.com/login/oauth/access_token",
           "scopes": ["repo", "read:org", "workflow"],
-          "client_id_env": "ORBIT_GITHUB_CLIENT_ID",
-          "client_secret_env": "ORBIT_GITHUB_CLIENT_SECRET"
+          "client_id_env": "FCODE_GITHUB_CLIENT_ID",
+          "client_secret_env": "FCODE_GITHUB_CLIENT_SECRET"
         }
       }
     }

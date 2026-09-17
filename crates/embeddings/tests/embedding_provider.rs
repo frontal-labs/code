@@ -1,4 +1,4 @@
-use orbit_embeddings::{
+use frontal_code_embeddings::{
     embed_batch_checked, embed_checked, EmbeddingError, EmbeddingModelConfig, EmbeddingModelInfo,
     EmbeddingProvider, LocalMlEmbeddingProvider,
 };

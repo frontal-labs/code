@@ -1,4 +1,4 @@
-use orbit_embeddings::cosine_similarity;
+use frontal_code_embeddings::cosine_similarity;
 
 #[test]
 fn identical_vectors() {

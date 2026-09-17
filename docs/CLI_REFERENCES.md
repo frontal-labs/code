@@ -1,6 +1,6 @@
 # CLI Reference
 
-This comprehensive reference covers all Orbit CLI commands, options, and usage patterns.
+This comprehensive reference covers all Frontal Code CLI commands, options, and usage patterns.
 
 ## Table of Contents
 
@@ -14,7 +14,7 @@ This comprehensive reference covers all Orbit CLI commands, options, and usage p
 
 ## Global Options
 
-These options can be used with any Orbit command:
+These options can be used with any Frontal Code command:
 
 | Option | Short | Description | Default |
 |--------|--------|-------------|---------|
@@ -25,7 +25,7 @@ These options can be used with any Orbit command:
 | `--dangerously-skip-permissions` | | Skip all permission checks | `false` |
 | `--allowed-tools` | | Comma-separated list of allowed tools | All tools |
 | `--resume` | | Resume session (session-id, latest, or path) | None |
-| `--config` | | Path to config file | `~/.orbit/config.json` |
+| `--config` | | Path to config file | `~/.frontal-code/config.json` |
 | `--version` | `-V` | Show version information | |
 | `--help` | `-h` | Show help message | |
 | `--verbose` | `-v` | Enable verbose output | `false` |
@@ -36,34 +36,34 @@ These options can be used with any Orbit command:
 
 ```bash
 # Full model names
-orbit --model claude-opus-5
-orbit --model claude-sonnet-4-6
-orbit --model claude-haiku-4-5
+frontal-code --model claude-opus-5
+frontal-code --model claude-sonnet-4-6
+frontal-code --model claude-haiku-4-5
 
 # Model aliases
-orbit --model opus      # claude-opus-5
-orbit --model sonnet     # claude-sonnet-4-6
-orbit --model haiku      # claude-haiku-4-5
+frontal-code --model opus      # claude-opus-5
+frontal-code --model sonnet     # claude-sonnet-4-6
+frontal-code --model haiku      # claude-haiku-4-5
 
 # Provider-specific models
-orbit --provider openai --model gpt-4
-orbit --provider xai --model grok-3
+frontal-code --provider openai --model gpt-4
+frontal-code --provider xai --model grok-3
 ```
 
 ### Provider Selection
 
 ```bash
 # Anthropic (default)
-orbit --provider anthropic
+frontal-code --provider anthropic
 
 # OpenAI
-orbit --provider openai --model gpt-4-turbo
+frontal-code --provider openai --model gpt-4-turbo
 
 # xAI
-orbit --provider xai --model grok-3
+frontal-code --provider xai --model grok-3
 
 # Frontal (API gateway)
-orbit --provider frontal
+frontal-code --provider frontal
 ```
 
 ## Commands
@@ -73,7 +73,7 @@ orbit --provider frontal
 Send a one-shot prompt to the AI model.
 
 ```bash
-orbit prompt [OPTIONS] <TEXT>
+frontal-code prompt [OPTIONS] <TEXT>
 ```
 
 **Options:**
@@ -87,19 +87,19 @@ orbit prompt [OPTIONS] <TEXT>
 **Examples:**
 ```bash
 # Simple prompt
-orbit prompt "What files are in the current directory?"
+frontal-code prompt "What files are in the current directory?"
 
 # Read from file
-orbit prompt --file prompt.txt
+frontal-code prompt --file prompt.txt
 
 # With context
-orbit prompt --context README.md --context Cargo.toml "Summarize this project"
+frontal-code prompt --context README.md --context Cargo.toml "Summarize this project"
 
 # Streaming
-orbit prompt --stream "Explain this codebase"
+frontal-code prompt --stream "Explain this codebase"
 
 # With custom parameters
-orbit prompt --max-tokens 1000 --temperature 0.5 "Write a short poem"
+frontal-code prompt --max-tokens 1000 --temperature 0.5 "Write a short poem"
 ```
 
 ### repl
@@ -107,7 +107,7 @@ orbit prompt --max-tokens 1000 --temperature 0.5 "Write a short poem"
 Start interactive REPL (Read-Eval-Print Loop).
 
 ```bash
-orbit repl [OPTIONS]
+frontal-code repl [OPTIONS]
 ```
 
 **Options:**
@@ -119,16 +119,16 @@ orbit repl [OPTIONS]
 **Examples:**
 ```bash
 # Start REPL
-orbit repl
+frontal-code repl
 
 # With custom prompt
-orbit repl --prompt "orbit> "
+frontal-code repl --prompt "frontal-code> "
 
 # Multiline mode
-orbit repl --multiline
+frontal-code repl --multiline
 
 # Load history
-orbit repl --history ~/.orbit/repl-history
+frontal-code repl --history ~/.frontal-code/repl-history
 ```
 
 ### status
@@ -136,7 +136,7 @@ orbit repl --history ~/.orbit/repl-history
 Show system status and information.
 
 ```bash
-orbit status [OPTIONS]
+frontal-code status [OPTIONS]
 ```
 
 **Options:**
@@ -147,37 +147,37 @@ orbit status [OPTIONS]
 **Examples:**
 ```bash
 # Basic status
-orbit status
+frontal-code status
 
 # Detailed status
-orbit status --detailed
+frontal-code status --detailed
 
 # JSON output
-orbit status --json
+frontal-code status --json
 
 # Specific component
- orbit status --component api
- orbit status --component mcp
+ frontal-code status --component api
+ frontal-code status --component mcp
 ```
 
 ### hosted
 
 ```bash
-orbit hosted tasks list [--status STATUS[,STATUS...]] [--source SOURCE] [--repository REPO] [--channel-id ID] [--thread-ts TS] [--needs-followup] [--limit N]
-orbit hosted task approval <TASK_ID> [retry|cancel|ack] [--kind orphaned_hosted_agent|github_review_followup] [--resolved-by NAME] [--reason TEXT]
+frontal-code hosted tasks list [--status STATUS[,STATUS...]] [--source SOURCE] [--repository REPO] [--channel-id ID] [--thread-ts TS] [--needs-followup] [--limit N]
+frontal-code hosted task approval <TASK_ID> [retry|cancel|ack] [--kind orphaned_hosted_agent|github_review_followup] [--resolved-by NAME] [--reason TEXT]
 ```
 
 **Examples:**
 
 ```bash
 # List active Slack-created tasks
-orbit hosted tasks list --status pending,running --source slack --limit 10
+frontal-code hosted tasks list --status pending,running --source slack --limit 10
 
 # List tasks that have GitHub review follow-up pending
-orbit hosted tasks list --needs-followup
+frontal-code hosted tasks list --needs-followup
 
 # Clear GitHub review follow-up and rerun the lane
-orbit hosted task approval task_123 retry --kind github_review_followup --resolved-by reviewer
+frontal-code hosted task approval task_123 retry --kind github_review_followup --resolved-by reviewer
 ```
 
 ### config
@@ -185,7 +185,7 @@ orbit hosted task approval task_123 retry --kind github_review_followup --resolv
 Manage configuration.
 
 ```bash
-orbit config [SUBCOMMAND] [OPTIONS]
+frontal-code config [SUBCOMMAND] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -200,23 +200,23 @@ orbit config [SUBCOMMAND] [OPTIONS]
 **Examples:**
 ```bash
 # Show all config
-orbit config show
+frontal-code config show
 
 # Get specific value
-orbit config get runtime.default_model
+frontal-code config get runtime.default_model
 
 # Set value
-orbit config set runtime.default_model "claude-sonnet-4-6"
-orbit config set permission-mode safe-mode
+frontal-code config set runtime.default_model "claude-sonnet-4-6"
+frontal-code config set permission-mode safe-mode
 
 # Unset value
-orbit config unset api.timeout
+frontal-code config unset api.timeout
 
 # Reset configuration
-orbit config reset
+frontal-code config reset
 
 # Validate configuration
-orbit config validate
+frontal-code config validate
 ```
 
 ### session
@@ -224,7 +224,7 @@ orbit config validate
 Manage sessions.
 
 ```bash
-orbit session [SUBCOMMAND] [OPTIONS]
+frontal-code session [SUBCOMMAND] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -238,22 +238,22 @@ orbit session [SUBCOMMAND] [OPTIONS]
 **Examples:**
 ```bash
 # List sessions
-orbit session list
+frontal-code session list
 
 # Show session details
-orbit session show session-123
+frontal-code session show session-123
 
 # Export session
-orbit session export session-123 --output session.json
+frontal-code session export session-123 --output session.json
 
 # Import session
-orbit session import session.json
+frontal-code session import session.json
 
 # Delete session
-orbit session delete session-123
+frontal-code session delete session-123
 
 # Clean up old sessions
-orbit session cleanup --older-than 7d
+frontal-code session cleanup --older-than 7d
 ```
 
 ### plugin
@@ -261,7 +261,7 @@ orbit session cleanup --older-than 7d
 Manage plugins.
 
 ```bash
-orbit plugin [SUBCOMMAND] [OPTIONS]
+frontal-code plugin [SUBCOMMAND] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -277,26 +277,26 @@ orbit plugin [SUBCOMMAND] [OPTIONS]
 **Examples:**
 ```bash
 # List plugins
-orbit plugin list
+frontal-code plugin list
 
 # Install plugin
-orbit plugin install ./my-plugin
-orbit plugin install https://github.com/user/plugin.git
-orbit plugin install plugin-name
+frontal-code plugin install ./my-plugin
+frontal-code plugin install https://github.com/user/plugin.git
+frontal-code plugin install plugin-name
 
 # Uninstall plugin
-orbit plugin uninstall my-plugin
+frontal-code plugin uninstall my-plugin
 
 # Enable/disable plugin
-orbit plugin enable my-plugin
-orbit plugin disable my-plugin
+frontal-code plugin enable my-plugin
+frontal-code plugin disable my-plugin
 
 # Update plugin
-orbit plugin update my-plugin
-orbit plugin update  # Update all
+frontal-code plugin update my-plugin
+frontal-code plugin update  # Update all
 
 # Show plugin details
-orbit plugin show my-plugin
+frontal-code plugin show my-plugin
 ```
 
 ### mcp
@@ -304,7 +304,7 @@ orbit plugin show my-plugin
 Manage MCP (Model Context Protocol) servers.
 
 ```bash
-orbit mcp [SUBCOMMAND] [OPTIONS]
+frontal-code mcp [SUBCOMMAND] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -320,22 +320,22 @@ orbit mcp [SUBCOMMAND] [OPTIONS]
 **Examples:**
 ```bash
 # List MCP servers
-orbit mcp list
+frontal-code mcp list
 
 # Start server
-orbit mcp start filesystem
+frontal-code mcp start filesystem
 
 # Stop server
-orbit mcp stop filesystem
+frontal-code mcp stop filesystem
 
 # Show status
-orbit mcp status filesystem
+frontal-code mcp status filesystem
 
 # List tools
-orbit mcp tools filesystem
+frontal-code mcp tools filesystem
 
 # Configure server
-orbit mcp config filesystem --timeout 60
+frontal-code mcp config filesystem --timeout 60
 ```
 
 ### tools
@@ -343,7 +343,7 @@ orbit mcp config filesystem --timeout 60
 Manage built-in tools.
 
 ```bash
-orbit tools [SUBCOMMAND] [OPTIONS]
+frontal-code tools [SUBCOMMAND] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -356,18 +356,18 @@ orbit tools [SUBCOMMAND] [OPTIONS]
 **Examples:**
 ```bash
 # List tools
-orbit tools list
+frontal-code tools list
 
 # Show tool details
-orbit tools show read
-orbit tools show bash
+frontal-code tools show read
+frontal-code tools show bash
 
 # Test tool
-orbit tools test read --arg path="/tmp/test"
+frontal-code tools test read --arg path="/tmp/test"
 
 # Enable/disable tool
-orbit tools enable bash
-orbit tools disable bash
+frontal-code tools enable bash
+frontal-code tools disable bash
 ```
 
 ### doctor
@@ -375,7 +375,7 @@ orbit tools disable bash
 Run system diagnostics.
 
 ```bash
-orbit doctor [OPTIONS]
+frontal-code doctor [OPTIONS]
 ```
 
 **Options:**
@@ -386,17 +386,17 @@ orbit doctor [OPTIONS]
 **Examples:**
 ```bash
 # Run full diagnostics
-orbit doctor
+frontal-code doctor
 
 # Check specific component
-orbit doctor --component api
-orbit doctor --component config
+frontal-code doctor --component api
+frontal-code doctor --component config
 
 # Auto-fix issues
-orbit doctor --fix
+frontal-code doctor --fix
 
 # Detailed diagnostics
-orbit doctor --detailed
+frontal-code doctor --detailed
 ```
 
 ### version
@@ -404,7 +404,7 @@ orbit doctor --detailed
 Show version information.
 
 ```bash
-orbit version [OPTIONS]
+frontal-code version [OPTIONS]
 ```
 
 **Options:**
@@ -414,13 +414,13 @@ orbit version [OPTIONS]
 **Examples:**
 ```bash
 # Basic version
-orbit version
+frontal-code version
 
 # Detailed version
-orbit version --detailed
+frontal-code version --detailed
 
 # JSON output
-orbit version --json
+frontal-code version --json
 ```
 
 ### help
@@ -428,18 +428,18 @@ orbit version --json
 Show help information.
 
 ```bash
-orbit help [COMMAND]
+frontal-code help [COMMAND]
 ```
 
 **Examples:**
 ```bash
 # General help
-orbit help
+frontal-code help
 
 # Command-specific help
-orbit help prompt
-orbit help repl
-orbit help config
+frontal-code help prompt
+frontal-code help repl
+frontal-code help config
 ```
 
 ## Slash Commands
@@ -538,9 +538,9 @@ Model aliases provide convenient shortcuts for full model names:
 
 ```bash
 # Using aliases
-orbit --model opus prompt "Complex analysis task"
-orbit --model sonnet prompt "Moderate complexity task"
-orbit --model haiku prompt "Simple task"
+frontal-code --model opus prompt "Complex analysis task"
+frontal-code --model sonnet prompt "Moderate complexity task"
+frontal-code --model haiku prompt "Simple task"
 
 # In REPL
 /model opus
@@ -554,7 +554,7 @@ orbit --model haiku prompt "Simple task"
 All tools are allowed without confirmation.
 
 ```bash
-orbit --permission-mode danger-full-access prompt "Deploy to production"
+frontal-code --permission-mode danger-full-access prompt "Deploy to production"
 ```
 
 **Characteristics:**
@@ -567,7 +567,7 @@ orbit --permission-mode danger-full-access prompt "Deploy to production"
 Only safe tools allowed; destructive tools require approval.
 
 ```bash
-orbit --permission-mode safe-mode prompt "Analyze this codebase"
+frontal-code --permission-mode safe-mode prompt "Analyze this codebase"
 ```
 
 **Safe Tools:**
@@ -587,7 +587,7 @@ orbit --permission-mode safe-mode prompt "Analyze this codebase"
 Prompt for approval on every tool use.
 
 ```bash
-orbit --permission-mode ask-permissions prompt "List files in /tmp"
+frontal-code --permission-mode ask-permissions prompt "List files in /tmp"
 ```
 
 **Characteristics:**
@@ -603,7 +603,7 @@ orbit --permission-mode ask-permissions prompt "List files in /tmp"
 Human-readable text output with formatting and colors.
 
 ```bash
-orbit --output-format text prompt "What files are in this directory?"
+frontal-code --output-format text prompt "What files are in this directory?"
 ```
 
 ### JSON Output
@@ -611,7 +611,7 @@ orbit --output-format text prompt "What files are in this directory?"
 Machine-readable JSON output for automation and scripting.
 
 ```bash
-orbit --output-format json prompt "Analyze this code"
+frontal-code --output-format json prompt "Analyze this code"
 ```
 
 **JSON Structure:**
@@ -634,7 +634,7 @@ orbit --output-format json prompt "Analyze this code"
 Real-time streaming of AI responses.
 
 ```bash
-orbit prompt --stream "Generate a long story"
+frontal-code prompt --stream "Generate a long story"
 ```
 
 ## Exit Codes
@@ -664,7 +664,7 @@ orbit prompt --stream "Generate a long story"
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `ORBIT_API_KEY` | Anthropic API key | `sk-ant-...` |
+| `FCODE_API_KEY` | Anthropic API key | `sk-ant-...` |
 | `OPENAI_API_KEY` | OpenAI API key | `sk-...` |
 | `XAI_API_KEY` | xAI API key | `xai-...` |
 
@@ -672,17 +672,17 @@ orbit prompt --stream "Generate a long story"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ORBIT_CONFIG_DIR` | Configuration directory | `~/.orbit` |
-| `ORBIT_DATA_DIR` | Data directory | `~/.orbit/data` |
-| `ORBIT_LOG_LEVEL` | Log level | `info` |
-| `ORBIT_SESSION_DIR` | Session directory | `~/.orbit/sessions` |
+| `FCODE_CONFIG_DIR` | Configuration directory | `~/.frontal-code` |
+| `FCODE_DATA_DIR` | Data directory | `~/.frontal-code/data` |
+| `FCODE_LOG_LEVEL` | Log level | `info` |
+| `FCODE_SESSION_DIR` | Session directory | `~/.frontal-code/sessions` |
 | `RUST_LOG` | Rust log level | `info` |
 
 ## Configuration Files
 
 ### User Configuration
 
-Location: `~/.orbit/config.json`
+Location: `~/.frontal-code/config.json`
 
 ```json
 {
@@ -700,7 +700,7 @@ Location: `~/.orbit/config.json`
 
 ### Project Configuration
 
-Location: `.orbit.json` (project root)
+Location: `.frontal-code/settings.json` (project root)
 
 ```json
 {
@@ -720,10 +720,10 @@ Location: `.orbit.json` (project root)
 
 ```bash
 # Chain commands with &&
-orbit prompt "Analyze code" && orbit tools list
+frontal-code prompt "Analyze code" && frontal-code tools list
 
 # Use output of one command as input
-orbit prompt "$(orbit config get runtime.default_model) model capabilities"
+frontal-code prompt "$(frontal-code config get runtime.default_model) model capabilities"
 ```
 
 ### Batch Operations
@@ -731,23 +731,23 @@ orbit prompt "$(orbit config get runtime.default_model) model capabilities"
 ```bash
 # Process multiple files
 for file in *.md; do
-  orbit prompt "Summarize $file" --context "$file"
+  frontal-code prompt "Summarize $file" --context "$file"
 done
 
 # Batch with xargs
-find . -name "*.rs" | xargs -I {} orbit prompt "Analyze {}" --context "{}"
+find . -name "*.rs" | xargs -I {} frontal-code prompt "Analyze {}" --context "{}"
 ```
 
 ### Automation Scripts
 
 ```bash
 #!/bin/bash
-# orbit-analyze.sh
+# frontal-code-analyze.sh
 
 set -e
 
-echo "Starting Orbit analysis..."
-orbit --output-format json prompt "Analyze codebase" > analysis.json
+echo "Starting Frontal Code analysis..."
+frontal-code --output-format json prompt "Analyze codebase" > analysis.json
 
 echo "Extracting results..."
 jq '.response' analysis.json > response.txt
@@ -759,13 +759,13 @@ echo "Analysis complete!"
 
 ```bash
 # Use with jq for JSON processing
-orbit --output-format json prompt "List files" | jq '.tools_used'
+frontal-code --output-format json prompt "List files" | jq '.tools_used'
 
 # Use with grep for filtering
-orbit prompt "Generate report" | grep -E "(ERROR|WARNING)"
+frontal-code prompt "Generate report" | grep -E "(ERROR|WARNING)"
 
 # Use with sed for transformation
-orbit prompt "Generate config" | sed 's/development/production/'
+frontal-code prompt "Generate config" | sed 's/development/production/'
 ```
 
-This CLI reference provides comprehensive coverage of all Orbit CLI commands and options for effective usage.
+This CLI reference provides comprehensive coverage of all Frontal Code CLI commands and options for effective usage.

@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-echo "==> Bootstrapping frontal-orbit Bazel monorepo"
+echo "==> Bootstrapping frontal-code Bazel monorepo"
 
 if ! command -v bazel >/dev/null 2>&1 && ! command -v bazelisk >/dev/null 2>&1; then
   echo "ERROR: bazel/bazelisk not found on PATH. Install Bazel first." >&2

@@ -1,12 +1,12 @@
 [package]
-name = "orbit-memory"
+name = "frontal-code-memory"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
-orbit-embeddings = { path = "../embeddings" }
+frontal-code-embeddings = { path = "../embeddings" }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true

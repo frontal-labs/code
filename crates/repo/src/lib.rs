@@ -159,7 +159,7 @@ pub fn normalize_branch_name(branch: &str) -> String {
         .collect::<Vec<_>>()
         .join("-");
     if collapsed.is_empty() {
-        "orbit-task".to_string()
+        "frontal-code-task".to_string()
     } else {
         collapsed
     }
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn prepare_checkout_clones_local_repo_and_creates_branch_from_base_ref() {
-        let root = temp_dir("orbit-repo-clone");
+        let root = temp_dir("frontal-code-repo-clone");
         let source = init_git_repo(root.join("source"));
         commit_file(&source, "README.md", "hello from main\n", "initial commit");
 
@@ -578,12 +578,12 @@ mod tests {
             source: RepoSource::LocalPath(source.clone()),
             repository: Some("acme/payments".to_string()),
             base_ref: Some("main".to_string()),
-            branch: Some("orbit/task-123".to_string()),
+            branch: Some("frontal-code/task-123".to_string()),
         })
         .expect("checkout should prepare");
 
-        assert_eq!(prepared.branch.as_deref(), Some("orbit/task-123"));
-        assert_eq!(prepared.active_ref, "orbit/task-123");
+        assert_eq!(prepared.branch.as_deref(), Some("frontal-code/task-123"));
+        assert_eq!(prepared.active_ref, "frontal-code/task-123");
         assert_eq!(
             fs::read_to_string(prepared.checkout_root.join("README.md")).unwrap(),
             "hello from main\n"
@@ -594,7 +594,7 @@ mod tests {
 
     #[test]
     fn prepare_checkout_fetches_latest_remote_state_when_reused() {
-        let root = temp_dir("orbit-repo-fetch");
+        let root = temp_dir("frontal-code-repo-fetch");
         let source = init_git_repo(root.join("source"));
         commit_file(&source, "README.md", "v1\n", "initial commit");
 
@@ -604,7 +604,7 @@ mod tests {
             source: RepoSource::LocalPath(source.clone()),
             repository: Some("acme/payments".to_string()),
             base_ref: Some("main".to_string()),
-            branch: Some("orbit/task-fetch".to_string()),
+            branch: Some("frontal-code/task-fetch".to_string()),
         };
 
         let first = prepare_checkout(&request).expect("first checkout should prepare");
@@ -620,14 +620,14 @@ mod tests {
             fs::read_to_string(second.checkout_root.join("README.md")).unwrap(),
             "v2\n"
         );
-        assert_eq!(second.active_ref, "orbit/task-fetch");
+        assert_eq!(second.active_ref, "frontal-code/task-fetch");
 
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn prepare_checkout_supports_detached_base_ref_without_branch() {
-        let root = temp_dir("orbit-repo-detached");
+        let root = temp_dir("frontal-code-repo-detached");
         let source = init_git_repo(root.join("source"));
         commit_file(&source, "README.md", "detached\n", "initial commit");
 
@@ -656,12 +656,12 @@ mod tests {
             normalize_branch_name(" Feature 123 / Fix::Bug "),
             "feature-123-fix-bug"
         );
-        assert_eq!(normalize_branch_name("////"), "orbit-task");
+        assert_eq!(normalize_branch_name("////"), "frontal-code-task");
     }
 
     #[test]
     fn repo_status_reports_dirty_and_untracked_state() {
-        let root = temp_dir("orbit-repo-status");
+        let root = temp_dir("frontal-code-repo-status");
         let repo = init_git_repo(root.join("repo"));
         commit_file(&repo, "README.md", "clean\n", "initial commit");
 
@@ -682,7 +682,7 @@ mod tests {
 
     #[test]
     fn stage_and_commit_and_push_branch_updates_remote() {
-        let root = temp_dir("orbit-repo-push");
+        let root = temp_dir("frontal-code-repo-push");
         let remote = root.join("remote.git");
         run_git_in_dir(root.as_path(), ["init", "--bare", remote.to_str().unwrap()]);
         run_git_in_dir(
@@ -695,8 +695,11 @@ mod tests {
             root.as_path(),
             ["clone", remote.to_str().unwrap(), source.to_str().unwrap()],
         );
-        run_git(&source, ["config", "user.name", "Orbit Tests"]);
-        run_git(&source, ["config", "user.email", "orbit-tests@example.com"]);
+        run_git(&source, ["config", "user.name", "FrontalCode Tests"]);
+        run_git(
+            &source,
+            ["config", "user.email", "frontal-code-tests@example.com"],
+        );
         commit_file(&source, "README.md", "main\n", "initial commit");
         run_git(&source, ["push", "-u", "origin", "main"]);
 
@@ -706,7 +709,7 @@ mod tests {
             source: RepoSource::LocalPath(remote.clone()),
             repository: Some("acme/payments".to_string()),
             base_ref: Some("main".to_string()),
-            branch: Some("orbit/task-push".to_string()),
+            branch: Some("frontal-code/task-push".to_string()),
         })
         .expect("checkout should prepare");
 
@@ -719,14 +722,14 @@ mod tests {
             &prepared.checkout_root,
             &RepoCommitRequest {
                 message: "Update from hosted worker".to_string(),
-                author_name: Some("Orbit Worker".to_string()),
-                author_email: Some("orbit-worker@example.com".to_string()),
+                author_name: Some("FrontalCode Worker".to_string()),
+                author_email: Some("frontal-code-worker@example.com".to_string()),
             },
         )
         .expect("commit should succeed");
-        assert_eq!(commit.branch.as_deref(), Some("orbit/task-push"));
+        assert_eq!(commit.branch.as_deref(), Some("frontal-code/task-push"));
 
-        push_branch(&prepared.checkout_root, "origin", "orbit/task-push")
+        push_branch(&prepared.checkout_root, "origin", "frontal-code/task-push")
             .expect("push should succeed");
 
         let verify = root.join("verify");
@@ -734,7 +737,7 @@ mod tests {
             root.as_path(),
             ["clone", remote.to_str().unwrap(), verify.to_str().unwrap()],
         );
-        run_git(&verify, ["checkout", "orbit/task-push"]);
+        run_git(&verify, ["checkout", "frontal-code/task-push"]);
         assert_eq!(
             fs::read_to_string(verify.join("README.md")).unwrap(),
             "updated from worker\n"
@@ -746,8 +749,11 @@ mod tests {
     fn init_git_repo(path: PathBuf) -> PathBuf {
         fs::create_dir_all(&path).unwrap();
         run_git(&path, ["init", "-b", "main"]);
-        run_git(&path, ["config", "user.name", "Orbit Tests"]);
-        run_git(&path, ["config", "user.email", "orbit-tests@example.com"]);
+        run_git(&path, ["config", "user.name", "FrontalCode Tests"]);
+        run_git(
+            &path,
+            ["config", "user.email", "frontal-code-tests@example.com"],
+        );
         path
     }
 

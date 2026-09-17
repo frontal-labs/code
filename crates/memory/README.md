@@ -1,4 +1,4 @@
-# Orbit Memory
+# Frontal Code Memory
 
 Semantic memory and lightweight knowledge graph utilities.
 
@@ -27,11 +27,11 @@ This crate powers memory tools such as `MemoryUpsert`, `MemorySearch`, and `Know
 
 Runtime backend selection is environment-driven:
 
-- `ORBIT_MEMORY_METADATA_PATH` enables `PersistentFileMetadataStore`
-- `ORBIT_MEMORY_PINECONE_URL` points at the Pinecone index host
-- `ORBIT_MEMORY_PINECONE_API_KEY` adds Pinecone API-key auth
-- `ORBIT_MEMORY_PINECONE_NAMESPACE` prefixes per-scope namespaces inside Pinecone
-- `ORBIT_MEMORY_NEO4J_URL` + `ORBIT_MEMORY_NEO4J_DATABASE` enable Neo4j KG storage
-- `ORBIT_MEMORY_NEO4J_USERNAME` + `ORBIT_MEMORY_NEO4J_PASSWORD` add Neo4j basic auth
+- `FCODE_MEMORY_METADATA_PATH` enables `PersistentFileMetadataStore`
+- `FCODE_MEMORY_PINECONE_URL` points at the Pinecone index host
+- `FCODE_MEMORY_PINECONE_API_KEY` adds Pinecone API-key auth
+- `FCODE_MEMORY_PINECONE_NAMESPACE` prefixes per-scope namespaces inside Pinecone
+- `FCODE_MEMORY_NEO4J_URL` + `FCODE_MEMORY_NEO4J_DATABASE` enable Neo4j KG storage
+- `FCODE_MEMORY_NEO4J_USERNAME` + `FCODE_MEMORY_NEO4J_PASSWORD` add Neo4j basic auth
 
 If those variables are absent, the crate falls back to in-memory metadata/vector/graph stores.

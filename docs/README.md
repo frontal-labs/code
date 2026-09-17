@@ -1,6 +1,6 @@
-# Orbit CLI Documentation
+# Frontal Code CLI Documentation
 
-Welcome to the Orbit CLI documentation hub. This comprehensive guide covers everything you need to know about using Orbit, the high-performance Rust-based AI agent harness.
+Welcome to the Frontal Code CLI documentation hub. This comprehensive guide covers everything you need to know about using Frontal Code, the high-performance Rust-based AI agent harness.
 
 ## 📚 Documentation Overview
 
@@ -22,7 +22,7 @@ Welcome to the Orbit CLI documentation hub. This comprehensive guide covers ever
 - **[Performance](./PERFORMANCE.md)** - Performance optimization and monitoring
 - **[Security](./SECURITY.md)** - Security features and best practices
 - **[Containers](./CONTAINERS.md)** - Docker and containerization
-- **[Hosted Engineering Plan](https://github.com/frontal-labs/orbit/issues)** - Implementation plan for the hosted server, worker containers, multi-agent execution, and GitHub automation
+- **[Hosted Engineering Plan](https://github.com/frontal-labs/frontal-code/issues)** - Implementation plan for the hosted server, worker containers, multi-agent execution, and GitHub automation
 
 ### Support
 - **[Troubleshooting](./TROUBLESHOOTING.md)** - Common issues and solutions
@@ -37,7 +37,7 @@ Welcome to the Orbit CLI documentation hub. This comprehensive guide covers ever
 # Install with Homebrew from this repo
 git clone <repository-url>
 cd claw-code-main
-brew install --HEAD ./homebrew/orbit.rb
+brew install --HEAD ./homebrew/frontal-code.rb
 ```
 
 For local development, build from source with `cargo build --workspace`.
@@ -46,34 +46,34 @@ For local development, build from source with `cargo build --workspace`.
 
 ```bash
 # Interactive session
-orbit repl
+frontal-code repl
 
 # One-shot prompt
-orbit prompt "What files are in the current directory?"
+frontal-code prompt "What files are in the current directory?"
 
 # Read and analyze
-orbit prompt "Read the README.md file and summarize it"
+frontal-code prompt "Read the README.md file and summarize it"
 
 # Use specific model
-orbit --model claude-sonnet-4-6 prompt "Explain this codebase"
+frontal-code --model claude-sonnet-4-6 prompt "Explain this codebase"
 ```
 
 ### Configuration
 
 ```bash
 # Set API key
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 
 # Configure default model
-orbit config set runtime.default_model "claude-sonnet-4-6"
+frontal-code config set runtime.default_model "claude-sonnet-4-6"
 
 # Show configuration
-orbit config show
+frontal-code config show
 ```
 
 ## 🏗️ Architecture Overview
 
-Orbit is built as a modular Rust workspace with the following key components:
+Frontal Code is built as a modular Rust workspace with the following key components:
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -111,7 +111,7 @@ Orbit is built as a modular Rust workspace with the following key components:
 ### By User Role
 
 #### For Developers
-- **[Development Guide](../DEVELOPMENT.md)** - Contributing to Orbit
+- **[Development Guide](../DEVELOPMENT.md)** - Contributing to Frontal Code
 - **[API Reference](./API_REFERENCES.md)** - Programmatic usage
 - **[Plugin Development](./PLUGINS.md#developing-plugins)** - Creating custom plugins
 - **[Architecture](./ARCHITECTURE.md)** - System design and internals
@@ -167,21 +167,21 @@ cargo build --workspace
 cargo test --workspace
 
 # 3. Start development REPL
-cargo run -p orbit-cli -- repl
+cargo run -p cli -- repl
 
 # 4. Test changes
-orbit prompt "test new feature"
+frontal-code prompt "test new feature"
 ```
 
 ### Automation Workflow
 
 ```bash
 # 1. Configure for automation
-orbit config set permission-mode danger-full-access
-orbit config set output-format json
+frontal-code config set permission-mode danger-full-access
+frontal-code config set output-format json
 
 # 2. Create automation script
-orbit prompt "analyze codebase" > analysis.json
+frontal-code prompt "analyze codebase" > analysis.json
 
 # 3. Process results
 jq '.result' analysis.json
@@ -191,18 +191,18 @@ jq '.result' analysis.json
 
 ```bash
 # 1. Create plugin
-orbit plugin init --type tool --name my-plugin
+frontal-code plugin init --type tool --name my-plugin
 
 # 2. Implement plugin
 cd my-plugin
 # ... implement plugin ...
 
 # 3. Test plugin
-orbit plugin install .
-orbit plugin test my-plugin
+frontal-code plugin install .
+frontal-code plugin test my-plugin
 
 # 4. Publish plugin
-orbit plugin publish
+frontal-code plugin publish
 ```
 
 ## 🔍 Navigation Tips
@@ -225,13 +225,13 @@ orbit plugin publish
 
 ```bash
 # Built-in help system
-orbit --help
-orbit help <command>
+frontal-code --help
+frontal-code help <command>
 /help          # In REPL
 
 # Interactive tutorials
-orbit tutorial start
-orbit tutorial list
+frontal-code tutorial start
+frontal-code tutorial list
 ```
 
 ## 🤝 Contributing to Documentation
@@ -264,11 +264,11 @@ orbit tutorial list
 
 ```bash
 # General help
-orbit --help
+frontal-code --help
 
 # Command-specific help
-orbit help prompt
-orbit help repl
+frontal-code help prompt
+frontal-code help repl
 
 # In-REPL help
 /help
@@ -283,7 +283,7 @@ orbit help repl
 
 ### Professional Support
 
-For enterprise support and consulting, visit the Orbit website or contact the team directly.
+For enterprise support and consulting, visit the Frontal Code website or contact the team directly.
 
 ## 🗺️ Roadmap
 
@@ -304,7 +304,7 @@ For enterprise support and consulting, visit the Orbit website or contact the te
 
 ## 📄 License
 
-This documentation is licensed under the same MIT license as the Orbit project. See the [LICENSE](../LICENSE.md) file for details.
+This documentation is licensed under the same MIT license as the Frontal Code project. See the [LICENSE](../LICENSE.md) file for details.
 
 ## 🙏 Acknowledgments
 
@@ -312,4 +312,4 @@ Thanks to all contributors who have helped build and improve this documentation.
 
 ---
 
-**Ready to get started?** Jump to the [Quick Start](../README.md#quick-start) guide or explore the [Examples](./EXAMPLES.md) to see Orbit in action!
+**Ready to get started?** Jump to the [Quick Start](../README.md#quick-start) guide or explore the [Examples](./EXAMPLES.md) to see Frontal Code in action!

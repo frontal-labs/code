@@ -1,23 +1,23 @@
 [package]
-name = "orbit-server"
+name = "frontal-code-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "orbit-server"
+name = "frontal-code-server"
 path = "src/main.rs"
 
 [dependencies]
 axum = { version = "0.7", features = ["ws"] }
 futures-util = "0.3"
-orbit-events = { path = "../events" }
-orbit-integrations = { path = "../integrations" }
-orbit-orchestrator = { path = "../orchestrator" }
-orbit-repo = { path = "../repo" }
-orbit-runtime = { path = "../runtime" }
-orbit-tools = { path = "../tools" }
+frontal-code-events = { path = "../events" }
+frontal-code-integrations = { path = "../integrations" }
+frontal-code-orchestrator = { path = "../orchestrator" }
+frontal-code-repo = { path = "../repo" }
+frontal-code-runtime = { path = "../runtime" }
+frontal-code-tools = { path = "../tools" }
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }

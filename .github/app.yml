@@ -1,10 +1,10 @@
-# GitHub App Configuration for Orbit Autonomous Engineering
-name: Orbit Autonomous Engineering
+# GitHub App Configuration for Frontal Code Autonomous Engineering
+name: Frontal Code Autonomous Engineering
 description: AI-powered autonomous engineering platform that handles code analysis, bug fixes, and deployments through natural language interfaces
 
 # App URL and webhook configuration
-url: https://your-orbit-server.com
-webhook_url: https://your-orbit-server.com/webhook/github
+url: https://your-frontal-code-server.com
+webhook_url: https://your-frontal-code-server.com/webhook/github
 
 # Repository permissions
 permissions:

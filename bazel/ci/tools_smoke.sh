@@ -13,7 +13,7 @@ cargo run -q -p tools-fuzz -- list >/dev/null
 cargo run -q -p tools-cache -- status >/dev/null
 cargo run -q -p tools-remote -- show >/dev/null
 cargo run -q -p tools-codegen -- command Smoke >/dev/null
-GEN_DIR="$(mktemp -d /tmp/orbit_gen_smoke.XXXXXX)"
+GEN_DIR="$(mktemp -d /tmp/frontal-code_gen_smoke.XXXXXX)"
 cargo run -q -p tools-generators -- crate smoke_lib --dest "$GEN_DIR" >/dev/null
 rm -rf "$GEN_DIR"
 cargo run -q -p tools-telemetry -- event smoke --message ok >/dev/null

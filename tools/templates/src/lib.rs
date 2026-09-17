@@ -66,9 +66,9 @@ mod tests {
     #[test]
     fn substitutes_known_vars() {
         let mut v = HashMap::new();
-        v.insert("name", "orbit".to_string());
+        v.insert("name", "frontal-code".to_string());
         v.insert("year", "2026".to_string());
-        assert_eq!(render("hi {name} in {year}", &v), "hi orbit in 2026");
+        assert_eq!(render("hi {name} in {year}", &v), "hi frontal-code in 2026");
     }
 
     #[test]

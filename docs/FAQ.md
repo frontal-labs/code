@@ -1,14 +1,14 @@
 # Frequently Asked Questions
 
-This document answers common questions about the Orbit CLI.
+This document answers common questions about the Frontal Code CLI.
 
 ## General Questions
 
-### What is Orbit?
+### What is Frontal Code?
 
-Orbit is a high-performance Rust rewrite of the Orbit CLI agent harness. It provides a command-line interface for interacting with AI models, with built-in tools for file operations, web access, and automation.
+Frontal Code is a high-performance Rust rewrite of the Frontal Code CLI agent harness. It provides a command-line interface for interacting with AI models, with built-in tools for file operations, web access, and automation.
 
-### What can I do with Orbit?
+### What can I do with Frontal Code?
 
 - Interact with AI models (Anthropic, OpenAI, xAI)
 - Execute shell commands and scripts
@@ -19,24 +19,24 @@ Orbit is a high-performance Rust rewrite of the Orbit CLI agent harness. It prov
 - Use MCP (Model Context Protocol) servers
 - Automate workflows and tasks
 
-### Is Orbit free?
+### Is Frontal Code free?
 
-Orbit is open-source and free to use. However, you'll need API keys from AI providers (Anthropic, OpenAI, etc.) which may have associated costs.
+Frontal Code is open-source and free to use. However, you'll need API keys from AI providers (Anthropic, OpenAI, etc.) which may have associated costs.
 
 ## Installation and Setup
 
-### How do I install Orbit?
+### How do I install Frontal Code?
 
 ```bash
 # Install with Homebrew from this repo
 git clone <repository-url>
 cd claw-code-main
-brew install --HEAD ./homebrew/orbit.rb
-orbit --help
+brew install --HEAD ./homebrew/frontal-code.rb
+frontal-code --help
 
 # Or build from source for development
 cargo build --workspace
-cargo run -p orbit-cli -- --help
+cargo run -p cli -- --help
 ```
 
 ### What are the system requirements?
@@ -47,11 +47,11 @@ cargo run -p orbit-cli -- --help
 - Internet connection for AI API access
 - Supported OS: Linux, macOS, Windows
 
-### How do I update Orbit?
+### How do I update Frontal Code?
 
 ```bash
 # If installed with Homebrew
-brew upgrade --fetch-HEAD orbit
+brew upgrade --fetch-HEAD frontal-code
 
 # If built from source
 git pull origin main
@@ -64,51 +64,51 @@ cargo build --workspace
 
 ```bash
 # Environment variables (recommended)
-export ORBIT_API_KEY="sk-ant-..."
+export FCODE_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
 
 # Or in config file
-orbit config set providers.anthropic.api_key "sk-ant-..."
+frontal-code config set providers.anthropic.api_key "sk-ant-..."
 ```
 
 ### Where is the configuration file?
 
 The main configuration file is located at:
-- `~/.orbit/config.json` (user config)
-- `.orbit.json` (project config)
+- `~/.frontal-code/config.json` (user config)
+- `.frontal-code/settings.json` (project config)
 
 ### How do I change the default model?
 
 ```bash
 # Via command line
-orbit --model claude-sonnet-4-6
+frontal-code --model claude-sonnet-4-6
 
 # Via config
-orbit config set runtime.default_model "claude-sonnet-4-6"
+frontal-code config set runtime.default_model "claude-sonnet-4-6"
 
 # Use model aliases
-orbit --model opus  # claude-opus-5
-orbit --model sonnet # claude-sonnet-4-6
-orbit --model haiku  # claude-haiku-4-5
+frontal-code --model opus  # claude-opus-5
+frontal-code --model sonnet # claude-sonnet-4-6
+frontal-code --model haiku  # claude-haiku-4-5
 ```
 
 ### Can I use different AI providers?
 
-Yes! Orbit supports multiple providers:
+Yes! Frontal Code supports multiple providers:
 
 ```bash
 # Anthropic (default)
-orbit --provider anthropic
+frontal-code --provider anthropic
 
 # OpenAI
-orbit --provider openai --model gpt-4
+frontal-code --provider openai --model gpt-4
 
 # xAI
-orbit --provider xai --model grok-3
+frontal-code --provider xai --model grok-3
 
 # Frontal (API gateway)
-orbit --provider frontal
+frontal-code --provider frontal
 ```
 
 ## Usage
@@ -117,13 +117,13 @@ orbit --provider frontal
 
 ```bash
 # Start REPL
-orbit repl
+frontal-code repl
 
 # With specific model
-orbit --model sonnet repl
+frontal-code --model sonnet repl
 
 # Resume previous session
-orbit --resume latest repl
+frontal-code --resume latest repl
 ```
 
 ### What are the permission modes?
@@ -133,7 +133,7 @@ orbit --resume latest repl
 - **ask-permissions**: Prompt for approval on every tool use
 
 ```bash
-orbit --permission-mode safe-mode prompt "analyze this code"
+frontal-code --permission-mode safe-mode prompt "analyze this code"
 ```
 
 ### How do I use tools?
@@ -142,13 +142,13 @@ Tools are automatically available in prompts:
 
 ```bash
 # File operations
-orbit prompt "Read the README.md file and summarize it"
+frontal-code prompt "Read the README.md file and summarize it"
 
 # Shell commands
-orbit prompt "Run 'ls -la' and show the output"
+frontal-code prompt "Run 'ls -la' and show the output"
 
 # Web access
-orbit prompt "Search for 'Rust programming' and summarize the results"
+frontal-code prompt "Search for 'Rust programming' and summarize the results"
 ```
 
 ### What tools are available?
@@ -168,53 +168,53 @@ Built-in tools include:
 
 ### How do sessions work?
 
-Orbit automatically saves your conversation history:
+Frontal Code automatically saves your conversation history:
 
 ```bash
 # List sessions
-orbit session list
+frontal-code session list
 
 # Resume session
-orbit --resume session-123.jsonl
+frontal-code --resume session-123.jsonl
 
 # Export session
-orbit session export --output session.json
+frontal-code session export --output session.json
 ```
 
 ### Where are sessions stored?
 
-Sessions are stored in `~/.orbit/sessions/` by default.
+Sessions are stored in `~/.frontal-code/sessions/` by default.
 
 ### Can I disable session saving?
 
 ```bash
-orbit config set session.auto_save false
+frontal-code config set session.auto_save false
 ```
 
 ## Plugins
 
 ### What are plugins?
 
-Plugins extend Orbit's functionality with additional tools, commands, and providers.
+Plugins extend Frontal Code's functionality with additional tools, commands, and providers.
 
 ### How do I install plugins?
 
 ```bash
 # From local directory
-orbit plugin install /path/to/plugin
+frontal-code plugin install /path/to/plugin
 
 # From Git repository
-orbit plugin install https://github.com/user/plugin.git
+frontal-code plugin install https://github.com/user/plugin.git
 
 # From registry
-orbit plugin install plugin-name
+frontal-code plugin install plugin-name
 ```
 
 ### Where can I find plugins?
 
-- Official plugin registry: https://github.com/frontal-labs/orbit
+- Official plugin registry: https://github.com/frontal-labs/frontal-code
 - Community plugins on GitHub
-- Built-in plugins included with Orbit
+- Built-in plugins included with Frontal Code
 
 ## MCP (Model Context Protocol)
 
@@ -226,13 +226,13 @@ MCP is a protocol for connecting AI models to external tools and data sources.
 
 ```bash
 # List available servers
-orbit mcp list
+frontal-code mcp list
 
 # Start a server
-orbit mcp start filesystem
+frontal-code mcp start filesystem
 
 # Use MCP tools
-orbit prompt "Use filesystem to read /tmp/test.txt"
+frontal-code prompt "Use filesystem to read /tmp/test.txt"
 ```
 
 ### What MCP servers are available?
@@ -245,7 +245,7 @@ Built-in servers include:
 
 ## Performance
 
-### Why is Orbit slow?
+### Why is Frontal Code slow?
 
 Common causes:
 - Network latency to AI providers
@@ -256,13 +256,13 @@ Common causes:
 Solutions:
 ```bash
 # Use faster model
-orbit --model haiku prompt "quick task"
+frontal-code --model haiku prompt "quick task"
 
 # Enable caching
-orbit config set caching.memory.enabled true
+frontal-code config set caching.memory.enabled true
 
 # Optimize configuration
-orbit optimize suggest
+frontal-code optimize suggest
 ```
 
 ### How can I improve performance?
@@ -281,13 +281,13 @@ Check your API key configuration:
 
 ```bash
 # Verify environment variable
-echo $ORBIT_API_KEY
+echo $FCODE_API_KEY
 
 # Test API connectivity
-orbit auth test anthropic
+frontal-code auth test anthropic
 
 # Check config
-orbit config show providers.anthropic
+frontal-code config show providers.anthropic
 ```
 
 ### Why do I get permission denied errors?
@@ -296,34 +296,34 @@ Check file permissions and configuration:
 
 ```bash
 # Check file permissions
-ls -la ~/.orbit/
+ls -la ~/.frontal-code/
 
 # Fix permissions
-chmod 700 ~/.orbit
-chmod 600 ~/.orbit/config.json
+chmod 700 ~/.frontal-code
+chmod 600 ~/.frontal-code/config.json
 
 # Use safe mode
-orbit --permission-mode safe-mode
+frontal-code --permission-mode safe-mode
 ```
 
 ### How do I debug issues?
 
 ```bash
 # Enable debug logging
-RUST_LOG=debug orbit prompt "test"
+RUST_LOG=debug frontal-code prompt "test"
 
 # Run diagnostics
-orbit doctor
+frontal-code doctor
 
 # Check system health
-orbit health check
+frontal-code health check
 ```
 
 ## Security
 
-### Is Orbit secure?
+### Is Frontal Code secure?
 
-Orbit implements multiple security layers:
+Frontal Code implements multiple security layers:
 - Permission system for tool access
 - Sandboxing for isolated execution
 - Secure API key management
@@ -336,16 +336,16 @@ Orbit implements multiple security layers:
 - Rotate keys regularly
 - Use different keys for different environments
 
-### Can Orbit access my files?
+### Can Frontal Code access my files?
 
-Orbit can only access files based on your permission settings:
+Frontal Code can only access files based on your permission settings:
 - **Safe mode**: Only read operations
 - **Ask permissions**: Prompts for file access
 - **Danger mode**: Full file access
 
 ## Development
 
-### How do I contribute to Orbit?
+### How do I contribute to Frontal Code?
 
 1. Fork the repository
 2. Create a feature branch
@@ -353,7 +353,7 @@ Orbit can only access files based on your permission settings:
 4. Run tests: `cargo test --workspace`
 5. Submit a pull request
 
-### How do I build Orbit from source?
+### How do I build Frontal Code from source?
 
 ```bash
 git clone <repository-url>
@@ -368,7 +368,7 @@ cargo build --workspace
 cargo test --workspace
 
 # Run specific test
-cargo test -p orbit-cli test_name
+cargo test -p cli test_name
 
 # Run with output
 cargo test --workspace -- --nocapture
@@ -376,9 +376,9 @@ cargo test --workspace -- --nocapture
 
 ## Comparison
 
-### How does Orbit compare to other AI CLI tools?
+### How does Frontal Code compare to other AI CLI tools?
 
-Orbit offers:
+Frontal Code offers:
 - Rust-based performance and safety
 - Multiple AI provider support
 - Extensible plugin system
@@ -387,7 +387,7 @@ Orbit offers:
 - Session persistence
 - Advanced permission system
 
-### Why choose Orbit over alternatives?
+### Why choose Frontal Code over alternatives?
 
 - **Performance**: Rust implementation for speed
 - **Flexibility**: Multiple providers and plugins
@@ -397,11 +397,11 @@ Orbit offers:
 
 ## Licensing
 
-### What license does Orbit use?
+### What license does Frontal Code use?
 
-Orbit is licensed under the MIT license. See the LICENSE file for details.
+Frontal Code is licensed under the MIT license. See the LICENSE file for details.
 
-### Can I use Orbit commercially?
+### Can I use Frontal Code commercially?
 
 Yes, the MIT license permits commercial use. However, you'll need to comply with the terms of service of your chosen AI providers.
 
@@ -411,14 +411,14 @@ Yes, the MIT license permits commercial use. However, you'll need to comply with
 
 ```bash
 # Built-in help
-orbit --help
-orbit help <command>
+frontal-code --help
+frontal-code help <command>
 
 # Diagnostics
-orbit doctor
+frontal-code doctor
 
 # Community support
-# GitHub Issues: https://github.com/frontal-labs/orbit/issues
+# GitHub Issues: https://github.com/frontal-labs/frontal-code/issues
 ```
 
 ### How do I report bugs?
@@ -439,27 +439,27 @@ orbit doctor
 
 ## Advanced Topics
 
-### Can I use Orbit in CI/CD?
+### Can I use Frontal Code in CI/CD?
 
-Yes! Orbit is designed for automation:
+Yes! Frontal Code is designed for automation:
 
 ```bash
 # JSON output for automation
-orbit --output-format json prompt "analyze code" > results.json
+frontal-code --output-format json prompt "analyze code" > results.json
 
 # Non-interactive mode
-orbit --permission-mode safe-mode prompt "run tests"
+frontal-code --permission-mode safe-mode prompt "run tests"
 ```
 
-### How do I integrate Orbit with other tools?
+### How do I integrate Frontal Code with other tools?
 
-Orbit provides:
+Frontal Code provides:
 - JSON output format
 - API for programmatic access
 - Plugin system for custom integrations
 - MCP for external tool connections
 
-### Can I customize Orbit?
+### Can I customize Frontal Code?
 
 Yes! Customization options include:
 - Configuration files
@@ -488,13 +488,13 @@ Yes! Customization options include:
 
 ## Miscellaneous
 
-### What does "Orbit" mean?
+### What does "Frontal Code" mean?
 
-Orbit refers to the concept of agents orbiting around tasks and tools, providing a comprehensive AI-powered development environment.
+Frontal Code refers to the concept of agents frontal-codeing around tasks and tools, providing a comprehensive AI-powered development environment.
 
-### Who maintains Orbit?
+### Who maintains Frontal Code?
 
-Orbit is maintained by the Orbit team and community contributors.
+Frontal Code is maintained by the Frontal Code team and community contributors.
 
 ### How can I stay updated?
 
@@ -505,4 +505,4 @@ Orbit is maintained by the Orbit team and community contributors.
 
 ---
 
-Still have questions? Check the [documentation](./README.md) or [open an issue](https://github.com/frontal-labs/orbit/issues).
+Still have questions? Check the [documentation](./README.md) or [open an issue](https://github.com/frontal-labs/frontal-code/issues).

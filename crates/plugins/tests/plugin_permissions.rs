@@ -1,4 +1,4 @@
-use orbit_plugins::{PluginPermission, PluginToolPermission};
+use frontal_code_plugins::{PluginPermission, PluginToolPermission};
 
 #[test]
 fn permission_as_str() {

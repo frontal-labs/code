@@ -1,6 +1,6 @@
-//! # Orbit Server
+//! # `FrontalCode` Server
 //!
-//! Hosted HTTP and WebSocket control-plane surface for Orbit.
+//! Hosted HTTP and WebSocket control-plane surface for `Frontal Code`.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
@@ -22,31 +22,31 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use axum::Router;
-use futures_util::{SinkExt, StreamExt};
-use orbit_events::{
+use frontal_code_events::{
     AppliedOrphanPolicy, ApprovalRequestedEventPayload, ApprovalResolvedEventPayload,
     ConnectorEventPayload, ConnectorEventRequest, ConnectorInteractionRequest,
     ConnectorInteractionResponse, EventEnvelope, EventIdentifiers, HostedEventName,
     HostedEventStatus, HostedEventTopic, HostedTaskEventSummary, LaneSignalEventPayload,
     TaskRoutedEventPayload, TerminalEventPayload,
 };
-use orbit_integrations::mcp::integration::{
+use frontal_code_integrations::mcp::integration::{
     global_integration_registry, register_integrations_from_json,
 };
-use orbit_orchestrator::{
+use frontal_code_orchestrator::{
     plan_work_item, LaneRole, WorkItem, WorkItemContext, WorkItemPriority, WorkItemSource,
 };
-use orbit_repo::{prepare_checkout, RepoCheckoutRequest, RepoSource};
-use orbit_runtime::task_registry::{Task, TaskRegistry, TaskRegistrySnapshot, TaskStatus};
-use orbit_runtime::worker_boot::{
+use frontal_code_repo::{prepare_checkout, RepoCheckoutRequest, RepoSource};
+use frontal_code_runtime::task_registry::{Task, TaskRegistry, TaskRegistrySnapshot, TaskStatus};
+use frontal_code_runtime::worker_boot::{
     WorkerEventKind, WorkerEventPayload, WorkerRegistry, WorkerStatus,
 };
-use orbit_runtime::{generate_state, save_oauth_credentials_for, OAuthTokenSet};
-use orbit_tools::{
+use frontal_code_runtime::{generate_state, save_oauth_credentials_for, OAuthTokenSet};
+use frontal_code_tools::{
     cancel_hosted_agent_with_locator, hosted_agent_status_with_locator, launch_hosted_agent,
     HostedAgentCancellationSource, HostedAgentLaunchRequest, HostedAgentLocator,
     HostedAgentStatusSnapshot,
 };
+use futures_util::{SinkExt, StreamExt};
 mod tracker_reporting;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
@@ -169,22 +169,22 @@ impl ServerConfig {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut config = Self::default();
 
-        if let Ok(host) = env::var("ORBIT_SERVER_HOST") {
+        if let Ok(host) = env::var("FCODE_SERVER_HOST") {
             let ip: IpAddr = host.parse()?;
             config.bind_addr = SocketAddr::new(ip, config.bind_addr.port());
         }
 
-        if let Ok(port) = env::var("ORBIT_SERVER_PORT") {
+        if let Ok(port) = env::var("FCODE_SERVER_PORT") {
             let port: u16 = port.parse()?;
             config.bind_addr = SocketAddr::new(config.bind_addr.ip(), port);
         }
 
-        if let Ok(limit) = env::var("ORBIT_SERVER_EVENT_REPLAY_LIMIT") {
+        if let Ok(limit) = env::var("FCODE_SERVER_EVENT_REPLAY_LIMIT") {
             let limit: usize = limit.parse()?;
             config.event_replay_limit = limit.max(1);
         }
 
-        if let Ok(kind) = env::var("ORBIT_SERVER_LANE_TRANSPORT") {
+        if let Ok(kind) = env::var("FCODE_SERVER_LANE_TRANSPORT") {
             config.lane_transport_kind = match kind.trim().to_ascii_lowercase().as_str() {
                 "docker" | "local-docker" | "local_docker" => LaneTransportKind::LocalDocker,
                 "tools-agent" | "tools_agent" | "agent" => LaneTransportKind::ToolsAgent,
@@ -192,64 +192,64 @@ impl ServerConfig {
             };
         }
 
-        if let Ok(api_key) = env::var("ORBIT_SERVER_API_KEY") {
+        if let Ok(api_key) = env::var("FCODE_SERVER_API_KEY") {
             let api_key = api_key.trim();
             if !api_key.is_empty() {
                 config.api_key = Some(api_key.to_string());
             }
         }
 
-        if let Ok(path) = env::var("ORBIT_SERVER_WORKSPACE_ROOT") {
+        if let Ok(path) = env::var("FCODE_SERVER_WORKSPACE_ROOT") {
             let path = path.trim();
             if !path.is_empty() {
                 config.workspace_root = PathBuf::from(path);
             }
         }
 
-        if let Ok(image) = env::var("ORBIT_SERVER_DOCKER_IMAGE") {
+        if let Ok(image) = env::var("FCODE_SERVER_DOCKER_IMAGE") {
             let image = image.trim();
             if !image.is_empty() {
                 config.docker_image = image.to_string();
             }
         }
 
-        if let Ok(url) = env::var("ORBIT_SERVER_CALLBACK_URL") {
+        if let Ok(url) = env::var("FCODE_SERVER_CALLBACK_URL") {
             let url = url.trim().trim_end_matches('/');
             if !url.is_empty() {
                 config.docker_server_url = url.to_string();
             }
         }
 
-        if let Ok(interval) = env::var("ORBIT_SERVER_RECONCILE_INTERVAL_SECS") {
+        if let Ok(interval) = env::var("FCODE_SERVER_RECONCILE_INTERVAL_SECS") {
             let interval: u64 = interval.parse()?;
             config.reconcile_interval = (interval > 0).then(|| Duration::from_secs(interval));
         }
 
-        if let Ok(path) = env::var("ORBIT_SERVER_STATE_FILE") {
+        if let Ok(path) = env::var("FCODE_SERVER_STATE_FILE") {
             let path = path.trim();
             config.state_file = (!path.is_empty()).then(|| PathBuf::from(path));
         }
 
-        if let Ok(delay) = env::var("ORBIT_SERVER_ORPHAN_APPROVAL_DELAY_SECS") {
+        if let Ok(delay) = env::var("FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS") {
             let delay: u64 = delay.parse()?;
             config.orphan_approval_delay = Duration::from_secs(delay);
         }
 
-        if let Ok(delay) = env::var("ORBIT_SERVER_ORPHAN_AUTO_RETRY_SECS") {
+        if let Ok(delay) = env::var("FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS") {
             let delay: u64 = delay.parse()?;
             config.orphan_auto_retry_after = (delay > 0).then(|| Duration::from_secs(delay));
         }
 
-        if let Ok(delay) = env::var("ORBIT_SERVER_ORPHAN_AUTO_CANCEL_SECS") {
+        if let Ok(delay) = env::var("FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS") {
             let delay: u64 = delay.parse()?;
             config.orphan_auto_cancel_after = (delay > 0).then(|| Duration::from_secs(delay));
         }
 
-        if let Ok(rules) = env::var("ORBIT_SERVER_ORPHAN_POLICY_RULES") {
+        if let Ok(rules) = env::var("FCODE_SERVER_ORPHAN_POLICY_RULES") {
             let rules = rules.trim();
             if !rules.is_empty() {
                 config.orphan_policy_rules = serde_json::from_str(rules).map_err(|error| {
-                    format!("invalid ORBIT_SERVER_ORPHAN_POLICY_RULES: {error}")
+                    format!("invalid FCODE_SERVER_ORPHAN_POLICY_RULES: {error}")
                 })?;
             }
         }
@@ -682,18 +682,18 @@ impl ServerStatePersistence {
 
 fn default_server_state_file() -> Option<PathBuf> {
     let cwd = env::current_dir().ok()?;
-    Some(cwd.join(".orbit-server").join("state.json"))
+    Some(cwd.join(".frontal-code-server").join("state.json"))
 }
 
 fn default_server_workspace_root() -> PathBuf {
     env::current_dir().map_or_else(
-        |_| env::temp_dir().join("orbit-server-workspaces"),
-        |cwd| cwd.join(".orbit-server").join("workspaces"),
+        |_| env::temp_dir().join("frontal-code-server-workspaces"),
+        |cwd| cwd.join(".frontal-code-server").join("workspaces"),
     )
 }
 
 fn default_server_docker_image() -> String {
-    "orbit-worker:local".to_string()
+    "frontal-code-worker:local".to_string()
 }
 
 fn default_server_docker_server_url() -> String {
@@ -1579,7 +1579,7 @@ pub fn app(state: Arc<ServerState>) -> Router {
 
 /// Environment variable that lets an operator deliberately run the control
 /// plane with no API key (local development, or a trusted private network).
-const ALLOW_ANONYMOUS_ENV: &str = "ORBIT_SERVER_ALLOW_ANONYMOUS";
+const ALLOW_ANONYMOUS_ENV: &str = "FCODE_SERVER_ALLOW_ANONYMOUS";
 
 fn is_truthy(value: &str) -> bool {
     matches!(
@@ -1602,16 +1602,16 @@ fn check_auth_posture(config: &ServerConfig) -> Result<(), String> {
     let allowed = env::var(ALLOW_ANONYMOUS_ENV).is_ok_and(|value| is_truthy(&value));
     if !allowed {
         return Err(format!(
-            "refusing to start: ORBIT_SERVER_API_KEY is not set, so every control-plane \
+            "refusing to start: FCODE_SERVER_API_KEY is not set, so every control-plane \
              route (task create/cancel/complete/approval, connector events, the event \
              stream) would accept unauthenticated requests.\n\
-             Set ORBIT_SERVER_API_KEY to a secret, or set {ALLOW_ANONYMOUS_ENV}=1 to \
+             Set FCODE_SERVER_API_KEY to a secret, or set {ALLOW_ANONYMOUS_ENV}=1 to \
              accept an open control plane on a trusted network."
         ));
     }
 
     eprintln!(
-        "warning: {ALLOW_ANONYMOUS_ENV} is set and ORBIT_SERVER_API_KEY is not — the \
+        "warning: {ALLOW_ANONYMOUS_ENV} is set and FCODE_SERVER_API_KEY is not — the \
          control plane will accept unauthenticated requests on {}",
         config.bind_addr
     );
@@ -1647,16 +1647,19 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
             }
         });
     }
-    if let Ok(raw) = env::var("ORBIT_INTEGRATIONS_CONFIG") {
+    if let Ok(raw) = env::var("FCODE_INTEGRATIONS_CONFIG") {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
             if let Err(err) = register_integrations_from_json(&value) {
-                eprintln!("failed to register integrations from ORBIT_INTEGRATIONS_CONFIG: {err}");
+                eprintln!("failed to register integrations from FCODE_INTEGRATIONS_CONFIG: {err}");
             }
         }
     }
     let app = app(state);
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
-    println!("orbit-server listening on http://{}", config.bind_addr);
+    println!(
+        "frontal-code-server listening on http://{}",
+        config.bind_addr
+    );
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -1677,8 +1680,8 @@ async fn generic_oauth_authorize(
 
     let client_id = std::env::var(&oauth.client_id_env)
         .map_err(|_| AppError::internal(format!("{} not set", oauth.client_id_env)))?;
-    let redirect_uri = std::env::var("ORBIT_OAUTH_REDIRECT_BASE").map_or_else(
-        |_| format!("https://frontal-orbit.fly.dev/v1/oauth/{provider}/callback"),
+    let redirect_uri = std::env::var("FCODE_OAUTH_REDIRECT_BASE").map_or_else(
+        |_| format!("https://frontal-code.fly.dev/v1/oauth/{provider}/callback"),
         |base| format!("{base}/v1/oauth/{provider}/callback"),
     );
 
@@ -2955,7 +2958,7 @@ fn verify_hmac_signature(secret: &str, signature_header: Option<&str>, body: &[u
     mac.verify_slice(&expected).is_ok()
 }
 
-/// Webhook sources map onto `ORBIT_<SOURCE>_WEBHOOK_SECRET`, so restrict them to
+/// Webhook sources map onto `FCODE_<SOURCE>_WEBHOOK_SECRET`, so restrict them to
 /// a shape that can only name a variable an operator deliberately created.
 fn is_valid_webhook_source(source: &str) -> bool {
     !source.is_empty()
@@ -2980,7 +2983,7 @@ async fn integration_webhook(
     // This route sits outside the control-plane auth layer, so the signature is
     // the only thing standing between an anonymous POST and task-state
     // mutation. An unconfigured secret is a rejection, never a bypass.
-    let secret_env = format!("ORBIT_{}_WEBHOOK_SECRET", source.to_uppercase());
+    let secret_env = format!("FCODE_{}_WEBHOOK_SECRET", source.to_uppercase());
     let Ok(secret) = env::var(&secret_env) else {
         return StatusCode::UNAUTHORIZED;
     };
@@ -2989,7 +2992,10 @@ async fn integration_webhook(
     }
 
     let signature_header = format!("x-{source}-signature");
-    let signature = headers.get(&signature_header).and_then(|h| h.to_str().ok());
+    let signature = headers
+        .get(&signature_header)
+        .or_else(|| headers.get("x-hub-signature-256"))
+        .and_then(|h| h.to_str().ok());
     if !verify_hmac_signature(&secret, signature, &body) {
         return StatusCode::UNAUTHORIZED;
     }
@@ -3247,7 +3253,7 @@ impl DockerRunner for CliDockerRunner {
             .args(["run", "-d", "--rm", "--workdir", "/workspace", "--volume"])
             .arg(format!("{}:/workspace", spec.checkout_root.display()))
             .args(["--add-host", "host.docker.internal:host-gateway"])
-            .args(["--label", &format!("orbit.task_id={}", spec.task_id)]);
+            .args(["--label", &format!("frontal-code.task_id={}", spec.task_id)]);
         for (key, value) in &spec.env {
             command.arg("--env").arg(format!("{key}={value}"));
         }
@@ -3541,20 +3547,20 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
         let image = self.image.clone();
         let mut container_env = BTreeMap::from([
-            ("ORBIT_SERVER_URL".to_string(), self.server_url.clone()),
+            ("FCODE_SERVER_URL".to_string(), self.server_url.clone()),
             (
-                "ORBIT_HOSTED_TASK_FILE".to_string(),
-                "/workspace/.orbit-hosted/task.json".to_string(),
+                "FCODE_HOSTED_TASK_FILE".to_string(),
+                "/workspace/.frontal-code-hosted/task.json".to_string(),
             ),
         ]);
         if let Some(api_key) = &self.server_api_key {
-            container_env.insert("ORBIT_SERVER_API_KEY".to_string(), api_key.clone());
+            container_env.insert("FCODE_SERVER_API_KEY".to_string(), api_key.clone());
         }
         for key in [
             "GITHUB_TOKEN",
-            "ORBIT_GITHUB_API_BASE",
-            "ORBIT_GIT_AUTHOR_NAME",
-            "ORBIT_GIT_AUTHOR_EMAIL",
+            "FCODE_GITHUB_API_BASE",
+            "FCODE_GIT_AUTHOR_NAME",
+            "FCODE_GIT_AUTHOR_EMAIL",
         ] {
             if let Ok(value) = env::var(key) {
                 if !value.trim().is_empty() {
@@ -3567,7 +3573,7 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             checkout_root: prepared.checkout_root.clone(),
             task_id: request.task_id.clone(),
             command: vec![
-                "orbit".to_string(),
+                "frontal-code".to_string(),
                 "hosted".to_string(),
                 "task".to_string(),
                 "run".to_string(),
@@ -3591,7 +3597,7 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
                     "image": image,
                     "checkout_root": prepared.checkout_root.display().to_string(),
                     "task_file": task_file.display().to_string(),
-                    "command": ["orbit", "hosted", "task", "run", request.task_id.as_str()],
+                    "command": ["frontal-code", "hosted", "task", "run", request.task_id.as_str()],
                     "active_ref": prepared.active_ref,
                     "branch": prepared.branch,
                     "source": prepared.source.display(),
@@ -3656,7 +3662,7 @@ fn write_local_docker_task_payload(
     checkout_root: &FsPath,
     request: &LaneExecutionRequest,
 ) -> Result<PathBuf, std::io::Error> {
-    let payload_dir = checkout_root.join(".orbit-hosted");
+    let payload_dir = checkout_root.join(".frontal-code-hosted");
     std::fs::create_dir_all(&payload_dir)?;
     let payload_path = payload_dir.join("task.json");
     std::fs::write(
@@ -3926,7 +3932,7 @@ fn bootstrap_task_lane(
 }
 
 fn signal_from_worker_event(
-    event: &orbit_runtime::worker_boot::WorkerEvent,
+    event: &frontal_code_runtime::worker_boot::WorkerEvent,
 ) -> Option<LaneTransportSignal> {
     let kind = match event.kind {
         WorkerEventKind::Running => LaneTransportSignalKind::Running,
@@ -4546,10 +4552,14 @@ mod tests {
     fn init_git_repo(path: PathBuf) -> PathBuf {
         fs::create_dir_all(&path).unwrap();
         run_git(&path, ["init", "-b", "main"]);
-        run_git(&path, ["config", "user.name", "Orbit Server Tests"]);
+        run_git(&path, ["config", "user.name", "FrontalCode Server Tests"]);
         run_git(
             &path,
-            ["config", "user.email", "orbit-server-tests@example.com"],
+            [
+                "config",
+                "user.email",
+                "frontal-code-server-tests@example.com",
+            ],
         );
         path
     }
@@ -4673,7 +4683,7 @@ mod tests {
                             "repository": "repo-a",
                             "repo_url": "https://github.com/acme/repo-a.git",
                             "base_ref": "main",
-                            "branch": "orbit/investigate-flake",
+                            "branch": "frontal-code/investigate-flake",
                             "source": "slack",
                             "user_id": "U123",
                             "channel_id": "C456"
@@ -4710,7 +4720,7 @@ mod tests {
         assert_eq!(snapshot["repository"], "repo-a");
         assert_eq!(snapshot["repo_url"], "https://github.com/acme/repo-a.git");
         assert_eq!(snapshot["base_ref"], "main");
-        assert_eq!(snapshot["branch"], "orbit/investigate-flake");
+        assert_eq!(snapshot["branch"], "frontal-code/investigate-flake");
         assert_eq!(snapshot["execution_backend"], "in_memory");
         assert_eq!(snapshot["lane_id"].as_str().map(str::is_empty), Some(false));
         assert_eq!(
@@ -4761,7 +4771,7 @@ mod tests {
                 .payload
                 .as_ref()
                 .and_then(|payload| payload.get("branch")),
-            Some(&json!("orbit/investigate-flake"))
+            Some(&json!("frontal-code/investigate-flake"))
         );
         assert_eq!(
             created_event
@@ -4815,7 +4825,7 @@ mod tests {
                 .payload
                 .as_ref()
                 .and_then(|payload| payload.get("branch")),
-            Some(&json!("orbit/investigate-flake"))
+            Some(&json!("frontal-code/investigate-flake"))
         );
         assert!(started_event
             .payload
@@ -4828,7 +4838,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn local_docker_transport_prepares_checkout_workspace_for_task() {
-        let dir = temp_test_dir("orbit-server-local-docker");
+        let dir = temp_test_dir("frontal-code-server-local-docker");
         let source_repo = init_git_repo(dir.join("source"));
         commit_file(
             &source_repo,
@@ -4843,7 +4853,7 @@ mod tests {
             LaneTransportKind::LocalDocker,
             Arc::new(LocalDockerLaneWorkerTransport::with_runner(
                 workspace_root.clone(),
-                "orbit-worker:test".to_string(),
+                "frontal-code-worker:test".to_string(),
                 "http://host.docker.internal:8788".to_string(),
                 Some("server-secret".to_string()),
                 docker.clone(),
@@ -4864,7 +4874,7 @@ mod tests {
                             "repository": "acme/local-docker",
                             "repo_url": source_repo.display().to_string(),
                             "base_ref": "main",
-                            "branch": "orbit/task-123",
+                            "branch": "frontal-code/task-123",
                             "source": "api"
                         }))
                         .unwrap(),
@@ -4942,13 +4952,13 @@ mod tests {
             .lock()
             .expect("mock docker launch lock poisoned");
         assert_eq!(launched.len(), 1);
-        assert_eq!(launched[0].image, "orbit-worker:test");
+        assert_eq!(launched[0].image, "frontal-code-worker:test");
         assert_eq!(launched[0].task_id, task_id);
         assert_eq!(launched[0].checkout_root, checkout_root);
         assert_eq!(
             launched[0].command,
             vec![
-                "orbit".to_string(),
+                "frontal-code".to_string(),
                 "hosted".to_string(),
                 "task".to_string(),
                 "run".to_string(),
@@ -4956,26 +4966,26 @@ mod tests {
             ]
         );
         assert_eq!(
-            launched[0].env.get("ORBIT_SERVER_URL").map(String::as_str),
+            launched[0].env.get("FCODE_SERVER_URL").map(String::as_str),
             Some("http://host.docker.internal:8788")
         );
         assert_eq!(
             launched[0]
                 .env
-                .get("ORBIT_HOSTED_TASK_FILE")
+                .get("FCODE_HOSTED_TASK_FILE")
                 .map(String::as_str),
-            Some("/workspace/.orbit-hosted/task.json")
+            Some("/workspace/.frontal-code-hosted/task.json")
         );
         assert_eq!(
             launched[0]
                 .env
-                .get("ORBIT_SERVER_API_KEY")
+                .get("FCODE_SERVER_API_KEY")
                 .map(String::as_str),
             Some("server-secret")
         );
 
         let task_payload: HostedDockerTaskPayload = serde_json::from_slice(
-            &fs::read(checkout_root.join(".orbit-hosted").join("task.json")).unwrap(),
+            &fs::read(checkout_root.join(".frontal-code-hosted").join("task.json")).unwrap(),
         )
         .unwrap();
         assert_eq!(task_payload.task_id, task_id);
@@ -4989,7 +4999,10 @@ mod tests {
             Some(source_repo.to_str().unwrap())
         );
         assert_eq!(task_payload.base_ref.as_deref(), Some("main"));
-        assert_eq!(task_payload.branch.as_deref(), Some("orbit/task-123"));
+        assert_eq!(
+            task_payload.branch.as_deref(),
+            Some("frontal-code/task-123")
+        );
         assert_eq!(task_payload.allowed_tools, Vec::<String>::new());
 
         let complete_response = router
@@ -5018,7 +5031,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_docker_transport_launch_failure_marks_task_failed() {
-        let dir = temp_test_dir("orbit-server-local-docker-fail");
+        let dir = temp_test_dir("frontal-code-server-local-docker-fail");
         let source_repo = init_git_repo(dir.join("source"));
         commit_file(
             &source_repo,
@@ -5036,7 +5049,7 @@ mod tests {
             LaneTransportKind::LocalDocker,
             Arc::new(LocalDockerLaneWorkerTransport::with_runner(
                 workspace_root,
-                "orbit-worker:test".to_string(),
+                "frontal-code-worker:test".to_string(),
                 "http://host.docker.internal:8788".to_string(),
                 None,
                 docker,
@@ -5056,7 +5069,7 @@ mod tests {
                             "repository": "acme/local-docker",
                             "repo_url": source_repo.display().to_string(),
                             "base_ref": "main",
-                            "branch": "orbit/task-123",
+                            "branch": "frontal-code/task-123",
                             "source": "api"
                         }))
                         .unwrap(),
@@ -5094,7 +5107,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_task_context_persists_slack_thread_anchor() {
-        let dir = temp_test_dir("orbit-server-context-update");
+        let dir = temp_test_dir("frontal-code-server-context-update");
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
@@ -5184,7 +5197,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn update_task_github_persists_pr_metadata() {
-        let dir = temp_test_dir("orbit-server-github-update");
+        let dir = temp_test_dir("frontal-code-server-github-update");
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
@@ -5206,7 +5219,7 @@ mod tests {
                             "repository": "acme/payments",
                             "repo_url": "https://github.com/acme/payments.git",
                             "base_ref": "main",
-                            "branch": "orbit/fix-flake"
+                            "branch": "frontal-code/fix-flake"
                         }))
                         .unwrap(),
                     ))
@@ -5232,11 +5245,11 @@ mod tests {
                     .body(Body::from(
                         serde_json::to_vec(&json!({
                             "published_remote": "origin",
-                            "published_branch": "orbit/fix-flake",
+                            "published_branch": "frontal-code/fix-flake",
                             "published_commit_sha": "abc123def456",
                             "pr_number": 42,
                             "pr_url": "https://github.com/acme/payments/pull/42",
-                            "pr_head_ref": "orbit/fix-flake",
+                            "pr_head_ref": "frontal-code/fix-flake",
                             "pr_base_ref": "main"
                         }))
                         .unwrap(),
@@ -5275,7 +5288,7 @@ mod tests {
             metadata
                 .get("github_published_branch")
                 .and_then(Value::as_str),
-            Some("orbit/fix-flake")
+            Some("frontal-code/fix-flake")
         );
         assert_eq!(
             metadata
@@ -5293,7 +5306,7 @@ mod tests {
         );
         assert_eq!(
             metadata.get("github_pr_head_ref").and_then(Value::as_str),
-            Some("orbit/fix-flake")
+            Some("frontal-code/fix-flake")
         );
         assert_eq!(
             metadata.get("github_pr_base_ref").and_then(Value::as_str),
@@ -5313,7 +5326,7 @@ mod tests {
                 .metadata
                 .get("github_published_branch")
                 .map(String::as_str),
-            Some("orbit/fix-flake")
+            Some("frontal-code/fix-flake")
         );
         assert_eq!(
             restored_context
@@ -5734,7 +5747,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_task_marks_hosted_lane_cancelled_even_without_transport_termination() {
-        let dir = temp_test_dir("orbit-server-cancel-hosted");
+        let dir = temp_test_dir("frontal-code-server-cancel-hosted");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport(
@@ -5816,7 +5829,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_task_runtime_reports_hosted_agent_status() {
-        let dir = temp_test_dir("orbit-server-runtime-hosted");
+        let dir = temp_test_dir("frontal-code-server-runtime-hosted");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport(
@@ -6054,7 +6067,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_task_reconciles_completed_hosted_agent_from_manifest() {
-        let dir = temp_test_dir("orbit-server-reconcile-success");
+        let dir = temp_test_dir("frontal-code-server-reconcile-success");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport(
@@ -6140,7 +6153,7 @@ mod tests {
 
     #[tokio::test]
     async fn reconcile_endpoint_marks_failed_hosted_agent_from_manifest() {
-        let dir = temp_test_dir("orbit-server-reconcile-failed");
+        let dir = temp_test_dir("frontal-code-server-reconcile-failed");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport(
@@ -6233,7 +6246,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn reconcile_endpoint_marks_orphaned_hosted_agent_as_blocked() {
-        let dir = temp_test_dir("orbit-server-reconcile-orphaned");
+        let dir = temp_test_dir("frontal-code-server-reconcile-orphaned");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport(
@@ -6373,7 +6386,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn orphaned_hosted_agent_waits_for_approval_delay_and_does_not_duplicate_requests() {
-        let dir = temp_test_dir("orbit-server-orphan-delay");
+        let dir = temp_test_dir("frontal-code-server-orphan-delay");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport_and_policy(
@@ -6490,7 +6503,7 @@ mod tests {
 
     #[tokio::test]
     async fn orphaned_hosted_agent_auto_cancels_after_timeout() {
-        let dir = temp_test_dir("orbit-server-orphan-auto-cancel");
+        let dir = temp_test_dir("frontal-code-server-orphan-auto-cancel");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport_and_policy(
@@ -6586,7 +6599,7 @@ mod tests {
 
     #[tokio::test]
     async fn orphaned_hosted_agent_auto_retries_once_before_requesting_approval() {
-        let dir = temp_test_dir("orbit-server-orphan-auto-retry");
+        let dir = temp_test_dir("frontal-code-server-orphan-auto-retry");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport_and_policy(
@@ -6683,7 +6696,7 @@ mod tests {
 
     #[tokio::test]
     async fn orphaned_hosted_agent_requests_approval_after_auto_retry_is_exhausted() {
-        let dir = temp_test_dir("orbit-server-orphan-after-auto-retry");
+        let dir = temp_test_dir("frontal-code-server-orphan-after-auto-retry");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport_and_policy(
@@ -6768,7 +6781,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn repo_scoped_orphan_policy_rule_overrides_global_defaults() {
-        let dir = temp_test_dir("orbit-server-orphan-policy-rule");
+        let dir = temp_test_dir("frontal-code-server-orphan-policy-rule");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport_and_policy_rules(
@@ -6897,7 +6910,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn resolve_orphaned_hosted_agent_approval_cancels_task() {
-        let dir = temp_test_dir("orbit-server-approval-orphaned");
+        let dir = temp_test_dir("frontal-code-server-approval-orphaned");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state = Arc::new(ServerState::with_lane_transport(
@@ -7237,7 +7250,7 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_webhook_route_correlates_pull_request_event_to_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7285,7 +7298,7 @@ mod tests {
                         "state": "open",
                         "html_url": "https://github.com/acme/payments/pull/42",
                         "head": {
-                            "ref": "orbit/fix-flake",
+                            "ref": "frontal-code/fix-flake",
                             "sha": "abc123def456"
                         },
                         "base": {
@@ -7361,7 +7374,7 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_webhook_route_persists_closed_merge_state_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7472,7 +7485,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_review_webhook_requests_followup_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7574,7 +7587,7 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_review_approval_webhook_clears_followup_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7688,7 +7701,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_route_emits_unmatched_event_without_task_binding() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7747,7 +7760,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_LINEAR_WEBHOOK_SECRET", Some("secret"));
+        let _secret = EnvVarGuard::set("FCODE_LINEAR_WEBHOOK_SECRET", Some("secret"));
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
@@ -7789,7 +7802,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GRAPHITE_WEBHOOK_SECRET", Some("secret"));
+        let _secret = EnvVarGuard::set("FCODE_GRAPHITE_WEBHOOK_SECRET", Some("secret"));
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
@@ -7831,7 +7844,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_matches_task_and_updates_context() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_LINEAR_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_LINEAR_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7903,7 +7916,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_no_match_returns_accepted() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_LINEAR_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_LINEAR_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7925,7 +7938,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_matches_task_and_updates_context() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GRAPHITE_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GRAPHITE_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7993,7 +8006,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_no_match_returns_accepted() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GRAPHITE_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GRAPHITE_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -8015,12 +8028,12 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some("secret"));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
         let state = Arc::new(ServerState::new(10));
 
         let payload = json!({
             "action": "opened",
-            "repository": { "full_name": "acme/orbit" },
+            "repository": { "full_name": "acme/frontal-code" },
             "pull_request": { "number": 42 }
         });
 
@@ -8039,6 +8052,37 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn github_webhook_accepts_valid_x_hub_signature_256() {
+        let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
+        let state = Arc::new(ServerState::new(10));
+
+        let payload = json!({
+            "action": "opened",
+            "repository": { "full_name": "acme/frontal-code" },
+            "pull_request": { "number": 42 }
+        });
+        let body = serde_json::to_vec(&payload).unwrap();
+
+        let response = super::app(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/webhooks/github")
+                    .header("content-type", "application/json")
+                    .header("x-github-event", "pull_request")
+                    .header("x-hub-signature-256", sign_webhook_body("secret", &body))
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
     }
 
     #[tokio::test]
@@ -8077,7 +8121,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_rejects_delivery_when_no_secret_is_configured() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", None);
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", None);
         let router = app(Arc::new(ServerState::default()));
 
         let response = router
@@ -8098,7 +8142,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_rejects_delivery_when_secret_is_blank() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some("   "));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some("   "));
         let router = app(Arc::new(ServerState::default()));
 
         let response = router
@@ -8133,7 +8177,7 @@ mod tests {
         assert!(config.api_key.is_none());
 
         let error = check_auth_posture(&config).expect_err("missing API key should be refused");
-        assert!(error.contains("ORBIT_SERVER_API_KEY"));
+        assert!(error.contains("FCODE_SERVER_API_KEY"));
     }
 
     #[test]
@@ -8160,14 +8204,14 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_routes_remain_public_when_control_plane_api_key_is_configured() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("ORBIT_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
         let state = Arc::new(
             ServerState::new(10).with_control_plane_api_key(Some("top-secret".to_string())),
         );
 
         let payload = json!({
             "action": "opened",
-            "repository": { "full_name": "acme/orbit" },
+            "repository": { "full_name": "acme/frontal-code" },
             "pull_request": { "number": 42 }
         });
 
@@ -8188,7 +8232,7 @@ mod tests {
 
     #[tokio::test]
     async fn server_state_persists_tasks_and_contexts_across_restart() {
-        let dir = temp_test_dir("orbit-server-persist");
+        let dir = temp_test_dir("frontal-code-server-persist");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
         let state_file = dir.join("server-state.json");
@@ -8215,7 +8259,7 @@ mod tests {
                             "repository": "repo-persisted",
                             "repo_url": "https://github.com/acme/repo-persisted.git",
                             "base_ref": "develop",
-                            "branch": "orbit/persisted-work",
+                            "branch": "frontal-code/persisted-work",
                             "source": "api"
                         }))
                         .unwrap(),
@@ -8262,7 +8306,7 @@ mod tests {
 
     #[tokio::test]
     async fn server_state_file_restores_tasks_and_contexts_across_restart() {
-        let dir = temp_test_dir("orbit-server-state-restore");
+        let dir = temp_test_dir("frontal-code-server-state-restore");
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
@@ -8284,7 +8328,7 @@ mod tests {
                             "repository": "repo-persisted",
                             "repo_url": "https://github.com/acme/repo-persisted.git",
                             "base_ref": "develop",
-                            "branch": "orbit/persisted-work",
+                            "branch": "frontal-code/persisted-work",
                             "source": "api"
                         }))
                         .unwrap(),
@@ -8327,7 +8371,7 @@ mod tests {
         assert_eq!(restored_context.base_ref.as_deref(), Some("develop"));
         assert_eq!(
             restored_context.branch.as_deref(),
-            Some("orbit/persisted-work")
+            Some("frontal-code/persisted-work")
         );
         assert_eq!(
             restored_context.execution_backend.as_deref(),
@@ -8359,7 +8403,7 @@ mod tests {
             "https://github.com/acme/repo-persisted.git"
         );
         assert_eq!(snapshot["base_ref"], "develop");
-        assert_eq!(snapshot["branch"], "orbit/persisted-work");
+        assert_eq!(snapshot["branch"], "frontal-code/persisted-work");
         assert_eq!(snapshot["execution_backend"], "in_memory");
         assert_eq!(snapshot["worker_status"], "running");
 
@@ -8368,7 +8412,7 @@ mod tests {
 
     #[tokio::test]
     async fn server_state_file_restores_event_history_across_restart() {
-        let dir = temp_test_dir("orbit-server-event-history");
+        let dir = temp_test_dir("frontal-code-server-event-history");
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
@@ -8723,7 +8767,7 @@ mod tests {
 
     #[tokio::test]
     async fn state_file_restores_hosted_task_after_server_restart() {
-        let dir = temp_test_dir("orbit-server-state-restore");
+        let dir = temp_test_dir("frontal-code-server-state-restore");
         let state_file = dir.join("server-state.json");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
@@ -8808,7 +8852,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn state_file_reconciles_hosted_task_during_server_restart() {
-        let dir = temp_test_dir("orbit-server-startup-reconcile");
+        let dir = temp_test_dir("frontal-code-server-startup-reconcile");
         let state_file = dir.join("server-state.json");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
@@ -8837,7 +8881,7 @@ mod tests {
                             "repository": "repo-startup-reconcile",
                             "repo_url": "https://github.com/acme/repo-startup-reconcile.git",
                             "base_ref": "release/2026.04",
-                            "branch": "orbit/reconcile-startup",
+                            "branch": "frontal-code/reconcile-startup",
                             "source": "api"
                         }))
                         .unwrap(),
@@ -8885,7 +8929,7 @@ mod tests {
         );
         assert_eq!(
             restored_context.branch.as_deref(),
-            Some("orbit/reconcile-startup")
+            Some("frontal-code/reconcile-startup")
         );
         assert_eq!(restored_context.worker_status.as_deref(), Some("finished"));
 
@@ -8930,7 +8974,7 @@ mod tests {
                 .payload
                 .as_ref()
                 .and_then(|payload| payload.get("branch")),
-            Some(&json!("orbit/reconcile-startup"))
+            Some(&json!("frontal-code/reconcile-startup"))
         );
 
         let _ = fs::remove_dir_all(dir);
@@ -8938,7 +8982,7 @@ mod tests {
 
     #[tokio::test]
     async fn state_file_restores_cancelled_hosted_task_after_server_restart() {
-        let dir = temp_test_dir("orbit-server-state-cancelled");
+        let dir = temp_test_dir("frontal-code-server-state-cancelled");
         let state_file = dir.join("server-state.json");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
@@ -9033,7 +9077,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_after_restart_clears_worker_status_for_manifest_backed_hosted_lane() {
-        let dir = temp_test_dir("orbit-server-cancel-restart-manifest");
+        let dir = temp_test_dir("frontal-code-server-cancel-restart-manifest");
         let state_file = dir.join("server-state.json");
         let manifest_file = dir.join("agent.json");
         let output_file = dir.join("agent.md");
@@ -9196,7 +9240,7 @@ mod tests {
             repository: Some("acme/payments".to_string()),
             repo_url: Some("https://github.com/acme/payments.git".to_string()),
             base_ref: Some("main".to_string()),
-            branch: Some("orbit/repo-aware".to_string()),
+            branch: Some("frontal-code/repo-aware".to_string()),
             linear_issue_id: None,
             linear_issue_url: None,
             linear_issue_state: None,
@@ -9229,24 +9273,24 @@ mod tests {
         );
         assert_eq!(
             context.metadata.get("branch").map(String::as_str),
-            Some("orbit/repo-aware")
+            Some("frontal-code/repo-aware")
         );
     }
 
     #[test]
     fn server_config_parses_local_docker_lane_transport_kind() {
-        let previous = env::var_os("ORBIT_SERVER_LANE_TRANSPORT");
-        let previous_workspace_root = env::var_os("ORBIT_SERVER_WORKSPACE_ROOT");
-        let previous_docker_image = env::var_os("ORBIT_SERVER_DOCKER_IMAGE");
-        let previous_callback_url = env::var_os("ORBIT_SERVER_CALLBACK_URL");
-        env::set_var("ORBIT_SERVER_LANE_TRANSPORT", "local-docker");
+        let previous = env::var_os("FCODE_SERVER_LANE_TRANSPORT");
+        let previous_workspace_root = env::var_os("FCODE_SERVER_WORKSPACE_ROOT");
+        let previous_docker_image = env::var_os("FCODE_SERVER_DOCKER_IMAGE");
+        let previous_callback_url = env::var_os("FCODE_SERVER_CALLBACK_URL");
+        env::set_var("FCODE_SERVER_LANE_TRANSPORT", "local-docker");
         env::set_var(
-            "ORBIT_SERVER_WORKSPACE_ROOT",
-            "/tmp/orbit-server-workspaces",
+            "FCODE_SERVER_WORKSPACE_ROOT",
+            "/tmp/frontal-code-server-workspaces",
         );
-        env::set_var("ORBIT_SERVER_DOCKER_IMAGE", "orbit-worker:test");
+        env::set_var("FCODE_SERVER_DOCKER_IMAGE", "frontal-code-worker:test");
         env::set_var(
-            "ORBIT_SERVER_CALLBACK_URL",
+            "FCODE_SERVER_CALLBACK_URL",
             "http://docker.internal.test:8788/",
         );
 
@@ -9254,26 +9298,26 @@ mod tests {
         assert_eq!(config.lane_transport_kind, LaneTransportKind::LocalDocker);
         assert_eq!(
             config.workspace_root,
-            PathBuf::from("/tmp/orbit-server-workspaces")
+            PathBuf::from("/tmp/frontal-code-server-workspaces")
         );
-        assert_eq!(config.docker_image, "orbit-worker:test");
+        assert_eq!(config.docker_image, "frontal-code-worker:test");
         assert_eq!(config.docker_server_url, "http://docker.internal.test:8788");
 
         match previous {
-            Some(value) => env::set_var("ORBIT_SERVER_LANE_TRANSPORT", value),
-            None => env::remove_var("ORBIT_SERVER_LANE_TRANSPORT"),
+            Some(value) => env::set_var("FCODE_SERVER_LANE_TRANSPORT", value),
+            None => env::remove_var("FCODE_SERVER_LANE_TRANSPORT"),
         }
         match previous_workspace_root {
-            Some(value) => env::set_var("ORBIT_SERVER_WORKSPACE_ROOT", value),
-            None => env::remove_var("ORBIT_SERVER_WORKSPACE_ROOT"),
+            Some(value) => env::set_var("FCODE_SERVER_WORKSPACE_ROOT", value),
+            None => env::remove_var("FCODE_SERVER_WORKSPACE_ROOT"),
         }
         match previous_docker_image {
-            Some(value) => env::set_var("ORBIT_SERVER_DOCKER_IMAGE", value),
-            None => env::remove_var("ORBIT_SERVER_DOCKER_IMAGE"),
+            Some(value) => env::set_var("FCODE_SERVER_DOCKER_IMAGE", value),
+            None => env::remove_var("FCODE_SERVER_DOCKER_IMAGE"),
         }
         match previous_callback_url {
-            Some(value) => env::set_var("ORBIT_SERVER_CALLBACK_URL", value),
-            None => env::remove_var("ORBIT_SERVER_CALLBACK_URL"),
+            Some(value) => env::set_var("FCODE_SERVER_CALLBACK_URL", value),
+            None => env::remove_var("FCODE_SERVER_CALLBACK_URL"),
         }
     }
 
@@ -9283,22 +9327,22 @@ mod tests {
             repository: Some("acme/payments".to_string()),
             repo_url: Some("https://github.com/acme/payments.git".to_string()),
             base_ref: Some("main".to_string()),
-            branch: Some("orbit/fix-flake".to_string()),
+            branch: Some("frontal-code/fix-flake".to_string()),
             ..HostedTaskContext::default()
         };
 
         let request = context
-            .repo_checkout_request("/tmp/orbit-workspaces", "task-123")
+            .repo_checkout_request("/tmp/frontal-code-workspaces", "task-123")
             .expect("repo checkout request should be built");
 
         assert_eq!(
             request.workspace_root,
-            PathBuf::from("/tmp/orbit-workspaces")
+            PathBuf::from("/tmp/frontal-code-workspaces")
         );
         assert_eq!(request.checkout_id, "task-123");
         assert_eq!(request.repository.as_deref(), Some("acme/payments"));
         assert_eq!(request.base_ref.as_deref(), Some("main"));
-        assert_eq!(request.branch.as_deref(), Some("orbit/fix-flake"));
+        assert_eq!(request.branch.as_deref(), Some("frontal-code/fix-flake"));
         assert_eq!(
             request.source,
             RepoSource::RemoteUrl("https://github.com/acme/payments.git".to_string())
@@ -9313,7 +9357,7 @@ mod tests {
         };
 
         assert!(context
-            .repo_checkout_request("/tmp/orbit-workspaces", "task-123")
+            .repo_checkout_request("/tmp/frontal-code-workspaces", "task-123")
             .is_none());
     }
 
@@ -9322,8 +9366,8 @@ mod tests {
         let context = HostedTaskContext {
             repository: Some("acme/payments".to_string()),
             repo_url: Some("https://github.com/acme/payments.git".to_string()),
-            branch: Some("orbit/fix-flake".to_string()),
-            published_branch: Some("orbit/fix-flake".to_string()),
+            branch: Some("frontal-code/fix-flake".to_string()),
+            published_branch: Some("frontal-code/fix-flake".to_string()),
             pr_number: Some(42),
             pr_url: Some("https://github.com/acme/payments/pull/42".to_string()),
             ..HostedTaskContext::default()
@@ -9339,7 +9383,7 @@ mod tests {
         );
         assert_eq!(
             payload.get("published_branch"),
-            Some(&json!("orbit/fix-flake"))
+            Some(&json!("frontal-code/fix-flake"))
         );
         assert_eq!(
             payload.get("pr_url"),

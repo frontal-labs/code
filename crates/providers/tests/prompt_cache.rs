@@ -1,4 +1,4 @@
-use orbit_providers::{
+use frontal_code_providers::{
     CacheBreakEvent, PromptCache, PromptCacheConfig, PromptCachePaths, PromptCacheRecord,
     PromptCacheStats,
 };

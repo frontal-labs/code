@@ -1,13 +1,13 @@
-# VS Code Configuration for Orbit
+# VS Code Configuration for Frontal Code
 
-This directory contains VS Code configuration files optimized for developing Orbit.
+This directory contains VS Code configuration files optimized for developing Frontal Code.
 
 ## Files Overview
 
 ### **launch.json** - Debug Configurations
-- **Debug Orbit CLI**: Main CLI debugging with environment variables
-- **Debug Orbit REPL**: Interactive REPL debugging
-- **Debug Orbit Prompt**: One-shot prompt debugging
+- **Debug Frontal Code CLI**: Main CLI debugging with environment variables
+- **Debug Frontal Code REPL**: Interactive REPL debugging
+- **Debug Frontal Code Prompt**: One-shot prompt debugging
 - **Debug Mock Parity Harness**: Testing with mock service
 - **Debug Mock Service**: Standalone mock service debugging
 
@@ -20,8 +20,8 @@ This directory contains VS Code configuration files optimized for developing Orb
 - **cargo check**: Quick syntax check
 - **cargo clippy**: Linting
 - **cargo fmt**: Code formatting
-- **cargo run orbit**: Run the CLI
-- **orbit doctor**: Health check
+- **cargo run frontal-code**: Run the CLI
+- **frontal-code doctor**: Health check
 - **mock parity harness**: Run parity tests
 - **docker-compose up/down/logs**: Container management
 
@@ -44,7 +44,7 @@ This directory contains VS Code configuration files optimized for developing Orb
 
 1. **Install Extensions**: VS Code will prompt to install recommended extensions
 2. **Build Project**: `Ctrl+Shift+P` > `Tasks: Run Task` > `cargo build debug`
-3. **Debug**: `F5` or use `Debug Orbit CLI` configuration
+3. **Debug**: `F5` or use `Debug Frontal Code CLI` configuration
 4. **Test**: `Ctrl+Shift+P` > `Tasks: Run Task` > `cargo test`
 
 ## Key Features

@@ -1,4 +1,4 @@
-use orbit_training::{
+use frontal_code_training::{
     InMemoryStyleProfileStore, StyleDatasetBuilder, StyleProfile, StyleProfileStore, StyleSample,
     StyleScope, StyleStoreError, StyleTrainingService,
 };
@@ -187,7 +187,7 @@ fn style_store_error_implements_std_error() {
 #[test]
 fn service_with_trainer_override() {
     let store = InMemoryStyleProfileStore::new();
-    let trainer = orbit_training::StyleTrainer;
+    let trainer = frontal_code_training::StyleTrainer;
     let service = StyleTrainingService::with_trainer(store, trainer);
     let scope = test_scope("session-custom-trainer");
     let samples = vec![StyleSample {

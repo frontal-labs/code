@@ -13,12 +13,12 @@ FILES = [
 FILES.extend(sorted((ROOT / 'docs').rglob('*.md')) if (ROOT / 'docs').exists() else [])
 
 FORBIDDEN = {
-    r'github\.com/Yeachan-Heo/orbit(?!-parity)': 'replace old orbit GitHub links with frontal-labs/orbit-code',
-    r'github\.com/code-yeongyu/orbit': 'replace stale alternate orbit GitHub links with frontal-labs/orbit-code',
-    r'github\.com/ultraworkers/orbit': 'replace old orbit GitHub links with frontal-labs/orbit-code',
-    r'api\.star-history\.com/svg\?repos=Yeachan-Heo/orbit': 'update star-history embeds to frontal-labs/orbit-code',
-    r'star-history\.com/#Yeachan-Heo/orbit': 'update star-history links to frontal-labs/orbit-code',
-    r'assets/orbit-hero\.jpeg': 'rename stale hero asset references to assets/banner.jpg',
+    r'github\.com/Yeachan-Heo/frontal-code(?!-parity)': 'replace old frontal-code GitHub links with frontal-labs/frontal-code-code',
+    r'github\.com/code-yeongyu/frontal-code': 'replace stale alternate frontal-code GitHub links with frontal-labs/frontal-code-code',
+    r'github\.com/ultraworkers/frontal-code': 'replace old frontal-code GitHub links with frontal-labs/frontal-code-code',
+    r'api\.star-history\.com/svg\?repos=Yeachan-Heo/frontal-code': 'update star-history embeds to frontal-labs/frontal-code-code',
+    r'star-history\.com/#Yeachan-Heo/frontal-code': 'update star-history links to frontal-labs/frontal-code-code',
+    r'assets/frontal-code-hero\.jpeg': 'rename stale hero asset references to assets/banner.jpg',
     r'assets/instructkr\.png': 'remove stale instructkr image references',
 }
 

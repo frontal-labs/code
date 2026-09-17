@@ -57,7 +57,7 @@ repos:
 
   # --- Biome (Ultracite preset) for TS/JS/JSON/YAML formatting & lint ------
   # Replaces prettier: Biome is the single formatter/linter for the monorepo's
-  # TypeScript and JavaScript surface (including the Orbit SDKs).
+  # TypeScript and JavaScript surface (including the Frontal Code SDKs).
   - repo: local
     hooks:
       - id: biome-check
@@ -82,7 +82,7 @@ repos:
     rev: v2.12.0
     hooks:
       - id: hadolint
-        files: '(\.devcontainer/Dockerfile|infrastructure/docker/.*\.Dockerfile|extensions/orbit-slack/Dockerfile|sdk/Dockerfile|infrastructure/proxy/Dockerfile)$'
+        files: '(\.devcontainer/Dockerfile|infrastructure/docker/.*\.Dockerfile|extensions/frontal-code-slack/Dockerfile|sdks/Dockerfile|infrastructure/proxy/Dockerfile)$'
 
   - repo: local
     hooks:
@@ -100,9 +100,9 @@ repos:
         pass_filenames: false
         always_run: true
 
-      - id: orbit-doctor
-        name: orbit doctor
-        entry: cargo run --bin orbit -- doctor
+      - id: frontal-code-doctor
+        name: frontal-code doctor
+        entry: cargo run --bin frontal-code -- doctor
         language: system
         pass_filenames: false
         always_run: true
@@ -147,7 +147,7 @@ repos:
         entry: bash scripts/changeset_check.sh
         language: system
         # Only enforce for PRs that change source/config; docs-only changes are exempt.
-        files: '^(crates/|sdk/typescript/|orbit-cli/|extensions/)'
+        files: '^(crates/|sdks/typescript/|cli/|extensions/)'
         pass_filenames: false
 
       - id: third-party-check
@@ -181,7 +181,7 @@ exclude: |
     target/|
     \.git/|
     \.cargo/|
-    \.orbit/|
+    \.frontal-code/|
     \.sandbox-home/|
     .*\.sum|
     .*\.lock|

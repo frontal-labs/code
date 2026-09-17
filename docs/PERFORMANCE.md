@@ -1,10 +1,10 @@
 # Performance Guide
 
-This guide covers performance optimization for the Orbit CLI, including tuning parameters, monitoring, and best practices.
+This guide covers performance optimization for the Frontal Code CLI, including tuning parameters, monitoring, and best practices.
 
 ## Performance Overview
 
-Orbit is designed for high performance with several optimization layers:
+Frontal Code is designed for high performance with several optimization layers:
 
 - **Async I/O** - Non-blocking operations throughout
 - **Connection Pooling** - Reused HTTP connections
@@ -27,15 +27,15 @@ Orbit is designed for high performance with several optimization layers:
 
 ```bash
 # Run performance benchmarks
-orbit benchmark --suite full
+frontal-code benchmark --suite full
 
 # Benchmark specific operations
-orbit benchmark --operation tool-execution
-orbit benchmark --operation api-response
-orbit benchmark --operation file-operations
+frontal-code benchmark --operation tool-execution
+frontal-code benchmark --operation api-response
+frontal-code benchmark --operation file-operations
 
 # Compare performance
-orbit benchmark --compare baseline
+frontal-code benchmark --compare baseline
 ```
 
 ## Configuration Optimization
@@ -129,7 +129,7 @@ orbit benchmark --compare baseline
         "max_size": "1GB",
         "ttl": "24h",
         "compression": true,
-        "directory": "~/.orbit/cache"
+        "directory": "~/.frontal-code/cache"
       },
       "network": {
         "enabled": false,
@@ -151,21 +151,21 @@ orbit benchmark --compare baseline
 
 ```bash
 # View cache statistics
-orbit cache stats
+frontal-code cache stats
 
 # Clear specific cache
-orbit cache clear api-responses
-orbit cache clear tool-results
+frontal-code cache clear api-responses
+frontal-code cache clear tool-results
 
 # Clear all caches
-orbit cache clear --all
+frontal-code cache clear --all
 
 # Warm up cache
-orbit cache warmup --type file-contents
+frontal-code cache warmup --type file-contents
 
 # Cache configuration
-orbit cache config --memory-size 200MB
-orbit cache config --disk-size 2GB
+frontal-code cache config --memory-size 200MB
+frontal-code cache config --disk-size 2GB
 ```
 
 ## Memory Optimization
@@ -189,16 +189,16 @@ orbit cache config --disk-size 2GB
 
 ```bash
 # Monitor memory usage
-orbit memory monitor
+frontal-code memory monitor
 
 # Memory profile
-orbit memory profile --duration 60s
+frontal-code memory profile --duration 60s
 
 # Memory analysis
-orbit memory analysis --process orbit-cli
+frontal-code memory analysis --process cli
 
 # Memory optimization suggestions
-orbit memory optimize
+frontal-code memory optimize
 ```
 
 ### Large File Handling
@@ -257,16 +257,16 @@ orbit memory optimize
 
 ```bash
 # Monitor network usage
-orbit network monitor
+frontal-code network monitor
 
 # Network diagnostics
-orbit network diagnostics
+frontal-code network diagnostics
 
 # Bandwidth test
-orbit network speedtest
+frontal-code network speedtest
 
 # Latency test
-orbit network latency --host api.anthropic.com
+frontal-code network latency --host api.anthropic.com
 ```
 
 ## Tool Performance
@@ -311,13 +311,13 @@ orbit network latency --host api.anthropic.com
 
 ```bash
 # Profile tool execution
-orbit profile tool bash --command "ls -la"
+frontal-code profile tool bash --command "ls -la"
 
 # Compare tool performance
-orbit benchmark tools --compare read write grep
+frontal-code benchmark tools --compare read write grep
 
 # Tool performance report
-orbit performance report --tools
+frontal-code performance report --tools
 ```
 
 ## Streaming Performance
@@ -341,13 +341,13 @@ orbit performance report --tools
 
 ```bash
 # Test streaming performance
-orbit streaming test --duration 30s
+frontal-code streaming test --duration 30s
 
 # Optimize streaming settings
-orbit streaming optimize --target latency
+frontal-code streaming optimize --target latency
 
 # Monitor streaming metrics
-orbit streaming monitor
+frontal-code streaming monitor
 ```
 
 ## Parallel Processing
@@ -370,13 +370,13 @@ orbit streaming monitor
 
 ```bash
 # Execute tools in parallel
-orbit parallel --tools "read,write,grep" --files "*.txt"
+frontal-code parallel --tools "read,write,grep" --files "*.txt"
 
 # Parallel batch processing
-orbit batch --parallel 4 --files "*.log" --command "grep error"
+frontal-code batch --parallel 4 --files "*.log" --command "grep error"
 
 # Concurrency testing
-orbit concurrency test --workers 8 --tasks 100
+frontal-code concurrency test --workers 8 --tasks 100
 ```
 
 ## Resource Management
@@ -413,13 +413,13 @@ orbit concurrency test --workers 8 --tasks 100
 
 ```bash
 # Monitor resource usage
-orbit resources monitor
+frontal-code resources monitor
 
 # Resource utilization report
-orbit resources report
+frontal-code resources report
 
 # Resource optimization suggestions
-orbit resources optimize
+frontal-code resources optimize
 ```
 
 ## Performance Profiling
@@ -428,29 +428,29 @@ orbit resources optimize
 
 ```bash
 # CPU profiling
-orbit profile cpu --duration 60s --output cpu-profile.svg
+frontal-code profile cpu --duration 60s --output cpu-profile.svg
 
 # Memory profiling
-orbit profile memory --duration 60s --output memory-profile.svg
+frontal-code profile memory --duration 60s --output memory-profile.svg
 
 # I/O profiling
-orbit profile io --duration 60s --output io-profile.svg
+frontal-code profile io --duration 60s --output io-profile.svg
 
 # Network profiling
-orbit profile network --duration 60s --output network-profile.svg
+frontal-code profile network --duration 60s --output network-profile.svg
 ```
 
 ### Performance Analysis
 
 ```bash
 # Analyze performance bottlenecks
-orbit analyze bottlenecks
+frontal-code analyze bottlenecks
 
 # Performance regression testing
-orbit test regression --baseline baseline.json
+frontal-code test regression --baseline baseline.json
 
 # Performance comparison
-orbit compare performance --run1 run1.json --run2 run2.json
+frontal-code compare performance --run1 run1.json --run2 run2.json
 ```
 
 ## Optimization Strategies
@@ -467,26 +467,26 @@ orbit compare performance --run1 run1.json --run2 run2.json
 
 ```bash
 # Fast responses for simple tasks
-orbit --model haiku prompt "list files in current directory"
+frontal-code --model haiku prompt "list files in current directory"
 
 # Balanced performance for moderate tasks
-orbit --model sonnet prompt "analyze this code file"
+frontal-code --model sonnet prompt "analyze this code file"
 
 # Maximum capability for complex tasks
-orbit --model opus prompt "write a comprehensive report"
+frontal-code --model opus prompt "write a comprehensive report"
 ```
 
 ### Tool Usage Optimization
 
 ```bash
 # Use glob for file discovery
-orbit prompt "use glob to find all Python files, then grep for imports"
+frontal-code prompt "use glob to find all Python files, then grep for imports"
 
 # Batch file operations
-orbit prompt "read all config files and summarize their settings"
+frontal-code prompt "read all config files and summarize their settings"
 
 # Parallel execution
-orbit prompt "use parallel tools to process multiple log files"
+frontal-code prompt "use parallel tools to process multiple log files"
 ```
 
 ## Performance Testing
@@ -495,26 +495,26 @@ orbit prompt "use parallel tools to process multiple log files"
 
 ```bash
 # Load test with concurrent requests
-orbit load-test --concurrent 10 --duration 300s
+frontal-code load-test --concurrent 10 --duration 300s
 
 # Stress test
-orbit stress-test --intensity high --duration 60s
+frontal-code stress-test --intensity high --duration 60s
 
 # Scalability test
-orbit scale-test --users 1,10,50,100
+frontal-code scale-test --users 1,10,50,100
 ```
 
 ### Benchmark Suites
 
 ```bash
 # Run full benchmark suite
-orbit benchmark --suite full
+frontal-code benchmark --suite full
 
 # Custom benchmark
-orbit benchmark --custom benchmark.json
+frontal-code benchmark --custom benchmark.json
 
 # Benchmark comparison
-orbit benchmark compare --baseline v1.0.0 --current v1.1.0
+frontal-code benchmark compare --baseline v1.0.0 --current v1.1.0
 ```
 
 ## Performance Monitoring
@@ -523,26 +523,26 @@ orbit benchmark compare --baseline v1.0.0 --current v1.1.0
 
 ```bash
 # Start performance monitor
-orbit monitor start
+frontal-code monitor start
 
 # View live metrics
-orbit metrics live
+frontal-code metrics live
 
 # Performance dashboard
-orbit dashboard performance
+frontal-code dashboard performance
 ```
 
 ### Historical Analysis
 
 ```bash
 # Performance history
-orbit history performance --days 30
+frontal-code history performance --days 30
 
 # Trend analysis
-orbit analyze trends --metric response_time
+frontal-code analyze trends --metric response_time
 
 # Performance reports
-orbit report performance --format html --output report.html
+frontal-code report performance --format html --output report.html
 ```
 
 ## Troubleshooting Performance Issues
@@ -568,16 +568,16 @@ orbit report performance --format html --output report.html
 
 ```bash
 # System health check
-orbit health check
+frontal-code health check
 
 # Performance diagnostics
-orbit diagnose performance
+frontal-code diagnose performance
 
 # Bottleneck identification
-orbit diagnose bottlenecks
+frontal-code diagnose bottlenecks
 
 # Optimization recommendations
-orbit recommend performance
+frontal-code recommend performance
 ```
 
 ## Performance Tuning Examples
@@ -651,4 +651,4 @@ orbit recommend performance
 }
 ```
 
-This performance guide provides comprehensive coverage of optimization techniques and monitoring tools for getting the best performance from Orbit CLI.
+This performance guide provides comprehensive coverage of optimization techniques and monitoring tools for getting the best performance from Frontal Code CLI.

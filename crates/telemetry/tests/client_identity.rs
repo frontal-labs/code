@@ -1,4 +1,4 @@
-use orbit_telemetry::ClientIdentity;
+use frontal_code_telemetry::ClientIdentity;
 
 #[test]
 fn new_creates_identity() {

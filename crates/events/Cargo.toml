@@ -1,5 +1,5 @@
 [package]
-name = "orbit-events"
+name = "frontal-code-events"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

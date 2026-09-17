@@ -1,14 +1,14 @@
-app = "frontal-orbit-slack"
+app = "frontal-code-slack"
 primary_region = "iad"
 
 [build]
-  dockerfile = "infrastructure/docker/orbit-slack-app.Dockerfile"
+  dockerfile = "infrastructure/docker/frontal-code-slack-app.Dockerfile"
 
 [env]
   NODE_ENV = "production"
   LOG_LEVEL = "info"
   PORT = "3000"
-  ORBIT_API_URL = "https://frontal-orbit.fly.dev"
+  FCODE_API_URL = "https://frontal-code.fly.dev"
 
 [http_service]
   internal_port = 3000

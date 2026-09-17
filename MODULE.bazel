@@ -1,10 +1,10 @@
 # ============================================================================
-# Bzlmod module definition for the frontal-orbit monorepo.
+# Bzlmod module definition for the frontal-code monorepo.
 # This is the SINGLE SOURCE OF TRUTH. There is no WORKSPACE file.
 # ============================================================================
 
 module(
-    name = "frontal-orbit",
+    name = "frontal-code",
     version = "0.1.1",
 )
 

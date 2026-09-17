@@ -3,13 +3,13 @@ use std::sync::Arc;
 use std::sync::{Mutex as StdMutex, OnceLock};
 use std::time::Duration;
 
-use orbit_api::{
+use frontal_code_api::{
     AnthropicClient, ApiClient, ApiError, AuthSource, ContentBlockDelta, ContentBlockDeltaEvent,
     ContentBlockStartEvent, InputContentBlock, InputMessage, MessageDeltaEvent, MessageRequest,
     OutputContentBlock, PromptCache, PromptCacheConfig, ProviderClient, StreamEvent, ToolChoice,
     ToolDefinition,
 };
-use orbit_telemetry::{ClientIdentity, MemoryTelemetrySink, SessionTracer, TelemetryEvent};
+use frontal_code_telemetry::{ClientIdentity, MemoryTelemetrySink, SessionTracer, TelemetryEvent};
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -199,7 +199,7 @@ async fn send_message_applies_request_profile_and_records_telemetry() {
         .with_base_url(server.base_url())
         .with_client_identity(ClientIdentity::new("claude-code", "9.9.9").with_runtime("rust-cli"))
         .with_beta("tools-2026-04-01")
-        .with_extra_body_param("metadata", json!({"source": "orbit-code"}))
+        .with_extra_body_param("metadata", json!({"source": "frontal-code-code"}))
         .with_session_tracer(SessionTracer::new("session-telemetry", sink.clone()));
 
     let response = client
@@ -221,7 +221,7 @@ async fn send_message_applies_request_profile_and_records_telemetry() {
     );
     let body: serde_json::Value =
         serde_json::from_str(&request.body).expect("request body should be json");
-    assert_eq!(body["metadata"]["source"], json!("orbit-code"));
+    assert_eq!(body["metadata"]["source"], json!("frontal-code-code"));
     assert_eq!(
         body["betas"],
         json!([
@@ -696,7 +696,7 @@ async fn send_message_tracks_unexpected_prompt_cache_breaks() {
 
 #[tokio::test]
 async fn live_stream_smoke_test() {
-    if std::env::var_os("ORBIT_RUN_LIVE_TESTS").is_none() {
+    if std::env::var_os("FCODE_RUN_LIVE_TESTS").is_none() {
         return;
     }
 
@@ -707,7 +707,7 @@ async fn live_stream_smoke_test() {
     };
     let mut stream = client
         .stream_message(&MessageRequest {
-            model: std::env::var("ORBIT_MODEL").unwrap_or_else(|_| "claude-sonnet-4-5".to_string()),
+            model: std::env::var("FCODE_MODEL").unwrap_or_else(|_| "claude-sonnet-4-5".to_string()),
             max_tokens: 32,
             messages: vec![InputMessage::user_text(
                 "Reply with exactly: hello from rust",
@@ -877,7 +877,7 @@ fn sample_request(stream: bool) -> MessageRequest {
                 },
                 InputContentBlock::ToolResult {
                     tool_use_id: "toolu_prev".to_string(),
-                    content: vec![orbit_api::ToolResultContentBlock::Json {
+                    content: vec![frontal_code_api::ToolResultContentBlock::Json {
                         value: json!({"forecast": "sunny"}),
                     }],
                     is_error: false,

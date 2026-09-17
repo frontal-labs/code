@@ -4,7 +4,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use orbit_runtime::Session;
+use frontal_code_runtime::Session;
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -15,7 +15,7 @@ fn status_command_applies_model_and_permission_mode_flags() {
     fs::create_dir_all(&temp_dir).expect("temp dir should exist");
 
     // when
-    let output = Command::new(env!("CARGO_BIN_EXE_orbit"))
+    let output = Command::new(env!("CARGO_BIN_EXE_frontal-code"))
         .current_dir(&temp_dir)
         .args([
             "--model",
@@ -25,7 +25,7 @@ fn status_command_applies_model_and_permission_mode_flags() {
             "status",
         ])
         .output()
-        .expect("orbit should launch");
+        .expect("frontal-code should launch");
 
     // then
     assert_success(&output);
@@ -45,7 +45,7 @@ fn resume_flag_loads_a_saved_session_and_dispatches_status() {
     let session_path = write_session(&temp_dir, "resume-status");
 
     // when
-    let output = Command::new(env!("CARGO_BIN_EXE_orbit"))
+    let output = Command::new(env!("CARGO_BIN_EXE_frontal-code"))
         .current_dir(&temp_dir)
         .args([
             "--resume",
@@ -53,7 +53,7 @@ fn resume_flag_loads_a_saved_session_and_dispatches_status() {
             "/status",
         ])
         .output()
-        .expect("orbit should launch");
+        .expect("frontal-code should launch");
 
     // then
     assert_success(&output);
@@ -73,16 +73,16 @@ fn slash_command_names_match_known_commands_and_suggest_nearby_unknown_ones() {
     fs::create_dir_all(&temp_dir).expect("temp dir should exist");
 
     // when
-    let help_output = Command::new(env!("CARGO_BIN_EXE_orbit"))
+    let help_output = Command::new(env!("CARGO_BIN_EXE_frontal-code"))
         .current_dir(&temp_dir)
         .arg("/help")
         .output()
-        .expect("orbit should launch");
-    let unknown_output = Command::new(env!("CARGO_BIN_EXE_orbit"))
+        .expect("frontal-code should launch");
+    let unknown_output = Command::new(env!("CARGO_BIN_EXE_frontal-code"))
         .current_dir(&temp_dir)
         .arg("/zstats")
         .output()
-        .expect("orbit should launch");
+        .expect("frontal-code should launch");
 
     // then
     assert_success(&help_output);
@@ -109,11 +109,11 @@ fn omc_namespaced_slash_commands_surface_a_targeted_compatibility_hint() {
     let temp_dir = unique_temp_dir("slash-dispatch-omc");
     fs::create_dir_all(&temp_dir).expect("temp dir should exist");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_orbit"))
+    let output = Command::new(env!("CARGO_BIN_EXE_frontal-code"))
         .current_dir(&temp_dir)
         .arg("/oh-my-claudecode:hud")
         .output()
-        .expect("orbit should launch");
+        .expect("frontal-code should launch");
 
     assert!(
         !output.status.success(),
@@ -133,16 +133,19 @@ fn omc_namespaced_slash_commands_surface_a_targeted_compatibility_hint() {
 fn config_command_loads_defaults_from_standard_config_locations() {
     // given
     let temp_dir = unique_temp_dir("config-defaults");
-    let config_home = temp_dir.join("home").join(".orbit");
-    fs::create_dir_all(temp_dir.join(".orbit")).expect("project config dir should exist");
+    let config_home = temp_dir.join("home").join(".frontal-code");
+    fs::create_dir_all(temp_dir.join(".frontal-code")).expect("project config dir should exist");
     fs::create_dir_all(&config_home).expect("home config dir should exist");
 
     fs::write(config_home.join("settings.json"), r#"{"model":"haiku"}"#)
         .expect("write user settings");
-    fs::write(temp_dir.join(".orbit.json"), r#"{"model":"sonnet"}"#)
-        .expect("write project settings");
     fs::write(
-        temp_dir.join(".orbit").join("settings.local.json"),
+        temp_dir.join(".frontal-code/settings.json"),
+        r#"{"model":"sonnet"}"#,
+    )
+    .expect("write project settings");
+    fs::write(
+        temp_dir.join(".frontal-code").join("settings.local.json"),
         r#"{"model":"opus"}"#,
     )
     .expect("write local settings");
@@ -150,7 +153,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
 
     // when
     let output = command_in(&temp_dir)
-        .env("ORBIT_CONFIG_HOME", &config_home)
+        .env("FCODE_CONFIG_HOME", &config_home)
         .args([
             "--resume",
             session_path.to_str().expect("utf8 path"),
@@ -158,7 +161,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
             "model",
         ])
         .output()
-        .expect("orbit should launch");
+        .expect("frontal-code should launch");
 
     // then
     assert_success(&output);
@@ -173,10 +176,15 @@ fn config_command_loads_defaults_from_standard_config_locations() {
             .to_str()
             .expect("utf8 path")
     ));
-    assert!(stdout.contains(temp_dir.join(".orbit.json").to_str().expect("utf8 path")));
     assert!(stdout.contains(
         temp_dir
-            .join(".orbit")
+            .join(".frontal-code/settings.json")
+            .to_str()
+            .expect("utf8 path")
+    ));
+    assert!(stdout.contains(
+        temp_dir
+            .join(".frontal-code")
             .join("settings.local.json")
             .to_str()
             .expect("utf8 path")
@@ -189,18 +197,18 @@ fn config_command_loads_defaults_from_standard_config_locations() {
 fn doctor_command_runs_as_a_local_shell_entrypoint() {
     // given
     let temp_dir = unique_temp_dir("doctor-entrypoint");
-    let config_home = temp_dir.join("home").join(".orbit");
+    let config_home = temp_dir.join("home").join(".frontal-code");
     fs::create_dir_all(&config_home).expect("config home should exist");
 
     // when
     let output = command_in(&temp_dir)
-        .env("ORBIT_CONFIG_HOME", &config_home)
-        .env_remove("ORBIT_API_KEY")
-        .env_remove("ORBIT_AUTH_TOKEN")
-        .env("ORBIT_BASE_URL", "http://127.0.0.1:9")
+        .env("FCODE_CONFIG_HOME", &config_home)
+        .env_remove("FCODE_API_KEY")
+        .env_remove("FCODE_AUTH_TOKEN")
+        .env("FCODE_BASE_URL", "http://127.0.0.1:9")
         .arg("doctor")
         .output()
-        .expect("orbit doctor should launch");
+        .expect("frontal-code doctor should launch");
 
     // then
     assert_success(&output);
@@ -218,35 +226,35 @@ fn doctor_command_runs_as_a_local_shell_entrypoint() {
 #[test]
 fn local_subcommand_help_does_not_fall_through_to_runtime_or_provider_calls() {
     let temp_dir = unique_temp_dir("subcommand-help");
-    let config_home = temp_dir.join("home").join(".orbit");
+    let config_home = temp_dir.join("home").join(".frontal-code");
     fs::create_dir_all(&config_home).expect("config home should exist");
 
     let doctor_help = command_in(&temp_dir)
-        .env("ORBIT_CONFIG_HOME", &config_home)
-        .env_remove("ORBIT_API_KEY")
-        .env_remove("ORBIT_AUTH_TOKEN")
-        .env("ORBIT_BASE_URL", "http://127.0.0.1:9")
+        .env("FCODE_CONFIG_HOME", &config_home)
+        .env_remove("FCODE_API_KEY")
+        .env_remove("FCODE_AUTH_TOKEN")
+        .env("FCODE_BASE_URL", "http://127.0.0.1:9")
         .args(["doctor", "--help"])
         .output()
         .expect("doctor help should launch");
     let status_help = command_in(&temp_dir)
-        .env("ORBIT_CONFIG_HOME", &config_home)
-        .env_remove("ORBIT_API_KEY")
-        .env_remove("ORBIT_AUTH_TOKEN")
-        .env("ORBIT_BASE_URL", "http://127.0.0.1:9")
+        .env("FCODE_CONFIG_HOME", &config_home)
+        .env_remove("FCODE_API_KEY")
+        .env_remove("FCODE_AUTH_TOKEN")
+        .env("FCODE_BASE_URL", "http://127.0.0.1:9")
         .args(["status", "--help"])
         .output()
         .expect("status help should launch");
 
     assert_success(&doctor_help);
     let doctor_stdout = String::from_utf8(doctor_help.stdout).expect("stdout should be utf8");
-    assert!(doctor_stdout.contains("Usage            orbit doctor"));
+    assert!(doctor_stdout.contains("Usage            frontal-code doctor"));
     assert!(doctor_stdout.contains("local-only health report"));
     assert!(!doctor_stdout.contains("Thinking"));
 
     assert_success(&status_help);
     let status_stdout = String::from_utf8(status_help.stdout).expect("stdout should be utf8");
-    assert!(status_stdout.contains("Usage            orbit status"));
+    assert!(status_stdout.contains("Usage            frontal-code status"));
     assert!(status_stdout.contains("local workspace snapshot"));
     assert!(!status_stdout.contains("Thinking"));
 
@@ -259,7 +267,7 @@ fn local_subcommand_help_does_not_fall_through_to_runtime_or_provider_calls() {
 }
 
 fn command_in(cwd: &Path) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_orbit"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_frontal-code"));
     command.current_dir(cwd);
     command
 }
@@ -292,7 +300,7 @@ fn unique_temp_dir(label: &str) -> PathBuf {
         .as_millis();
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "orbit-{label}-{}-{millis}-{counter}",
+        "frontal-code-{label}-{}-{millis}-{counter}",
         std::process::id()
     ))
 }

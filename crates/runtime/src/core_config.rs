@@ -4,7 +4,7 @@
 //! and the new core configuration system, allowing gradual migration and coexistence.
 
 use crate::config::{ConfigError, ConfigLoader, RuntimeConfig};
-use orbit_core::config::ProjectConfig;
+use frontal_code_core::config::ProjectConfig;
 use std::sync::Arc;
 
 /// Configuration manager that combines both runtime and core configurations
@@ -148,19 +148,19 @@ impl ConfigurationManager {
 
     /// Get sandbox configuration from core config
     #[must_use]
-    pub fn sandbox_config(&self) -> &orbit_core::config::SandboxConfig {
+    pub fn sandbox_config(&self) -> &frontal_code_core::config::SandboxConfig {
         &self.core_config.sandbox
     }
 
     /// Get service configuration from core config
     #[must_use]
-    pub fn service_config(&self) -> &orbit_core::config::ServiceConfig {
+    pub fn service_config(&self) -> &frontal_code_core::config::ServiceConfig {
         &self.core_config.services
     }
 
     /// Get feature configuration from core config
     #[must_use]
-    pub fn feature_config(&self) -> &orbit_core::config::FeatureConfig {
+    pub fn feature_config(&self) -> &frontal_code_core::config::FeatureConfig {
         &self.core_config.features
     }
 }

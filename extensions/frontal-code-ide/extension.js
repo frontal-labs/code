@@ -3,24 +3,24 @@ const { execFile } = require("child_process");
 
 function activate(context) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("orbit.startRepl", () => startRepl()),
-    vscode.commands.registerCommand("orbit.askSelection", () => askSelection()),
-    vscode.commands.registerCommand("orbit.askInput", () => askInput())
+    vscode.commands.registerCommand("frontal-code.startRepl", () => startRepl()),
+    vscode.commands.registerCommand("frontal-code.askSelection", () => askSelection()),
+    vscode.commands.registerCommand("frontal-code.askInput", () => askInput())
   );
 }
 
 function deactivate() {}
 
 function config() {
-  return vscode.workspace.getConfiguration("orbit");
+  return vscode.workspace.getConfiguration("frontal-code");
 }
 
-function orbitCliPath() {
-  const value = config().get("cliPath", "orbit");
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "orbit";
+function frontal-codeCliPath() {
+  const value = config().get("cliPath", "frontal-code");
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "frontal-code";
 }
 
-function orbitModelArgs() {
+function frontal-codeModelArgs() {
   const model = config().get("defaultModel", "");
   if (typeof model === "string" && model.trim().length > 0) {
     return ["--model", model.trim()];
@@ -29,57 +29,57 @@ function orbitModelArgs() {
 }
 
 function startRepl() {
-  const terminal = vscode.window.createTerminal("Orbit");
+  const terminal = vscode.window.createTerminal("Frontal Code");
   terminal.show(true);
-  terminal.sendText(orbitCliPath(), true);
+  terminal.sendText(frontal-codeCliPath(), true);
 }
 
 async function askInput() {
   const question = await vscode.window.showInputBox({
-    prompt: "Ask Orbit",
+    prompt: "Ask Frontal Code",
     placeHolder: "Explain the active file"
   });
   if (!question || !question.trim()) {
     return;
   }
-  await runOrbitPrompt(question.trim());
+  await runFrontalCodePrompt(question.trim());
 }
 
 async function askSelection() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    vscode.window.showWarningMessage("Orbit: open an editor first.");
+    vscode.window.showWarningMessage("Frontal Code: open an editor first.");
     return;
   }
   const selected = editor.document.getText(editor.selection).trim();
   if (!selected) {
-    vscode.window.showWarningMessage("Orbit: select some text first.");
+    vscode.window.showWarningMessage("Frontal Code: select some text first.");
     return;
   }
   const question = await vscode.window.showInputBox({
-    prompt: "What should Orbit do with this selection?",
+    prompt: "What should Frontal Code do with this selection?",
     placeHolder: "Explain this code"
   });
   if (!question || !question.trim()) {
     return;
   }
   const prompt = `${question.trim()}\n\nSelected code:\n${selected}`;
-  await runOrbitPrompt(prompt);
+  await runFrontalCodePrompt(prompt);
 }
 
-async function runOrbitPrompt(prompt) {
-  const output = vscode.window.createOutputChannel("Orbit");
+async function runFrontalCodePrompt(prompt) {
+  const output = vscode.window.createOutputChannel("Frontal Code");
   output.show(true);
-  output.appendLine("Running Orbit...");
+  output.appendLine("Running Frontal Code...");
 
-  const args = [...orbitModelArgs(), "--output-format", "text", "prompt", prompt];
+  const args = [...frontal-codeModelArgs(), "--output-format", "text", "prompt", prompt];
   const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
   const execOptions = cwd ? { cwd, maxBuffer: 16 * 1024 * 1024 } : { maxBuffer: 16 * 1024 * 1024 };
 
   const startedAt = Date.now();
-  execFile(orbitCliPath(), args, execOptions, (error, stdout, stderr) => {
+  execFile(frontal-codeCliPath(), args, execOptions, (error, stdout, stderr) => {
     const elapsedMs = Date.now() - startedAt;
-    output.appendLine(`Orbit finished in ${elapsedMs} ms.`);
+    output.appendLine(`Frontal Code finished in ${elapsedMs} ms.`);
     if (stdout && stdout.trim()) {
       output.appendLine("");
       output.appendLine(stdout.trimEnd());
@@ -91,13 +91,13 @@ async function runOrbitPrompt(prompt) {
     }
 
     if (error) {
-      const message = `Orbit command failed: ${error.message}`;
+      const message = `Frontal Code command failed: ${error.message}`;
       output.appendLine(message);
       vscode.window.showErrorMessage(message);
       return;
     }
 
-    vscode.window.showInformationMessage("Orbit response ready.");
+    vscode.window.showInformationMessage("Frontal Code response ready.");
   });
 }
 

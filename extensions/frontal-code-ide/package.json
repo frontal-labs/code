@@ -1,0 +1,50 @@
+{
+  "name": "frontal-code-ide",
+  "displayName": "Frontal Code IDE",
+  "description": "Frontal Code integration for VS Code and Cursor",
+  "version": "0.1.0",
+  "publisher": "frontal-code",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:frontal-code.startRepl",
+    "onCommand:frontal-code.askSelection",
+    "onCommand:frontal-code.askInput"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "frontal-code.startRepl",
+        "title": "Frontal Code: Start REPL"
+      },
+      {
+        "command": "frontal-code.askSelection",
+        "title": "Frontal Code: Ask About Selection"
+      },
+      {
+        "command": "frontal-code.askInput",
+        "title": "Frontal Code: Ask Frontal Code"
+      }
+    ],
+    "configuration": {
+      "title": "Frontal Code",
+      "properties": {
+        "frontal-code.cliPath": {
+          "type": "string",
+          "default": "frontal-code",
+          "description": "Path to the Frontal Code CLI binary."
+        },
+        "frontal-code.defaultModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model override used for one-shot asks."
+        }
+      }
+    }
+  }
+}

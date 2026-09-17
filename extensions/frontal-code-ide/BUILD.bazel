@@ -16,7 +16,7 @@ sh_test(
     name = "lint",
     srcs = ["//tools:extension.sh"],
     args = [
-        "extensions/orbit-ide",
+        "extensions/frontal-code-ide",
         "lint",
     ],
     tags = [
@@ -29,7 +29,7 @@ sh_test(
     name = "build",
     srcs = ["//tools:extension.sh"],
     args = [
-        "extensions/orbit-ide",
+        "extensions/frontal-code-ide",
         "build",
     ],
     tags = [

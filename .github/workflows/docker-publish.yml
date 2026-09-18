@@ -10,7 +10,7 @@ on:
     branches:
       - main
     paths:
-      - infrastructure/docker/cli.Dockerfile
+      - infrastructure/docker/frontal-code-cli.Dockerfile
       - infrastructure/docker/frontal-code-dev.Dockerfile
       - .github/workflows/docker-publish.yml
 
@@ -29,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: infrastructure/docker/cli.Dockerfile
+          - dockerfile: infrastructure/docker/frontal-code-cli.Dockerfile
             image: frontal-code
           - dockerfile: infrastructure/docker/frontal-code-dev.Dockerfile
             image: frontal-code-dev
@@ -61,7 +61,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        if: ${{ github.event_name != 'pull_request' || matrix.dockerfile != 'infrastructure/docker/cli.Dockerfile' }}
+        if: ${{ github.event_name != 'pull_request' || matrix.dockerfile != 'infrastructure/docker/frontal-code-cli.Dockerfile' }}
         uses: docker/build-push-action@v6
         with:
           context: .

@@ -28,7 +28,7 @@ The configuration is split into:
 - `docker/frontal-code-server.Dockerfile`: builds the `frontal-code-server` image
 - `docker/frontal-code-worker.Dockerfile`: builds the worker image used by server-side `local-docker` lanes
 - `docker/frontal-code-slack.Dockerfile`: builds the Slack connector image
-- `docker/cli.Dockerfile`: builds the combined `frontal-code` + `frontal-code-server` CLI image (published as `frontal-code`/`frontal-code-dev` to GHCR)
+- `docker/frontal-code-cli.Dockerfile`: builds the combined `frontal-code` + `frontal-code-server` CLI image (published as `frontal-code`/`frontal-code-dev` to GHCR)
 - `docker/frontal-code-dev.Dockerfile`: development image with hot reload (`cargo watch`)
 - `docker/frontal-code-fly.Dockerfile`: Fly.io deployment image for `frontal-code-server`
 - `docker/frontal-code-slack-app.Dockerfile`: Fly.io deployment image for the Slack connector

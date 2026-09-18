@@ -26,7 +26,7 @@ COPY tools/ ./tools/
 COPY tests/ ./tests/
 
 # Build the application
-RUN cargo build --release -p cli -p frontal-code-server
+RUN cargo build --release -p frontal-code-cli -p frontal-code-server
 
 # Runtime stage
 FROM debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d

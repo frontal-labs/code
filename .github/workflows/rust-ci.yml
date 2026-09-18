@@ -1,4 +1,4 @@
-name: Frontal Frontal Code Code CI
+name: Frontal Code CI
 
 on:
   push:

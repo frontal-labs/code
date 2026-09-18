@@ -31,14 +31,14 @@ export class FrontalCodeApiClient {
   private readonly timeout: number;
 
   constructor() {
-    this.baseUrl = config.frontal - code.apiUrl;
-    this.timeout = config.frontal - code.timeout;
+    this.baseUrl = config.frontalCode.apiUrl;
+    this.timeout = config.frontalCode.timeout;
     const defaultHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       "User-Agent": "frontal-code-slack-bot/1.0.0",
     };
-    if (config.frontal - code.apiKey) {
-      defaultHeaders["x-api-key"] = config.frontal - code.apiKey;
+    if (config.frontalCode.apiKey) {
+      defaultHeaders["x-api-key"] = config.frontalCode.apiKey;
     }
 
     this.client = axios.create({
@@ -311,11 +311,11 @@ export class FrontalCodeApiClient {
   }
 
   getEventsWebSocketHeaders(): Record<string, string> | undefined {
-    if (!config.frontal - code.apiKey) {
+    if (!config.frontalCode.apiKey) {
       return undefined;
     }
     return {
-      "x-api-key": config.frontal - code.apiKey,
+      "x-api-key": config.frontalCode.apiKey,
     };
   }
 

@@ -79,8 +79,8 @@ describe("Environment Variables", () => {
       expect(config.slack).toHaveProperty("appToken");
       expect(config.slack).toHaveProperty("signingSecret");
 
-      expect(config.frontal - code).toHaveProperty("apiUrl");
-      expect(config.frontal - code).toHaveProperty("timeout");
+      expect(config.frontalCode).toHaveProperty("apiUrl");
+      expect(config.frontalCode).toHaveProperty("timeout");
 
       expect(config.database).toHaveProperty("url");
       expect(config.redis).toHaveProperty("url");
@@ -101,8 +101,8 @@ describe("Environment Variables", () => {
       expect(config.slack.appToken).toBe(env.SLACK_APP_TOKEN);
       expect(config.slack.signingSecret).toBe(env.SLACK_SIGNING_SECRET);
 
-      expect(config.frontal - code.apiUrl).toBe(env.FCODE_API_URL);
-      expect(config.frontal - code.timeout).toBe(env.FCODE_API_TIMEOUT);
+      expect(config.frontalCode.apiUrl).toBe(env.FCODE_API_URL);
+      expect(config.frontalCode.timeout).toBe(env.FCODE_API_TIMEOUT);
 
       expect(config.database.url).toBe(env.DATABASE_URL);
       expect(config.redis.url).toBe(env.REDIS_URL);

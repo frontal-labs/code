@@ -1,6 +1,6 @@
-# Contributing to Frontal Frontal Code Code
+# Contributing to Frontal Code
 
-Thank you for your interest in contributing to Frontal Frontal Code Code! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to Frontal Code! This document provides guidelines and information for contributors.
 
 ## Getting Started
 
@@ -201,4 +201,4 @@ Maintainer responsibilities:
 - [Cargo Book](https://doc.rust-lang.org/cargo/)
 - [Clippy Lints](https://rust-lang.github.io/rust-clippy/)
 
-Thank you for contributing to Frontal Frontal Code Code!
+Thank you for contributing to Frontal Code!

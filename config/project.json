@@ -2,7 +2,7 @@
   "project": {
     "name": "Frontal Code",
     "version": "0.1.1",
-    "description": "Frontal Frontal Code is an internal agentic engineering system"
+    "description": "Frontal Code is an internal agentic engineering system"
   },
   "runtime": {
     "default_provider": "frontal",

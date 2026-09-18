@@ -1,6 +1,6 @@
 {
   "display_information": {
-    "name": "Frontal Frontal Code",
+    "name": "Frontal Code",
     "description": "AI-powered autonomous engineering platform for code analysis, bug fixes, and deployments",
     "background_color": "#000000",
     "long_description": "Frontal Code is a complete autonomous engineering platform that can reason, plan, and execute like a full-stack engineer. It understands your infrastructure, code, and data in real time, then takes action to build, fix, and operate systems end-to-end through natural language commands in Slack."

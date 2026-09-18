@@ -145,12 +145,12 @@ vi.mock("@slack/bolt", () => ({
 }));
 
 vi.mock("../src/api-client", () => ({
-  FrontalCodeApiClient: frontal - codeApiState.MockFrontalCodeApiClient,
+  FrontalCodeApiClient: frontalCodeApiState.MockFrontalCodeApiClient,
 }));
 
 vi.mock("../src/frontal-code-events", () => ({
   FrontalCodeEventsClient:
-    frontal - codeEventsState.MockFrontalCodeEventsClient,
+    frontalCodeEventsState.MockFrontalCodeEventsClient,
 }));
 
 vi.mock("../src/config", () => ({
@@ -178,7 +178,7 @@ describe("SlackInterface constructor wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     slackState.resetHandlers();
-    frontal - codeEventsState.resetTrackedHandler();
+    frontalCodeEventsState.resetTrackedHandler();
   });
 
   it("constructs the Slack app, Frontal Code clients, and tracked-event subscription", async () => {
@@ -192,8 +192,8 @@ describe("SlackInterface constructor wiring", () => {
       .mockResolvedValue(undefined);
     const slack = new SlackInterface();
 
-    expect(frontal - codeApiState.getEventsWebSocketUrl).not.toHaveBeenCalled();
-    expect(frontal - codeEventsState.onTrackedTaskEvent).toHaveBeenCalledTimes(
+    expect(frontalCodeApiState.getEventsWebSocketUrl).not.toHaveBeenCalled();
+    expect(frontalCodeEventsState.onTrackedTaskEvent).toHaveBeenCalledTimes(
       1
     );
     expect(slackState.getMessageHandler()).toBeTypeOf("function");
@@ -234,7 +234,7 @@ describe("SlackInterface constructor wiring", () => {
       },
     });
 
-    expect(frontal - codeApiState.createTask).not.toHaveBeenCalled();
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
   });
 
   it("creates and registers a task from a Slack message event", async () => {
@@ -263,7 +263,7 @@ describe("SlackInterface constructor wiring", () => {
       },
     });
 
-    expect(frontal - codeApiState.createTask).toHaveBeenCalledWith({
+    expect(frontalCodeApiState.createTask).toHaveBeenCalledWith({
       prompt: "Investigate flaky test",
       user_id: "U123",
       channel_id: "C123",
@@ -301,13 +301,13 @@ describe("SlackInterface constructor wiring", () => {
       ack,
     });
 
-    expect(frontal - codeApiState.getOrphanPolicy).toHaveBeenCalledWith({});
+    expect(frontalCodeApiState.getOrphanPolicy).toHaveBeenCalledWith({});
     expect(ack).toHaveBeenCalledWith(
       expect.objectContaining({
         response_type: "ephemeral",
       })
     );
-    expect(frontal - codeApiState.createTask).not.toHaveBeenCalled();
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
   });
 
   it("acknowledges policy preview failures with an ephemeral error response", async () => {
@@ -331,7 +331,7 @@ describe("SlackInterface constructor wiring", () => {
       response_type: "ephemeral",
       text: "Failed to load orphan policy: policy unavailable",
     });
-    expect(frontal - codeApiState.createTask).not.toHaveBeenCalled();
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
   });
 
   it("creates a task from /ai commands after acknowledging", async () => {
@@ -362,7 +362,7 @@ describe("SlackInterface constructor wiring", () => {
     });
 
     expect(ack).toHaveBeenCalledWith();
-    expect(frontal - codeApiState.createTask).toHaveBeenCalledWith({
+    expect(frontalCodeApiState.createTask).toHaveBeenCalledWith({
       prompt: "Fix the flaky test",
       user_id: "U123",
       channel_id: "C123",
@@ -418,7 +418,7 @@ describe("SlackInterface constructor wiring", () => {
       },
     });
 
-    expect(frontal - codeApiState.sendConnectorEvent).toHaveBeenCalledWith(
+    expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith(
       "slack",
       {
         type: "reaction_added",
@@ -442,7 +442,7 @@ describe("SlackInterface constructor wiring", () => {
       },
     });
 
-    expect(frontal - codeApiState.sendConnectorEvent).toHaveBeenCalledWith(
+    expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith(
       "slack",
       {
         type: "member_joined_channel",

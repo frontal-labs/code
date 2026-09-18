@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Frontal Frontal Code — monorepo formatter.
+# Frontal Code — monorepo formatter.
 #
 # Runs Biome format --write (TS/JS/JSON/YAML) and cargo fmt. Failed commands
 # propagate their exit status; missing tooling is a hard error. Accepts a target

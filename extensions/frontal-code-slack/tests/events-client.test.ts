@@ -124,7 +124,7 @@ describe("Legacy FrontalCodeEventsClient", () => {
   it("builds a ws URL from an http API base by mutating the shared config object", () => {
     const client =
       new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
-    const originalUrl = config.frontal - code.apiUrl;
+    const originalUrl = config.frontalCode.apiUrl;
     config.frontal-code.apiUrl = "http://frontal-code.example.com/";
 
     try {

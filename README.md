@@ -315,7 +315,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p cli -- -
 
 ## Attribution
 
-Originally based on [ultraworkers/claw-code](https://github.com/ultraworkers/claw-code), a high-performance Rust rewrite of AI agent tooling. This fork has been significantly modified and rebranded as "Frontal Frontal Code" by Frontal Labs.
+Originally based on [ultraworkers/claw-code](https://github.com/ultraworkers/claw-code), a high-performance Rust rewrite of AI agent tooling. This fork has been significantly modified and rebranded as "Frontal Code" by Frontal Labs.
 
 ## Bazel monorepo
 

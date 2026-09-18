@@ -5,7 +5,7 @@ describe("config compatibility surface", () => {
   it("exports the validated runtime config object", () => {
     expect(config.slack.botToken).toEqual(expect.any(String));
     expect(config.slack.botToken.length).toBeGreaterThan(0);
-    expect(config.frontal - code.apiUrl).toMatch(/^https?:\/\//);
+    expect(config.frontalCode.apiUrl).toMatch(/^https?:\/\//);
     expect(config.app.nodeEnv).toEqual(expect.any(String));
   });
 

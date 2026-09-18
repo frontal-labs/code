@@ -42,12 +42,8 @@ interface SlackMessagePayload {
 // Pure Slack interface - WebSocket connection to Slack, talks to Frontal Code AI
 export class SlackInterface {
   private readonly app: App;
-  private readonly frontal;
-  -
-  codeApi: FrontalCodeApiClient;
-  private readonly frontal;
-  -
-  codeEvents: FrontalCodeEventsClient;
+  private readonly frontalCodeApi: FrontalCodeApiClient;
+  private readonly frontalCodeEvents: FrontalCodeEventsClient;
   private readonly trackedTasks = new Map<string, FrontalCodeTrackedTask>();
   private readonly approvalMessageTsByTask = new Map<string, string>();
   private readonly approvalInFlight = new Set<string>();
@@ -63,13 +59,12 @@ export class SlackInterface {
       logLevel: undefined, // Minimal logging
     });
 
-    this.frontal-codeApi = new FrontalCodeApiClient();
-    this.frontal-codeEvents = new FrontalCodeEventsClient(
-      (query) => this.frontal - codeApi.getEventsWebSocketUrl(query),
-      () => this.frontal - codeApi.getEventsWebSocketHeaders()
+    this.frontalCodeApi = new FrontalCodeApiClient();
+    this.frontalCodeEvents = new FrontalCodeEventsClient(
+      (query) => this.frontalCodeApi.getEventsWebSocketUrl(query),
+      () => this.frontalCodeApi.getEventsWebSocketHeaders()
     );
-    this.frontal -
-      codeEvents.onTrackedTaskEvent(async (event, task) => {
+    this.frontalCodeEvents.onTrackedTaskEvent(async (event, task) => {
         await this.handleFrontalCodeTaskEvent(event, task);
       });
     this.setupEventHandlers();
@@ -91,8 +86,7 @@ export class SlackInterface {
 
       const threadTs = slackMessage.thread_ts || slackMessage.ts;
       const task =
-        (await this.frontal) -
-        codeApi.createTask({
+        await this.frontalCodeApi.createTask({
           prompt: slackMessage.text,
           user_id: slackMessage.user,
           channel_id: slackMessage.channel,
@@ -118,7 +112,7 @@ export class SlackInterface {
       if (policyQuery) {
         try {
           const policy =
-            (await this.frontal) - codeApi.getOrphanPolicy(policyQuery);
+            await this.frontalCodeApi.getOrphanPolicy(policyQuery);
           await ack(this.buildOrphanPolicyCommandResponse(policy));
         } catch (error) {
           await ack({
@@ -132,8 +126,7 @@ export class SlackInterface {
       await ack();
 
       const task =
-        (await this.frontal) -
-        codeApi.createTask({
+        await this.frontalCodeApi.createTask({
           prompt: command.text,
           user_id: command.user_id,
           channel_id: command.channel_id,
@@ -164,8 +157,7 @@ export class SlackInterface {
     this.app.event(/.*/, async ({ event }) => {
       // Forward events to Frontal Code AI for processing
       const slackEvent = event as { type: string; user?: string };
-      (await this.frontal) -
-        codeApi.sendConnectorEvent("slack", {
+      await this.frontalCodeApi.sendConnectorEvent("slack", {
           type: slackEvent.type,
           userId: slackEvent.user || "",
           data: event,
@@ -205,12 +197,11 @@ export class SlackInterface {
         (
           this.app as unknown as { isListening?: () => boolean }
         ).isListening?.() || false;
-      const frontal;
-      -codeConnected = (await this.frontal) - codeApi.healthCheck();
+      const frontalCodeConnected = await this.frontalCodeApi.healthCheck();
 
       return {
         slack: slackConnected,
-        frontal_code: frontal - codeConnected,
+        frontal_code: frontalCodeConnected,
       };
     } catch (error) {
       logger.error("Health check failed", error as Error);
@@ -239,8 +230,7 @@ export class SlackInterface {
     };
     this.upsertTrackedTask(nextTask);
     try {
-      (await this.frontal) -
-        codeApi.updateTaskContext({
+      await this.frontalCodeApi.updateTaskContext({
           taskId: nextTask.taskId,
           source: "slack",
           user_id: nextTask.userId,
@@ -256,7 +246,7 @@ export class SlackInterface {
         }
       );
     }
-    this.frontal - codeEvents.trackTask(nextTask);
+    this.frontalCodeEvents.trackTask(nextTask);
   }
 
   private async handleSlackAction(
@@ -273,8 +263,7 @@ export class SlackInterface {
     }
 
     const response =
-      (await this.frontal) -
-      codeApi.sendConnectorInteraction("slack", {
+      await this.frontalCodeApi.sendConnectorInteraction("slack", {
         action: action.action_id,
         value: action.value,
         userId: body.user.id,
@@ -353,8 +342,7 @@ export class SlackInterface {
 
     try {
       const task =
-        (await this.frontal) -
-        codeApi.resolveTaskApproval({
+        await this.frontalCodeApi.resolveTaskApproval({
           taskId,
           approvalKind: "orphaned_hosted_agent",
           action: actionName,
@@ -427,8 +415,7 @@ export class SlackInterface {
     this.approvalInFlight.add(taskId);
     try {
       const result =
-        (await this.frontal) -
-        codeApi.resolveTaskApproval({
+        await this.frontalCodeApi.resolveTaskApproval({
           taskId,
           approvalKind: "github_review_followup",
           action: actionName,
@@ -520,8 +507,7 @@ export class SlackInterface {
     if (event.event === "approval.requested") {
       this.approvalMessageTsByTask.set(nextTask.taskId, response.ts as string);
       try {
-        (await this.frontal) -
-          codeApi.updateTaskContext({
+        await this.frontalCodeApi.updateTaskContext({
             taskId: nextTask.taskId,
             source: "slack",
             user_id: nextTask.userId,
@@ -574,8 +560,7 @@ export class SlackInterface {
 
     if (hasLinear) {
       try {
-        (await this.frontal) -
-          codeApi.postLinearStatus({
+        await this.frontalCodeApi.postLinearStatus({
             issueId: payload.linear_issue_id,
             identifier: payload.linear_issue_identifier,
             url: payload.linear_issue_url,
@@ -592,8 +577,7 @@ export class SlackInterface {
 
     if (hasGraphite) {
       try {
-        (await this.frontal) -
-          codeApi.postGraphiteStatus({
+        await this.frontalCodeApi.postGraphiteStatus({
             stackId: payload.graphite_stack_id,
             headBranch: payload.graphite_head_branch,
             baseBranch: payload.graphite_base_branch,
@@ -641,12 +625,12 @@ export class SlackInterface {
     const eventTask = this.readTrackedTaskFromEventSummary(taskId, event);
     if (eventTask) {
       this.upsertTrackedTask(eventTask);
-      this.frontal - codeEvents.trackTask(eventTask);
+      this.frontalCodeEvents.trackTask(eventTask);
       return eventTask;
     }
 
     try {
-      const snapshot = (await this.frontal) - codeApi.getTask(taskId);
+      const snapshot = await this.frontalCodeApi.getTask(taskId);
       const snapshotTask = this.toTrackedTask(snapshot);
       if (!snapshotTask) {
         return undefined;
@@ -659,7 +643,7 @@ export class SlackInterface {
         );
       }
       this.upsertTrackedTask(snapshotTask);
-      this.frontal - codeEvents.trackTask(snapshotTask);
+      this.frontalCodeEvents.trackTask(snapshotTask);
       return snapshotTask;
     } catch (error) {
       logger.warn(
@@ -1347,8 +1331,7 @@ export class SlackInterface {
   private async syncTrackedTasksFromFrontalCode(): Promise<void> {
     try {
       const activeTasks =
-        (await this.frontal) -
-        codeApi.listTasks({
+        await this.frontalCodeApi.listTasks({
           source: "slack",
           status: "pending,running",
         });
@@ -1371,7 +1354,7 @@ export class SlackInterface {
           );
         }
         this.syncDerivedApprovalState(task);
-        this.frontal - codeEvents.trackTask(trackedTask);
+        this.frontalCodeEvents.trackTask(trackedTask);
       }
 
       logger.info("Synchronized Slack tasks from Frontal Code", {
@@ -1443,7 +1426,7 @@ export class SlackInterface {
 
   private async cleanupTaskState(taskId: string): Promise<void> {
     this.trackedTasks.delete(taskId);
-    this.frontal - codeEvents.untrackTask(taskId);
+    this.frontalCodeEvents.untrackTask(taskId);
     this.approvalMessageTsByTask.delete(taskId);
     this.approvalInFlight.delete(taskId);
     this.approvalResolved.delete(taskId);

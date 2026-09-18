@@ -154,7 +154,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
     // when
     let output = command_in(&temp_dir)
         .env("FCODE_CONFIG_HOME", &config_home)
-        .env("HOME", &temp_dir.join("home"))
+        .env("HOME", temp_dir.join("home"))
         .args([
             "--resume",
             session_path.to_str().expect("utf8 path"),

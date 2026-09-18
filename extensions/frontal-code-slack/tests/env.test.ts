@@ -92,8 +92,8 @@ describe("Environment Variables", () => {
       expect(config.slack).toHaveProperty("appToken");
       expect(config.slack).toHaveProperty("signingSecret");
 
-      expect(config.frontal - code).toHaveProperty("apiUrl");
-      expect(config.frontal - code).toHaveProperty("timeout");
+      expect(config.frontalCode).toHaveProperty("apiUrl");
+      expect(config.frontalCode).toHaveProperty("timeout");
 
       expect(config.app).toHaveProperty("nodeEnv");
       expect(config.app).toHaveProperty("logLevel");
@@ -112,8 +112,8 @@ describe("Environment Variables", () => {
       expect(config.slack.botToken).toBe(env.SLACK_BOT_TOKEN);
       expect(config.slack.appToken).toBe(env.SLACK_APP_TOKEN);
       expect(config.slack.signingSecret).toBe(env.SLACK_SIGNING_SECRET);
-      expect(config.frontal - code.apiUrl).toBe(env.FCODE_API_URL);
-      expect(config.frontal - code.timeout).toBe(env.FCODE_API_TIMEOUT);
+      expect(config.frontalCode.apiUrl).toBe(env.FCODE_API_URL);
+      expect(config.frontalCode.timeout).toBe(env.FCODE_API_TIMEOUT);
       expect(config.app.nodeEnv).toBe(env.NODE_ENV);
       expect(config.app.logLevel).toBe(env.LOG_LEVEL);
       expect(config.app.port).toBe(env.PORT);
@@ -161,7 +161,7 @@ describe("Environment Variables", () => {
       expect(freshEnv.MAX_CONCURRENT_TASKS).toBe(7);
       expect(freshEnv.TASK_TIMEOUT).toBe(120000);
       expect(freshEnv.HEALTH_CHECK_INTERVAL).toBe(15000);
-      expect(config.frontal - code.timeout).toBe(45000);
+      expect(config.frontalCode.timeout).toBe(45000);
       expect(config.app.port).toBe(4567);
     });
 

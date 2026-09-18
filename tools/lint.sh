@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Frontal Frontal Code — monorepo linter.
+# Frontal Code — monorepo linter.
 #
 # Runs Biome (TS/JS/JSON/YAML) and Rust clippy. Any failed check fails the run;
 # missing tooling is a hard error. Accepts a target path relative to the repo

@@ -680,7 +680,7 @@ Structured error handling with:
 
 ### Bazel Monorepo Architecture
 
-This section describes the **Bazel build foundation** for Frontal Frontal Code. It is
+This section describes the **Bazel build foundation** for Frontal Code. It is
 deliberately decoupled from application source: all build infrastructure lives
 under `bazel/` and `third_party/`, and `MODULE.bazel` is the single source of
 truth (no `WORKSPACE` file — Bzlmod only).

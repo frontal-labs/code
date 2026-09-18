@@ -1697,7 +1697,7 @@ async fn generic_oauth_authorize(
             created_at: Instant::now(),
         },
     );
-    states.retain(|_, v| v.created_at.elapsed() < Duration::from_secs(600));
+    states.retain(|_, v| v.created_at.elapsed() < Duration::from_mins(10));
 
     let scope = oauth.scopes.join(",");
     let authorize_url = format!(
@@ -5508,9 +5508,9 @@ mod tests {
         let state = Arc::new(ServerState::with_lane_transport_and_policy_rules(
             DEFAULT_EVENT_REPLAY_LIMIT,
             Arc::new(InMemoryLaneWorkerTransport::default()),
-            Duration::from_secs(120),
-            Some(Duration::from_secs(60)),
-            Some(Duration::from_secs(600)),
+            Duration::from_mins(2),
+            Some(Duration::from_mins(1)),
+            Some(Duration::from_mins(10)),
             vec![OrphanPolicyRule {
                 repository: Some("repo-ops".to_string()),
                 source: Some("slack".to_string()),
@@ -5551,7 +5551,7 @@ mod tests {
         let state = Arc::new(ServerState::with_lane_transport_and_policy_rules(
             DEFAULT_EVENT_REPLAY_LIMIT,
             Arc::new(InMemoryLaneWorkerTransport::default()),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
             None,
             vec![OrphanPolicyRule {
@@ -6396,7 +6396,7 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
             None,
         ));
@@ -6513,9 +6513,9 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
-            Some(Duration::from_secs(60)),
+            Some(Duration::from_mins(1)),
         ));
         let router = app(state.clone());
 
@@ -6609,8 +6609,8 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
-            Some(Duration::from_secs(60)),
+            Duration::from_mins(5),
+            Some(Duration::from_mins(1)),
             None,
         ));
         let router = app(state.clone());
@@ -6706,8 +6706,8 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(120),
-            Some(Duration::from_secs(60)),
+            Duration::from_mins(2),
+            Some(Duration::from_mins(1)),
             None,
         ));
         let router = app(state.clone());
@@ -6791,7 +6791,7 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
             None,
             vec![OrphanPolicyRule {

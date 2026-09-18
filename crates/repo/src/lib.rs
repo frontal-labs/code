@@ -9,6 +9,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+#[allow(clippy::duration_suboptimal_units)]
 const GIT_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Spawn a child and wait for it to complete with a timeout, collecting stdout + stderr.

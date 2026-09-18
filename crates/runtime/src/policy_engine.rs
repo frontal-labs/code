@@ -2,6 +2,7 @@ use std::time::Duration;
 
 pub type GreenLevel = u8;
 
+#[allow(clippy::duration_suboptimal_units)]
 const STALE_BRANCH_THRESHOLD: Duration = Duration::from_secs(3600);
 
 #[derive(Debug, Clone, PartialEq, Eq)]

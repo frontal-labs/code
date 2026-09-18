@@ -34,13 +34,12 @@ fn make_status(
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_with_off_filesystem_mode() {
     let status = make_status(FilesystemIsolationMode::Off, false, false, vec![]);
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.contains("(allow default)"));
@@ -50,7 +49,6 @@ fn profile_with_off_filesystem_mode() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_with_workspace_only_and_allowlist_mounts() {
     let status = make_status(
         FilesystemIsolationMode::WorkspaceOnly,
@@ -58,10 +56,10 @@ fn profile_with_workspace_only_and_allowlist_mounts() {
         true,
         vec!["/extra/mount".to_string()],
     );
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.contains("(deny file-write*)"));
@@ -72,7 +70,6 @@ fn profile_with_workspace_only_and_allowlist_mounts() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_with_allow_list_mode() {
     let status = make_status(
         FilesystemIsolationMode::AllowList,
@@ -80,10 +77,10 @@ fn profile_with_allow_list_mode() {
         true,
         vec!["/data".to_string(), "/logs".to_string()],
     );
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.contains("(deny file-write*)"));
@@ -95,13 +92,12 @@ fn profile_with_allow_list_mode() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_with_network_isolation() {
     let status = make_status(FilesystemIsolationMode::Off, true, false, vec![]);
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.contains("(deny network*)"));
@@ -111,13 +107,12 @@ fn profile_with_network_isolation() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_with_both_network_and_filesystem_isolation() {
     let status = make_status(FilesystemIsolationMode::WorkspaceOnly, true, true, vec![]);
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.contains("(deny network*)"));
@@ -128,13 +123,12 @@ fn profile_with_both_network_and_filesystem_isolation() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_starts_with_version_and_allow_default() {
     let status = make_status(FilesystemIsolationMode::WorkspaceOnly, false, true, vec![]);
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.starts_with("(version 1) (allow default)"));
@@ -143,7 +137,6 @@ fn profile_starts_with_version_and_allow_default() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_handles_paths_with_special_characters() {
     let status = make_status(
         FilesystemIsolationMode::WorkspaceOnly,
@@ -151,26 +144,24 @@ fn profile_handles_paths_with_special_characters() {
         true,
         vec!["/path/with\"quotes".to_string()],
     );
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
-            // The quote should be escaped in the sandbox profile
             assert!(profile.contains("with\\\"quotes"));
         }
     }
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_with_no_writable_mounts_in_workspace_only() {
     let status = make_status(FilesystemIsolationMode::WorkspaceOnly, false, true, vec![]);
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.contains("(allow file-write* (subpath \"/workspace\"))"));
@@ -179,17 +170,15 @@ fn profile_with_no_writable_mounts_in_workspace_only() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn profile_with_allow_list_and_no_mounts_grants_no_writes() {
     let status = make_status(FilesystemIsolationMode::AllowList, false, true, vec![]);
-    let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
 
     #[cfg(target_os = "macos")]
     {
+        let result = build_macos_sandbox_command("echo test", Path::new("/workspace"), &status);
         if let Some(cmd) = result {
             let profile = &cmd.args[1];
             assert!(profile.contains("(deny file-write*)"));
-            // No (allow file-write*) entries since there are no mounts
             let allow_count = profile.matches("(allow file-write*").count();
             assert_eq!(allow_count, 0);
         }

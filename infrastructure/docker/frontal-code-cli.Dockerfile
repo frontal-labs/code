@@ -21,6 +21,7 @@ WORKDIR /workspace
 # Copy Cargo files
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
+COPY tests/ ./tests/
 
 # Build the application
 RUN cargo build --release -p cli -p frontal-code-server

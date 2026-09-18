@@ -1,8 +1,8 @@
 import { App } from "@slack/bolt";
 import { FrontalCodeApiClient } from "./api-client";
 import { config } from "./config";
-import { logger } from "./log";
 import { FrontalCodeEventsClient } from "./frontal-code-events";
+import { logger } from "./log";
 import type {
   FrontalCodeAppliedOrphanPolicy,
   FrontalCodeApprovalAction,
@@ -42,8 +42,12 @@ interface SlackMessagePayload {
 // Pure Slack interface - WebSocket connection to Slack, talks to Frontal Code AI
 export class SlackInterface {
   private readonly app: App;
-  private readonly frontal-codeApi: FrontalCodeApiClient;
-  private readonly frontal-codeEvents: FrontalCodeEventsClient;
+  private readonly frontal;
+  -
+  codeApi: FrontalCodeApiClient;
+  private readonly frontal;
+  -
+  codeEvents: FrontalCodeEventsClient;
   private readonly trackedTasks = new Map<string, FrontalCodeTrackedTask>();
   private readonly approvalMessageTsByTask = new Map<string, string>();
   private readonly approvalInFlight = new Set<string>();
@@ -61,12 +65,13 @@ export class SlackInterface {
 
     this.frontal-codeApi = new FrontalCodeApiClient();
     this.frontal-codeEvents = new FrontalCodeEventsClient(
-      (query) => this.frontal-codeApi.getEventsWebSocketUrl(query),
-      () => this.frontal-codeApi.getEventsWebSocketHeaders()
+      (query) => this.frontal - codeApi.getEventsWebSocketUrl(query),
+      () => this.frontal - codeApi.getEventsWebSocketHeaders()
     );
-    this.frontal-codeEvents.onTrackedTaskEvent(async (event, task) => {
-      await this.handleFrontalCodeTaskEvent(event, task);
-    });
+    this.frontal -
+      codeEvents.onTrackedTaskEvent(async (event, task) => {
+        await this.handleFrontalCodeTaskEvent(event, task);
+      });
     this.setupEventHandlers();
   }
 
@@ -85,13 +90,15 @@ export class SlackInterface {
       }
 
       const threadTs = slackMessage.thread_ts || slackMessage.ts;
-      const task = await this.frontal-codeApi.createTask({
-        prompt: slackMessage.text,
-        user_id: slackMessage.user,
-        channel_id: slackMessage.channel,
-        thread_ts: threadTs,
-        source: "slack",
-      });
+      const task =
+        (await this.frontal) -
+        codeApi.createTask({
+          prompt: slackMessage.text,
+          user_id: slackMessage.user,
+          channel_id: slackMessage.channel,
+          thread_ts: threadTs,
+          source: "slack",
+        });
 
       await this.registerTask(
         task,
@@ -110,7 +117,8 @@ export class SlackInterface {
       const policyQuery = this.parseOrphanPolicyCommand(command.text);
       if (policyQuery) {
         try {
-          const policy = await this.frontal-codeApi.getOrphanPolicy(policyQuery);
+          const policy =
+            (await this.frontal) - codeApi.getOrphanPolicy(policyQuery);
           await ack(this.buildOrphanPolicyCommandResponse(policy));
         } catch (error) {
           await ack({
@@ -123,12 +131,14 @@ export class SlackInterface {
 
       await ack();
 
-      const task = await this.frontal-codeApi.createTask({
-        prompt: command.text,
-        user_id: command.user_id,
-        channel_id: command.channel_id,
-        source: "slack",
-      });
+      const task =
+        (await this.frontal) -
+        codeApi.createTask({
+          prompt: command.text,
+          user_id: command.user_id,
+          channel_id: command.channel_id,
+          source: "slack",
+        });
 
       await this.registerTask(
         task,
@@ -154,11 +164,12 @@ export class SlackInterface {
     this.app.event(/.*/, async ({ event }) => {
       // Forward events to Frontal Code AI for processing
       const slackEvent = event as { type: string; user?: string };
-      await this.frontal-codeApi.sendConnectorEvent("slack", {
-        type: slackEvent.type,
-        userId: slackEvent.user || "",
-        data: event,
-      });
+      (await this.frontal) -
+        codeApi.sendConnectorEvent("slack", {
+          type: slackEvent.type,
+          userId: slackEvent.user || "",
+          data: event,
+        });
     });
   }
 
@@ -167,7 +178,7 @@ export class SlackInterface {
     try {
       await this.syncTrackedTasksFromFrontalCode();
       await this.app.start();
-      await this.frontal-codeEvents.connect();
+      (await this.frontal) - codeEvents.connect();
       logger.info("Slack WebSocket interface connected");
     } catch (error) {
       logger.error("Failed to connect to Slack", error as Error);
@@ -178,7 +189,7 @@ export class SlackInterface {
   // Disconnect WebSocket
   async disconnect(): Promise<void> {
     try {
-      await this.frontal-codeEvents.disconnect();
+      (await this.frontal) - codeEvents.disconnect();
       await this.app.stop();
       logger.info("Slack WebSocket interface disconnected");
     } catch (error) {
@@ -194,11 +205,12 @@ export class SlackInterface {
         (
           this.app as unknown as { isListening?: () => boolean }
         ).isListening?.() || false;
-      const frontal-codeConnected = await this.frontal-codeApi.healthCheck();
+      const frontal;
+      -codeConnected = (await this.frontal) - codeApi.healthCheck();
 
       return {
         slack: slackConnected,
-        frontal_code: frontal-codeConnected,
+        frontal_code: frontal - codeConnected,
       };
     } catch (error) {
       logger.error("Health check failed", error as Error);
@@ -227,20 +239,24 @@ export class SlackInterface {
     };
     this.upsertTrackedTask(nextTask);
     try {
-      await this.frontal-codeApi.updateTaskContext({
-        taskId: nextTask.taskId,
-        source: "slack",
-        user_id: nextTask.userId,
-        channel_id: nextTask.channelId,
-        thread_ts: nextTask.threadTs,
-      });
+      (await this.frontal) -
+        codeApi.updateTaskContext({
+          taskId: nextTask.taskId,
+          source: "slack",
+          user_id: nextTask.userId,
+          channel_id: nextTask.channelId,
+          thread_ts: nextTask.threadTs,
+        });
     } catch (error) {
-      logger.warn("Failed to persist Slack task thread anchor to Frontal Code", {
-        taskId: nextTask.taskId,
-        error: (error as Error).message,
-      });
+      logger.warn(
+        "Failed to persist Slack task thread anchor to Frontal Code",
+        {
+          taskId: nextTask.taskId,
+          error: (error as Error).message,
+        }
+      );
     }
-    this.frontal-codeEvents.trackTask(nextTask);
+    this.frontal - codeEvents.trackTask(nextTask);
   }
 
   private async handleSlackAction(
@@ -256,12 +272,14 @@ export class SlackInterface {
       return;
     }
 
-    const response = await this.frontal-codeApi.sendConnectorInteraction("slack", {
-      action: action.action_id,
-      value: action.value,
-      userId: body.user.id,
-      context: body,
-    });
+    const response =
+      (await this.frontal) -
+      codeApi.sendConnectorInteraction("slack", {
+        action: action.action_id,
+        value: action.value,
+        userId: body.user.id,
+        context: body,
+      });
 
     await this.app.client.chat.update({
       channel: body.channel.id,
@@ -295,7 +313,9 @@ export class SlackInterface {
       return;
     }
 
-    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(".retry")
+    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(
+      ".retry"
+    )
       ? "retry"
       : "cancel";
     const approvalTs =
@@ -332,13 +352,15 @@ export class SlackInterface {
     );
 
     try {
-      const task = await this.frontal-codeApi.resolveTaskApproval({
-        taskId,
-        approvalKind: "orphaned_hosted_agent",
-        action: actionName,
-        resolvedBy: body.user.id,
-        reason: "resolved from Slack approval action",
-      });
+      const task =
+        (await this.frontal) -
+        codeApi.resolveTaskApproval({
+          taskId,
+          approvalKind: "orphaned_hosted_agent",
+          action: actionName,
+          resolvedBy: body.user.id,
+          reason: "resolved from Slack approval action",
+        });
 
       this.approvalInFlight.delete(taskId);
       this.approvalResolved.add(taskId);
@@ -374,7 +396,9 @@ export class SlackInterface {
     if (!taskId) {
       return;
     }
-    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(".retry")
+    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(
+      ".retry"
+    )
       ? "retry"
       : "ack";
     const approvalTs =
@@ -402,12 +426,14 @@ export class SlackInterface {
 
     this.approvalInFlight.add(taskId);
     try {
-      const result = await this.frontal-codeApi.resolveTaskApproval({
-        taskId,
-        approvalKind: "github_review_followup",
-        action: actionName,
-        resolvedBy: body.user.name || body.user.id,
-      });
+      const result =
+        (await this.frontal) -
+        codeApi.resolveTaskApproval({
+          taskId,
+          approvalKind: "github_review_followup",
+          action: actionName,
+          resolvedBy: body.user.name || body.user.id,
+        });
       this.approvalResolved.add(taskId);
       this.approvalInFlight.delete(taskId);
       await this.updateApprovalMessage(
@@ -494,14 +520,15 @@ export class SlackInterface {
     if (event.event === "approval.requested") {
       this.approvalMessageTsByTask.set(nextTask.taskId, response.ts as string);
       try {
-        await this.frontal-codeApi.updateTaskContext({
-          taskId: nextTask.taskId,
-          source: "slack",
-          user_id: nextTask.userId,
-          channel_id: nextTask.channelId,
-          thread_ts: nextTask.threadTs,
-          approval_message_ts: response.ts as string,
-        });
+        (await this.frontal) -
+          codeApi.updateTaskContext({
+            taskId: nextTask.taskId,
+            source: "slack",
+            user_id: nextTask.userId,
+            channel_id: nextTask.channelId,
+            thread_ts: nextTask.threadTs,
+            approval_message_ts: response.ts as string,
+          });
       } catch (error) {
         logger.warn(
           "Failed to persist Slack approval message linkage to Frontal Code",
@@ -523,7 +550,9 @@ export class SlackInterface {
     fallbackText: string
   ): Promise<void> {
     const payload = event.payload;
-    if (!payload) return;
+    if (!payload) {
+      return;
+    }
 
     const hasLinear =
       payload.linear_issue_id ||
@@ -533,22 +562,27 @@ export class SlackInterface {
       payload.graphite_stack_id ||
       payload.graphite_head_branch ||
       payload.graphite_base_branch;
-    if (!hasLinear && !hasGraphite) return;
+    if (!hasLinear && !hasGraphite) {
+      return;
+    }
 
     const message =
       this.buildExternalStatusMessage(event) ?? fallbackText ?? undefined;
-    if (!message) return;
+    if (!message) {
+      return;
+    }
 
     if (hasLinear) {
       try {
-        await this.frontal-codeApi.postLinearStatus({
-          issueId: payload.linear_issue_id,
-          identifier: payload.linear_issue_identifier,
-          url: payload.linear_issue_url,
-          state: payload.linear_issue_state,
-          taskId: event.task_id,
-          message,
-        });
+        (await this.frontal) -
+          codeApi.postLinearStatus({
+            issueId: payload.linear_issue_id,
+            identifier: payload.linear_issue_identifier,
+            url: payload.linear_issue_url,
+            state: payload.linear_issue_state,
+            taskId: event.task_id,
+            message,
+          });
       } catch (error) {
         logger.warn("Failed to post Linear status", {
           error: (error as Error).message,
@@ -558,13 +592,14 @@ export class SlackInterface {
 
     if (hasGraphite) {
       try {
-        await this.frontal-codeApi.postGraphiteStatus({
-          stackId: payload.graphite_stack_id,
-          headBranch: payload.graphite_head_branch,
-          baseBranch: payload.graphite_base_branch,
-          taskId: event.task_id,
-          message,
-        });
+        (await this.frontal) -
+          codeApi.postGraphiteStatus({
+            stackId: payload.graphite_stack_id,
+            headBranch: payload.graphite_head_branch,
+            baseBranch: payload.graphite_base_branch,
+            taskId: event.task_id,
+            message,
+          });
       } catch (error) {
         logger.warn("Failed to post Graphite status", {
           error: (error as Error).message,
@@ -606,12 +641,12 @@ export class SlackInterface {
     const eventTask = this.readTrackedTaskFromEventSummary(taskId, event);
     if (eventTask) {
       this.upsertTrackedTask(eventTask);
-      this.frontal-codeEvents.trackTask(eventTask);
+      this.frontal - codeEvents.trackTask(eventTask);
       return eventTask;
     }
 
     try {
-      const snapshot = await this.frontal-codeApi.getTask(taskId);
+      const snapshot = (await this.frontal) - codeApi.getTask(taskId);
       const snapshotTask = this.toTrackedTask(snapshot);
       if (!snapshotTask) {
         return undefined;
@@ -624,13 +659,16 @@ export class SlackInterface {
         );
       }
       this.upsertTrackedTask(snapshotTask);
-      this.frontal-codeEvents.trackTask(snapshotTask);
+      this.frontal - codeEvents.trackTask(snapshotTask);
       return snapshotTask;
     } catch (error) {
-      logger.warn("Failed to resolve Slack task routing from Frontal Code event", {
-        taskId,
-        error: (error as Error).message,
-      });
+      logger.warn(
+        "Failed to resolve Slack task routing from Frontal Code event",
+        {
+          taskId,
+          error: (error as Error).message,
+        }
+      );
       return undefined;
     }
   }
@@ -675,8 +713,7 @@ export class SlackInterface {
         return this.formatLaneBlockedEvent(taskLabel, event);
       case "lane.green": {
         const payload = event.payload as Record<string, unknown> | undefined;
-        const resultText =
-          (payload?.result as string) || task.result || "";
+        const resultText = (payload?.result as string) || task.result || "";
         const truncated =
           resultText && resultText.length > 2800
             ? resultText.substring(0, 2800) + "\n\n... (truncated)"
@@ -1059,7 +1096,10 @@ export class SlackInterface {
     };
   }
 
-  private describeTask(taskId: string, summary: FrontalCodeEventTaskSummary): string {
+  private describeTask(
+    taskId: string,
+    summary: FrontalCodeEventTaskSummary
+  ): string {
     if (summary.repository) {
       return `Task ${taskId} (${summary.repository})`;
     }
@@ -1100,7 +1140,9 @@ export class SlackInterface {
     return query;
   }
 
-  private buildOrphanPolicyCommandResponse(policy: FrontalCodeOrphanPolicyResponse): {
+  private buildOrphanPolicyCommandResponse(
+    policy: FrontalCodeOrphanPolicyResponse
+  ): {
     response_type: "ephemeral";
     text: string;
     blocks: SlackBlock[];
@@ -1304,10 +1346,12 @@ export class SlackInterface {
 
   private async syncTrackedTasksFromFrontalCode(): Promise<void> {
     try {
-      const activeTasks = await this.frontal-codeApi.listTasks({
-        source: "slack",
-        status: "pending,running",
-      });
+      const activeTasks =
+        (await this.frontal) -
+        codeApi.listTasks({
+          source: "slack",
+          status: "pending,running",
+        });
 
       let merged = 0;
       for (const task of activeTasks) {
@@ -1327,7 +1371,7 @@ export class SlackInterface {
           );
         }
         this.syncDerivedApprovalState(task);
-        this.frontal-codeEvents.trackTask(trackedTask);
+        this.frontal - codeEvents.trackTask(trackedTask);
       }
 
       logger.info("Synchronized Slack tasks from Frontal Code", {
@@ -1374,7 +1418,9 @@ export class SlackInterface {
     this.trackedTasks.set(task.taskId, mergedTask);
   }
 
-  private sanitizeTrackedTask(task: FrontalCodeTrackedTask): FrontalCodeTrackedTask {
+  private sanitizeTrackedTask(
+    task: FrontalCodeTrackedTask
+  ): FrontalCodeTrackedTask {
     return {
       taskId: task.taskId,
       channelId: task.channelId,
@@ -1397,7 +1443,7 @@ export class SlackInterface {
 
   private async cleanupTaskState(taskId: string): Promise<void> {
     this.trackedTasks.delete(taskId);
-    this.frontal-codeEvents.untrackTask(taskId);
+    this.frontal - codeEvents.untrackTask(taskId);
     this.approvalMessageTsByTask.delete(taskId);
     this.approvalInFlight.delete(taskId);
     this.approvalResolved.delete(taskId);

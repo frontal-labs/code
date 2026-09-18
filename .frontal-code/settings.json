@@ -209,8 +209,8 @@
   "version": "1.0",
   "providers": {
     "anthropic": {
-      "api_key": "${FCODE_API_KEY}",
-      "base_url": "${FCODE_BASE_URL:-https://api.anthropic.com}",
+      "api_key": "${FRONTAL_API_KEY}",
+      "base_url": "${FRONTAL_BASE_URL:-https://api.anthropic.com}",
       "default_model": "claude-opus-5"
     },
     "openai": {
@@ -225,7 +225,7 @@
     },
     "frontal": {
       "api_key": "${FRONTAL_API_KEY}",
-      "base_url": "${FRONTAL_BASE_URL:-https://api.frontal.ai/v1}",
+      "base_url": "${FRONTAL_BASE_URL:-https://api.frontal.dev/v1}",
       "default_model": "frontal-code-proxy"
     }
   },
@@ -262,9 +262,9 @@
     "temperature": 0.7,
     "timeout": 300,
     "log_level": "info",
-    "max_concurrent_requests": 5
-  },
-  "prompts": {
+     "max_concurrent_requests": 5
+   },
+   "prompts": {
     "system": "You are Frontal Code, a helpful AI engineering assistant that keeps the repository structure intact.",
     "user_context": "repo: {repo}\nbranch: {branch}\nirrelevant_files: {irrelevant_files}",
     "tool_use_template": "Using tool: {tool} args: {args}"

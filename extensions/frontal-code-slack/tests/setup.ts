@@ -1,44 +1,44 @@
-import { vi } from 'vitest';
-import { setupServer } from 'msw/node';
-import { http, HttpResponse } from 'msw';
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { vi } from "vitest";
 
 // Mock environment variables
-process.env.NODE_ENV = 'test';
-process.env.LOG_LEVEL = 'error';
-process.env.SLACK_BOT_TOKEN = 'xoxb-test-token';
-process.env.SLACK_APP_TOKEN = 'xapp-test-token';
-process.env.SLACK_SIGNING_SECRET = 'test-signing-secret-with-at-least-32-chars';
-process.env.FCODE_API_URL = 'http://localhost:8787';
-process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db';
-process.env.REDIS_URL = 'redis://localhost:6379';
+process.env.NODE_ENV = "test";
+process.env.LOG_LEVEL = "error";
+process.env.SLACK_BOT_TOKEN = "xoxb-test-token";
+process.env.SLACK_APP_TOKEN = "xapp-test-token";
+process.env.SLACK_SIGNING_SECRET = "test-signing-secret-with-at-least-32-chars";
+process.env.FCODE_API_URL = "http://localhost:8787";
+process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test_db";
+process.env.REDIS_URL = "redis://localhost:6379";
 
 // MSW server for mocking HTTP requests
 export const server = setupServer(
   // Mock Frontal Code API endpoints
-  http.post('http://localhost:8787/v1/prompt', () => {
+  http.post("http://localhost:8787/v1/prompt", () => {
     return HttpResponse.json({
       ok: true,
       exit_code: 0,
-      args: ['prompt', 'test'],
+      args: ["prompt", "test"],
       duration_ms: 1000,
-      stdout: 'Task completed successfully',
-      stderr: '',
+      stdout: "Task completed successfully",
+      stderr: "",
     });
   }),
-  
-  http.get('http://localhost:8787/health', () => {
+
+  http.get("http://localhost:8787/health", () => {
     return HttpResponse.json({
-      status: 'healthy',
+      status: "healthy",
       uptime: 3600,
-      version: '1.0.0',
+      version: "1.0.0",
     });
   }),
-  
-  http.get('http://localhost:8787/v1/status', () => {
+
+  http.get("http://localhost:8787/v1/status", () => {
     return HttpResponse.json({
       system: {
-        status: 'healthy',
-        version: '1.0.0',
+        status: "healthy",
+        version: "1.0.0",
         uptime: 3600,
       },
       agents: {
@@ -52,50 +52,50 @@ export const server = setupServer(
       },
     });
   }),
-  
-  http.get('http://localhost:8787/v1/sandbox', () => {
+
+  http.get("http://localhost:8787/v1/sandbox", () => {
     return HttpResponse.json({
-      status: 'ready',
+      status: "ready",
       workspaces: 1,
       active_sessions: 0,
     });
   }),
-  
-  http.get('http://localhost:8787/v1/version', () => {
+
+  http.get("http://localhost:8787/v1/version", () => {
     return HttpResponse.json({
-      version: '1.0.0',
-      commit: 'abc123',
-      build_time: '2024-01-01T00:00:00Z',
+      version: "1.0.0",
+      commit: "abc123",
+      build_time: "2024-01-01T00:00:00Z",
     });
   }),
-  
+
   // Mock Slack API endpoints
-  http.post('https://slack.com/api/auth.test', () => {
+  http.post("https://slack.com/api/auth.test", () => {
     return HttpResponse.json({
       ok: true,
-      user: 'test-bot',
-      team: 'test-team',
-      bot_id: 'B123456',
+      user: "test-bot",
+      team: "test-team",
+      bot_id: "B123456",
     });
-  }),
+  })
 );
 
 // Global test setup
 beforeAll(() => {
   // Start MSW server
   server.listen();
-  
+
   // Mock console methods to reduce noise in tests
-  vi.spyOn(console, 'log').mockImplementation(() => {});
-  vi.spyOn(console, 'info').mockImplementation(() => {});
-  vi.spyOn(console, 'warn').mockImplementation(() => {});
-  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterAll(() => {
   // Close MSW server
   server.close();
-  
+
   // Restore console mocks
   vi.restoreAllMocks();
 });
@@ -107,55 +107,55 @@ afterEach(() => {
 
 // Global test utilities
 export const createMockSlackCommand = (overrides = {}) => ({
-  token: 'test-token',
-  team_id: 'T123456',
-  team_domain: 'test-team',
-  channel_id: 'C123456',
-  channel_name: 'general',
-  user_id: 'U123456',
-  user_name: 'test-user',
-  command: '/frontal-code-create',
-  text: 'Test task description',
-  response_url: 'https://hooks.slack.com/test',
-  trigger_id: 'trigger-123',
+  token: "test-token",
+  team_id: "T123456",
+  team_domain: "test-team",
+  channel_id: "C123456",
+  channel_name: "general",
+  user_id: "U123456",
+  user_name: "test-user",
+  command: "/frontal-code-create",
+  text: "Test task description",
+  response_url: "https://hooks.slack.com/test",
+  trigger_id: "trigger-123",
   ...overrides,
 });
 
 export const createMockSlackInteraction = (overrides = {}) => ({
-  type: 'interactive_message',
-  token: 'test-token',
-  action_ts: '1640995200.000000',
+  type: "interactive_message",
+  token: "test-token",
+  action_ts: "1640995200.000000",
   team: {
-    id: 'T123456',
-    domain: 'test-team',
+    id: "T123456",
+    domain: "test-team",
   },
   user: {
-    id: 'U123456',
-    name: 'test-user',
+    id: "U123456",
+    name: "test-user",
   },
   channel: {
-    id: 'C123456',
-    name: 'general',
+    id: "C123456",
+    name: "general",
   },
   actions: [
     {
-      name: 'task_cancel',
-      type: 'button',
-      value: 'task-123',
+      name: "task_cancel",
+      type: "button",
+      value: "task-123",
     },
   ],
   ...overrides,
 });
 
 export const createMockTaskCreationRequest = (overrides = {}) => ({
-  prompt: 'Test task description',
-  repository: 'test-org/test-repo',
-  branch: 'main',
-  model: 'claude-3-sonnet',
-  provider: 'anthropic',
-  permission_mode: 'auto',
-  allowed_tools: ['file_system', 'git'],
-  priority: 'medium',
+  prompt: "Test task description",
+  repository: "test-org/test-repo",
+  branch: "main",
+  model: "claude-3-sonnet",
+  provider: "anthropic",
+  permission_mode: "auto",
+  allowed_tools: ["file_system", "git"],
+  priority: "medium",
   ...overrides,
 });
 
@@ -172,19 +172,19 @@ export const createMockSlackTask = (overrides = {}) => ({
 });
 
 export const createMockSlackUser = (overrides = {}) => ({
-  id: '123',
-  slack_user_id: 'U123456',
+  id: "123",
+  slack_user_id: "U123456",
   preferences: {
-    default_model: 'claude-3-sonnet',
-    default_provider: 'anthropic',
-    notification_level: 'important',
+    default_model: "claude-3-sonnet",
+    default_provider: "anthropic",
+    notification_level: "important",
     auto_merge: false,
   },
   permissions: {
     can_create_tasks: true,
     can_cancel_tasks: true,
     can_view_all_tasks: false,
-    repositories: ['test-org/test-repo'],
+    repositories: ["test-org/test-repo"],
   },
   created_at: new Date(),
   updated_at: new Date(),
@@ -196,29 +196,29 @@ export const mockFrontalCodeApiClient = {
   submitPrompt: vi.fn().mockResolvedValue({
     ok: true,
     exit_code: 0,
-    args: ['prompt', 'test'],
+    args: ["prompt", "test"],
     duration_ms: 1000,
-    stdout: 'Task completed successfully',
-    stderr: '',
+    stdout: "Task completed successfully",
+    stderr: "",
   }),
   runCliCommand: vi.fn().mockResolvedValue({
     ok: true,
     exit_code: 0,
-    args: ['test'],
+    args: ["test"],
     duration_ms: 500,
-    stdout: 'Command completed',
-    stderr: '',
+    stdout: "Command completed",
+    stderr: "",
   }),
   healthCheck: vi.fn().mockResolvedValue(true),
   checkSandboxStatus: vi.fn().mockResolvedValue({
-    status: 'ready',
+    status: "ready",
     workspaces: 1,
     active_sessions: 0,
   }),
   getVersion: vi.fn().mockResolvedValue({
-    version: '1.0.0',
-    commit: 'abc123',
-    build_time: '2024-01-01T00:00:00Z',
+    version: "1.0.0",
+    commit: "abc123",
+    build_time: "2024-01-01T00:00:00Z",
   }),
 };
 
@@ -244,13 +244,13 @@ export const mockRedisService = {
   connect: vi.fn().mockResolvedValue(undefined),
   disconnect: vi.fn().mockResolvedValue(undefined),
   healthCheck: vi.fn().mockResolvedValue(true),
-  set: vi.fn().mockResolvedValue('OK'),
-  get: vi.fn().mockResolvedValue('test-value'),
+  set: vi.fn().mockResolvedValue("OK"),
+  get: vi.fn().mockResolvedValue("test-value"),
   del: vi.fn().mockResolvedValue(1),
   exists: vi.fn().mockResolvedValue(true),
   expire: vi.fn().mockResolvedValue(true),
-  keys: vi.fn().mockResolvedValue(['key1', 'key2']),
-  flushAll: vi.fn().mockResolvedValue('OK'),
+  keys: vi.fn().mockResolvedValue(["key1", "key2"]),
+  flushAll: vi.fn().mockResolvedValue("OK"),
   cacheTask: vi.fn().mockResolvedValue(undefined),
   getCachedTask: vi.fn().mockResolvedValue(createMockSlackTask()),
   deleteCachedTask: vi.fn().mockResolvedValue(undefined),
@@ -271,9 +271,9 @@ export const mockTaskManager = {
   cancelTask: vi.fn().mockResolvedValue(undefined),
   getUserTasks: vi.fn().mockResolvedValue([createMockSlackTask()]),
   getTaskProgress: vi.fn().mockResolvedValue({
-    task_id: 'task-123',
-    status: 'running',
-    message: 'Task is in progress',
+    task_id: "task-123",
+    status: "running",
+    message: "Task is in progress",
     progress: 50,
     artifacts: [],
   }),
@@ -288,14 +288,14 @@ export const mockTaskManager = {
 export const mockConversationManager = {
   createContext: vi.fn().mockResolvedValue(undefined),
   getContext: vi.fn().mockResolvedValue({
-    channel_id: 'C123456',
-    thread_ts: '1640995200.000000',
-    user_id: 'U123456',
+    channel_id: "C123456",
+    thread_ts: "1640995200.000000",
+    user_id: "U123456",
     context: {
-      current_task: 'task-123',
-      repository: 'test-org/test-repo',
-      branch: 'main',
-      last_command: '/frontal-code-create',
+      current_task: "task-123",
+      repository: "test-org/test-repo",
+      branch: "main",
+      last_command: "/frontal-code-create",
       preferences: {},
     },
     created_at: new Date(),
@@ -318,16 +318,16 @@ export const mockSlackApp = {
     auth: {
       test: vi.fn().mockResolvedValue({
         ok: true,
-        user: 'test-bot',
-        team: 'test-team',
-        bot_id: 'B123456',
+        user: "test-bot",
+        team: "test-team",
+        bot_id: "B123456",
       }),
     },
     chat: {
       postMessage: vi.fn().mockResolvedValue({
         ok: true,
-        channel: 'C123456',
-        ts: '1640995200.000000',
+        channel: "C123456",
+        ts: "1640995200.000000",
       }),
     },
   },

@@ -1,52 +1,52 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SlackBotService } from '@/bot/slack-bot-service';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SlackBotService } from "@/bot/slack-bot-service";
 import {
   createMockSlackCommand,
   createMockSlackInteraction,
   createMockTaskCreationRequest,
-  mockFrontalCodeApiClient,
-  mockDatabaseService,
-  mockRedisService,
-  mockTaskManager,
   mockConversationManager,
+  mockDatabaseService,
+  mockFrontalCodeApiClient,
+  mockRedisService,
   mockSlackApp,
-} from '../setup';
+  mockTaskManager,
+} from "../setup";
 
 // Mock the dependencies
-vi.mock('@/services/frontal-code-api-client', () => ({
+vi.mock("@/services/frontal-code-api-client", () => ({
   FrontalCodeApiClient: vi.fn(() => mockFrontalCodeApiClient),
 }));
 
-vi.mock('@/services/database-service', () => ({
+vi.mock("@/services/database-service", () => ({
   DatabaseService: vi.fn(() => mockDatabaseService),
 }));
 
-vi.mock('@/services/redis-service', () => ({
+vi.mock("@/services/redis-service", () => ({
   RedisService: vi.fn(() => mockRedisService),
 }));
 
-vi.mock('@/services/task-manager', () => ({
+vi.mock("@/services/task-manager", () => ({
   TaskManager: vi.fn(() => mockTaskManager),
 }));
 
-vi.mock('@/services/conversation-manager', () => ({
+vi.mock("@/services/conversation-manager", () => ({
   ConversationManager: vi.fn(() => mockConversationManager),
 }));
 
-vi.mock('@/utils/config', () => ({
+vi.mock("@/utils/config", () => ({
   config: {
     slack: {
-      botToken: 'xoxb-test-token',
-      appToken: 'xapp-test-token',
-      signingSecret: 'test-signing-secret',
+      botToken: "xoxb-test-token",
+      appToken: "xapp-test-token",
+      signingSecret: "test-signing-secret",
     },
     app: {
-      logLevel: 'error',
+      logLevel: "error",
     },
   },
 }));
 
-vi.mock('@/utils/logger', () => ({
+vi.mock("@/utils/logger", () => ({
   logger: {
     error: vi.fn(),
     info: vi.fn(),
@@ -56,11 +56,11 @@ vi.mock('@/utils/logger', () => ({
   logSlackEvent: vi.fn(),
 }));
 
-vi.mock('@slack/bolt', () => ({
+vi.mock("@slack/bolt", () => ({
   App: vi.fn(() => mockSlackApp),
 }));
 
-describe('SlackBotService', () => {
+describe("SlackBotService", () => {
   let slackBotService: SlackBotService;
 
   beforeEach(() => {
@@ -68,45 +68,86 @@ describe('SlackBotService', () => {
     slackBotService = new SlackBotService();
   });
 
-  describe('Constructor', () => {
-    it('should initialize the Slack bot service', () => {
+  describe("Constructor", () => {
+    it("should initialize the Slack bot service", () => {
       expect(slackBotService).toBeInstanceOf(SlackBotService);
     });
 
-    it('should register all handlers', () => {
-      expect(mockSlackApp.command).toHaveBeenCalledWith('/frontal-code-create', expect.any(Function));
-      expect(mockSlackApp.command).toHaveBeenCalledWith('/frontal-code-status', expect.any(Function));
-      expect(mockSlackApp.command).toHaveBeenCalledWith('/frontal-code-list', expect.any(Function));
-      expect(mockSlackApp.command).toHaveBeenCalledWith('/frontal-code-pause', expect.any(Function));
-      expect(mockSlackApp.command).toHaveBeenCalledWith('/frontal-code-resume', expect.any(Function));
-      expect(mockSlackApp.command).toHaveBeenCalledWith('/frontal-code-cancel', expect.any(Function));
-      expect(mockSlackApp.command).toHaveBeenCalledWith('/frontal-code-help', expect.any(Function));
+    it("should register all handlers", () => {
+      expect(mockSlackApp.command).toHaveBeenCalledWith(
+        "/frontal-code-create",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith(
+        "/frontal-code-status",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith(
+        "/frontal-code-list",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith(
+        "/frontal-code-pause",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith(
+        "/frontal-code-resume",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith(
+        "/frontal-code-cancel",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith(
+        "/frontal-code-help",
+        expect.any(Function)
+      );
 
-      expect(mockSlackApp.message).toHaveBeenCalledWith('hello frontal-code', expect.any(Function));
-      expect(mockSlackApp.message).toHaveBeenCalledWith(/frontal-code (.+)/, expect.any(Function));
+      expect(mockSlackApp.message).toHaveBeenCalledWith(
+        "hello frontal-code",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.message).toHaveBeenCalledWith(
+        /frontal-code (.+)/,
+        expect.any(Function)
+      );
 
-      expect(mockSlackApp.action).toHaveBeenCalledWith('task_pause', expect.any(Function));
-      expect(mockSlackApp.action).toHaveBeenCalledWith('task_resume', expect.any(Function));
-      expect(mockSlackApp.action).toHaveBeenCalledWith('task_cancel', expect.any(Function));
+      expect(mockSlackApp.action).toHaveBeenCalledWith(
+        "task_pause",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.action).toHaveBeenCalledWith(
+        "task_resume",
+        expect.any(Function)
+      );
+      expect(mockSlackApp.action).toHaveBeenCalledWith(
+        "task_cancel",
+        expect.any(Function)
+      );
 
-      expect(mockSlackApp.event).toHaveBeenCalledWith('app_mention', expect.any(Function));
+      expect(mockSlackApp.event).toHaveBeenCalledWith(
+        "app_mention",
+        expect.any(Function)
+      );
     });
   });
 
-  describe('Command Handling', () => {
-    describe('Create Command', () => {
-      it('should handle valid create command successfully', async () => {
+  describe("Command Handling", () => {
+    describe("Create Command", () => {
+      it("should handle valid create command successfully", async () => {
         const command = createMockSlackCommand({
-          text: 'Fix the login bug',
+          text: "Fix the login bug",
         });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         // Mock successful task creation
         const mockTask = {
-          slack_task_id: 'task-123',
-          status: 'pending',
-          request: createMockTaskCreationRequest({ prompt: 'Fix the login bug' }),
+          slack_task_id: "task-123",
+          status: "pending",
+          request: createMockTaskCreationRequest({
+            prompt: "Fix the login bug",
+          }),
           created_at: new Date(),
           updated_at: new Date(),
         };
@@ -114,96 +155,100 @@ describe('SlackBotService', () => {
 
         // Get the handler function and call it
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-create'
+          ([cmd]) => cmd === "/frontal-code-create"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Task created successfully!',
+          text: "Task created successfully!",
           blocks: expect.arrayContaining([
             expect.objectContaining({
-              type: 'section',
+              type: "section",
               text: expect.objectContaining({
-                text: expect.stringContaining('task-123'),
+                text: expect.stringContaining("task-123"),
               }),
             }),
           ]),
-          response_type: 'in_channel',
+          response_type: "in_channel",
         });
       });
 
-      it('should handle invalid command with validation error', async () => {
-        const invalidCommand = createMockSlackCommand({ token: '' });
+      it("should handle invalid command with validation error", async () => {
+        const invalidCommand = createMockSlackCommand({ token: "" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-create'
+          ([cmd]) => cmd === "/frontal-code-create"
         )?.[1];
-        await handler({ command: invalidCommand, ack: mockAck, respond: mockRespond });
+        await handler({
+          command: invalidCommand,
+          ack: mockAck,
+          respond: mockRespond,
+        });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: expect.stringContaining('Invalid command:'),
-          response_type: 'ephemeral',
+          text: expect.stringContaining("Invalid command:"),
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle empty command text with usage help', async () => {
-        const command = createMockSlackCommand({ text: '' });
+      it("should handle empty command text with usage help", async () => {
+        const command = createMockSlackCommand({ text: "" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-create'
+          ([cmd]) => cmd === "/frontal-code-create"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: expect.stringContaining('Usage:'),
-          response_type: 'ephemeral',
+          text: expect.stringContaining("Usage:"),
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle task creation errors gracefully', async () => {
-        const command = createMockSlackCommand({ text: 'Test task' });
+      it("should handle task creation errors gracefully", async () => {
+        const command = createMockSlackCommand({ text: "Test task" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         // Mock task creation error
-        const error = new Error('Task creation failed');
+        const error = new Error("Task creation failed");
         mockTaskManager.createTask.mockRejectedValue(error);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-create'
+          ([cmd]) => cmd === "/frontal-code-create"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Failed to create task: Task creation failed',
-          response_type: 'ephemeral',
+          text: "Failed to create task: Task creation failed",
+          response_type: "ephemeral",
         });
       });
 
-      it('should parse task creation request with flags', async () => {
+      it("should parse task creation request with flags", async () => {
         const command = createMockSlackCommand({
-          text: 'Add user profile page --repository myorg/myapp --branch feature/profile --model claude-3-sonnet --provider anthropic',
+          text: "Add user profile page --repository myorg/myapp --branch feature/profile --model claude-3-sonnet --provider anthropic",
         });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const mockTask = {
-          slack_task_id: 'task-123',
-          status: 'pending',
+          slack_task_id: "task-123",
+          status: "pending",
           request: expect.objectContaining({
-            prompt: 'Add user profile page',
-            repository: 'myorg/myapp',
-            branch: 'feature/profile',
-            model: 'claude-3-sonnet',
-            provider: 'anthropic',
+            prompt: "Add user profile page",
+            repository: "myorg/myapp",
+            branch: "feature/profile",
+            model: "claude-3-sonnet",
+            provider: "anthropic",
           }),
           created_at: new Date(),
           updated_at: new Date(),
@@ -211,47 +256,47 @@ describe('SlackBotService', () => {
         mockTaskManager.createTask.mockResolvedValue(mockTask);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-create'
+          ([cmd]) => cmd === "/frontal-code-create"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockTaskManager.createTask).toHaveBeenCalledWith(
           command.user_id,
           expect.objectContaining({
-            prompt: 'Add user profile page',
-            repository: 'myorg/myapp',
-            branch: 'feature/profile',
-            model: 'claude-3-sonnet',
-            provider: 'anthropic',
+            prompt: "Add user profile page",
+            repository: "myorg/myapp",
+            branch: "feature/profile",
+            model: "claude-3-sonnet",
+            provider: "anthropic",
           })
         );
       });
     });
 
-    describe('Status Command', () => {
-      it('should handle status command with specific task ID', async () => {
-        const command = createMockSlackCommand({ text: 'task-123' });
+    describe("Status Command", () => {
+      it("should handle status command with specific task ID", async () => {
+        const command = createMockSlackCommand({ text: "task-123" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const mockTask = {
-          slack_task_id: 'task-123',
-          status: 'running',
+          slack_task_id: "task-123",
+          status: "running",
           request: createMockTaskCreationRequest(),
           created_at: new Date(),
           updated_at: new Date(),
         };
         mockTaskManager.getTask.mockResolvedValue(mockTask);
         mockTaskManager.getTaskProgress.mockResolvedValue({
-          task_id: 'task-123',
-          status: 'running',
-          message: 'Task is in progress',
+          task_id: "task-123",
+          status: "running",
+          message: "Task is in progress",
           progress: 50,
           artifacts: [],
         });
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-status'
+          ([cmd]) => cmd === "/frontal-code-status"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
@@ -260,37 +305,37 @@ describe('SlackBotService', () => {
           blocks: expect.arrayContaining([
             expect.objectContaining({
               text: expect.objectContaining({
-                text: expect.stringContaining('task-123'),
+                text: expect.stringContaining("task-123"),
               }),
             }),
           ]),
-          response_type: 'ephemeral',
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle status command without task ID (show most recent)', async () => {
-        const command = createMockSlackCommand({ text: '' });
+      it("should handle status command without task ID (show most recent)", async () => {
+        const command = createMockSlackCommand({ text: "" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const mockTask = {
-          slack_task_id: 'task-456',
-          status: 'completed',
+          slack_task_id: "task-456",
+          status: "completed",
           request: createMockTaskCreationRequest(),
           created_at: new Date(),
           updated_at: new Date(),
         };
         mockTaskManager.getUserTasks.mockResolvedValue([mockTask]);
         mockTaskManager.getTaskProgress.mockResolvedValue({
-          task_id: 'task-456',
-          status: 'completed',
-          message: 'Task completed successfully',
+          task_id: "task-456",
+          status: "completed",
+          message: "Task completed successfully",
           progress: 100,
           artifacts: [],
         });
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-status'
+          ([cmd]) => cmd === "/frontal-code-status"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
@@ -299,71 +344,71 @@ describe('SlackBotService', () => {
           blocks: expect.arrayContaining([
             expect.objectContaining({
               text: expect.objectContaining({
-                text: expect.stringContaining('task-456'),
+                text: expect.stringContaining("task-456"),
               }),
             }),
           ]),
-          response_type: 'ephemeral',
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle task not found', async () => {
-        const command = createMockSlackCommand({ text: 'nonexistent-task' });
+      it("should handle task not found", async () => {
+        const command = createMockSlackCommand({ text: "nonexistent-task" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         mockTaskManager.getTask.mockResolvedValue(null);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-status'
+          ([cmd]) => cmd === "/frontal-code-status"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Task `nonexistent-task` not found',
-          response_type: 'ephemeral',
+          text: "Task `nonexistent-task` not found",
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle no tasks found for user', async () => {
-        const command = createMockSlackCommand({ text: '' });
+      it("should handle no tasks found for user", async () => {
+        const command = createMockSlackCommand({ text: "" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         mockTaskManager.getUserTasks.mockResolvedValue([]);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-status'
+          ([cmd]) => cmd === "/frontal-code-status"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'No tasks found. Use `/frontal-code-create` to create a new task.',
-          response_type: 'ephemeral',
+          text: "No tasks found. Use `/frontal-code-create` to create a new task.",
+          response_type: "ephemeral",
         });
       });
     });
 
-    describe('List Command', () => {
-      it('should handle list command with tasks', async () => {
+    describe("List Command", () => {
+      it("should handle list command with tasks", async () => {
         const command = createMockSlackCommand();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const mockTasks = [
           {
-            slack_task_id: 'task-1',
-            status: 'completed',
-            request: createMockTaskCreationRequest({ prompt: 'First task' }),
+            slack_task_id: "task-1",
+            status: "completed",
+            request: createMockTaskCreationRequest({ prompt: "First task" }),
             created_at: new Date(),
             updated_at: new Date(),
           },
           {
-            slack_task_id: 'task-2',
-            status: 'running',
-            request: createMockTaskCreationRequest({ prompt: 'Second task' }),
+            slack_task_id: "task-2",
+            status: "running",
+            request: createMockTaskCreationRequest({ prompt: "Second task" }),
             created_at: new Date(),
             updated_at: new Date(),
           },
@@ -371,7 +416,7 @@ describe('SlackBotService', () => {
         mockTaskManager.getUserTasks.mockResolvedValue(mockTasks);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-list'
+          ([cmd]) => cmd === "/frontal-code-list"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
@@ -380,15 +425,15 @@ describe('SlackBotService', () => {
           blocks: expect.arrayContaining([
             expect.objectContaining({
               text: expect.objectContaining({
-                text: 'Your Recent Tasks',
+                text: "Your Recent Tasks",
               }),
             }),
           ]),
-          response_type: 'ephemeral',
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle list command with no tasks', async () => {
+      it("should handle list command with no tasks", async () => {
         const command = createMockSlackCommand();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
@@ -396,85 +441,88 @@ describe('SlackBotService', () => {
         mockTaskManager.getUserTasks.mockResolvedValue([]);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-list'
+          ([cmd]) => cmd === "/frontal-code-list"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'No tasks found. Use `/frontal-code-create` to create a new task.',
-          response_type: 'ephemeral',
+          text: "No tasks found. Use `/frontal-code-create` to create a new task.",
+          response_type: "ephemeral",
         });
       });
     });
 
-    describe('Cancel Command', () => {
-      it('should handle cancel command successfully', async () => {
-        const command = createMockSlackCommand({ text: 'task-123' });
+    describe("Cancel Command", () => {
+      it("should handle cancel command successfully", async () => {
+        const command = createMockSlackCommand({ text: "task-123" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         mockTaskManager.cancelTask.mockResolvedValue(undefined);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-cancel'
+          ([cmd]) => cmd === "/frontal-code-cancel"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
-        expect(mockTaskManager.cancelTask).toHaveBeenCalledWith('task-123', command.user_id);
+        expect(mockTaskManager.cancelTask).toHaveBeenCalledWith(
+          "task-123",
+          command.user_id
+        );
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Task `task-123` has been cancelled.',
-          response_type: 'in_channel',
+          text: "Task `task-123` has been cancelled.",
+          response_type: "in_channel",
         });
       });
 
-      it('should handle cancel command without task ID', async () => {
-        const command = createMockSlackCommand({ text: '' });
+      it("should handle cancel command without task ID", async () => {
+        const command = createMockSlackCommand({ text: "" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-cancel'
+          ([cmd]) => cmd === "/frontal-code-cancel"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Usage: `/frontal-code-cancel <task_id>`',
-          response_type: 'ephemeral',
+          text: "Usage: `/frontal-code-cancel <task_id>`",
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle cancel command errors', async () => {
-        const command = createMockSlackCommand({ text: 'task-123' });
+      it("should handle cancel command errors", async () => {
+        const command = createMockSlackCommand({ text: "task-123" });
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
-        const error = new Error('Task not found');
+        const error = new Error("Task not found");
         mockTaskManager.cancelTask.mockRejectedValue(error);
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-cancel'
+          ([cmd]) => cmd === "/frontal-code-cancel"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Failed to cancel task: Task not found',
-          response_type: 'ephemeral',
+          text: "Failed to cancel task: Task not found",
+          response_type: "ephemeral",
         });
       });
     });
 
-    describe('Help Command', () => {
-      it('should handle help command', async () => {
+    describe("Help Command", () => {
+      it("should handle help command", async () => {
         const command = createMockSlackCommand();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-help'
+          ([cmd]) => cmd === "/frontal-code-help"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
@@ -483,152 +531,162 @@ describe('SlackBotService', () => {
           blocks: expect.arrayContaining([
             expect.objectContaining({
               text: expect.objectContaining({
-                text: 'Frontal Code Slack Bot Help',
+                text: "Frontal Code Slack Bot Help",
               }),
             }),
             expect.objectContaining({
               text: expect.objectContaining({
-                text: expect.stringContaining('Available Commands:'),
+                text: expect.stringContaining("Available Commands:"),
               }),
             }),
           ]),
-          response_type: 'ephemeral',
+          response_type: "ephemeral",
         });
       });
     });
 
-    describe('Pause/Resume Commands', () => {
-      it('should handle pause command with not implemented message', async () => {
+    describe("Pause/Resume Commands", () => {
+      it("should handle pause command with not implemented message", async () => {
         const command = createMockSlackCommand();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-pause'
+          ([cmd]) => cmd === "/frontal-code-pause"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Pause functionality is not yet implemented.',
-          response_type: 'ephemeral',
+          text: "Pause functionality is not yet implemented.",
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle resume command with not implemented message', async () => {
+      it("should handle resume command with not implemented message", async () => {
         const command = createMockSlackCommand();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === '/frontal-code-resume'
+          ([cmd]) => cmd === "/frontal-code-resume"
         )?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Resume functionality is not yet implemented.',
-          response_type: 'ephemeral',
+          text: "Resume functionality is not yet implemented.",
+          response_type: "ephemeral",
         });
       });
     });
   });
 
-  describe('Message Handling', () => {
-    describe('Hello Message', () => {
-      it('should handle hello frontal_code message', async () => {
+  describe("Message Handling", () => {
+    describe("Hello Message", () => {
+      it("should handle hello frontal_code message", async () => {
         const message = {
-          user: 'U123456',
-          channel: 'C123456',
-          text: 'hello frontal-code',
+          user: "U123456",
+          channel: "C123456",
+          text: "hello frontal-code",
         };
         const mockSay = vi.fn();
 
         const handler = mockSlackApp.message.mock.calls.find(
-          ([pattern]) => pattern === 'hello frontal-code'
+          ([pattern]) => pattern === "hello frontal-code"
         )?.[1];
         await handler({ message, say: mockSay });
 
         expect(mockSay).toHaveBeenCalledWith(
-          'Hello! I\'m Frontal Code, your autonomous coding assistant. Use `/frontal-code-help` to see what I can do!'
+          "Hello! I'm Frontal Code, your autonomous coding assistant. Use `/frontal-code-help` to see what I can do!"
         );
       });
     });
 
-    describe('Direct Message', () => {
-      it('should handle direct message with task creation', async () => {
+    describe("Direct Message", () => {
+      it("should handle direct message with task creation", async () => {
         const message = {
-          user: 'U123456',
-          channel: 'C123456',
-          text: 'frontal-code fix the login bug',
+          user: "U123456",
+          channel: "C123456",
+          text: "frontal-code fix the login bug",
         };
         const mockSay = vi.fn();
 
         const mockTask = {
-          slack_task_id: 'task-789',
-          status: 'pending',
-          request: createMockTaskCreationRequest({ prompt: 'fix the login bug' }),
+          slack_task_id: "task-789",
+          status: "pending",
+          request: createMockTaskCreationRequest({
+            prompt: "fix the login bug",
+          }),
           created_at: new Date(),
           updated_at: new Date(),
         };
         mockTaskManager.createTask.mockResolvedValue(mockTask);
 
         const handler = mockSlackApp.message.mock.calls.find(
-          ([pattern]) => pattern instanceof RegExp && pattern.test('frontal-code fix the login bug')
+          ([pattern]) =>
+            pattern instanceof RegExp &&
+            pattern.test("frontal-code fix the login bug")
         )?.[1];
         await handler({ message, say: mockSay });
 
         expect(mockSay).toHaveBeenCalledWith(
-          'Task created: `task-789`. I\'ll start working on it right away!'
+          "Task created: `task-789`. I'll start working on it right away!"
         );
       });
 
-      it('should handle direct message without task text', async () => {
+      it("should handle direct message without task text", async () => {
         const message = {
-          user: 'U123456',
-          channel: 'C123456',
-          text: 'frontal-code',
+          user: "U123456",
+          channel: "C123456",
+          text: "frontal-code",
         };
         const mockSay = vi.fn();
 
         const handler = mockSlackApp.message.mock.calls.find(
-          ([pattern]) => pattern instanceof RegExp && pattern.test('frontal-code')
+          ([pattern]) =>
+            pattern instanceof RegExp && pattern.test("frontal-code")
         )?.[1];
         await handler({ message, say: mockSay });
 
-        expect(mockSay).toHaveBeenCalledWith('Please provide a task description after "frontal-code".');
+        expect(mockSay).toHaveBeenCalledWith(
+          'Please provide a task description after "frontal-code".'
+        );
       });
 
-      it('should handle direct message errors', async () => {
+      it("should handle direct message errors", async () => {
         const message = {
-          user: 'U123456',
-          channel: 'C123456',
-          text: 'frontal-code test task',
+          user: "U123456",
+          channel: "C123456",
+          text: "frontal-code test task",
         };
         const mockSay = vi.fn();
 
-        const error = new Error('Failed to create task');
+        const error = new Error("Failed to create task");
         mockTaskManager.createTask.mockRejectedValue(error);
 
         const handler = mockSlackApp.message.mock.calls.find(
-          ([pattern]) => pattern instanceof RegExp && pattern.test('frontal-code test task')
+          ([pattern]) =>
+            pattern instanceof RegExp && pattern.test("frontal-code test task")
         )?.[1];
         await handler({ message, say: mockSay });
 
-        expect(mockSay).toHaveBeenCalledWith('Sorry, I couldn\'t create that task: Failed to create task');
+        expect(mockSay).toHaveBeenCalledWith(
+          "Sorry, I couldn't create that task: Failed to create task"
+        );
       });
     });
   });
 
-  describe('Interaction Handling', () => {
-    describe('Task Cancel Action', () => {
-      it('should handle task cancel action', async () => {
+  describe("Interaction Handling", () => {
+    describe("Task Cancel Action", () => {
+      it("should handle task cancel action", async () => {
         const interaction = createMockSlackInteraction({
           actions: [
             {
-              name: 'task_cancel',
-              type: 'button',
-              value: 'task-123',
+              name: "task_cancel",
+              type: "button",
+              value: "task-123",
             },
           ],
         });
@@ -638,145 +696,170 @@ describe('SlackBotService', () => {
         mockTaskManager.cancelTask.mockResolvedValue(undefined);
 
         const handler = mockSlackApp.action.mock.calls.find(
-          ([action]) => action === 'task_cancel'
+          ([action]) => action === "task_cancel"
         )?.[1];
-        await handler({ body: interaction, ack: mockAck, respond: mockRespond });
+        await handler({
+          body: interaction,
+          ack: mockAck,
+          respond: mockRespond,
+        });
 
         expect(mockAck).toHaveBeenCalled();
-        expect(mockTaskManager.cancelTask).toHaveBeenCalledWith('task-123', interaction.user.id);
+        expect(mockTaskManager.cancelTask).toHaveBeenCalledWith(
+          "task-123",
+          interaction.user.id
+        );
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Task `task-123` has been cancelled.',
+          text: "Task `task-123` has been cancelled.",
           replace_original: true,
         });
       });
 
-      it('should handle task cancel action errors', async () => {
+      it("should handle task cancel action errors", async () => {
         const interaction = createMockSlackInteraction();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
-        const error = new Error('Task not found');
+        const error = new Error("Task not found");
         mockTaskManager.cancelTask.mockRejectedValue(error);
 
         const handler = mockSlackApp.action.mock.calls.find(
-          ([action]) => action === 'task_cancel'
+          ([action]) => action === "task_cancel"
         )?.[1];
-        await handler({ body: interaction, ack: mockAck, respond: mockRespond });
+        await handler({
+          body: interaction,
+          ack: mockAck,
+          respond: mockRespond,
+        });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Failed to cancel task: Task not found',
-          response_type: 'ephemeral',
+          text: "Failed to cancel task: Task not found",
+          response_type: "ephemeral",
         });
       });
     });
 
-    describe('Task Pause/Resume Actions', () => {
-      it('should handle task pause action with not implemented message', async () => {
+    describe("Task Pause/Resume Actions", () => {
+      it("should handle task pause action with not implemented message", async () => {
         const interaction = createMockSlackInteraction();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.action.mock.calls.find(
-          ([action]) => action === 'task_pause'
+          ([action]) => action === "task_pause"
         )?.[1];
-        await handler({ body: interaction, ack: mockAck, respond: mockRespond });
+        await handler({
+          body: interaction,
+          ack: mockAck,
+          respond: mockRespond,
+        });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Pause functionality is not yet implemented.',
-          response_type: 'ephemeral',
+          text: "Pause functionality is not yet implemented.",
+          response_type: "ephemeral",
         });
       });
 
-      it('should handle task resume action with not implemented message', async () => {
+      it("should handle task resume action with not implemented message", async () => {
         const interaction = createMockSlackInteraction();
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
         const handler = mockSlackApp.action.mock.calls.find(
-          ([action]) => action === 'task_resume'
+          ([action]) => action === "task_resume"
         )?.[1];
-        await handler({ body: interaction, ack: mockAck, respond: mockRespond });
+        await handler({
+          body: interaction,
+          ack: mockAck,
+          respond: mockRespond,
+        });
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockRespond).toHaveBeenCalledWith({
-          text: 'Resume functionality is not yet implemented.',
-          response_type: 'ephemeral',
+          text: "Resume functionality is not yet implemented.",
+          response_type: "ephemeral",
         });
       });
     });
   });
 
-  describe('Event Handling', () => {
-    describe('App Mention', () => {
-      it('should handle app mention with task creation', async () => {
+  describe("Event Handling", () => {
+    describe("App Mention", () => {
+      it("should handle app mention with task creation", async () => {
         const event = {
-          user: 'U123456',
-          channel: 'C123456',
-          text: '<@U789012> can you help me fix this bug?',
+          user: "U123456",
+          channel: "C123456",
+          text: "<@U789012> can you help me fix this bug?",
         };
         const mockSay = vi.fn();
 
         const mockTask = {
-          slack_task_id: 'task-999',
-          status: 'pending',
-          request: createMockTaskCreationRequest({ prompt: 'can you help me fix this bug?' }),
+          slack_task_id: "task-999",
+          status: "pending",
+          request: createMockTaskCreationRequest({
+            prompt: "can you help me fix this bug?",
+          }),
           created_at: new Date(),
           updated_at: new Date(),
         };
         mockTaskManager.createTask.mockResolvedValue(mockTask);
 
         const handler = mockSlackApp.event.mock.calls.find(
-          ([event_type]) => event_type === 'app_mention'
+          ([event_type]) => event_type === "app_mention"
         )?.[1];
         await handler({ event, say: mockSay });
 
         expect(mockSay).toHaveBeenCalledWith(
-          'Task created: `task-999`. I\'ll start working on it right away!'
+          "Task created: `task-999`. I'll start working on it right away!"
         );
       });
 
-      it('should handle app mention without task text', async () => {
+      it("should handle app mention without task text", async () => {
         const event = {
-          user: 'U123456',
-          channel: 'C123456',
-          text: '<@U789012>',
+          user: "U123456",
+          channel: "C123456",
+          text: "<@U789012>",
         };
         const mockSay = vi.fn();
 
         const handler = mockSlackApp.event.mock.calls.find(
-          ([event_type]) => event_type === 'app_mention'
+          ([event_type]) => event_type === "app_mention"
         )?.[1];
         await handler({ event, say: mockSay });
 
-        expect(mockSay).toHaveBeenCalledWith('Hi! How can I help you with your coding tasks?');
+        expect(mockSay).toHaveBeenCalledWith(
+          "Hi! How can I help you with your coding tasks?"
+        );
       });
 
-      it('should handle app mention errors', async () => {
+      it("should handle app mention errors", async () => {
         const event = {
-          user: 'U123456',
-          channel: 'C123456',
-          text: '<@U789012> test task',
+          user: "U123456",
+          channel: "C123456",
+          text: "<@U789012> test task",
         };
         const mockSay = vi.fn();
 
-        const error = new Error('Failed to create task');
+        const error = new Error("Failed to create task");
         mockTaskManager.createTask.mockRejectedValue(error);
 
         const handler = mockSlackApp.event.mock.calls.find(
-          ([event_type]) => event_type === 'app_mention'
+          ([event_type]) => event_type === "app_mention"
         )?.[1];
         await handler({ event, say: mockSay });
 
-        expect(mockSay).toHaveBeenCalledWith('Sorry, I couldn\'t create that task: Failed to create task');
+        expect(mockSay).toHaveBeenCalledWith(
+          "Sorry, I couldn't create that task: Failed to create task"
+        );
       });
     });
   });
 
-  describe('Service Methods', () => {
-    describe('start', () => {
-      it('should start the bot service successfully', async () => {
+  describe("Service Methods", () => {
+    describe("start", () => {
+      it("should start the bot service successfully", async () => {
         mockRedisService.connect.mockResolvedValue(undefined);
         mockSlackApp.start.mockResolvedValue(undefined);
 
@@ -786,16 +869,18 @@ describe('SlackBotService', () => {
         expect(mockSlackApp.start).toHaveBeenCalled();
       });
 
-      it('should handle start errors', async () => {
-        const error = new Error('Failed to start bot');
+      it("should handle start errors", async () => {
+        const error = new Error("Failed to start bot");
         mockRedisService.connect.mockRejectedValue(error);
 
-        await expect(slackBotService.start()).rejects.toThrow('Failed to start bot');
+        await expect(slackBotService.start()).rejects.toThrow(
+          "Failed to start bot"
+        );
       });
     });
 
-    describe('stop', () => {
-      it('should stop the bot service successfully', async () => {
+    describe("stop", () => {
+      it("should stop the bot service successfully", async () => {
         mockSlackApp.stop.mockResolvedValue(undefined);
         mockRedisService.disconnect.mockResolvedValue(undefined);
         mockDatabaseService.close.mockResolvedValue(undefined);
@@ -807,19 +892,21 @@ describe('SlackBotService', () => {
         expect(mockDatabaseService.close).toHaveBeenCalled();
       });
 
-      it('should handle stop errors', async () => {
-        const error = new Error('Failed to stop bot');
+      it("should handle stop errors", async () => {
+        const error = new Error("Failed to stop bot");
         mockSlackApp.stop.mockRejectedValue(error);
 
-        await expect(slackBotService.stop()).rejects.toThrow('Failed to stop bot');
+        await expect(slackBotService.stop()).rejects.toThrow(
+          "Failed to stop bot"
+        );
       });
     });
 
-    describe('healthCheck', () => {
-      it('should return health status for all services', async () => {
+    describe("healthCheck", () => {
+      it("should return health status for all services", async () => {
         mockSlackApp.client.auth.test.mockResolvedValue({
           ok: true,
-          user: 'test-bot',
+          user: "test-bot",
         });
         mockFrontalCodeApiClient.healthCheck.mockResolvedValue(true);
         mockDatabaseService.healthCheck.mockResolvedValue(true);
@@ -847,8 +934,10 @@ describe('SlackBotService', () => {
         });
       });
 
-      it('should handle service failures in health check', async () => {
-        mockSlackApp.client.auth.test.mockRejectedValue(new Error('Slack API error'));
+      it("should handle service failures in health check", async () => {
+        mockSlackApp.client.auth.test.mockRejectedValue(
+          new Error("Slack API error")
+        );
         mockFrontalCodeApiClient.healthCheck.mockResolvedValue(false);
         mockDatabaseService.healthCheck.mockResolvedValue(false);
         mockRedisService.healthCheck.mockResolvedValue(false);

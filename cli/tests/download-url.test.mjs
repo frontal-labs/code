@@ -1,9 +1,9 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
 import { downloadRelease, releaseAssetUrl, verifySha256 } from "../lib/download.mjs";
 
 test("releaseAssetUrl builds the exact GitHub release asset URL", () => {
@@ -34,7 +34,10 @@ test("downloadRelease refuses a release with no SHA-256 sidecar", async () => {
       : new Response(Buffer.from("binary"), { status: 200 });
   try {
     await assert.rejects(
-      downloadRelease({ version: "9.9.9", destDir: mkdtempSync(join(tmpdir(), "frontal-code-dl-")) }),
+      downloadRelease({
+        version: "9.9.9",
+        destDir: mkdtempSync(join(tmpdir(), "frontal-code-dl-")),
+      }),
       /No SHA-256 sidecar/,
       "an unverified binary must not be installed",
     );

@@ -1,14 +1,14 @@
+import { configToArgs } from "./config.js";
+import type { FrontalCode } from "./frontal-code.js";
 import type {
+  FrontalCodeEvent,
   InputEntry,
   JsonValue,
-  FrontalCodeEvent,
   ThreadInput,
   ThreadOptions,
   ThreadRunOptions,
   TurnResult,
 } from "./protocol.js";
-import type {FrontalCode} from "./frontal-code.js";
-import { configToArgs } from "./config.js";
 import { collectTurn, streamEvents } from "./spawn.js";
 
 /** A single conversation with the Frontal Code agent. */
@@ -32,10 +32,7 @@ export class Thread {
    * Run a turn and buffer the result. Call repeatedly on the same instance to
    * continue the conversation (the CLI is resumed via its session id).
    */
-  async run(
-    input: ThreadInput,
-    runOptions: ThreadRunOptions = {},
-  ): Promise<TurnResult> {
+  async run(input: ThreadInput, runOptions: ThreadRunOptions = {}): Promise<TurnResult> {
     const args = this.buildArgs(input, runOptions);
     const env = this.frontal_code.buildEnv();
     const turn = await collectTurn(
@@ -96,10 +93,7 @@ export class Thread {
     return { prompt: texts.join("\n"), images };
   }
 
-  private buildArgs(
-    input: ThreadInput,
-    runOptions: ThreadRunOptions,
-  ): string[] {
+  private buildArgs(input: ThreadInput, runOptions: ThreadRunOptions): string[] {
     const { prompt, images } = this.toPromptAndImages(input);
 
     const args = ["prompt", "-p", prompt];

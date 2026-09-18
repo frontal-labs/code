@@ -126,10 +126,9 @@ The CLI supports multiple configuration methods:
 
 ### Environment Variables
 ```bash
-export FCODE_API_KEY="sk-ant-..."
+export FRONTAL_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
-export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 ```
 

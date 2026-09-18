@@ -11,7 +11,7 @@ node --test tests/*.test.mjs
 if node -e 'import("./lib/resolve-binary.mjs").then(m=>process.exit(m.resolveBinary()?0:1))'; then
   echo "==> Smoke test: frontal-code --version"
   node ./bin/index.js --version
-  node ./bin/index.js --version | grep -qi "frontal-code" && echo "OK: version output contains 'Frontal Code'"
+  node ./bin/index.js --version | grep -qi "Frontal Code" && echo "OK: version output contains 'Frontal Code'"
 else
   echo "WARN: no native binary resolved; skipping smoke test."
 fi

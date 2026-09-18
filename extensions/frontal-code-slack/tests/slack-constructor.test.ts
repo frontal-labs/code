@@ -1,12 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const slackState = vi.hoisted(() => {
-  let messageHandler: ((args: { message: unknown }) => Promise<void>) | undefined;
+  let messageHandler:
+    | ((args: { message: unknown }) => Promise<void>)
+    | undefined;
   let commandHandler:
-    | ((args: { command: { text: string; user_id: string; channel_id: string }; ack: (arg?: unknown) => Promise<void> | void }) => Promise<void>)
+    | ((args: {
+        command: { text: string; user_id: string; channel_id: string };
+        ack: (arg?: unknown) => Promise<void> | void;
+      }) => Promise<void>)
     | undefined;
   let actionHandler:
-    | ((args: { action: unknown; ack: () => Promise<void> | void; body: unknown }) => Promise<void>)
+    | ((args: {
+        action: unknown;
+        ack: () => Promise<void> | void;
+        body: unknown;
+      }) => Promise<void>)
     | undefined;
   let eventHandler: ((args: { event: unknown }) => Promise<void>) | undefined;
 
@@ -67,11 +76,14 @@ const slackState = vi.hoisted(() => {
   };
 });
 
-const frontal-codeApiState = vi.hoisted(() => {
+const frontal;
+-codeApiState = vi.hoisted(() => {
   const createTask = vi.fn();
   const getOrphanPolicy = vi.fn();
   const sendConnectorEvent = vi.fn();
-  const getEventsWebSocketUrl = vi.fn().mockReturnValue('ws://localhost:8787/v1/events/ws?source=slack');
+  const getEventsWebSocketUrl = vi
+    .fn()
+    .mockReturnValue("ws://localhost:8787/v1/events/ws?source=slack");
 
   class MockFrontalCodeApiClient {
     createTask = createTask;
@@ -89,7 +101,8 @@ const frontal-codeApiState = vi.hoisted(() => {
   };
 });
 
-const frontal-codeEventsState = vi.hoisted(() => {
+const frontal;
+-codeEventsState = vi.hoisted(() => {
   let trackedHandler:
     | ((event: unknown, task: unknown) => Promise<void> | void)
     | undefined;
@@ -127,227 +140,266 @@ const frontal-codeEventsState = vi.hoisted(() => {
   };
 });
 
-vi.mock('@slack/bolt', () => ({
+vi.mock("@slack/bolt", () => ({
   App: slackState.MockApp,
 }));
 
-vi.mock('../src/api-client', () => ({
-  FrontalCodeApiClient: frontal-codeApiState.MockFrontalCodeApiClient,
+vi.mock("../src/api-client", () => ({
+  FrontalCodeApiClient: frontal - codeApiState.MockFrontalCodeApiClient,
 }));
 
-vi.mock('../src/frontal-code-events', () => ({
-  FrontalCodeEventsClient: frontal-codeEventsState.MockFrontalCodeEventsClient,
+vi.mock("../src/frontal-code-events", () => ({
+  FrontalCodeEventsClient:
+    frontal - codeEventsState.MockFrontalCodeEventsClient,
 }));
 
-vi.mock('../src/config', () => ({
+vi.mock("../src/config", () => ({
   config: {
     app: {
-      nodeEnv: 'test',
-      logLevel: 'error',
+      nodeEnv: "test",
+      logLevel: "error",
       port: 3000,
     },
     slack: {
-      botToken: 'xoxb-test',
-      appToken: 'xapp-test',
-      signingSecret: 'secret',
+      botToken: "xoxb-test",
+      appToken: "xapp-test",
+      signingSecret: "secret",
     },
     frontal_code: {
-      apiUrl: 'http://localhost:8787',
+      apiUrl: "http://localhost:8787",
       timeout: 30_000,
     },
   },
 }));
 
-import { SlackInterface } from '../src/slack';
+import { SlackInterface } from "../src/slack";
 
-describe('SlackInterface constructor wiring', () => {
+describe("SlackInterface constructor wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     slackState.resetHandlers();
-    frontal-codeEventsState.resetTrackedHandler();
+    frontal - codeEventsState.resetTrackedHandler();
   });
 
-  it('constructs the Slack app, Frontal Code clients, and tracked-event subscription', async () => {
+  it("constructs the Slack app, Frontal Code clients, and tracked-event subscription", async () => {
     const handleSpy = vi
-      .spyOn(SlackInterface.prototype as unknown as { handleFrontalCodeTaskEvent: (...args: unknown[]) => Promise<void> }, 'handleFrontalCodeTaskEvent')
+      .spyOn(
+        SlackInterface.prototype as unknown as {
+          handleFrontalCodeTaskEvent: (...args: unknown[]) => Promise<void>;
+        },
+        "handleFrontalCodeTaskEvent"
+      )
       .mockResolvedValue(undefined);
     const slack = new SlackInterface();
 
-    expect(frontal-codeApiState.getEventsWebSocketUrl).not.toHaveBeenCalled();
-    expect(frontal-codeEventsState.onTrackedTaskEvent).toHaveBeenCalledTimes(1);
-    expect(slackState.getMessageHandler()).toBeTypeOf('function');
-    expect(slackState.getCommandHandler()).toBeTypeOf('function');
-    expect(slackState.getActionHandler()).toBeTypeOf('function');
-    expect(slackState.getEventHandler()).toBeTypeOf('function');
+    expect(frontal - codeApiState.getEventsWebSocketUrl).not.toHaveBeenCalled();
+    expect(frontal - codeEventsState.onTrackedTaskEvent).toHaveBeenCalledTimes(
+      1
+    );
+    expect(slackState.getMessageHandler()).toBeTypeOf("function");
+    expect(slackState.getCommandHandler()).toBeTypeOf("function");
+    expect(slackState.getActionHandler()).toBeTypeOf("function");
+    expect(slackState.getEventHandler()).toBeTypeOf("function");
 
-    await frontal-codeEventsState.getTrackedHandler()?.({ event: 'lane.started' }, { taskId: 'task-123' });
+    (await frontal) -
+      codeEventsState.getTrackedHandler()?.(
+        { event: "lane.started" },
+        { taskId: "task-123" }
+      );
 
-    expect(handleSpy).toHaveBeenCalledWith({ event: 'lane.started' }, { taskId: 'task-123' });
-  });
-
-  it('ignores Slack message events without a user-facing prompt', async () => {
-    new SlackInterface();
-
-    await slackState.getMessageHandler()?.({
-      message: {
-        text: '',
-        user: 'U123',
-        channel: 'C123',
-        ts: '1710000000.100',
-      },
-    });
-    await slackState.getMessageHandler()?.({
-      message: {
-        text: 'hello',
-        user: 'U123',
-        channel: 'C123',
-        ts: '1710000000.101',
-        bot_id: 'B123',
-      },
-    });
-
-    expect(frontal-codeApiState.createTask).not.toHaveBeenCalled();
-  });
-
-  it('creates and registers a task from a Slack message event', async () => {
-    const registerSpy = vi
-      .spyOn(SlackInterface.prototype as unknown as { registerTask: (...args: unknown[]) => Promise<void> }, 'registerTask')
-      .mockResolvedValue(undefined);
-    frontal-codeApiState.createTask.mockResolvedValue({
-      task_id: 'task-123',
-      status: 'running',
-      message: 'created',
-    });
-    new SlackInterface();
-
-    await slackState.getMessageHandler()?.({
-      message: {
-        text: 'Investigate flaky test',
-        user: 'U123',
-        channel: 'C123',
-        ts: '1710000000.100',
-      },
-    });
-
-    expect(frontal-codeApiState.createTask).toHaveBeenCalledWith({
-      prompt: 'Investigate flaky test',
-      user_id: 'U123',
-      channel_id: 'C123',
-      thread_ts: '1710000000.100',
-      source: 'slack',
-    });
-    expect(registerSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ task_id: 'task-123' }),
-      {
-        taskId: 'task-123',
-        channelId: 'C123',
-        threadTs: '1710000000.100',
-        userId: 'U123',
-      },
-      'Investigate flaky test'
+    expect(handleSpy).toHaveBeenCalledWith(
+      { event: "lane.started" },
+      { taskId: "task-123" }
     );
   });
 
-  it('acknowledges and returns policy previews for /ai policy orphans', async () => {
-    const ack = vi.fn();
-    frontal-codeApiState.getOrphanPolicy.mockResolvedValue({
-      default_policy: { source: 'default', approval_delay_secs: 60 },
-      effective_policy: { source: 'default', approval_delay_secs: 60 },
-      configured_rules: [],
+  it("ignores Slack message events without a user-facing prompt", async () => {
+    new SlackInterface();
+
+    await slackState.getMessageHandler()?.({
+      message: {
+        text: "",
+        user: "U123",
+        channel: "C123",
+        ts: "1710000000.100",
+      },
     });
+    await slackState.getMessageHandler()?.({
+      message: {
+        text: "hello",
+        user: "U123",
+        channel: "C123",
+        ts: "1710000000.101",
+        bot_id: "B123",
+      },
+    });
+
+    expect(frontal - codeApiState.createTask).not.toHaveBeenCalled();
+  });
+
+  it("creates and registers a task from a Slack message event", async () => {
+    const registerSpy = vi
+      .spyOn(
+        SlackInterface.prototype as unknown as {
+          registerTask: (...args: unknown[]) => Promise<void>;
+        },
+        "registerTask"
+      )
+      .mockResolvedValue(undefined);
+    frontal -
+      codeApiState.createTask.mockResolvedValue({
+        task_id: "task-123",
+        status: "running",
+        message: "created",
+      });
+    new SlackInterface();
+
+    await slackState.getMessageHandler()?.({
+      message: {
+        text: "Investigate flaky test",
+        user: "U123",
+        channel: "C123",
+        ts: "1710000000.100",
+      },
+    });
+
+    expect(frontal - codeApiState.createTask).toHaveBeenCalledWith({
+      prompt: "Investigate flaky test",
+      user_id: "U123",
+      channel_id: "C123",
+      thread_ts: "1710000000.100",
+      source: "slack",
+    });
+    expect(registerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ task_id: "task-123" }),
+      {
+        taskId: "task-123",
+        channelId: "C123",
+        threadTs: "1710000000.100",
+        userId: "U123",
+      },
+      "Investigate flaky test"
+    );
+  });
+
+  it("acknowledges and returns policy previews for /ai policy orphans", async () => {
+    const ack = vi.fn();
+    frontal -
+      codeApiState.getOrphanPolicy.mockResolvedValue({
+        default_policy: { source: "default", approval_delay_secs: 60 },
+        effective_policy: { source: "default", approval_delay_secs: 60 },
+        configured_rules: [],
+      });
     new SlackInterface();
 
     await slackState.getCommandHandler()?.({
       command: {
-        text: 'policy orphans',
-        user_id: 'U123',
-        channel_id: 'C123',
+        text: "policy orphans",
+        user_id: "U123",
+        channel_id: "C123",
       },
       ack,
     });
 
-    expect(frontal-codeApiState.getOrphanPolicy).toHaveBeenCalledWith({});
+    expect(frontal - codeApiState.getOrphanPolicy).toHaveBeenCalledWith({});
     expect(ack).toHaveBeenCalledWith(
       expect.objectContaining({
-        response_type: 'ephemeral',
+        response_type: "ephemeral",
       })
     );
-    expect(frontal-codeApiState.createTask).not.toHaveBeenCalled();
+    expect(frontal - codeApiState.createTask).not.toHaveBeenCalled();
   });
 
-  it('acknowledges policy preview failures with an ephemeral error response', async () => {
+  it("acknowledges policy preview failures with an ephemeral error response", async () => {
     const ack = vi.fn();
-    frontal-codeApiState.getOrphanPolicy.mockRejectedValue(new Error('policy unavailable'));
+    frontal -
+      codeApiState.getOrphanPolicy.mockRejectedValue(
+        new Error("policy unavailable")
+      );
     new SlackInterface();
 
     await slackState.getCommandHandler()?.({
       command: {
-        text: 'policy orphans repo=frontal-code/slack',
-        user_id: 'U123',
-        channel_id: 'C123',
+        text: "policy orphans repo=frontal-code/slack",
+        user_id: "U123",
+        channel_id: "C123",
       },
       ack,
     });
 
     expect(ack).toHaveBeenCalledWith({
-      response_type: 'ephemeral',
-      text: 'Failed to load orphan policy: policy unavailable',
+      response_type: "ephemeral",
+      text: "Failed to load orphan policy: policy unavailable",
     });
-    expect(frontal-codeApiState.createTask).not.toHaveBeenCalled();
+    expect(frontal - codeApiState.createTask).not.toHaveBeenCalled();
   });
 
-  it('creates a task from /ai commands after acknowledging', async () => {
+  it("creates a task from /ai commands after acknowledging", async () => {
     const ack = vi.fn();
     const registerSpy = vi
-      .spyOn(SlackInterface.prototype as unknown as { registerTask: (...args: unknown[]) => Promise<void> }, 'registerTask')
+      .spyOn(
+        SlackInterface.prototype as unknown as {
+          registerTask: (...args: unknown[]) => Promise<void>;
+        },
+        "registerTask"
+      )
       .mockResolvedValue(undefined);
-    frontal-codeApiState.createTask.mockResolvedValue({
-      task_id: 'task-456',
-      status: 'running',
-      message: 'created',
-    });
+    frontal -
+      codeApiState.createTask.mockResolvedValue({
+        task_id: "task-456",
+        status: "running",
+        message: "created",
+      });
     new SlackInterface();
 
     await slackState.getCommandHandler()?.({
       command: {
-        text: 'Fix the flaky test',
-        user_id: 'U123',
-        channel_id: 'C123',
+        text: "Fix the flaky test",
+        user_id: "U123",
+        channel_id: "C123",
       },
       ack,
     });
 
     expect(ack).toHaveBeenCalledWith();
-    expect(frontal-codeApiState.createTask).toHaveBeenCalledWith({
-      prompt: 'Fix the flaky test',
-      user_id: 'U123',
-      channel_id: 'C123',
-      source: 'slack',
+    expect(frontal - codeApiState.createTask).toHaveBeenCalledWith({
+      prompt: "Fix the flaky test",
+      user_id: "U123",
+      channel_id: "C123",
+      source: "slack",
     });
     expect(registerSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ task_id: 'task-456' }),
+      expect.objectContaining({ task_id: "task-456" }),
       {
-        taskId: 'task-456',
-        channelId: 'C123',
-        userId: 'U123',
+        taskId: "task-456",
+        channelId: "C123",
+        userId: "U123",
       },
-      'Fix the flaky test'
+      "Fix the flaky test"
     );
   });
 
-  it('acknowledges actions and forwards them to the Slack action handler', async () => {
+  it("acknowledges actions and forwards them to the Slack action handler", async () => {
     const ack = vi.fn();
     const handleSpy = vi
-      .spyOn(SlackInterface.prototype as unknown as { handleSlackAction: (...args: unknown[]) => Promise<void> }, 'handleSlackAction')
+      .spyOn(
+        SlackInterface.prototype as unknown as {
+          handleSlackAction: (...args: unknown[]) => Promise<void>;
+        },
+        "handleSlackAction"
+      )
       .mockResolvedValue(undefined);
     new SlackInterface();
 
     const body = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.100' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.100" },
     };
-    const action = { action_id: 'orphaned_hosted_agent.retry', value: 'task-123' };
+    const action = {
+      action_id: "orphaned_hosted_agent.retry",
+      value: "task-123",
+    };
 
     await slackState.getActionHandler()?.({ action, ack, body });
 
@@ -355,45 +407,51 @@ describe('SlackInterface constructor wiring', () => {
     expect(handleSpy).toHaveBeenCalledWith(action, body);
   });
 
-  it('forwards Slack events to the connector event endpoint', async () => {
+  it("forwards Slack events to the connector event endpoint", async () => {
     new SlackInterface();
 
     await slackState.getEventHandler()?.({
       event: {
-        type: 'reaction_added',
-        user: 'U123',
-        reaction: 'eyes',
+        type: "reaction_added",
+        user: "U123",
+        reaction: "eyes",
       },
     });
 
-    expect(frontal-codeApiState.sendConnectorEvent).toHaveBeenCalledWith('slack', {
-      type: 'reaction_added',
-      userId: 'U123',
-      data: {
-        type: 'reaction_added',
-        user: 'U123',
-        reaction: 'eyes',
-      },
-    });
+    expect(frontal - codeApiState.sendConnectorEvent).toHaveBeenCalledWith(
+      "slack",
+      {
+        type: "reaction_added",
+        userId: "U123",
+        data: {
+          type: "reaction_added",
+          user: "U123",
+          reaction: "eyes",
+        },
+      }
+    );
   });
 
-  it('forwards Slack events without a user as connector events with an empty user id', async () => {
+  it("forwards Slack events without a user as connector events with an empty user id", async () => {
     new SlackInterface();
 
     await slackState.getEventHandler()?.({
       event: {
-        type: 'member_joined_channel',
-        channel: 'C123',
+        type: "member_joined_channel",
+        channel: "C123",
       },
     });
 
-    expect(frontal-codeApiState.sendConnectorEvent).toHaveBeenCalledWith('slack', {
-      type: 'member_joined_channel',
-      userId: '',
-      data: {
-        type: 'member_joined_channel',
-        channel: 'C123',
-      },
-    });
+    expect(frontal - codeApiState.sendConnectorEvent).toHaveBeenCalledWith(
+      "slack",
+      {
+        type: "member_joined_channel",
+        userId: "",
+        data: {
+          type: "member_joined_channel",
+          channel: "C123",
+        },
+      }
+    );
   });
 });

@@ -40,8 +40,8 @@ pub enum AuthSource {
 
 impl AuthSource {
     pub fn from_env() -> Result<Self, ApiError> {
-        let api_key = read_env_non_empty("FCODE_API_KEY")?;
-        let auth_token = read_env_non_empty("FCODE_AUTH_TOKEN")?;
+        let api_key = read_env_non_empty("FRONTAL_API_KEY")?;
+        let auth_token = read_env_non_empty("FRONTAL_AUTH_TOKEN")?;
         match (api_key, auth_token) {
             (Some(api_key), Some(bearer_token)) => Ok(Self::ApiKeyAndBearer {
                 api_key,
@@ -51,7 +51,7 @@ impl AuthSource {
             (None, Some(bearer_token)) => Ok(Self::BearerToken(bearer_token)),
             (None, None) => Err(ApiError::missing_credentials(
                 "Anthropic",
-                &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
+                &["FRONTAL_AUTH_TOKEN", "FRONTAL_API_KEY"],
             )),
         }
     }
@@ -569,8 +569,8 @@ impl AnthropicClient {
 
 impl AuthSource {
     pub fn from_env_or_saved() -> Result<Self, ApiError> {
-        if let Some(api_key) = read_env_non_empty("FCODE_API_KEY")? {
-            return match read_env_non_empty("FCODE_AUTH_TOKEN")? {
+        if let Some(api_key) = read_env_non_empty("FRONTAL_API_KEY")? {
+            return match read_env_non_empty("FRONTAL_AUTH_TOKEN")? {
                 Some(bearer_token) => Ok(Self::ApiKeyAndBearer {
                     api_key,
                     bearer_token,
@@ -578,7 +578,7 @@ impl AuthSource {
                 None => Ok(Self::ApiKey(api_key)),
             };
         }
-        if let Some(bearer_token) = read_env_non_empty("FCODE_AUTH_TOKEN")? {
+        if let Some(bearer_token) = read_env_non_empty("FRONTAL_AUTH_TOKEN")? {
             return Ok(Self::BearerToken(bearer_token));
         }
         match load_saved_oauth_token() {
@@ -595,7 +595,7 @@ impl AuthSource {
             Ok(Some(token_set)) => Ok(Self::BearerToken(token_set.access_token)),
             Ok(None) => Err(ApiError::missing_credentials(
                 "Anthropic",
-                &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
+                &["FRONTAL_AUTH_TOKEN", "FRONTAL_API_KEY"],
             )),
             Err(error) => Err(error),
         }
@@ -620,8 +620,8 @@ pub fn resolve_startup_auth_source<F>(load_oauth_config: F) -> Result<AuthSource
 where
     F: FnOnce() -> Result<Option<OAuthConfig>, ApiError>,
 {
-    if let Some(api_key) = read_env_non_empty("FCODE_API_KEY")? {
-        return match read_env_non_empty("FCODE_AUTH_TOKEN")? {
+    if let Some(api_key) = read_env_non_empty("FRONTAL_API_KEY")? {
+        return match read_env_non_empty("FRONTAL_AUTH_TOKEN")? {
             Some(bearer_token) => Ok(AuthSource::ApiKeyAndBearer {
                 api_key,
                 bearer_token,
@@ -629,14 +629,14 @@ where
             None => Ok(AuthSource::ApiKey(api_key)),
         };
     }
-    if let Some(bearer_token) = read_env_non_empty("FCODE_AUTH_TOKEN")? {
+    if let Some(bearer_token) = read_env_non_empty("FRONTAL_AUTH_TOKEN")? {
         return Ok(AuthSource::BearerToken(bearer_token));
     }
 
     let Some(token_set) = load_saved_oauth_token()? else {
         return Err(ApiError::missing_credentials(
             "Anthropic",
-            &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
+            &["FRONTAL_AUTH_TOKEN", "FRONTAL_API_KEY"],
         ));
     };
     if !oauth_token_is_expired(&token_set) {
@@ -736,20 +736,20 @@ fn read_api_key() -> Result<String, ApiError> {
         .map(ToOwned::to_owned)
         .ok_or(ApiError::missing_credentials(
             "Anthropic",
-            &["FCODE_AUTH_TOKEN", "FCODE_API_KEY"],
+            &["FRONTAL_AUTH_TOKEN", "FRONTAL_API_KEY"],
         ))
 }
 
 #[cfg(test)]
 fn read_auth_token() -> Option<String> {
-    read_env_non_empty("FCODE_AUTH_TOKEN")
+    read_env_non_empty("FRONTAL_AUTH_TOKEN")
         .ok()
         .and_then(std::convert::identity)
 }
 
 #[must_use]
 pub fn read_base_url() -> String {
-    std::env::var("FCODE_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+    std::env::var("FRONTAL_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
 }
 
 fn request_id_from_headers(headers: &reqwest::header::HeaderMap) -> Option<String> {
@@ -972,8 +972,8 @@ mod tests {
     #[test]
     fn read_api_key_requires_presence() {
         let _guard = env_lock();
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
         std::env::remove_var("FCODE_CONFIG_HOME");
         let error = super::read_api_key().expect_err("missing key should error");
         assert!(matches!(
@@ -985,35 +985,35 @@ mod tests {
     #[test]
     fn read_api_key_requires_non_empty_value() {
         let _guard = env_lock();
-        std::env::set_var("FCODE_AUTH_TOKEN", "");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::set_var("FRONTAL_AUTH_TOKEN", "");
+        std::env::remove_var("FRONTAL_API_KEY");
         let error = super::read_api_key().expect_err("empty key should error");
         assert!(matches!(
             error,
             crate::error::ApiError::MissingCredentials { .. }
         ));
-        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
     }
 
     #[test]
     fn read_api_key_prefers_api_key_env() {
         let _guard = env_lock();
-        std::env::set_var("FCODE_AUTH_TOKEN", "auth-token");
-        std::env::set_var("FCODE_API_KEY", "legacy-key");
+        std::env::set_var("FRONTAL_AUTH_TOKEN", "auth-token");
+        std::env::set_var("FRONTAL_API_KEY", "legacy-key");
         assert_eq!(
             super::read_api_key().expect("api key should load"),
             "legacy-key"
         );
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
     }
 
     #[test]
     fn read_auth_token_reads_auth_token_env() {
         let _guard = env_lock();
-        std::env::set_var("FCODE_AUTH_TOKEN", "auth-token");
+        std::env::set_var("FRONTAL_AUTH_TOKEN", "auth-token");
         assert_eq!(super::read_auth_token().as_deref(), Some("auth-token"));
-        std::env::remove_var("FCODE_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
     }
 
     #[test]
@@ -1031,13 +1031,13 @@ mod tests {
     #[test]
     fn auth_source_from_env_combines_api_key_and_bearer_token() {
         let _guard = env_lock();
-        std::env::set_var("FCODE_AUTH_TOKEN", "auth-token");
-        std::env::set_var("FCODE_API_KEY", "legacy-key");
+        std::env::set_var("FRONTAL_AUTH_TOKEN", "auth-token");
+        std::env::set_var("FRONTAL_API_KEY", "legacy-key");
         let auth = AuthSource::from_env().expect("env auth");
         assert_eq!(auth.api_key(), Some("legacy-key"));
         assert_eq!(auth.bearer_token(), Some("auth-token"));
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
     }
 
     #[test]
@@ -1045,8 +1045,8 @@ mod tests {
         let _guard = env_lock();
         let config_home = temp_config_home();
         std::env::set_var("FCODE_CONFIG_HOME", &config_home);
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
         save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "saved-access-token".to_string(),
             refresh_token: Some("refresh".to_string()),
@@ -1084,8 +1084,8 @@ mod tests {
         let _guard = env_lock();
         let config_home = temp_config_home();
         std::env::set_var("FCODE_CONFIG_HOME", &config_home);
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
         save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "expired-access-token".to_string(),
             refresh_token: Some("refresh-token".to_string()),
@@ -1121,8 +1121,8 @@ mod tests {
         let _guard = env_lock();
         let config_home = temp_config_home();
         std::env::set_var("FCODE_CONFIG_HOME", &config_home);
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
         save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "saved-access-token".to_string(),
             refresh_token: Some("refresh".to_string()),
@@ -1145,8 +1145,8 @@ mod tests {
         let _guard = env_lock();
         let config_home = temp_config_home();
         std::env::set_var("FCODE_CONFIG_HOME", &config_home);
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
         save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "expired-access-token".to_string(),
             refresh_token: Some("refresh-token".to_string()),
@@ -1177,8 +1177,8 @@ mod tests {
         let _guard = env_lock();
         let config_home = temp_config_home();
         std::env::set_var("FCODE_CONFIG_HOME", &config_home);
-        std::env::remove_var("FCODE_AUTH_TOKEN");
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_AUTH_TOKEN");
+        std::env::remove_var("FRONTAL_API_KEY");
         save_oauth_credentials(&frontal_code_runtime::OAuthTokenSet {
             access_token: "expired-access-token".to_string(),
             refresh_token: Some("refresh-token".to_string()),

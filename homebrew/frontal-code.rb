@@ -29,11 +29,11 @@ class Frontal Code < Formula
   def caveats
     <<~EOS
       To use a provider, set your API key:
-        export FCODE_API_KEY="sk-ant-..."
+        export FRONTAL_API_KEY="sk-ant-..."
 
       Or use a bearer token with a custom base URL:
-        export FCODE_AUTH_TOKEN="sk-..."
-        export FCODE_BASE_URL="https://api.deepseek.com/anthropic"
+        export FRONTAL_AUTH_TOKEN="sk-..."
+        export FRONTAL_BASE_URL="https://api.deepseek.com/anthropic"
 
       Run `frontal-code --help` to see available commands.
     EOS

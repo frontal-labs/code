@@ -1,6 +1,6 @@
-import { mkdtempSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, delimiter } from "node:path";
+import { delimiter, join } from "node:path";
 
 export interface MockFrontalCodeOptions {
   /** Raw JSONL the fake binary should emit on stdout. */

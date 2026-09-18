@@ -37,7 +37,7 @@ resource "kubernetes_secret" "frontal-code_slack_secrets" {
   }
 
   data = {
-    "FCODE_API_KEY"        = var.frontal-code_server_api_key
+     "FRONTAL_SERVER_API_KEY"      = var.frontal-code_server_api_key
     "SLACK_BOT_TOKEN"      = var.slack_bot_token
     "SLACK_APP_TOKEN"      = var.slack_app_token
     "SLACK_SIGNING_SECRET" = var.slack_signing_secret

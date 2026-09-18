@@ -201,7 +201,7 @@ services:
       - frontal-code-data:/home/frontal-code/.frontal-code
     environment:
       - FCODE_LOG_LEVEL=debug
-      - FCODE_API_KEY=${FCODE_API_KEY}
+      - FRONTAL_API_KEY=${FRONTAL_API_KEY}
       - FCODE_DEFAULT_MODEL=claude-sonnet-4-6
     working_dir: /app
     command: repl
@@ -239,7 +239,7 @@ services:
         max_attempts: 3
     environment:
       - FCODE_LOG_LEVEL=info
-      - FCODE_API_KEY=${FCODE_API_KEY}
+      - FRONTAL_API_KEY=${FRONTAL_API_KEY}
       - FCODE_PERMISSION_MODE=safe-mode
     volumes:
       - frontal-code-config:/home/frontal-code/.frontal-code
@@ -416,7 +416,7 @@ spec:
         env:
         - name: FCODE_LOG_LEVEL
           value: "info"
-        - name: FCODE_API_KEY
+        - name: FRONTAL_API_KEY
           valueFrom:
             secretKeyRef:
               name: frontal-code-secrets

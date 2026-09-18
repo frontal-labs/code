@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { logger } from '../src/log';
-import { SlackInterface } from '../src/slack';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { logger } from "../src/log";
+import { SlackInterface } from "../src/slack";
 import type {
   FrontalCodeCreateTaskResponse,
   FrontalCodeEventEnvelope,
@@ -8,7 +8,7 @@ import type {
   FrontalCodeTrackedTask,
   FrontalCodeUpdateTaskContextRequest,
   SlackBody,
-} from '../src/types';
+} from "../src/types";
 
 type TestableSlackInterface = SlackInterface & {
   connect(): Promise<void>;
@@ -19,12 +19,18 @@ type TestableSlackInterface = SlackInterface & {
     trackedTask: FrontalCodeTrackedTask,
     prompt: string
   ): Promise<void>;
-  handleSlackAction(action: { action_id: string; value?: string }, body: SlackBody): Promise<void>;
+  handleSlackAction(
+    action: { action_id: string; value?: string },
+    body: SlackBody
+  ): Promise<void>;
   handleOrphanApprovalAction(
     action: { action_id: string; value?: string },
     body: SlackBody
   ): Promise<void>;
-  handleFrontalCodeTaskEvent(event: FrontalCodeEventEnvelope, task?: FrontalCodeTrackedTask): Promise<void>;
+  handleFrontalCodeTaskEvent(
+    event: FrontalCodeEventEnvelope,
+    task?: FrontalCodeTrackedTask
+  ): Promise<void>;
   resolveTrackedTaskForEvent(
     event: FrontalCodeEventEnvelope,
     task?: FrontalCodeTrackedTask
@@ -42,7 +48,9 @@ type TestableSlackInterface = SlackInterface & {
 };
 
 function createTestSlackInterface() {
-  const slack = Object.create(SlackInterface.prototype) as TestableSlackInterface;
+  const slack = Object.create(
+    SlackInterface.prototype
+  ) as TestableSlackInterface;
   const postMessage = vi.fn();
   const updateMessage = vi.fn();
   const updateTaskContext = vi.fn();
@@ -111,12 +119,14 @@ function createTestSlackInterface() {
   };
 }
 
-function createTrackedTask(overrides: Partial<FrontalCodeTrackedTask> = {}): FrontalCodeTrackedTask {
+function createTrackedTask(
+  overrides: Partial<FrontalCodeTrackedTask> = {}
+): FrontalCodeTrackedTask {
   return {
-    taskId: 'task-123',
-    channelId: 'C123',
-    threadTs: '1710000000.100',
-    userId: 'U123',
+    taskId: "task-123",
+    channelId: "C123",
+    threadTs: "1710000000.100",
+    userId: "U123",
     ...overrides,
   };
 }
@@ -125,91 +135,97 @@ function createTaskResponse(
   overrides: Partial<FrontalCodeCreateTaskResponse> = {}
 ): FrontalCodeCreateTaskResponse {
   return {
-    task_id: 'task-123',
-    status: 'running',
-    message: 'created',
+    task_id: "task-123",
+    status: "running",
+    message: "created",
     ...overrides,
   };
 }
 
-function createTaskSnapshot(overrides: Partial<FrontalCodeTask> = {}): FrontalCodeTask {
+function createTaskSnapshot(
+  overrides: Partial<FrontalCodeTask> = {}
+): FrontalCodeTask {
   return {
-    task_id: 'task-123',
-    prompt: 'Investigate flaky test',
-    status: 'running',
+    task_id: "task-123",
+    prompt: "Investigate flaky test",
+    status: "running",
     created_at: 1,
     updated_at: 2,
     ...overrides,
   };
 }
 
-function createEvent(overrides: Partial<FrontalCodeEventEnvelope> = {}): FrontalCodeEventEnvelope {
+function createEvent(
+  overrides: Partial<FrontalCodeEventEnvelope> = {}
+): FrontalCodeEventEnvelope {
   return {
-    event_id: 'evt-123',
-    topic: 'approval',
-    event: 'approval.requested',
-    status: 'waiting',
-    emittedAt: '2026-04-09T10:00:00Z',
-    task_id: 'task-123',
+    event_id: "evt-123",
+    topic: "approval",
+    event: "approval.requested",
+    status: "waiting",
+    emittedAt: "2026-04-09T10:00:00Z",
+    task_id: "task-123",
     payload: {
-      approval_kind: 'orphaned_hosted_agent',
-      reason: 'Hosted lane lost its executor',
-      channel_id: 'C123',
-      thread_ts: '1710000000.100',
-      user_id: 'U123',
-      repository: 'frontal-code/slack',
+      approval_kind: "orphaned_hosted_agent",
+      reason: "Hosted lane lost its executor",
+      channel_id: "C123",
+      thread_ts: "1710000000.100",
+      user_id: "U123",
+      repository: "frontal-code/slack",
     },
     ...overrides,
   };
 }
 
-describe('SlackInterface behavior', () => {
+describe("SlackInterface behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('registers a created task, persists thread context, and tracks it for Frontal Code events', async () => {
-    const { slack, postMessage, updateTaskContext, trackTask } = createTestSlackInterface();
+  it("registers a created task, persists thread context, and tracks it for Frontal Code events", async () => {
+    const { slack, postMessage, updateTaskContext, trackTask } =
+      createTestSlackInterface();
     const task = createTaskResponse({
-      plan_kind: 'implementer',
-      worker_status: 'ready',
-      worker_id: 'worker-123',
+      plan_kind: "implementer",
+      worker_status: "ready",
+      worker_id: "worker-123",
     });
     const trackedTask = createTrackedTask({ threadTs: undefined });
-    postMessage.mockResolvedValue({ ts: '1710000000.200' });
+    postMessage.mockResolvedValue({ ts: "1710000000.200" });
     updateTaskContext.mockResolvedValue({});
 
-    await slack.registerTask(task, trackedTask, 'Investigate flaky test');
+    await slack.registerTask(task, trackedTask, "Investigate flaky test");
 
     expect(postMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      text: expect.stringContaining('Task created: task-123'),
+      channel: "C123",
+      text: expect.stringContaining("Task created: task-123"),
       thread_ts: undefined,
     });
     expect(updateTaskContext).toHaveBeenCalledWith({
-      taskId: 'task-123',
-      source: 'slack',
-      user_id: 'U123',
-      channel_id: 'C123',
-      thread_ts: '1710000000.200',
+      taskId: "task-123",
+      source: "slack",
+      user_id: "U123",
+      channel_id: "C123",
+      thread_ts: "1710000000.200",
     } satisfies FrontalCodeUpdateTaskContextRequest);
     expect(trackTask).toHaveBeenCalledWith({
-      taskId: 'task-123',
-      channelId: 'C123',
-      threadTs: '1710000000.200',
-      userId: 'U123',
+      taskId: "task-123",
+      channelId: "C123",
+      threadTs: "1710000000.200",
+      userId: "U123",
     });
-    expect(slack.trackedTasks.get('task-123')).toEqual({
-      taskId: 'task-123',
-      channelId: 'C123',
-      threadTs: '1710000000.200',
-      userId: 'U123',
+    expect(slack.trackedTasks.get("task-123")).toEqual({
+      taskId: "task-123",
+      channelId: "C123",
+      threadTs: "1710000000.200",
+      userId: "U123",
     });
   });
 
-  it('connects by syncing tasks, starting Slack, and connecting Frontal Code events', async () => {
-    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {});
-    const { slack, listTasks, appStart, connectEvents } = createTestSlackInterface();
+  it("connects by syncing tasks, starting Slack, and connecting Frontal Code events", async () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    const { slack, listTasks, appStart, connectEvents } =
+      createTestSlackInterface();
     listTasks.mockResolvedValue([]);
     appStart.mockResolvedValue(undefined);
     connectEvents.mockResolvedValue(undefined);
@@ -217,27 +233,31 @@ describe('SlackInterface behavior', () => {
     await slack.connect();
 
     expect(listTasks).toHaveBeenCalledWith({
-      source: 'slack',
-      status: 'pending,running',
+      source: "slack",
+      status: "pending,running",
     });
     expect(appStart).toHaveBeenCalled();
     expect(connectEvents).toHaveBeenCalled();
-    expect(infoSpy).toHaveBeenCalledWith('Slack WebSocket interface connected');
+    expect(infoSpy).toHaveBeenCalledWith("Slack WebSocket interface connected");
   });
 
-  it('rethrows connect failures after logging them', async () => {
-    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
-    const { slack, listTasks, appStart, connectEvents } = createTestSlackInterface();
+  it("rethrows connect failures after logging them", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const { slack, listTasks, appStart, connectEvents } =
+      createTestSlackInterface();
     listTasks.mockResolvedValue([]);
     appStart.mockResolvedValue(undefined);
-    connectEvents.mockRejectedValue(new Error('ws down'));
+    connectEvents.mockRejectedValue(new Error("ws down"));
 
-    await expect(slack.connect()).rejects.toThrow('ws down');
-    expect(errorSpy).toHaveBeenCalledWith('Failed to connect to Slack', expect.any(Error));
+    await expect(slack.connect()).rejects.toThrow("ws down");
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to connect to Slack",
+      expect.any(Error)
+    );
   });
 
-  it('disconnects Frontal Code events before stopping Slack', async () => {
-    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {});
+  it("disconnects Frontal Code events before stopping Slack", async () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     const { slack, disconnectEvents, appStop } = createTestSlackInterface();
     disconnectEvents.mockResolvedValue(undefined);
     appStop.mockResolvedValue(undefined);
@@ -246,20 +266,25 @@ describe('SlackInterface behavior', () => {
 
     expect(disconnectEvents).toHaveBeenCalled();
     expect(appStop).toHaveBeenCalled();
-    expect(infoSpy).toHaveBeenCalledWith('Slack WebSocket interface disconnected');
+    expect(infoSpy).toHaveBeenCalledWith(
+      "Slack WebSocket interface disconnected"
+    );
   });
 
-  it('rethrows disconnect failures after logging them', async () => {
-    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+  it("rethrows disconnect failures after logging them", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const { slack, disconnectEvents, appStop } = createTestSlackInterface();
-    disconnectEvents.mockRejectedValue(new Error('disconnect failed'));
+    disconnectEvents.mockRejectedValue(new Error("disconnect failed"));
 
-    await expect(slack.disconnect()).rejects.toThrow('disconnect failed');
+    await expect(slack.disconnect()).rejects.toThrow("disconnect failed");
     expect(appStop).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledWith('Failed to disconnect from Slack', expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to disconnect from Slack",
+      expect.any(Error)
+    );
   });
 
-  it('reports Slack and Frontal Code health from the live clients', async () => {
+  it("reports Slack and Frontal Code health from the live clients", async () => {
     const { slack, isListening, healthCheck } = createTestSlackInterface();
     isListening.mockReturnValue(true);
     healthCheck.mockResolvedValue(true);
@@ -270,7 +295,7 @@ describe('SlackInterface behavior', () => {
     });
   });
 
-  it('treats Slack as disconnected when the Bolt client does not expose isListening', async () => {
+  it("treats Slack as disconnected when the Bolt client does not expose isListening", async () => {
     const { slack, healthCheck } = createTestSlackInterface();
     delete (slack.app as { isListening?: () => boolean }).isListening;
     healthCheck.mockResolvedValue(true);
@@ -281,176 +306,182 @@ describe('SlackInterface behavior', () => {
     });
   });
 
-  it('returns a degraded health response when health checks throw', async () => {
-    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+  it("returns a degraded health response when health checks throw", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const { slack, isListening } = createTestSlackInterface();
     isListening.mockImplementation(() => {
-      throw new Error('listener unavailable');
+      throw new Error("listener unavailable");
     });
 
     await expect(slack.healthCheck()).resolves.toEqual({
       slack: false,
       frontal_code: false,
     });
-    expect(errorSpy).toHaveBeenCalledWith('Health check failed', expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Health check failed",
+      expect.any(Error)
+    );
   });
 
-  it('still tracks a task when thread-anchor persistence back to Frontal Code fails', async () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const { slack, postMessage, updateTaskContext, trackTask } = createTestSlackInterface();
-    postMessage.mockResolvedValue({ ts: '1710000000.250' });
-    updateTaskContext.mockRejectedValue(new Error('frontal-code unavailable'));
+  it("still tracks a task when thread-anchor persistence back to Frontal Code fails", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const { slack, postMessage, updateTaskContext, trackTask } =
+      createTestSlackInterface();
+    postMessage.mockResolvedValue({ ts: "1710000000.250" });
+    updateTaskContext.mockRejectedValue(new Error("frontal-code unavailable"));
 
     await slack.registerTask(
       createTaskResponse(),
       createTrackedTask({ threadTs: undefined }),
-      'Investigate flaky test'
+      "Investigate flaky test"
     );
 
     expect(trackTask).toHaveBeenCalledWith({
-      taskId: 'task-123',
-      channelId: 'C123',
-      threadTs: '1710000000.250',
-      userId: 'U123',
+      taskId: "task-123",
+      channelId: "C123",
+      threadTs: "1710000000.250",
+      userId: "U123",
     });
-    expect(slack.trackedTasks.get('task-123')?.threadTs).toBe('1710000000.250');
+    expect(slack.trackedTasks.get("task-123")?.threadTs).toBe("1710000000.250");
     expect(warnSpy).toHaveBeenCalledWith(
-      'Failed to persist Slack task thread anchor to Frontal Code',
+      "Failed to persist Slack task thread anchor to Frontal Code",
       expect.objectContaining({
-        taskId: 'task-123',
-        error: 'frontal-code unavailable',
+        taskId: "task-123",
+        error: "frontal-code unavailable",
       })
     );
   });
 
-  it('routes generic connector actions through the hosted connector interaction endpoint', async () => {
-    const { slack, sendConnectorInteraction, updateMessage } = createTestSlackInterface();
+  it("routes generic connector actions through the hosted connector interaction endpoint", async () => {
+    const { slack, sendConnectorInteraction, updateMessage } =
+      createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.500' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.500" },
     };
     sendConnectorInteraction.mockResolvedValue({
       blocks: [
         {
-          type: 'section',
-          text: { type: 'mrkdwn', text: '*Updated*' },
+          type: "section",
+          text: { type: "mrkdwn", text: "*Updated*" },
         },
       ],
     });
 
     await slack.handleSlackAction(
       {
-        action_id: 'connector.action',
-        value: 'task-123',
+        action_id: "connector.action",
+        value: "task-123",
       },
       body
     );
 
-    expect(sendConnectorInteraction).toHaveBeenCalledWith('slack', {
-      action: 'connector.action',
-      value: 'task-123',
-      userId: 'U123',
+    expect(sendConnectorInteraction).toHaveBeenCalledWith("slack", {
+      action: "connector.action",
+      value: "task-123",
+      userId: "U123",
       context: body,
     });
     expect(updateMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      ts: '1710000000.500',
+      channel: "C123",
+      ts: "1710000000.500",
       blocks: expect.any(Array),
     });
   });
 
-  it('routes orphan approval actions through the dedicated approval handler', async () => {
+  it("routes orphan approval actions through the dedicated approval handler", async () => {
     const { slack, sendConnectorInteraction } = createTestSlackInterface();
     const approvalSpy = vi
-      .spyOn(slack, 'handleOrphanApprovalAction')
+      .spyOn(slack, "handleOrphanApprovalAction")
       .mockResolvedValue(undefined);
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.500' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.500" },
     };
 
     await slack.handleSlackAction(
       {
-        action_id: 'orphaned_hosted_agent.retry',
-        value: 'task-123',
+        action_id: "orphaned_hosted_agent.retry",
+        value: "task-123",
       },
       body
     );
 
     expect(approvalSpy).toHaveBeenCalledWith(
       {
-        action_id: 'orphaned_hosted_agent.retry',
-        value: 'task-123',
+        action_id: "orphaned_hosted_agent.retry",
+        value: "task-123",
       },
       body
     );
     expect(sendConnectorInteraction).not.toHaveBeenCalled();
   });
 
-  it('short-circuits orphan approvals that were already resolved', async () => {
+  it("short-circuits orphan approvals that were already resolved", async () => {
     const { slack, updateMessage } = createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.510' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.510" },
     };
-    slack.approvalResolved.add('task-123');
+    slack.approvalResolved.add("task-123");
 
     await slack.handleOrphanApprovalAction(
       {
-        action_id: 'orphaned_hosted_agent.retry',
-        value: 'task-123',
+        action_id: "orphaned_hosted_agent.retry",
+        value: "task-123",
       },
       body
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      ts: '1710000000.510',
-      text: 'Approval for task task-123 was already resolved.',
+      channel: "C123",
+      ts: "1710000000.510",
+      text: "Approval for task task-123 was already resolved.",
       blocks: expect.any(Array),
     });
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
   });
 
-  it('short-circuits orphan approvals already being processed', async () => {
+  it("short-circuits orphan approvals already being processed", async () => {
     const { slack, updateMessage } = createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.520' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.520" },
     };
-    slack.approvalInFlight.add('task-123');
+    slack.approvalInFlight.add("task-123");
 
     await slack.handleOrphanApprovalAction(
       {
-        action_id: 'orphaned_hosted_agent.cancel',
-        value: 'task-123',
+        action_id: "orphaned_hosted_agent.cancel",
+        value: "task-123",
       },
       body
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      ts: '1710000000.520',
-      text: 'Approval for task task-123 is already being processed.',
+      channel: "C123",
+      ts: "1710000000.520",
+      text: "Approval for task task-123 is already being processed.",
       blocks: expect.any(Array),
     });
   });
 
-  it('ignores orphan approval actions that do not carry a task id', async () => {
-    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
+  it("ignores orphan approval actions that do not carry a task id", async () => {
+    const { slack, updateMessage, resolveTaskApproval } =
+      createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.530' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.530" },
     };
 
     await slack.handleOrphanApprovalAction(
       {
-        action_id: 'orphaned_hosted_agent.retry',
+        action_id: "orphaned_hosted_agent.retry",
       },
       body
     );
@@ -459,157 +490,163 @@ describe('SlackInterface behavior', () => {
     expect(resolveTaskApproval).not.toHaveBeenCalled();
   });
 
-  it('resolves orphan approvals through Frontal Code and updates the approval message twice', async () => {
-    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
+  it("resolves orphan approvals through Frontal Code and updates the approval message twice", async () => {
+    const { slack, updateMessage, resolveTaskApproval } =
+      createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.540' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.540" },
     };
     resolveTaskApproval.mockResolvedValue(
       createTaskSnapshot({
-        status: 'running',
-        worker_status: 'ready_for_prompt',
-        worker_id: 'worker-123',
+        status: "running",
+        worker_status: "ready_for_prompt",
+        worker_id: "worker-123",
       })
     );
 
     await slack.handleOrphanApprovalAction(
       {
-        action_id: 'orphaned_hosted_agent.retry',
-        value: 'task-123',
+        action_id: "orphaned_hosted_agent.retry",
+        value: "task-123",
       },
       body
     );
 
     expect(resolveTaskApproval).toHaveBeenCalledWith({
-      taskId: 'task-123',
-      approvalKind: 'orphaned_hosted_agent',
-      action: 'retry',
-      resolvedBy: 'U123',
-      reason: 'resolved from Slack approval action',
+      taskId: "task-123",
+      approvalKind: "orphaned_hosted_agent",
+      action: "retry",
+      resolvedBy: "U123",
+      reason: "resolved from Slack approval action",
     });
     expect(updateMessage).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        channel: 'C123',
-        ts: '1710000000.540',
-        text: 'Processing approval for task task-123: retry.',
+        channel: "C123",
+        ts: "1710000000.540",
+        text: "Processing approval for task task-123: retry.",
       })
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        channel: 'C123',
-        ts: '1710000000.540',
-        text: 'Approval resolved for task task-123: retry.',
+        channel: "C123",
+        ts: "1710000000.540",
+        text: "Approval resolved for task task-123: retry.",
       })
     );
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
-    expect(slack.approvalResolved.has('task-123')).toBe(true);
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
+    expect(slack.approvalResolved.has("task-123")).toBe(true);
   });
 
-  it('updates the approval message with an error state when resolution fails', async () => {
-    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
+  it("updates the approval message with an error state when resolution fails", async () => {
+    const { slack, updateMessage, resolveTaskApproval } =
+      createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.550' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.550" },
     };
-    resolveTaskApproval.mockRejectedValue(new Error('provider down'));
+    resolveTaskApproval.mockRejectedValue(new Error("provider down"));
 
     await expect(
       slack.handleOrphanApprovalAction(
         {
-          action_id: 'orphaned_hosted_agent.cancel',
-          value: 'task-123',
+          action_id: "orphaned_hosted_agent.cancel",
+          value: "task-123",
         },
         body
       )
-    ).rejects.toThrow('provider down');
+    ).rejects.toThrow("provider down");
 
     expect(updateMessage).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        text: 'Processing approval for task task-123: cancel.',
+        text: "Processing approval for task task-123: cancel.",
       })
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        text: 'Approval failed for task task-123.',
+        text: "Approval failed for task task-123.",
       })
     );
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
   });
 
-  it('resolves orphan approvals, updates the message twice, and marks the approval resolved', async () => {
-    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
+  it("resolves orphan approvals, updates the message twice, and marks the approval resolved", async () => {
+    const { slack, updateMessage, resolveTaskApproval } =
+      createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.530' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.530" },
     };
     resolveTaskApproval.mockResolvedValue(
       createTaskSnapshot({
-        worker_status: 'ready_for_prompt',
-        worker_id: 'worker-123',
+        worker_status: "ready_for_prompt",
+        worker_id: "worker-123",
       })
     );
 
     await slack.handleOrphanApprovalAction(
       {
-        action_id: 'orphaned_hosted_agent.retry',
-        value: 'task-123',
+        action_id: "orphaned_hosted_agent.retry",
+        value: "task-123",
       },
       body
     );
 
     expect(resolveTaskApproval).toHaveBeenCalledWith({
-      taskId: 'task-123',
-      approvalKind: 'orphaned_hosted_agent',
-      action: 'retry',
-      resolvedBy: 'U123',
-      reason: 'resolved from Slack approval action',
+      taskId: "task-123",
+      approvalKind: "orphaned_hosted_agent",
+      action: "retry",
+      resolvedBy: "U123",
+      reason: "resolved from Slack approval action",
     });
     expect(updateMessage).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        channel: 'C123',
-        ts: '1710000000.530',
-        text: 'Processing approval for task task-123: retry.',
+        channel: "C123",
+        ts: "1710000000.530",
+        text: "Processing approval for task task-123: retry.",
         blocks: expect.any(Array),
       })
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        channel: 'C123',
-        ts: '1710000000.530',
-        text: 'Approval resolved for task task-123: retry.',
+        channel: "C123",
+        ts: "1710000000.530",
+        text: "Approval resolved for task task-123: retry.",
         blocks: expect.any(Array),
       })
     );
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
-    expect(slack.approvalResolved.has('task-123')).toBe(true);
-    expect(slack.approvalMessageTsByTask.get('task-123')).toBe('1710000000.530');
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
+    expect(slack.approvalResolved.has("task-123")).toBe(true);
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
+      "1710000000.530"
+    );
   });
 
-  it('shows an approval error state, clears in-flight state, and rethrows when resolution fails', async () => {
-    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
+  it("shows an approval error state, clears in-flight state, and rethrows when resolution fails", async () => {
+    const { slack, updateMessage, resolveTaskApproval } =
+      createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.540' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.540" },
     };
-    const failure = new Error('approval backend unavailable');
+    const failure = new Error("approval backend unavailable");
     resolveTaskApproval.mockRejectedValue(failure);
 
     await expect(
       slack.handleOrphanApprovalAction(
         {
-          action_id: 'orphaned_hosted_agent.cancel',
-          value: 'task-123',
+          action_id: "orphaned_hosted_agent.cancel",
+          value: "task-123",
         },
         body
       )
@@ -618,80 +655,88 @@ describe('SlackInterface behavior', () => {
     expect(updateMessage).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        channel: 'C123',
-        ts: '1710000000.540',
-        text: 'Processing approval for task task-123: cancel.',
+        channel: "C123",
+        ts: "1710000000.540",
+        text: "Processing approval for task task-123: cancel.",
         blocks: expect.any(Array),
       })
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        channel: 'C123',
-        ts: '1710000000.540',
-        text: 'Approval failed for task task-123.',
+        channel: "C123",
+        ts: "1710000000.540",
+        text: "Approval failed for task task-123.",
         blocks: expect.any(Array),
       })
     );
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
-    expect(slack.approvalResolved.has('task-123')).toBe(false);
-    expect(slack.approvalMessageTsByTask.get('task-123')).toBe('1710000000.540');
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
+    expect(slack.approvalResolved.has("task-123")).toBe(false);
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
+      "1710000000.540"
+    );
   });
 
-  it('leaves the approval marked in-flight when the initial Slack approval update fails', async () => {
-    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
+  it("leaves the approval marked in-flight when the initial Slack approval update fails", async () => {
+    const { slack, updateMessage, resolveTaskApproval } =
+      createTestSlackInterface();
     const body: SlackBody = {
-      user: { id: 'U123' },
-      channel: { id: 'C123' },
-      message: { ts: '1710000000.550' },
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.550" },
     };
-    updateMessage.mockRejectedValue(new Error('slack update failed'));
+    updateMessage.mockRejectedValue(new Error("slack update failed"));
 
     await expect(
       slack.handleOrphanApprovalAction(
         {
-          action_id: 'orphaned_hosted_agent.retry',
-          value: 'task-123',
+          action_id: "orphaned_hosted_agent.retry",
+          value: "task-123",
         },
         body
       )
-    ).rejects.toThrow('slack update failed');
+    ).rejects.toThrow("slack update failed");
 
     expect(resolveTaskApproval).not.toHaveBeenCalled();
-    expect(slack.approvalInFlight.has('task-123')).toBe(true);
-    expect(slack.approvalResolved.has('task-123')).toBe(false);
-    expect(slack.approvalMessageTsByTask.get('task-123')).toBe('1710000000.550');
+    expect(slack.approvalInFlight.has("task-123")).toBe(true);
+    expect(slack.approvalResolved.has("task-123")).toBe(false);
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
+      "1710000000.550"
+    );
   });
 
-  it('posts approval-request events into the task thread and persists the approval message ts', async () => {
-    const { slack, postMessage, updateTaskContext } = createTestSlackInterface();
+  it("posts approval-request events into the task thread and persists the approval message ts", async () => {
+    const { slack, postMessage, updateTaskContext } =
+      createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    postMessage.mockResolvedValue({ ts: '1710000000.300' });
+    postMessage.mockResolvedValue({ ts: "1710000000.300" });
     updateTaskContext.mockResolvedValue({});
 
     await slack.handleFrontalCodeTaskEvent(createEvent(), trackedTask);
 
     expect(postMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      text: expect.stringContaining('needs approval'),
+      channel: "C123",
+      text: expect.stringContaining("needs approval"),
       blocks: expect.any(Array),
-      thread_ts: '1710000000.100',
+      thread_ts: "1710000000.100",
     });
-    expect(slack.approvalMessageTsByTask.get('task-123')).toBe('1710000000.300');
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
+      "1710000000.300"
+    );
     expect(updateTaskContext).toHaveBeenCalledWith({
-      taskId: 'task-123',
-      source: 'slack',
-      user_id: 'U123',
-      channel_id: 'C123',
-      thread_ts: '1710000000.100',
-      approval_message_ts: '1710000000.300',
+      taskId: "task-123",
+      source: "slack",
+      user_id: "U123",
+      channel_id: "C123",
+      thread_ts: "1710000000.100",
+      approval_message_ts: "1710000000.300",
     });
   });
 
-  it('returns without posting when an Frontal Code event cannot be resolved to a tracked task', async () => {
+  it("returns without posting when an Frontal Code event cannot be resolved to a tracked task", async () => {
     const { slack, postMessage } = createTestSlackInterface();
     const resolveSpy = vi
-      .spyOn(slack, 'resolveTrackedTaskForEvent')
+      .spyOn(slack, "resolveTrackedTaskForEvent")
       .mockResolvedValue(undefined);
 
     await slack.handleFrontalCodeTaskEvent(createEvent());
@@ -700,119 +745,125 @@ describe('SlackInterface behavior', () => {
     expect(postMessage).not.toHaveBeenCalled();
   });
 
-  it('suppresses repeated approval-request events after the approval is already resolved', async () => {
+  it("suppresses repeated approval-request events after the approval is already resolved", async () => {
     const { slack, postMessage } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    slack.approvalResolved.add('task-123');
+    slack.approvalResolved.add("task-123");
 
     await slack.handleFrontalCodeTaskEvent(createEvent(), trackedTask);
 
     expect(postMessage).not.toHaveBeenCalled();
   });
 
-  it('keeps the posted approval message even when approval-message persistence back to Frontal Code fails', async () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const { slack, postMessage, updateTaskContext } = createTestSlackInterface();
+  it("keeps the posted approval message even when approval-message persistence back to Frontal Code fails", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const { slack, postMessage, updateTaskContext } =
+      createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    postMessage.mockResolvedValue({ ts: '1710000000.301' });
-    updateTaskContext.mockRejectedValue(new Error('persist failed'));
+    postMessage.mockResolvedValue({ ts: "1710000000.301" });
+    updateTaskContext.mockRejectedValue(new Error("persist failed"));
 
     await slack.handleFrontalCodeTaskEvent(createEvent(), trackedTask);
 
     expect(postMessage).toHaveBeenCalled();
-    expect(slack.approvalMessageTsByTask.get('task-123')).toBe('1710000000.301');
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
+      "1710000000.301"
+    );
     expect(warnSpy).toHaveBeenCalledWith(
-      'Failed to persist Slack approval message linkage to Frontal Code',
+      "Failed to persist Slack approval message linkage to Frontal Code",
       expect.objectContaining({
-        taskId: 'task-123',
-        error: 'persist failed',
+        taskId: "task-123",
+        error: "persist failed",
       })
     );
   });
 
-  it('updates an existing approval message when an approval is resolved', async () => {
+  it("updates an existing approval message when an approval is resolved", async () => {
     const { slack, postMessage, updateMessage } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    slack.approvalMessageTsByTask.set('task-123', '1710000000.300');
-    slack.approvalInFlight.add('task-123');
+    slack.approvalMessageTsByTask.set("task-123", "1710000000.300");
+    slack.approvalInFlight.add("task-123");
 
     await slack.handleFrontalCodeTaskEvent(
       createEvent({
-        event: 'approval.resolved',
-        status: 'running',
+        event: "approval.resolved",
+        status: "running",
         payload: {
-          action: 'retry',
-          worker_status: 'ready_for_prompt',
-          worker_id: 'worker-123',
-          channel_id: 'C123',
-          repository: 'frontal-code/slack',
+          action: "retry",
+          worker_status: "ready_for_prompt",
+          worker_id: "worker-123",
+          channel_id: "C123",
+          repository: "frontal-code/slack",
         },
       }),
       trackedTask
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      ts: '1710000000.300',
-      text: expect.stringContaining('Approval resolved'),
+      channel: "C123",
+      ts: "1710000000.300",
+      text: expect.stringContaining("Approval resolved"),
       blocks: expect.any(Array),
     });
     expect(postMessage).not.toHaveBeenCalled();
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
-    expect(slack.approvalResolved.has('task-123')).toBe(true);
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
+    expect(slack.approvalResolved.has("task-123")).toBe(true);
   });
 
-  it('cleans up tracked task state after a terminal approval-resolved update succeeds', async () => {
-    const { slack, postMessage, updateMessage, untrackTask } = createTestSlackInterface();
+  it("cleans up tracked task state after a terminal approval-resolved update succeeds", async () => {
+    const { slack, postMessage, updateMessage, untrackTask } =
+      createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    slack.trackedTasks.set('task-123', trackedTask);
-    slack.approvalMessageTsByTask.set('task-123', '1710000000.300');
-    slack.approvalInFlight.add('task-123');
+    slack.trackedTasks.set("task-123", trackedTask);
+    slack.approvalMessageTsByTask.set("task-123", "1710000000.300");
+    slack.approvalInFlight.add("task-123");
     updateMessage.mockResolvedValue({});
-    vi.spyOn(slack as never, 'isTerminalFrontalCodeEvent').mockReturnValue(true);
+    vi.spyOn(slack as never, "isTerminalFrontalCodeEvent").mockReturnValue(
+      true
+    );
 
     await slack.handleFrontalCodeTaskEvent(
       createEvent({
-        event: 'approval.resolved',
-        status: 'running',
+        event: "approval.resolved",
+        status: "running",
         payload: {
-          action: 'cancel',
-          worker_status: 'cancelled',
-          worker_id: 'worker-123',
-          channel_id: 'C123',
-          repository: 'frontal-code/slack',
+          action: "cancel",
+          worker_status: "cancelled",
+          worker_id: "worker-123",
+          channel_id: "C123",
+          repository: "frontal-code/slack",
         },
       }),
       trackedTask
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      ts: '1710000000.300',
-      text: expect.stringContaining('Approval resolved'),
+      channel: "C123",
+      ts: "1710000000.300",
+      text: expect.stringContaining("Approval resolved"),
       blocks: expect.any(Array),
     });
     expect(postMessage).not.toHaveBeenCalled();
-    expect(untrackTask).toHaveBeenCalledWith('task-123');
-    expect(slack.trackedTasks.has('task-123')).toBe(false);
-    expect(slack.approvalMessageTsByTask.has('task-123')).toBe(false);
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
-    expect(slack.approvalResolved.has('task-123')).toBe(false);
+    expect(untrackTask).toHaveBeenCalledWith("task-123");
+    expect(slack.trackedTasks.has("task-123")).toBe(false);
+    expect(slack.approvalMessageTsByTask.has("task-123")).toBe(false);
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
+    expect(slack.approvalResolved.has("task-123")).toBe(false);
   });
 
-  it('posts a new message when an approval is resolved without a known approval message ts', async () => {
+  it("posts a new message when an approval is resolved without a known approval message ts", async () => {
     const { slack, postMessage, updateMessage } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    postMessage.mockResolvedValue({ ts: '1710000000.302' });
+    postMessage.mockResolvedValue({ ts: "1710000000.302" });
 
     await slack.handleFrontalCodeTaskEvent(
       createEvent({
-        event: 'approval.resolved',
-        status: 'running',
+        event: "approval.resolved",
+        status: "running",
         payload: {
-          action: 'cancel',
-          worker_status: 'cancelled',
-          channel_id: 'C123',
+          action: "cancel",
+          worker_status: "cancelled",
+          channel_id: "C123",
         },
       }),
       trackedTask
@@ -820,21 +871,21 @@ describe('SlackInterface behavior', () => {
 
     expect(updateMessage).not.toHaveBeenCalled();
     expect(postMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      text: 'Approval resolved for task task-123: cancel.',
+      channel: "C123",
+      text: "Approval resolved for task task-123: cancel.",
       blocks: expect.any(Array),
-      thread_ts: '1710000000.100',
+      thread_ts: "1710000000.100",
     });
   });
 
-  it('ignores task-created events because they do not produce Slack messages', async () => {
+  it("ignores task-created events because they do not produce Slack messages", async () => {
     const { slack, postMessage } = createTestSlackInterface();
 
     await slack.handleFrontalCodeTaskEvent(
       createEvent({
-        topic: 'task',
-        event: 'task.created',
-        status: 'pending',
+        topic: "task",
+        event: "task.created",
+        status: "pending",
       }),
       createTrackedTask()
     );
@@ -842,143 +893,147 @@ describe('SlackInterface behavior', () => {
     expect(postMessage).not.toHaveBeenCalled();
   });
 
-  it('posts correlated github connector events into the tracked task thread', async () => {
+  it("posts correlated github connector events into the tracked task thread", async () => {
     const { slack, postMessage } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    postMessage.mockResolvedValue({ ts: '1710000000.450' });
+    postMessage.mockResolvedValue({ ts: "1710000000.450" });
 
     await slack.handleFrontalCodeTaskEvent(
       createEvent({
-        topic: 'connector',
-        event: 'connector.event.received',
-        status: 'completed',
+        topic: "connector",
+        event: "connector.event.received",
+        status: "completed",
         payload: {
-          connector: 'github',
-          type: 'pull_request.synchronize',
+          connector: "github",
+          type: "pull_request.synchronize",
           data: {
             pr_number: 42,
-            sender_login: 'octocat',
-            html_url: 'https://github.com/acme/payments/pull/42',
+            sender_login: "octocat",
+            html_url: "https://github.com/acme/payments/pull/42",
           },
-          channel_id: 'C123',
-          thread_ts: '1710000000.100',
-          repository: 'frontal-code/slack',
+          channel_id: "C123",
+          thread_ts: "1710000000.100",
+          repository: "frontal-code/slack",
         },
       }),
       trackedTask
     );
 
     expect(postMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      text: 'Task task-123 (frontal-code/slack) received a GitHub PR update (#42) from octocat. https://github.com/acme/payments/pull/42',
+      channel: "C123",
+      text: "Task task-123 (frontal-code/slack) received a GitHub PR update (#42) from octocat. https://github.com/acme/payments/pull/42",
       blocks: undefined,
-      thread_ts: '1710000000.100',
+      thread_ts: "1710000000.100",
     });
   });
 
-  it('does not clean up tracked task state when updating a resolved approval message fails', async () => {
+  it("does not clean up tracked task state when updating a resolved approval message fails", async () => {
     const { slack, updateMessage, untrackTask } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    slack.trackedTasks.set('task-123', trackedTask);
-    slack.approvalMessageTsByTask.set('task-123', '1710000000.300');
-    slack.approvalInFlight.add('task-123');
-    updateMessage.mockRejectedValue(new Error('slack update failed'));
+    slack.trackedTasks.set("task-123", trackedTask);
+    slack.approvalMessageTsByTask.set("task-123", "1710000000.300");
+    slack.approvalInFlight.add("task-123");
+    updateMessage.mockRejectedValue(new Error("slack update failed"));
 
     await expect(
       slack.handleFrontalCodeTaskEvent(
         createEvent({
-          event: 'approval.resolved',
-          status: 'completed',
+          event: "approval.resolved",
+          status: "completed",
           payload: {
-            action: 'cancel',
-            worker_status: 'failed',
-            worker_id: 'worker-123',
-            channel_id: 'C123',
-            repository: 'frontal-code/slack',
+            action: "cancel",
+            worker_status: "failed",
+            worker_id: "worker-123",
+            channel_id: "C123",
+            repository: "frontal-code/slack",
           },
         }),
         trackedTask
       )
-    ).rejects.toThrow('slack update failed');
+    ).rejects.toThrow("slack update failed");
 
     expect(untrackTask).not.toHaveBeenCalled();
-    expect(slack.trackedTasks.get('task-123')).toEqual(trackedTask);
-    expect(slack.approvalMessageTsByTask.get('task-123')).toBe('1710000000.300');
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
-    expect(slack.approvalResolved.has('task-123')).toBe(true);
+    expect(slack.trackedTasks.get("task-123")).toEqual(trackedTask);
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
+      "1710000000.300"
+    );
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
+    expect(slack.approvalResolved.has("task-123")).toBe(true);
   });
 
-  it('cleans up tracked task state after terminal lane events', async () => {
+  it("cleans up tracked task state after terminal lane events", async () => {
     const { slack, postMessage, untrackTask } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
-    slack.trackedTasks.set('task-123', trackedTask);
-    slack.approvalMessageTsByTask.set('task-123', '1710000000.300');
-    slack.approvalInFlight.add('task-123');
-    slack.approvalResolved.add('task-123');
-    postMessage.mockResolvedValue({ ts: '1710000000.400' });
+    slack.trackedTasks.set("task-123", trackedTask);
+    slack.approvalMessageTsByTask.set("task-123", "1710000000.300");
+    slack.approvalInFlight.add("task-123");
+    slack.approvalResolved.add("task-123");
+    postMessage.mockResolvedValue({ ts: "1710000000.400" });
 
     await slack.handleFrontalCodeTaskEvent(
       createEvent({
-        topic: 'lane',
-        event: 'lane.green',
-        status: 'completed',
+        topic: "lane",
+        event: "lane.green",
+        status: "completed",
         payload: {
-          channel_id: 'C123',
-          repository: 'frontal-code/slack',
+          channel_id: "C123",
+          repository: "frontal-code/slack",
         },
       }),
       trackedTask
     );
 
     expect(postMessage).toHaveBeenCalledWith({
-      channel: 'C123',
-      text: 'Task task-123 (frontal-code/slack) reported a green lane.',
+      channel: "C123",
+      text: "Task task-123 (frontal-code/slack) reported a green lane.",
       blocks: undefined,
-      thread_ts: '1710000000.100',
+      thread_ts: "1710000000.100",
     });
-    expect(slack.trackedTasks.has('task-123')).toBe(false);
-    expect(slack.approvalMessageTsByTask.has('task-123')).toBe(false);
-    expect(slack.approvalInFlight.has('task-123')).toBe(false);
-    expect(slack.approvalResolved.has('task-123')).toBe(false);
-    expect(untrackTask).toHaveBeenCalledWith('task-123');
+    expect(slack.trackedTasks.has("task-123")).toBe(false);
+    expect(slack.approvalMessageTsByTask.has("task-123")).toBe(false);
+    expect(slack.approvalInFlight.has("task-123")).toBe(false);
+    expect(slack.approvalResolved.has("task-123")).toBe(false);
+    expect(untrackTask).toHaveBeenCalledWith("task-123");
   });
 
-  it('falls back to Frontal Code task snapshots when an event arrives for an unknown task', async () => {
+  it("falls back to Frontal Code task snapshots when an event arrives for an unknown task", async () => {
     const { slack, getTask, trackTask } = createTestSlackInterface();
     getTask.mockResolvedValue(
       createTaskSnapshot({
-        task_id: 'task-unknown',
-        channel_id: 'C999',
-        thread_ts: '1710000000.900',
-        user_id: 'U999',
-        approval_message_ts: '1710000001.000',
+        task_id: "task-unknown",
+        channel_id: "C999",
+        thread_ts: "1710000000.900",
+        user_id: "U999",
+        approval_message_ts: "1710000001.000",
       })
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
-        task_id: 'task-unknown',
+        task_id: "task-unknown",
         payload: {},
       })
     );
 
-    expect(getTask).toHaveBeenCalledWith('task-unknown');
+    expect(getTask).toHaveBeenCalledWith("task-unknown");
     expect(trackTask).toHaveBeenCalledWith({
-      taskId: 'task-unknown',
-      channelId: 'C999',
-      threadTs: '1710000000.900',
-      userId: 'U999',
+      taskId: "task-unknown",
+      channelId: "C999",
+      threadTs: "1710000000.900",
+      userId: "U999",
     });
     expect(resolvedTask).toEqual({
-      taskId: 'task-unknown',
-      channelId: 'C999',
-      threadTs: '1710000000.900',
-      userId: 'U999',
+      taskId: "task-unknown",
+      channelId: "C999",
+      threadTs: "1710000000.900",
+      userId: "U999",
     });
-    expect(slack.approvalMessageTsByTask.get('task-unknown')).toBe('1710000001.000');
+    expect(slack.approvalMessageTsByTask.get("task-unknown")).toBe(
+      "1710000001.000"
+    );
   });
 
-  it('returns no tracked task when an event arrives without a task id', async () => {
+  it("returns no tracked task when an event arrives without a task id", async () => {
     const { slack, getTask } = createTestSlackInterface();
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
@@ -991,12 +1046,12 @@ describe('SlackInterface behavior', () => {
     expect(getTask).not.toHaveBeenCalled();
   });
 
-  it('hydrates a known tracked task from event summary routing fields', async () => {
+  it("hydrates a known tracked task from event summary routing fields", async () => {
     const { slack } = createTestSlackInterface();
     slack.trackedTasks.set(
-      'task-123',
+      "task-123",
       createTrackedTask({
-        channelId: 'C123',
+        channelId: "C123",
         threadTs: undefined,
         userId: undefined,
       })
@@ -1005,172 +1060,172 @@ describe('SlackInterface behavior', () => {
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
         payload: {
-          channel_id: 'C999',
-          thread_ts: '1710000000.999',
-          user_id: 'U999',
-          repository: 'frontal-code/slack',
+          channel_id: "C999",
+          thread_ts: "1710000000.999",
+          user_id: "U999",
+          repository: "frontal-code/slack",
         },
       })
     );
 
     expect(resolvedTask).toEqual({
-      taskId: 'task-123',
-      channelId: 'C999',
-      threadTs: '1710000000.999',
-      userId: 'U999',
+      taskId: "task-123",
+      channelId: "C999",
+      threadTs: "1710000000.999",
+      userId: "U999",
     });
-    expect(slack.trackedTasks.get('task-123')).toEqual(resolvedTask);
+    expect(slack.trackedTasks.get("task-123")).toEqual(resolvedTask);
   });
 
-  it('creates tracked routing directly from event summaries without calling Frontal Code task lookup', async () => {
+  it("creates tracked routing directly from event summaries without calling Frontal Code task lookup", async () => {
     const { slack, getTask, trackTask } = createTestSlackInterface();
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
-        task_id: 'task-456',
+        task_id: "task-456",
         payload: {
-          channel_id: 'C456',
-          thread_ts: '1710000000.456',
-          user_id: 'U456',
+          channel_id: "C456",
+          thread_ts: "1710000000.456",
+          user_id: "U456",
         },
       })
     );
 
     expect(getTask).not.toHaveBeenCalled();
     expect(trackTask).toHaveBeenCalledWith({
-      taskId: 'task-456',
-      channelId: 'C456',
-      threadTs: '1710000000.456',
-      userId: 'U456',
+      taskId: "task-456",
+      channelId: "C456",
+      threadTs: "1710000000.456",
+      userId: "U456",
     });
     expect(resolvedTask).toEqual({
-      taskId: 'task-456',
-      channelId: 'C456',
-      threadTs: '1710000000.456',
-      userId: 'U456',
+      taskId: "task-456",
+      channelId: "C456",
+      threadTs: "1710000000.456",
+      userId: "U456",
     });
   });
 
-  it('derives Slack task routing directly from event summaries before fetching Frontal Code task snapshots', async () => {
+  it("derives Slack task routing directly from event summaries before fetching Frontal Code task snapshots", async () => {
     const { slack, getTask, trackTask } = createTestSlackInterface();
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
-        task_id: 'task-from-event',
+        task_id: "task-from-event",
         payload: {
-          channel_id: 'C777',
-          thread_ts: '1710000000.777',
-          user_id: 'U777',
-          repository: 'frontal-code/slack',
+          channel_id: "C777",
+          thread_ts: "1710000000.777",
+          user_id: "U777",
+          repository: "frontal-code/slack",
         },
       })
     );
 
     expect(getTask).not.toHaveBeenCalled();
     expect(trackTask).toHaveBeenCalledWith({
-      taskId: 'task-from-event',
-      channelId: 'C777',
-      threadTs: '1710000000.777',
-      userId: 'U777',
+      taskId: "task-from-event",
+      channelId: "C777",
+      threadTs: "1710000000.777",
+      userId: "U777",
     });
     expect(resolvedTask).toEqual({
-      taskId: 'task-from-event',
-      channelId: 'C777',
-      threadTs: '1710000000.777',
-      userId: 'U777',
+      taskId: "task-from-event",
+      channelId: "C777",
+      threadTs: "1710000000.777",
+      userId: "U777",
     });
-    expect(slack.trackedTasks.get('task-from-event')).toEqual(resolvedTask);
+    expect(slack.trackedTasks.get("task-from-event")).toEqual(resolvedTask);
   });
 
-  it('returns no tracked task when fallback Frontal Code lookup fails', async () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+  it("returns no tracked task when fallback Frontal Code lookup fails", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const { slack, getTask } = createTestSlackInterface();
-    getTask.mockRejectedValue(new Error('not found'));
+    getTask.mockRejectedValue(new Error("not found"));
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
-        task_id: 'task-missing',
+        task_id: "task-missing",
         payload: {},
       })
     );
 
     expect(resolvedTask).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
-      'Failed to resolve Slack task routing from Frontal Code event',
+      "Failed to resolve Slack task routing from Frontal Code event",
       expect.objectContaining({
-        taskId: 'task-missing',
-        error: 'not found',
+        taskId: "task-missing",
+        error: "not found",
       })
     );
   });
 
-  it('returns no tracked task when the Frontal Code snapshot cannot be converted into Slack routing', async () => {
+  it("returns no tracked task when the Frontal Code snapshot cannot be converted into Slack routing", async () => {
     const { slack, getTask, trackTask } = createTestSlackInterface();
     getTask.mockResolvedValue(
       createTaskSnapshot({
-        task_id: 'task-no-routing',
+        task_id: "task-no-routing",
         channel_id: undefined,
-        thread_ts: '1710000000.901',
-        user_id: 'U901',
+        thread_ts: "1710000000.901",
+        user_id: "U901",
       })
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
-        task_id: 'task-no-routing',
+        task_id: "task-no-routing",
         payload: {},
       })
     );
 
     expect(resolvedTask).toBeUndefined();
     expect(trackTask).not.toHaveBeenCalled();
-    expect(slack.trackedTasks.has('task-no-routing')).toBe(false);
+    expect(slack.trackedTasks.has("task-no-routing")).toBe(false);
   });
 
-  it('hydrates active Slack tasks from Frontal Code during startup sync', async () => {
+  it("hydrates active Slack tasks from Frontal Code during startup sync", async () => {
     const { slack, listTasks, trackTask } = createTestSlackInterface();
     listTasks.mockResolvedValue([
       createTaskSnapshot({
-        task_id: 'task-1',
-        channel_id: 'C101',
-        thread_ts: '1710000000.101',
-        user_id: 'U101',
-        approval_message_ts: '1710000000.201',
-        worker_status: 'running',
+        task_id: "task-1",
+        channel_id: "C101",
+        thread_ts: "1710000000.101",
+        user_id: "U101",
+        approval_message_ts: "1710000000.201",
+        worker_status: "running",
       }),
       createTaskSnapshot({
-        task_id: 'task-2',
-        channel_id: 'C202',
-        thread_ts: '1710000000.102',
-        user_id: 'U202',
-        approval_message_ts: '1710000000.202',
-        worker_status: 'orphaned',
+        task_id: "task-2",
+        channel_id: "C202",
+        thread_ts: "1710000000.102",
+        user_id: "U202",
+        approval_message_ts: "1710000000.202",
+        worker_status: "orphaned",
       }),
     ]);
 
     await slack.syncTrackedTasksFromFrontalCode();
 
     expect(listTasks).toHaveBeenCalledWith({
-      source: 'slack',
-      status: 'pending,running',
+      source: "slack",
+      status: "pending,running",
     });
     expect(trackTask).toHaveBeenCalledTimes(2);
-    expect(slack.trackedTasks.get('task-1')).toEqual({
-      taskId: 'task-1',
-      channelId: 'C101',
-      threadTs: '1710000000.101',
-      userId: 'U101',
+    expect(slack.trackedTasks.get("task-1")).toEqual({
+      taskId: "task-1",
+      channelId: "C101",
+      threadTs: "1710000000.101",
+      userId: "U101",
     });
-    expect(slack.approvalMessageTsByTask.get('task-2')).toBe('1710000000.202');
-    expect(slack.approvalResolved.has('task-1')).toBe(true);
-    expect(slack.approvalResolved.has('task-2')).toBe(false);
+    expect(slack.approvalMessageTsByTask.get("task-2")).toBe("1710000000.202");
+    expect(slack.approvalResolved.has("task-1")).toBe(true);
+    expect(slack.approvalResolved.has("task-2")).toBe(false);
   });
 
-  it('skips sync entries that do not have a Slack channel id', async () => {
+  it("skips sync entries that do not have a Slack channel id", async () => {
     const { slack, listTasks, trackTask } = createTestSlackInterface();
     listTasks.mockResolvedValue([
       createTaskSnapshot({
-        task_id: 'task-no-channel',
+        task_id: "task-no-channel",
         channel_id: undefined,
       }),
     ]);
@@ -1181,25 +1236,28 @@ describe('SlackInterface behavior', () => {
     expect(slack.trackedTasks.size).toBe(0);
   });
 
-  it('logs and continues when startup sync from Frontal Code fails', async () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+  it("logs and continues when startup sync from Frontal Code fails", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const { slack, listTasks, trackTask } = createTestSlackInterface();
-    listTasks.mockRejectedValue(new Error('frontal-code down'));
+    listTasks.mockRejectedValue(new Error("frontal-code down"));
 
     await slack.syncTrackedTasksFromFrontalCode();
 
     expect(trackTask).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith('Failed to synchronize Slack tasks from Frontal Code', {
-      error: 'frontal-code down',
-    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Failed to synchronize Slack tasks from Frontal Code",
+      {
+        error: "frontal-code down",
+      }
+    );
   });
 
-  it('hydrates known tracked tasks with newer routing details from later events', async () => {
+  it("hydrates known tracked tasks with newer routing details from later events", async () => {
     const { slack, getTask, trackTask } = createTestSlackInterface();
     slack.trackedTasks.set(
-      'task-123',
+      "task-123",
       createTrackedTask({
-        channelId: 'C123',
+        channelId: "C123",
         threadTs: undefined,
         userId: undefined,
       })
@@ -1208,10 +1266,10 @@ describe('SlackInterface behavior', () => {
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
         payload: {
-          channel_id: 'C456',
-          thread_ts: '1710000000.456',
-          user_id: 'U456',
-          repository: 'frontal-code/slack',
+          channel_id: "C456",
+          thread_ts: "1710000000.456",
+          user_id: "U456",
+          repository: "frontal-code/slack",
         },
       })
     );
@@ -1219,45 +1277,45 @@ describe('SlackInterface behavior', () => {
     expect(getTask).not.toHaveBeenCalled();
     expect(trackTask).not.toHaveBeenCalled();
     expect(resolvedTask).toEqual({
-      taskId: 'task-123',
-      channelId: 'C456',
-      threadTs: '1710000000.456',
-      userId: 'U456',
+      taskId: "task-123",
+      channelId: "C456",
+      threadTs: "1710000000.456",
+      userId: "U456",
     });
-    expect(slack.trackedTasks.get('task-123')).toEqual(resolvedTask);
+    expect(slack.trackedTasks.get("task-123")).toEqual(resolvedTask);
   });
 
-  it('preserves an existing thread ts when a newer event omits thread_ts', async () => {
+  it("preserves an existing thread ts when a newer event omits thread_ts", async () => {
     const { slack } = createTestSlackInterface();
     slack.trackedTasks.set(
-      'task-123',
+      "task-123",
       createTrackedTask({
-        channelId: 'C123',
-        threadTs: '1710000000.100',
-        userId: 'U123',
+        channelId: "C123",
+        threadTs: "1710000000.100",
+        userId: "U123",
       })
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
         payload: {
-          channel_id: 'C456',
-          user_id: 'U456',
-          repository: 'frontal-code/slack',
+          channel_id: "C456",
+          user_id: "U456",
+          repository: "frontal-code/slack",
         },
       })
     );
 
     expect(resolvedTask).toEqual({
-      taskId: 'task-123',
-      channelId: 'C456',
-      threadTs: '1710000000.100',
-      userId: 'U456',
+      taskId: "task-123",
+      channelId: "C456",
+      threadTs: "1710000000.100",
+      userId: "U456",
     });
-    expect(slack.trackedTasks.get('task-123')).toEqual(resolvedTask);
+    expect(slack.trackedTasks.get("task-123")).toEqual(resolvedTask);
   });
 
-  it('returns the original tracked task when an event summary does not change routing fields', () => {
+  it("returns the original tracked task when an event summary does not change routing fields", () => {
     const { slack } = createTestSlackInterface();
     const task = createTrackedTask();
 
@@ -1266,30 +1324,30 @@ describe('SlackInterface behavior', () => {
         task,
         createEvent({
           payload: {
-            repository: 'frontal-code/slack',
+            repository: "frontal-code/slack",
           },
         })
       )
     ).toBe(task);
   });
 
-  it('upserts tracked tasks while preserving an existing thread ts when a new task omits it', () => {
+  it("upserts tracked tasks while preserving an existing thread ts when a new task omits it", () => {
     const { slack } = createTestSlackInterface();
-    slack.trackedTasks.set('task-123', createTrackedTask());
+    slack.trackedTasks.set("task-123", createTrackedTask());
 
     slack.upsertTrackedTask(
       createTrackedTask({
-        channelId: 'C456',
+        channelId: "C456",
         threadTs: undefined,
-        userId: 'U456',
+        userId: "U456",
       })
     );
 
-    expect(slack.trackedTasks.get('task-123')).toEqual({
-      taskId: 'task-123',
-      channelId: 'C456',
-      threadTs: '1710000000.100',
-      userId: 'U456',
+    expect(slack.trackedTasks.get("task-123")).toEqual({
+      taskId: "task-123",
+      channelId: "C456",
+      threadTs: "1710000000.100",
+      userId: "U456",
     });
   });
 });

@@ -62,7 +62,7 @@ frontal-code --model claude-sonnet-4-6 prompt "Explain this codebase"
 
 ```bash
 # Set API key
-export FCODE_API_KEY="sk-ant-..."
+export FRONTAL_API_KEY="sk-ant-..."
 
 # Configure default model
 frontal-code config set runtime.default_model "claude-sonnet-4-6"

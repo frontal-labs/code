@@ -2,14 +2,7 @@
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "Frontal Frontal Code",
   "description": "A Rust workspace providing the Frontal Code CLI/runtime and a repo-level developer tooling suite (doctor, coverage, benchmark, cache, codegen, fuzz, generators, remote, telemetry, templates, version, workspace).",
-  "folders": [
-    "crates",
-    "tools",
-    "cli",
-    "sdk",
-    "extensions",
-    "docs"
-  ],
+  "folders": ["crates", "tools", "cli", "sdk", "extensions", "docs"],
   "excludeFolders": [
     "target",
     "bazel",
@@ -24,12 +17,7 @@
     ".opencode",
     ".devcontainer"
   ],
-  "excludeFiles": [
-    "CHANGELOG.md",
-    "Cargo.lock",
-    "package-lock.json",
-    "libtest_ts.rlib"
-  ],
+  "excludeFiles": ["CHANGELOG.md", "Cargo.lock", "package-lock.json", "libtest_ts.rlib"],
   "rules": [
     "Follow the AGENTS.md guidance: run 'cargo fmt', 'cargo clippy --workspace --all-targets -- -D warnings', and 'cargo test --workspace' before considering changes complete.",
     "Prefer small, reviewable changes and keep generated bootstrap files aligned with actual repo workflows.",

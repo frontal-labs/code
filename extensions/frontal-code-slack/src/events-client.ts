@@ -21,10 +21,10 @@ export class FrontalCodeEventsClient {
     }
     this.ws = new WebSocket(
       this.url,
-      config.frontal-code.apiKey
+      config.frontal - code.apiKey
         ? {
             headers: {
-              "x-api-key": config.frontal-code.apiKey,
+              "x-api-key": config.frontal - code.apiKey,
             },
           }
         : undefined
@@ -34,7 +34,9 @@ export class FrontalCodeEventsClient {
     });
     this.ws.on("message", (payload) => {
       try {
-        const event = JSON.parse(payload.toString()) as FrontalCodeEventEnvelope;
+        const event = JSON.parse(
+          payload.toString()
+        ) as FrontalCodeEventEnvelope;
         for (const handler of this.handlers) {
           handler(event);
         }
@@ -80,7 +82,7 @@ export class FrontalCodeEventsClient {
   }
 
   private buildWsUrl(): string {
-    const base = config.frontal-code.apiUrl.replace(/\/+$/, "");
+    const base = config.frontal - code.apiUrl.replace(/\/+$/, "");
     const wsBase = base.replace(/^http/, (match) =>
       match === "https" ? "wss" : "ws"
     );

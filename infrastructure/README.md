@@ -40,7 +40,7 @@ The configuration is split into:
 1. Copy `compose/.env.example` to `compose/.env`.
 2. Fill in Slack credentials and at least one provider key.
 3. (Optional) To enable Linear/Graphite tracking: set `FCODE_LINEAR_API_TOKEN` / `FCODE_GRAPHITE_API_TOKEN` and, if you enforce webhook signatures, `FCODE_LINEAR_WEBHOOK_SECRET` / `FCODE_GRAPHITE_WEBHOOK_SECRET`.
-4. Set `FCODE_SERVER_API_KEY` in `compose/.env`, and set the same shared secret as `FCODE_API_KEY`
+4. Set `FRONTAL_SERVER_API_KEY` in `compose/.env`, and set the same shared secret as `FRONTAL_SERVER_API_KEY`
    for any connector calling the hosted control plane.
 5. Start the stack:
 

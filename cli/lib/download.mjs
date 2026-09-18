@@ -7,21 +7,13 @@
 // No top-level side effects — everything is exported as functions so the
 // module is safe to import in tests.
 
-import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { detectTarget, UnsupportedPlatformError } from "./platform.mjs";
 
-export const RELEASE_BASE =
-  "https://github.com/frontal-labs/frontal-code/releases/download";
+export const RELEASE_BASE = "https://github.com/frontal-labs/frontal-code/releases/download";
 
 // Build the release asset URL for a given version + target descriptor.
 export function releaseAssetUrl(version, assetName) {

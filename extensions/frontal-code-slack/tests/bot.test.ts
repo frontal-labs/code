@@ -1,21 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SlackBotService } from '../src/bot';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SlackBotService } from "../src/bot";
 
 // Mock dependencies
-vi.mock('../src/config', () => ({
+vi.mock("../src/config", () => ({
   config: {
     slack: {
-      botToken: 'xoxb-test-token',
-      appToken: 'xapp-test-token',
-      signingSecret: 'test-signing-secret',
+      botToken: "xoxb-test-token",
+      appToken: "xapp-test-token",
+      signingSecret: "test-signing-secret",
     },
     app: {
-      logLevel: 'error',
+      logLevel: "error",
     },
   },
 }));
 
-vi.mock('../src/logger', () => ({
+vi.mock("../src/logger", () => ({
   logger: {
     error: vi.fn(),
     info: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('../src/logger', () => ({
   logSlackEvent: vi.fn(),
 }));
 
-vi.mock('@slack/bolt', () => ({
+vi.mock("@slack/bolt", () => ({
   App: vi.fn(() => ({
     command: vi.fn(),
     message: vi.fn(),
@@ -37,37 +37,37 @@ vi.mock('@slack/bolt', () => ({
       auth: {
         test: vi.fn().mockResolvedValue({
           ok: true,
-          user: 'test-bot',
+          user: "test-bot",
         }),
       },
     },
   })),
 }));
 
-vi.mock('../src/api-client', () => ({
+vi.mock("../src/api-client", () => ({
   FrontalCodeApiClient: vi.fn(() => ({
     submitPrompt: vi.fn().mockResolvedValue({
       ok: true,
       exit_code: 0,
-      args: ['prompt', 'test'],
+      args: ["prompt", "test"],
       duration_ms: 1000,
-      stdout: 'Task completed successfully',
-      stderr: '',
+      stdout: "Task completed successfully",
+      stderr: "",
     }),
     healthCheck: vi.fn().mockResolvedValue(true),
   })),
 }));
 
-vi.mock('../src/database', () => ({
+vi.mock("../src/database", () => ({
   DatabaseService: vi.fn(() => ({
     connect: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
     healthCheck: vi.fn().mockResolvedValue(true),
     createSlackTask: vi.fn().mockResolvedValue({
-      id: '123',
-      slack_task_id: 'task-123',
-      status: 'pending',
-      request: { prompt: 'Test task' },
+      id: "123",
+      slack_task_id: "task-123",
+      status: "pending",
+      request: { prompt: "Test task" },
       created_at: new Date(),
       updated_at: new Date(),
     }),
@@ -77,32 +77,32 @@ vi.mock('../src/database', () => ({
   })),
 }));
 
-vi.mock('../src/redis', () => ({
+vi.mock("../src/redis", () => ({
   RedisService: vi.fn(() => ({
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     healthCheck: vi.fn().mockResolvedValue(true),
-    set: vi.fn().mockResolvedValue('OK'),
+    set: vi.fn().mockResolvedValue("OK"),
     get: vi.fn().mockResolvedValue(null),
     del: vi.fn().mockResolvedValue(1),
   })),
 }));
 
-vi.mock('../src/tasks', () => ({
+vi.mock("../src/tasks", () => ({
   TaskManager: vi.fn(() => ({
     createTask: vi.fn().mockResolvedValue({
-      slack_task_id: 'task-123',
-      status: 'pending',
-      request: { prompt: 'Test task' },
+      slack_task_id: "task-123",
+      status: "pending",
+      request: { prompt: "Test task" },
     }),
     getTask: vi.fn().mockResolvedValue(null),
     updateTask: vi.fn().mockResolvedValue(null),
     cancelTask: vi.fn().mockResolvedValue(undefined),
     getUserTasks: vi.fn().mockResolvedValue([]),
     getTaskProgress: vi.fn().mockResolvedValue({
-      task_id: 'task-123',
-      status: 'pending',
-      message: 'Task is pending',
+      task_id: "task-123",
+      status: "pending",
+      message: "Task is pending",
       progress: 0,
       artifacts: [],
     }),
@@ -115,7 +115,7 @@ vi.mock('../src/tasks', () => ({
   })),
 }));
 
-vi.mock('../src/conversations', () => ({
+vi.mock("../src/conversations", () => ({
   ConversationManager: vi.fn(() => ({
     createContext: vi.fn().mockResolvedValue(undefined),
     getContext: vi.fn().mockResolvedValue(null),
@@ -125,12 +125,12 @@ vi.mock('../src/conversations', () => ({
   })),
 }));
 
-vi.mock('../src/validators', () => ({
+vi.mock("../src/validators", () => ({
   validateSlackCommand: vi.fn(() => ({ success: true, data: {} })),
-  getValidationErrorMessage: vi.fn(() => ''),
+  getValidationErrorMessage: vi.fn(() => ""),
 }));
 
-describe('SlackBotService', () => {
+describe("SlackBotService", () => {
   let bot: SlackBotService;
 
   beforeEach(() => {
@@ -138,28 +138,28 @@ describe('SlackBotService', () => {
     bot = new SlackBotService();
   });
 
-  describe('Constructor', () => {
-    it('should create bot service instance', () => {
+  describe("Constructor", () => {
+    it("should create bot service instance", () => {
       expect(bot).toBeInstanceOf(SlackBotService);
     });
   });
 
-  describe('Service Methods', () => {
-    it('should start successfully', async () => {
+  describe("Service Methods", () => {
+    it("should start successfully", async () => {
       await expect(bot.start()).resolves.not.toThrow();
     });
 
-    it('should stop successfully', async () => {
+    it("should stop successfully", async () => {
       await expect(bot.stop()).resolves.not.toThrow();
     });
 
-    it('should perform health check', async () => {
+    it("should perform health check", async () => {
       const health = await bot.healthCheck();
-      expect(health).toHaveProperty('slack');
-      expect(health).toHaveProperty('frontal-code');
-      expect(health).toHaveProperty('database');
-      expect(health).toHaveProperty('redis');
-      expect(health).toHaveProperty('tasks');
+      expect(health).toHaveProperty("slack");
+      expect(health).toHaveProperty("frontal-code");
+      expect(health).toHaveProperty("database");
+      expect(health).toHaveProperty("redis");
+      expect(health).toHaveProperty("tasks");
     });
   });
 });

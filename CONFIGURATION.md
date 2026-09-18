@@ -219,8 +219,8 @@ export FCODE_LOGS_DIR="/custom/logs"
 ### API Provider Variables
 ```bash
 # Anthropic
-export FCODE_API_KEY="sk-ant-..."
-export FCODE_BASE_URL="https://api.anthropic.com"
+export FRONTAL_API_KEY="sk-ant-..."
+export FRONTAL_BASE_URL="https://api.anthropic.com"
 
 # OpenAI
 export OPENAI_API_KEY="sk-..."

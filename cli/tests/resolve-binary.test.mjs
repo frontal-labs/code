@@ -1,14 +1,14 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
 import { detectTarget } from "../lib/platform.mjs";
 import {
   __setPkgRootForTests,
-  resolveVendoredBinary,
-  resolveLocalBuild,
   resolveBinary,
+  resolveLocalBuild,
+  resolveVendoredBinary,
 } from "../lib/resolve-binary.mjs";
 
 function makeFakeBin(dir, name = "frontal-code") {

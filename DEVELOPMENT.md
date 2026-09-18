@@ -43,8 +43,8 @@ ln -sf config/project.json.dev config/project.json
 Create a `.env` file for local development:
 
 ```bash
-# AI Provider
-FCODE_API_KEY=sk-ant-...
+  # AI Provider
+  FRONTAL_API_KEY=sk-ant-...
 
 # Database (for local development)
 DATABASE_URL=sqlite:///tmp/frontal-code_dev.db

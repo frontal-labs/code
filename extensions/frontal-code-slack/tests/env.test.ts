@@ -1,24 +1,26 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { env, getEnvConfig, validateEnvConfig } from '../src/env';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { env, getEnvConfig, validateEnvConfig } from "../src/env";
 
 const BASE_ENV = {
-  SLACK_BOT_TOKEN: 'xoxb-test-token',
-  SLACK_APP_TOKEN: 'xapp-test-token',
-  SLACK_SIGNING_SECRET: 'test-signing-secret-with-at-least-32-chars',
-  FCODE_API_URL: 'http://localhost:8787',
-  FCODE_API_TIMEOUT: '30000',
-  NODE_ENV: 'test',
-  LOG_LEVEL: 'error',
-  PORT: '3000',
-  GITHUB_TOKEN: '',
-  SENTRY_DSN: '',
-  MAX_CONCURRENT_TASKS: '10',
-  TASK_TIMEOUT: '3600000',
-  HEALTH_CHECK_INTERVAL: '30000',
-  SKIP_ENV_VALIDATION: '',
+  SLACK_BOT_TOKEN: "xoxb-test-token",
+  SLACK_APP_TOKEN: "xapp-test-token",
+  SLACK_SIGNING_SECRET: "test-signing-secret-with-at-least-32-chars",
+  FCODE_API_URL: "http://localhost:8787",
+  FCODE_API_TIMEOUT: "30000",
+  NODE_ENV: "test",
+  LOG_LEVEL: "error",
+  PORT: "3000",
+  GITHUB_TOKEN: "",
+  SENTRY_DSN: "",
+  MAX_CONCURRENT_TASKS: "10",
+  TASK_TIMEOUT: "3600000",
+  HEALTH_CHECK_INTERVAL: "30000",
+  SKIP_ENV_VALIDATION: "",
 } as const;
 
-async function importFreshEnvModule(overrides: Record<string, string | undefined> = {}) {
+async function importFreshEnvModule(
+  overrides: Record<string, string | undefined> = {}
+) {
   vi.resetModules();
 
   for (const key of Object.keys(BASE_ENV)) {
@@ -36,18 +38,18 @@ async function importFreshEnvModule(overrides: Record<string, string | undefined
     process.env[key] = value;
   }
 
-  return import('../src/env');
+  return import("../src/env");
 }
 
-describe('Environment Variables', () => {
+describe("Environment Variables", () => {
   beforeEach(() => {
     // Reset environment variables before each test
     process.env.SKIP_ENV_VALIDATION = undefined;
     vi.resetModules();
   });
 
-  describe('env object', () => {
-    it('should have all required Slack environment variables', () => {
+  describe("env object", () => {
+    it("should have all required Slack environment variables", () => {
       expect(env.SLACK_BOT_TOKEN).toBeDefined();
       expect(env.SLACK_BOT_TOKEN).toMatch(/^xoxb-/);
       expect(env.SLACK_APP_TOKEN).toBeDefined();
@@ -56,7 +58,7 @@ describe('Environment Variables', () => {
       expect(env.SLACK_SIGNING_SECRET.length).toBeGreaterThanOrEqual(32);
     });
 
-    it('should have Frontal Code API configuration', () => {
+    it("should have Frontal Code API configuration", () => {
       expect(env.FCODE_API_URL).toBeDefined();
       expect(env.FCODE_API_URL).toMatch(/^https?:\/\//);
       expect(env.FCODE_API_TIMEOUT).toBeDefined();
@@ -64,52 +66,54 @@ describe('Environment Variables', () => {
       expect(env.FCODE_API_TIMEOUT).toBeLessThanOrEqual(300000);
     });
 
-    it('should have application configuration', () => {
+    it("should have application configuration", () => {
       expect(env.NODE_ENV).toBeDefined();
-      expect(['development', 'production', 'test']).toContain(env.NODE_ENV);
+      expect(["development", "production", "test"]).toContain(env.NODE_ENV);
       expect(env.LOG_LEVEL).toBeDefined();
-      expect(['error', 'warn', 'info', 'http', 'debug']).toContain(env.LOG_LEVEL);
+      expect(["error", "warn", "info", "http", "debug"]).toContain(
+        env.LOG_LEVEL
+      );
       expect(env.PORT).toBeDefined();
       expect(env.PORT).toBeGreaterThanOrEqual(1000);
       expect(env.PORT).toBeLessThanOrEqual(65535);
     });
   });
 
-  describe('getEnvConfig', () => {
-    it('should return a properly structured configuration object', () => {
+  describe("getEnvConfig", () => {
+    it("should return a properly structured configuration object", () => {
       const config = getEnvConfig();
 
-      expect(config).toHaveProperty('slack');
-      expect(config).toHaveProperty('frontal-code');
-      expect(config).toHaveProperty('app');
-      expect(config).toHaveProperty('limits');
+      expect(config).toHaveProperty("slack");
+      expect(config).toHaveProperty("frontal-code");
+      expect(config).toHaveProperty("app");
+      expect(config).toHaveProperty("limits");
 
-      expect(config.slack).toHaveProperty('botToken');
-      expect(config.slack).toHaveProperty('appToken');
-      expect(config.slack).toHaveProperty('signingSecret');
+      expect(config.slack).toHaveProperty("botToken");
+      expect(config.slack).toHaveProperty("appToken");
+      expect(config.slack).toHaveProperty("signingSecret");
 
-      expect(config.frontal-code).toHaveProperty('apiUrl');
-      expect(config.frontal-code).toHaveProperty('timeout');
+      expect(config.frontal - code).toHaveProperty("apiUrl");
+      expect(config.frontal - code).toHaveProperty("timeout");
 
-      expect(config.app).toHaveProperty('nodeEnv');
-      expect(config.app).toHaveProperty('logLevel');
-      expect(config.app).toHaveProperty('port');
+      expect(config.app).toHaveProperty("nodeEnv");
+      expect(config.app).toHaveProperty("logLevel");
+      expect(config.app).toHaveProperty("port");
 
       expect(config.github).toBeUndefined();
 
-      expect(config.limits).toHaveProperty('maxConcurrentTasks');
-      expect(config.limits).toHaveProperty('taskTimeout');
-      expect(config.limits).toHaveProperty('healthCheckInterval');
+      expect(config.limits).toHaveProperty("maxConcurrentTasks");
+      expect(config.limits).toHaveProperty("taskTimeout");
+      expect(config.limits).toHaveProperty("healthCheckInterval");
     });
 
-    it('should map environment variables to config fields', () => {
+    it("should map environment variables to config fields", () => {
       const config = getEnvConfig();
 
       expect(config.slack.botToken).toBe(env.SLACK_BOT_TOKEN);
       expect(config.slack.appToken).toBe(env.SLACK_APP_TOKEN);
       expect(config.slack.signingSecret).toBe(env.SLACK_SIGNING_SECRET);
-      expect(config.frontal-code.apiUrl).toBe(env.FCODE_API_URL);
-      expect(config.frontal-code.timeout).toBe(env.FCODE_API_TIMEOUT);
+      expect(config.frontal - code.apiUrl).toBe(env.FCODE_API_URL);
+      expect(config.frontal - code.timeout).toBe(env.FCODE_API_TIMEOUT);
       expect(config.app.nodeEnv).toBe(env.NODE_ENV);
       expect(config.app.logLevel).toBe(env.LOG_LEVEL);
       expect(config.app.port).toBe(env.PORT);
@@ -118,9 +122,9 @@ describe('Environment Variables', () => {
       expect(config.limits.healthCheckInterval).toBe(env.HEALTH_CHECK_INTERVAL);
     });
 
-    it('should omit github config when the runtime token is an empty string', async () => {
+    it("should omit github config when the runtime token is an empty string", async () => {
       const { getEnvConfig: loadConfig } = await importFreshEnvModule({
-        GITHUB_TOKEN: '',
+        GITHUB_TOKEN: "",
       });
 
       const config = loadConfig();
@@ -129,25 +133,26 @@ describe('Environment Variables', () => {
     });
   });
 
-  describe('validateEnvConfig', () => {
-    it('should not throw when configuration is valid', () => {
+  describe("validateEnvConfig", () => {
+    it("should not throw when configuration is valid", () => {
       expect(() => validateEnvConfig()).not.toThrow();
     });
 
-    it('should be a function for backward compatibility', () => {
-      expect(typeof validateEnvConfig).toBe('function');
+    it("should be a function for backward compatibility", () => {
+      expect(typeof validateEnvConfig).toBe("function");
     });
   });
 
-  describe('runtime coercion and validation', () => {
-    it('coerces numeric runtime env strings into numbers on fresh module load', async () => {
-      const { env: freshEnv, getEnvConfig: loadConfig } = await importFreshEnvModule({
-        FCODE_API_TIMEOUT: '45000',
-        PORT: '4567',
-        MAX_CONCURRENT_TASKS: '7',
-        TASK_TIMEOUT: '120000',
-        HEALTH_CHECK_INTERVAL: '15000',
-      });
+  describe("runtime coercion and validation", () => {
+    it("coerces numeric runtime env strings into numbers on fresh module load", async () => {
+      const { env: freshEnv, getEnvConfig: loadConfig } =
+        await importFreshEnvModule({
+          FCODE_API_TIMEOUT: "45000",
+          PORT: "4567",
+          MAX_CONCURRENT_TASKS: "7",
+          TASK_TIMEOUT: "120000",
+          HEALTH_CHECK_INTERVAL: "15000",
+        });
 
       const config = loadConfig();
 
@@ -156,45 +161,47 @@ describe('Environment Variables', () => {
       expect(freshEnv.MAX_CONCURRENT_TASKS).toBe(7);
       expect(freshEnv.TASK_TIMEOUT).toBe(120000);
       expect(freshEnv.HEALTH_CHECK_INTERVAL).toBe(15000);
-      expect(config.frontal-code.timeout).toBe(45000);
+      expect(config.frontal - code.timeout).toBe(45000);
       expect(config.app.port).toBe(4567);
     });
 
-    it('treats empty strings as undefined and falls back to schema defaults', async () => {
+    it("treats empty strings as undefined and falls back to schema defaults", async () => {
       const { env: freshEnv } = await importFreshEnvModule({
-        FCODE_API_URL: '',
-        FCODE_API_TIMEOUT: '',
-        LOG_LEVEL: '',
-        PORT: '',
-        MAX_CONCURRENT_TASKS: '',
-        TASK_TIMEOUT: '',
-        HEALTH_CHECK_INTERVAL: '',
+        FCODE_API_URL: "",
+        FCODE_API_TIMEOUT: "",
+        LOG_LEVEL: "",
+        PORT: "",
+        MAX_CONCURRENT_TASKS: "",
+        TASK_TIMEOUT: "",
+        HEALTH_CHECK_INTERVAL: "",
       });
 
-      expect(freshEnv.FCODE_API_URL).toBe('http://frontal-code-api:8787');
+      expect(freshEnv.FCODE_API_URL).toBe("http://frontal-code-api:8787");
       expect(freshEnv.FCODE_API_TIMEOUT).toBe(30000);
-      expect(freshEnv.LOG_LEVEL).toBe('info');
+      expect(freshEnv.LOG_LEVEL).toBe("info");
       expect(freshEnv.PORT).toBe(3000);
       expect(freshEnv.MAX_CONCURRENT_TASKS).toBe(10);
       expect(freshEnv.TASK_TIMEOUT).toBe(3600000);
       expect(freshEnv.HEALTH_CHECK_INTERVAL).toBe(30000);
     });
 
-    it('throws a validation error for invalid runtime env values', async () => {
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    it("throws a validation error for invalid runtime env values", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       await expect(
         importFreshEnvModule({
-          SLACK_BOT_TOKEN: 'invalid-token',
+          SLACK_BOT_TOKEN: "invalid-token",
         })
-      ).rejects.toThrow('Environment variable validation failed');
+      ).rejects.toThrow("Environment variable validation failed");
 
-      expect(errorSpy).toHaveBeenCalledWith('Environment variable validation failed:');
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Environment variable validation failed:"
+      );
     });
 
-    it('throws on client-side access to server env variables', async () => {
+    it("throws on client-side access to server env variables", async () => {
       const originalWindow = globalThis.window;
-      Object.defineProperty(globalThis, 'window', {
+      Object.defineProperty(globalThis, "window", {
         value: {},
         configurable: true,
       });
@@ -209,7 +216,7 @@ describe('Environment Variables', () => {
         if (originalWindow === undefined) {
           delete (globalThis as { window?: unknown }).window;
         } else {
-          Object.defineProperty(globalThis, 'window', {
+          Object.defineProperty(globalThis, "window", {
             value: originalWindow,
             configurable: true,
           });

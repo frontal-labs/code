@@ -1,12 +1,11 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
+  "root": false,
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "complexity": {
         "noExcessiveCognitiveComplexity": {
           "level": "error",
@@ -36,18 +35,8 @@
           "fix": "safe",
           "level": "error",
           "options": {
-            "attributes": [
-              "className"
-            ],
-            "functions": [
-              "clsx",
-              "cva",
-              "tw",
-              "twMerge",
-              "cn",
-              "twJoin",
-              "tv"
-            ]
+            "attributes": ["className"],
+            "functions": ["clsx", "cva", "tw", "twMerge", "cn", "twJoin", "tv"]
           }
         }
       },
@@ -180,12 +169,13 @@
     }
   },
   "files": {
-    "ignore": [
-      "**/node_modules/**",
-      "**/dist/**",
-      "**/logs/**",
-      "**/*.d.ts",
-      "src/generated/**"
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/logs",
+      "!**/*.d.ts",
+      "!**/src/generated"
     ]
   }
 }

@@ -34,12 +34,12 @@ If you are developing from source instead of installing the CLI, use `cargo buil
 Set your API credentials:
 
 ```bash
-export FCODE_API_KEY="sk-ant-..."
+export FRONTAL_API_KEY="sk-ant-..."
 # Or use Frontal's OpenAI-compatible API gateway
 export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 # Or use an Anthropic proxy
-export FCODE_BASE_URL="https://your-proxy.com"
+export FRONTAL_BASE_URL="https://your-proxy.com"
 ```
 
 ### Core Configuration

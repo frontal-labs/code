@@ -89,9 +89,7 @@ export interface BufferedTurn {
 }
 
 /** Drain a stream of events into a buffered {@link BufferedTurn}. */
-export async function collectTurn(
-  events: AsyncIterable<FrontalCodeEvent>,
-): Promise<BufferedTurn> {
+export async function collectTurn(events: AsyncIterable<FrontalCodeEvent>): Promise<BufferedTurn> {
   const collected: FrontalCodeEvent[] = [];
   const items: ThreadItem[] = [];
   let finalResponse = "";

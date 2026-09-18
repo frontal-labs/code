@@ -1,9 +1,5 @@
-import { describe, it, expect } from "vitest";
-import {
-  toTomlLiteral,
-  flattenConfig,
-  configToArgs,
-} from "../src/config.js";
+import { describe, expect, it } from "vitest";
+import { configToArgs, flattenConfig, toTomlLiteral } from "../src/config.js";
 
 describe("toTomlLiteral", () => {
   it("serializes primitives", () => {
@@ -25,12 +21,8 @@ describe("toTomlLiteral", () => {
   });
 
   it("serializes nested objects as inline tables", () => {
-    expect(toTomlLiteral({ network_access: true })).toBe(
-      "{ network_access = true }",
-    );
-    expect(
-      toTomlLiteral({ a: 1, b: { c: "x" } }),
-    ).toBe('{ a = 1, b = { c = "x" } }');
+    expect(toTomlLiteral({ network_access: true })).toBe("{ network_access = true }");
+    expect(toTomlLiteral({ a: 1, b: { c: "x" } })).toBe('{ a = 1, b = { c = "x" } }');
   });
 
   it("rejects non-finite numbers", () => {

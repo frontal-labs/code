@@ -2410,16 +2410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tools-coverage"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "clap",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "tools-doctor"
 version = "0.1.1"
 dependencies = [

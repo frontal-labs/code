@@ -21,9 +21,7 @@ By default it binds to `127.0.0.1:8787`.
 - `FCODE_API_PORT` (default: `8787`)
 - `FCODE_CLI_BIN` (optional path to `frontal-code` binary)
 - `FCODE_API_WORKDIR` (optional working directory for executed CLI commands)
-- `FCODE_API_KEY` (optional API key; accepts `x-api-key` or `Authorization: Bearer ...`)
-- `FCODE_API_ALLOWED_COMMANDS` (optional comma-separated allowlist for `/v1/cli/run`)
-- `FCODE_API_COMMAND_TIMEOUT_MS` (default: `120000`)
+- `FRONTAL_API_KEY` (required API key for server authentication; accepts `x-api-key` or `Authorization: Bearer ...`)
 
 ## REST Endpoints
 

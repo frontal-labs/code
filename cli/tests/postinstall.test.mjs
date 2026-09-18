@@ -1,11 +1,10 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
 import { detectTarget, UnsupportedPlatformError } from "../lib/platform.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

@@ -176,7 +176,7 @@ async fn prompt_endpoint_forwards_prompt_and_options() {
 
 #[tokio::test]
 async fn auth_rejects_missing_api_key_and_accepts_valid_key() {
-    let server = TestServer::start_with_env(&[("FCODE_API_KEY", "top-secret")]).await;
+    let server = TestServer::start_with_env(&[("FRONTAL_API_KEY", "top-secret")]).await;
 
     let client = reqwest::Client::new();
     let unauthorized = client

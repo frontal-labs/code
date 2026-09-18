@@ -154,6 +154,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
     // when
     let output = command_in(&temp_dir)
         .env("FCODE_CONFIG_HOME", &config_home)
+        .env("HOME", &temp_dir.join("home"))
         .args([
             "--resume",
             session_path.to_str().expect("utf8 path"),
@@ -203,9 +204,9 @@ fn doctor_command_runs_as_a_local_shell_entrypoint() {
     // when
     let output = command_in(&temp_dir)
         .env("FCODE_CONFIG_HOME", &config_home)
-        .env_remove("FCODE_API_KEY")
-        .env_remove("FCODE_AUTH_TOKEN")
-        .env("FCODE_BASE_URL", "http://127.0.0.1:9")
+        .env_remove("FRONTAL_API_KEY")
+        .env_remove("FRONTAL_AUTH_TOKEN")
+        .env("FRONTAL_BASE_URL", "http://127.0.0.1:9")
         .arg("doctor")
         .output()
         .expect("frontal-code doctor should launch");
@@ -231,17 +232,17 @@ fn local_subcommand_help_does_not_fall_through_to_runtime_or_provider_calls() {
 
     let doctor_help = command_in(&temp_dir)
         .env("FCODE_CONFIG_HOME", &config_home)
-        .env_remove("FCODE_API_KEY")
-        .env_remove("FCODE_AUTH_TOKEN")
-        .env("FCODE_BASE_URL", "http://127.0.0.1:9")
+        .env_remove("FRONTAL_API_KEY")
+        .env_remove("FRONTAL_AUTH_TOKEN")
+        .env("FRONTAL_BASE_URL", "http://127.0.0.1:9")
         .args(["doctor", "--help"])
         .output()
         .expect("doctor help should launch");
     let status_help = command_in(&temp_dir)
         .env("FCODE_CONFIG_HOME", &config_home)
-        .env_remove("FCODE_API_KEY")
-        .env_remove("FCODE_AUTH_TOKEN")
-        .env("FCODE_BASE_URL", "http://127.0.0.1:9")
+        .env_remove("FRONTAL_API_KEY")
+        .env_remove("FRONTAL_AUTH_TOKEN")
+        .env("FRONTAL_BASE_URL", "http://127.0.0.1:9")
         .args(["status", "--help"])
         .output()
         .expect("status help should launch");

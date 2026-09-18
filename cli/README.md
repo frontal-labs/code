@@ -68,13 +68,13 @@ For the full CLI reference (slash commands, permission modes, flags), see
 Environment variables used by the native binary:
 
 ```bash
-export FCODE_API_KEY="sk-ant-..."     # Anthropic
+export FRONTAL_API_KEY="sk-ant-..."     # Anthropic
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
 export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
-export FCODE_AUTH_TOKEN="sk-..."      # bearer token w/ custom base URL
-export FCODE_BASE_URL="https://api.deepseek.com/anthropic"
+export FRONTAL_AUTH_TOKEN="sk-..."      # bearer token w/ custom base URL
+export FRONTAL_BASE_URL="https://api.deepseek.com/anthropic"
 ```
 
 Configuration files (read by the native binary):

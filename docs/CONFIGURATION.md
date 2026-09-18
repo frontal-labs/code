@@ -18,8 +18,8 @@ Settings are applied in the following order (highest to lowest priority):
 
 ```bash
 # Anthropic API (primary provider)
-export FCODE_API_KEY="sk-ant-..."
-export FCODE_BASE_URL="https://api.anthropic.com"  # optional
+export FRONTAL_API_KEY="sk-ant-..."
+export FRONTAL_BASE_URL="https://api.anthropic.com"  # optional
 
 # OpenAI-compatible API
 export OPENAI_API_KEY="sk-..."
@@ -69,7 +69,7 @@ The `.frontal-code/settings.json` config file uses JSON format with the followin
   "version": "1.0",
   "providers": {
     "anthropic": {
-      "api_key": "${FCODE_API_KEY}",
+       "api_key": "${FRONTAL_API_KEY}",
       "base_url": "https://api.anthropic.com",
       "default_model": "claude-opus-5"
     },

@@ -1,5 +1,5 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { detectTarget, targetFor, UnsupportedPlatformError } from "../lib/platform.mjs";
 
 test("detectTarget maps darwin/arm64 to macos-arm64", () => {

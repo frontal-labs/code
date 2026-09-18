@@ -613,7 +613,7 @@ spec:
             memory: "1Gi"
             cpu: "1000m"
         env:
-        - name: FCODE_API_KEY
+        - name: FRONTAL_API_KEY
           valueFrom:
             secretKeyRef:
               name: frontal-code-secrets

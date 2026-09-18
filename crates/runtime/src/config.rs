@@ -235,15 +235,7 @@ impl ConfigLoader {
 
     #[must_use]
     pub fn discover(&self) -> Vec<ConfigEntry> {
-        let user_legacy_path = self.config_home.parent().map_or_else(
-            || PathBuf::from(".frontal-code/settings.json"),
-            |parent| parent.join(".frontal-code/settings.json"),
-        );
-        vec![
-            ConfigEntry {
-                source: ConfigSource::User,
-                path: user_legacy_path,
-            },
+        let mut entries = vec![
             ConfigEntry {
                 source: ConfigSource::User,
                 path: self.config_home.join("settings.json"),
@@ -253,14 +245,23 @@ impl ConfigLoader {
                 path: self.cwd.join(".frontal-code/settings.json"),
             },
             ConfigEntry {
-                source: ConfigSource::Project,
-                path: self.cwd.join(".frontal-code").join("settings.json"),
-            },
-            ConfigEntry {
                 source: ConfigSource::Local,
                 path: self.cwd.join(".frontal-code").join("settings.local.json"),
             },
-        ]
+        ];
+        if let Some(parent) = self.config_home.parent() {
+            let legacy = parent.join(".frontal-code/settings.json");
+            if legacy != entries[0].path {
+                entries.insert(
+                    0,
+                    ConfigEntry {
+                        source: ConfigSource::User,
+                        path: legacy,
+                    },
+                );
+            }
+        }
+        entries
     }
 
     pub fn load(&self) -> Result<RuntimeConfig, ConfigError> {

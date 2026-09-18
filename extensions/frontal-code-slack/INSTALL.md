@@ -68,16 +68,16 @@ SLACK_SIGNING_SECRET=your-signing-secret-here
 SLACK_APP_ID=A0123456789012
 
 # Frontal Code Server Configuration
-FCODE_API_URL=https://your-frontal-code-server.com
-FCODE_API_KEY=your-frontal-code-api-key-here
+FRONTAL_API_URL=https://your-frontal-code-server.com
+FRONTAL_SERVER_API_KEY=your-frontal-code-api-key-here
 
 # Optional: GitHub Integration
 GITHUB_APP_ID=your-github-app-id
 GITHUB_PRIVATE_KEY_PATH=/path/to/github/private/key.pem
 ```
 
-Set the same shared secret value as `FCODE_SERVER_API_KEY` on the hosted server and
-`FCODE_API_KEY` on the Slack connector so authenticated control-plane calls succeed.
+Set the same shared secret value as `FRONTAL_SERVER_API_KEY` on the hosted server and
+`FRONTAL_SERVER_API_KEY` on the Slack connector so authenticated control-plane calls succeed.
 
 ### 4. Install Dependencies and Build
 

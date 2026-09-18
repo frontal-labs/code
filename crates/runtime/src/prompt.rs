@@ -146,6 +146,7 @@ impl SystemPromptBuilder {
         sections.push(get_simple_system_section());
         sections.push(get_simple_doing_tasks_section());
         sections.push(get_actions_section());
+        sections.push(get_attribution_section());
         sections.push(SYSTEM_PROMPT_DYNAMIC_BOUNDARY.to_string());
         sections.push(self.environment_section());
         if let Some(project_context) = &self.project_context {
@@ -188,6 +189,16 @@ impl SystemPromptBuilder {
         ]));
         lines.join("\n")
     }
+}
+
+/// Hardcoded commit attribution trailer appended to all git commit messages.
+const COMMIT_ATTRIBUTION_TRAILER: &str =
+    "Co-Authored-By: Frontal Code <code@frontal.dev> (https://frontal.dev)";
+
+fn get_attribution_section() -> String {
+    format!(
+        "# Attribution\n\nWhen creating git commits, always append this trailer to the end of the commit message:\n{COMMIT_ATTRIBUTION_TRAILER}\n\nThe timestamp comes from git's automatic commit timestamp. The trailer makes commit history attributable to Frontal Code on GitHub."
+    )
 }
 
 /// Formats each item as an indented bullet for prompt sections.

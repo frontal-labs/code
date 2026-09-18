@@ -2252,8 +2252,8 @@ fn run_doctor(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::
 #[allow(clippy::too_many_lines)]
 fn check_auth_health() -> DiagnosticCheck {
     let providers = [
-        ("anthropic_api_key", "FCODE_API_KEY"),
-        ("anthropic_auth_token", "FCODE_AUTH_TOKEN"),
+        ("anthropic_api_key", "FRONTAL_API_KEY"),
+        ("anthropic_auth_token", "FRONTAL_AUTH_TOKEN"),
         ("openai_api_key", "OPENAI_API_KEY"),
         ("xai_api_key", "XAI_API_KEY"),
         ("frontal_api_key", "FRONTAL_API_KEY"),
@@ -10639,8 +10639,9 @@ fn convert_messages(messages: &[ConversationMessage]) -> Vec<InputMessage> {
         .iter()
         .filter_map(|message| {
             let role = match message.role {
-                MessageRole::System | MessageRole::User | MessageRole::Tool => "user",
+                MessageRole::System | MessageRole::User => "user",
                 MessageRole::Assistant => "assistant",
+                MessageRole::Tool => "tool",
             };
             let content = message
                 .blocks
@@ -13735,7 +13736,7 @@ UU conflicted.rs",
         let converted = super::convert_messages(&messages);
         assert_eq!(converted.len(), 3);
         assert_eq!(converted[1].role, "assistant");
-        assert_eq!(converted[2].role, "user");
+        assert_eq!(converted[2].role, "tool");
     }
     #[test]
     fn repl_help_mentions_history_completion_and_multiline() {
@@ -14280,7 +14281,7 @@ UU conflicted.rs",
         let config_home = temp_dir();
         // Inject a dummy API key so runtime construction succeeds without real credentials.
         // This test only exercises plugin lifecycle (init/shutdown), never calls the API.
-        std::env::set_var("FCODE_API_KEY", "test-dummy-key-for-plugin-lifecycle");
+        std::env::set_var("FRONTAL_API_KEY", "test-dummy-key-for-plugin-lifecycle");
         let workspace = temp_dir();
         let source_root = temp_dir();
         fs::create_dir_all(&config_home).expect("config home");
@@ -14329,7 +14330,7 @@ UU conflicted.rs",
         let _ = fs::remove_dir_all(config_home);
         let _ = fs::remove_dir_all(workspace);
         let _ = fs::remove_dir_all(source_root);
-        std::env::remove_var("FCODE_API_KEY");
+        std::env::remove_var("FRONTAL_API_KEY");
     }
 }
 

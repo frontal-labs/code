@@ -62,8 +62,8 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
         "opus",
         ProviderMetadata {
             provider: ProviderKind::Anthropic,
-            auth_env: "FCODE_API_KEY",
-            base_url_env: "FCODE_BASE_URL",
+            auth_env: "FRONTAL_API_KEY",
+            base_url_env: "FRONTAL_BASE_URL",
             default_base_url: anthropic::DEFAULT_BASE_URL,
         },
     ),
@@ -71,8 +71,8 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
         "sonnet",
         ProviderMetadata {
             provider: ProviderKind::Anthropic,
-            auth_env: "FCODE_API_KEY",
-            base_url_env: "FCODE_BASE_URL",
+            auth_env: "FRONTAL_API_KEY",
+            base_url_env: "FRONTAL_BASE_URL",
             default_base_url: anthropic::DEFAULT_BASE_URL,
         },
     ),
@@ -80,8 +80,8 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
         "haiku",
         ProviderMetadata {
             provider: ProviderKind::Anthropic,
-            auth_env: "FCODE_API_KEY",
-            base_url_env: "FCODE_BASE_URL",
+            auth_env: "FRONTAL_API_KEY",
+            base_url_env: "FRONTAL_BASE_URL",
             default_base_url: anthropic::DEFAULT_BASE_URL,
         },
     ),
@@ -195,8 +195,8 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
     if canonical.starts_with("claude") {
         return Some(ProviderMetadata {
             provider: ProviderKind::Anthropic,
-            auth_env: "FCODE_API_KEY",
-            base_url_env: "FCODE_BASE_URL",
+            auth_env: "FRONTAL_API_KEY",
+            base_url_env: "FRONTAL_BASE_URL",
             default_base_url: anthropic::DEFAULT_BASE_URL,
         });
     }
@@ -240,7 +240,7 @@ pub fn detect_provider_kind(model: &str) -> ProviderKind {
     if let Some(metadata) = metadata_for_model(model) {
         return metadata.provider;
     }
-    if openai::has_api_key("FCODE_API_KEY") || openai::has_api_key("FCODE_AUTH_TOKEN") {
+    if openai::has_api_key("FRONTAL_API_KEY") || openai::has_api_key("FRONTAL_AUTH_TOKEN") {
         return ProviderKind::Anthropic;
     }
     if openai::has_api_key("OPENAI_API_KEY") {

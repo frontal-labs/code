@@ -1,7 +1,7 @@
+import * as http from "node:http";
 import { config } from "./config";
 import { logger } from "./log";
 import { SlackInterface } from "./slack";
-import * as http from "node:http";
 
 async function main(): Promise<void> {
   const slackInterface = new SlackInterface();

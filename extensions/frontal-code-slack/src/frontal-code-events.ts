@@ -10,7 +10,9 @@ type TrackedTaskHandler = (
   event: FrontalCodeEventEnvelope,
   task?: FrontalCodeTrackedTask
 ) => Promise<void> | void;
-type FrontalCodeEventsUrlBuilder = (query?: FrontalCodeEventStreamQuery) => string;
+type FrontalCodeEventsUrlBuilder = (
+  query?: FrontalCodeEventStreamQuery
+) => string;
 type FrontalCodeEventsHeadersBuilder = () => Record<string, string> | undefined;
 
 const RECENT_EVENTS_PER_TASK = 12;
@@ -146,7 +148,10 @@ export class FrontalCodeEventsClient {
         return;
       }
       this.openSocket().catch((error) => {
-        logger.error("Frontal Code hosted events reconnect failed", error as Error);
+        logger.error(
+          "Frontal Code hosted events reconnect failed",
+          error as Error
+        );
         this.scheduleReconnect();
       });
     }, RECONNECT_DELAY_MS);
@@ -157,7 +162,9 @@ export class FrontalCodeEventsClient {
     try {
       event = JSON.parse(payload) as FrontalCodeEventEnvelope;
     } catch (_error) {
-      logger.warn("Ignoring malformed Frontal Code hosted event payload", { payload });
+      logger.warn("Ignoring malformed Frontal Code hosted event payload", {
+        payload,
+      });
       return;
     }
 
@@ -208,10 +215,14 @@ export class FrontalCodeEventsClient {
 
     for (const handler of this.handlers) {
       void Promise.resolve(handler(event, task)).catch((error) => {
-        logger.error("Frontal Code hosted event handler failed", error as Error, {
-          event: event.event,
-          taskId,
-        });
+        logger.error(
+          "Frontal Code hosted event handler failed",
+          error as Error,
+          {
+            event: event.event,
+            taskId,
+          }
+        );
       });
     }
   }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { MockWebSocket, wsInstances } = vi.hoisted(() => {
   const wsInstances: Array<InstanceType<typeof MockWebSocket>> = [];
@@ -8,8 +8,14 @@ const { MockWebSocket, wsInstances } = vi.hoisted(() => {
     public static readonly CLOSED = 3;
     public readonly url: string;
     public readyState = 0;
-    private readonly handlers = new Map<string, Array<(...args: unknown[]) => void>>();
-    private readonly onceHandlers = new Map<string, Array<(...args: unknown[]) => void>>();
+    private readonly handlers = new Map<
+      string,
+      Array<(...args: unknown[]) => void>
+    >();
+    private readonly onceHandlers = new Map<
+      string,
+      Array<(...args: unknown[]) => void>
+    >();
 
     constructor(url: string) {
       this.url = url;
@@ -30,7 +36,7 @@ const { MockWebSocket, wsInstances } = vi.hoisted(() => {
 
     close(): void {
       this.readyState = MockWebSocket.CLOSED;
-      this.emit('close');
+      this.emit("close");
     }
 
     emit(event: string, ...args: unknown[]): void {
@@ -50,19 +56,27 @@ const { MockWebSocket, wsInstances } = vi.hoisted(() => {
   return { MockWebSocket, wsInstances };
 });
 
-vi.mock('ws', () => ({
+vi.mock("ws", () => ({
   default: MockWebSocket,
 }));
 
-import { logger } from '../src/log';
-import { FrontalCodeEventsClient } from '../src/frontal-code-events';
-import type { FrontalCodeEventEnvelope, FrontalCodeTrackedTask } from '../src/types';
+import { FrontalCodeEventsClient } from "../src/frontal-code-events";
+import { logger } from "../src/log";
+import type {
+  FrontalCodeEventEnvelope,
+  FrontalCodeTrackedTask,
+} from "../src/types";
 
 type TestableFrontalCodeEventsClient = FrontalCodeEventsClient & {
   buildSocketUrl(): string;
   handleMessage(payload: string): void;
-  dispatchEvent(event: FrontalCodeEventEnvelope, hintedTask?: FrontalCodeTrackedTask): void;
-  readTrackedTaskFromEvent(event: FrontalCodeEventEnvelope): FrontalCodeTrackedTask | undefined;
+  dispatchEvent(
+    event: FrontalCodeEventEnvelope,
+    hintedTask?: FrontalCodeTrackedTask
+  ): void;
+  readTrackedTaskFromEvent(
+    event: FrontalCodeEventEnvelope
+  ): FrontalCodeTrackedTask | undefined;
   scheduleReconnect(): void;
   recentEvents: Map<string, FrontalCodeEventEnvelope[]>;
   reconnectTimer?: NodeJS.Timeout;
@@ -71,51 +85,57 @@ type TestableFrontalCodeEventsClient = FrontalCodeEventsClient & {
   socket?: InstanceType<typeof MockWebSocket>;
 };
 
-function createEventEnvelope(overrides: Partial<FrontalCodeEventEnvelope> = {}): FrontalCodeEventEnvelope {
+function createEventEnvelope(
+  overrides: Partial<FrontalCodeEventEnvelope> = {}
+): FrontalCodeEventEnvelope {
   return {
-    event_id: 'evt-123',
-    topic: 'lane',
-    event: 'lane.started',
-    status: 'running',
-    emittedAt: '2026-04-09T10:00:00Z',
-    task_id: 'task-123',
-    lane_id: 'lane-123',
+    event_id: "evt-123",
+    topic: "lane",
+    event: "lane.started",
+    status: "running",
+    emittedAt: "2026-04-09T10:00:00Z",
+    task_id: "task-123",
+    lane_id: "lane-123",
     payload: {
-      channel_id: 'C123',
-      thread_ts: '1710000000.100',
-      user_id: 'U123',
-      worker_status: 'running',
+      channel_id: "C123",
+      thread_ts: "1710000000.100",
+      user_id: "U123",
+      worker_status: "running",
     },
     ...overrides,
   };
 }
 
-describe('FrontalCodeEventsClient', () => {
+describe("FrontalCodeEventsClient", () => {
   let client: TestableFrontalCodeEventsClient;
   let urlBuilder: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     wsInstances.length = 0;
     vi.useRealTimers();
-    urlBuilder = vi.fn().mockReturnValue('ws://localhost:8787/v1/events/ws?source=slack');
-    client = new FrontalCodeEventsClient(urlBuilder) as unknown as TestableFrontalCodeEventsClient;
+    urlBuilder = vi
+      .fn()
+      .mockReturnValue("ws://localhost:8787/v1/events/ws?source=slack");
+    client = new FrontalCodeEventsClient(
+      urlBuilder
+    ) as unknown as TestableFrontalCodeEventsClient;
   });
 
-  it('builds a slack-scoped websocket subscription URL', () => {
+  it("builds a slack-scoped websocket subscription URL", () => {
     const url = client.buildSocketUrl();
 
-    expect(urlBuilder).toHaveBeenCalledWith({ source: 'slack' });
-    expect(url).toBe('ws://localhost:8787/v1/events/ws?source=slack');
+    expect(urlBuilder).toHaveBeenCalledWith({ source: "slack" });
+    expect(url).toBe("ws://localhost:8787/v1/events/ws?source=slack");
   });
 
-  it('opens and closes the hosted event socket', async () => {
+  it("opens and closes the hosted event socket", async () => {
     const connectPromise = client.connect();
     const socket = wsInstances[0];
-    socket.emit('open');
+    socket.emit("open");
     await connectPromise;
 
     expect(client.shouldReconnect).toBe(true);
-    expect(socket.url).toBe('ws://localhost:8787/v1/events/ws?source=slack');
+    expect(socket.url).toBe("ws://localhost:8787/v1/events/ws?source=slack");
 
     await client.disconnect();
 
@@ -124,52 +144,52 @@ describe('FrontalCodeEventsClient', () => {
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);
   });
 
-  it('routes websocket message events through the hosted event handler pipeline', async () => {
+  it("routes websocket message events through the hosted event handler pipeline", async () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
     const connectPromise = client.connect();
     const socket = wsInstances[0];
-    socket.emit('open');
+    socket.emit("open");
     await connectPromise;
 
-    socket.emit('message', Buffer.from(JSON.stringify(createEventEnvelope())));
+    socket.emit("message", Buffer.from(JSON.stringify(createEventEnvelope())));
 
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({
-        event_id: 'evt-123',
-        task_id: 'task-123',
+        event_id: "evt-123",
+        task_id: "task-123",
       }),
       expect.objectContaining({
-        taskId: 'task-123',
-        channelId: 'C123',
+        taskId: "task-123",
+        channelId: "C123",
       })
     );
   });
 
-  it('retains only the most recent buffered events per task', () => {
+  it("retains only the most recent buffered events per task", () => {
     for (let index = 0; index < 14; index += 1) {
       client.handleMessage(
         JSON.stringify(
           createEventEnvelope({
             event_id: `evt-${index}`,
-            emittedAt: `2026-04-09T10:00:${String(index).padStart(2, '0')}Z`,
+            emittedAt: `2026-04-09T10:00:${String(index).padStart(2, "0")}Z`,
           })
         )
       );
     }
 
-    const bufferedEvents = client.recentEvents.get('task-123');
+    const bufferedEvents = client.recentEvents.get("task-123");
 
     expect(bufferedEvents).toHaveLength(12);
     expect(bufferedEvents?.[0]).toEqual(
       expect.objectContaining({
-        event_id: 'evt-2',
+        event_id: "evt-2",
       })
     );
   });
 
-  it('hydrates task routing hints from hosted event payloads', () => {
+  it("hydrates task routing hints from hosted event payloads", () => {
     const handler = vi.fn();
     const event = createEventEnvelope();
     client.onTrackedTaskEvent(handler);
@@ -179,15 +199,15 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).toHaveBeenCalledWith(
       event,
       expect.objectContaining({
-        taskId: 'task-123',
-        channelId: 'C123',
-        threadTs: '1710000000.100',
-        userId: 'U123',
+        taskId: "task-123",
+        channelId: "C123",
+        threadTs: "1710000000.100",
+        userId: "U123",
       })
     );
   });
 
-  it('reuses cached task hints for later events with thin payloads', () => {
+  it("reuses cached task hints for later events with thin payloads", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
@@ -195,10 +215,10 @@ describe('FrontalCodeEventsClient', () => {
     client.handleMessage(
       JSON.stringify(
         createEventEnvelope({
-          event_id: 'evt-124',
-          emittedAt: '2026-04-09T10:00:01Z',
+          event_id: "evt-124",
+          emittedAt: "2026-04-09T10:00:01Z",
           payload: {
-            worker_status: 'running',
+            worker_status: "running",
           },
         })
       )
@@ -206,38 +226,38 @@ describe('FrontalCodeEventsClient', () => {
 
     expect(handler).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        event_id: 'evt-124',
+        event_id: "evt-124",
       }),
       expect.objectContaining({
-        taskId: 'task-123',
-        channelId: 'C123',
+        taskId: "task-123",
+        channelId: "C123",
       })
     );
   });
 
-  it('replays buffered events immediately when a task is tracked later', () => {
-    const dispatchSpy = vi.spyOn(client, 'dispatchEvent');
-    client.recentEvents.set('task-123', [createEventEnvelope()]);
+  it("replays buffered events immediately when a task is tracked later", () => {
+    const dispatchSpy = vi.spyOn(client, "dispatchEvent");
+    client.recentEvents.set("task-123", [createEventEnvelope()]);
 
     client.trackTask({
-      taskId: 'task-123',
-      channelId: 'C123',
-      threadTs: '1710000000.100',
-      userId: 'U123',
+      taskId: "task-123",
+      channelId: "C123",
+      threadTs: "1710000000.100",
+      userId: "U123",
     });
 
     expect(dispatchSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        event_id: 'evt-123',
+        event_id: "evt-123",
       }),
       expect.objectContaining({
-        taskId: 'task-123',
-        channelId: 'C123',
+        taskId: "task-123",
+        channelId: "C123",
       })
     );
   });
 
-  it('deduplicates replayed events with the same hosted event key', () => {
+  it("deduplicates replayed events with the same hosted event key", () => {
     const handler = vi.fn();
     const event = createEventEnvelope();
     client.onTrackedTaskEvent(handler);
@@ -248,7 +268,7 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it('deduplicates replayed events even when lane ids are absent', () => {
+  it("deduplicates replayed events even when lane ids are absent", () => {
     const handler = vi.fn();
     const event = createEventEnvelope({
       lane_id: undefined,
@@ -261,7 +281,7 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it('deduplicates replayed events when lane_id is explicitly null', () => {
+  it("deduplicates replayed events when lane_id is explicitly null", () => {
     const handler = vi.fn();
     const event = createEventEnvelope({
       lane_id: null as unknown as string,
@@ -274,76 +294,76 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it('does not deduplicate events that only differ by lane id', () => {
+  it("does not deduplicate events that only differ by lane id", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
     client.dispatchEvent(
       createEventEnvelope({
-        emittedAt: '2026-04-09T10:00:00Z',
-        lane_id: 'lane-1',
+        emittedAt: "2026-04-09T10:00:00Z",
+        lane_id: "lane-1",
       })
     );
     client.dispatchEvent(
       createEventEnvelope({
-        event_id: 'evt-124',
-        emittedAt: '2026-04-09T10:00:00Z',
-        lane_id: 'lane-2',
+        event_id: "evt-124",
+        emittedAt: "2026-04-09T10:00:00Z",
+        lane_id: "lane-2",
       })
     );
 
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
-  it('does not deduplicate events that only differ by status', () => {
+  it("does not deduplicate events that only differ by status", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
     client.dispatchEvent(
       createEventEnvelope({
-        emittedAt: '2026-04-09T10:00:00Z',
-        lane_id: 'lane-123',
-        status: 'running',
+        emittedAt: "2026-04-09T10:00:00Z",
+        lane_id: "lane-123",
+        status: "running",
       })
     );
     client.dispatchEvent(
       createEventEnvelope({
-        event_id: 'evt-125',
-        emittedAt: '2026-04-09T10:00:00Z',
-        lane_id: 'lane-123',
-        status: 'failed',
+        event_id: "evt-125",
+        emittedAt: "2026-04-09T10:00:00Z",
+        lane_id: "lane-123",
+        status: "failed",
       })
     );
 
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
-  it('does not deduplicate events that only differ by event name', () => {
+  it("does not deduplicate events that only differ by event name", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
     client.dispatchEvent(
       createEventEnvelope({
-        event: 'lane.started',
-        status: 'running',
-        emittedAt: '2026-04-09T10:00:00Z',
-        lane_id: 'lane-123',
+        event: "lane.started",
+        status: "running",
+        emittedAt: "2026-04-09T10:00:00Z",
+        lane_id: "lane-123",
       })
     );
     client.dispatchEvent(
       createEventEnvelope({
-        event_id: 'evt-126',
-        event: 'lane.failed',
-        status: 'running',
-        emittedAt: '2026-04-09T10:00:00Z',
-        lane_id: 'lane-123',
+        event_id: "evt-126",
+        event: "lane.failed",
+        status: "running",
+        emittedAt: "2026-04-09T10:00:00Z",
+        lane_id: "lane-123",
       })
     );
 
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
-  it('supports unregistering tracked task handlers', () => {
+  it("supports unregistering tracked task handlers", () => {
     const handler = vi.fn();
     const dispose = client.onTrackedTaskEvent(handler);
 
@@ -353,20 +373,20 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('replays tracked task events with the explicit tracked task hint', () => {
+  it("replays tracked task events with the explicit tracked task hint", () => {
     const handler = vi.fn();
     const trackedTask: FrontalCodeTrackedTask = {
-      taskId: 'task-123',
-      channelId: 'C999',
-      threadTs: '1710000000.500',
-      userId: 'U999',
+      taskId: "task-123",
+      channelId: "C999",
+      threadTs: "1710000000.500",
+      userId: "U999",
     };
     client.onTrackedTaskEvent(handler);
 
     client.dispatchEvent(
       createEventEnvelope({
-        event_id: 'evt-456',
-        emittedAt: '2026-04-09T10:00:01Z',
+        event_id: "evt-456",
+        emittedAt: "2026-04-09T10:00:01Z",
       }),
       trackedTask
     );
@@ -374,9 +394,9 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).toHaveBeenCalledWith(expect.any(Object), trackedTask);
   });
 
-  it('logs handler failures without stopping dispatch', () => {
-    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
-    const failingHandler = vi.fn().mockRejectedValue(new Error('boom'));
+  it("logs handler failures without stopping dispatch", () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const failingHandler = vi.fn().mockRejectedValue(new Error("boom"));
     const nextHandler = vi.fn();
     client.onTrackedTaskEvent(failingHandler);
     client.onTrackedTaskEvent(nextHandler);
@@ -388,30 +408,33 @@ describe('FrontalCodeEventsClient', () => {
       .then(() => Promise.resolve())
       .then(() => {
         expect(errorSpy).toHaveBeenCalledWith(
-          'Frontal Code hosted event handler failed',
+          "Frontal Code hosted event handler failed",
           expect.any(Error),
           expect.objectContaining({
-            event: 'lane.started',
-            taskId: 'task-123',
+            event: "lane.started",
+            taskId: "task-123",
           })
         );
       });
   });
 
-  it('ignores malformed hosted event payloads', () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+  it("ignores malformed hosted event payloads", () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
-    client.handleMessage('not-json');
+    client.handleMessage("not-json");
 
     expect(handler).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith('Ignoring malformed Frontal Code hosted event payload', {
-      payload: 'not-json',
-    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Ignoring malformed Frontal Code hosted event payload",
+      {
+        payload: "not-json",
+      }
+    );
   });
 
-  it('ignores events without a task id', () => {
+  it("ignores events without a task id", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
@@ -426,11 +449,11 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('dispatches without a tracked task when the payload lacks a Slack channel id', () => {
+  it("dispatches without a tracked task when the payload lacks a Slack channel id", () => {
     const handler = vi.fn();
     const event = createEventEnvelope({
       payload: {
-        thread_ts: '1710000000.100',
+        thread_ts: "1710000000.100",
       },
     });
     client.onTrackedTaskEvent(handler);
@@ -440,24 +463,24 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).toHaveBeenCalledWith(event, undefined);
   });
 
-  it('reads a sparse tracked task from an event payload when only channel routing is present', () => {
+  it("reads a sparse tracked task from an event payload when only channel routing is present", () => {
     const task = client.readTrackedTaskFromEvent(
       createEventEnvelope({
         payload: {
-          channel_id: 'C999',
+          channel_id: "C999",
         },
       })
     );
 
     expect(task).toEqual({
-      taskId: 'task-123',
-      channelId: 'C999',
+      taskId: "task-123",
+      channelId: "C999",
       threadTs: undefined,
       userId: undefined,
     });
   });
 
-  it('returns no tracked task from events without payload routing details', () => {
+  it("returns no tracked task from events without payload routing details", () => {
     expect(
       client.readTrackedTaskFromEvent(
         createEventEnvelope({
@@ -471,14 +494,14 @@ describe('FrontalCodeEventsClient', () => {
         createEventEnvelope({
           task_id: undefined,
           payload: {
-            channel_id: 'C123',
+            channel_id: "C123",
           },
         })
       )
     ).toBeUndefined();
   });
 
-  it('dispatches without a tracked task when the event has no payload at all', () => {
+  it("dispatches without a tracked task when the event has no payload at all", () => {
     const handler = vi.fn();
     const event = createEventEnvelope({
       payload: undefined,
@@ -490,7 +513,7 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).toHaveBeenCalledWith(event, undefined);
   });
 
-  it('ignores direct dispatch calls when the event has no task id', () => {
+  it("ignores direct dispatch calls when the event has no task id", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
@@ -503,23 +526,23 @@ describe('FrontalCodeEventsClient', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('clears replay buffers when tasks are untracked', () => {
+  it("clears replay buffers when tasks are untracked", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
     client.handleMessage(JSON.stringify(createEventEnvelope()));
 
-    client.untrackTask('task-123');
+    client.untrackTask("task-123");
     handler.mockClear();
 
     client.trackTask({
-      taskId: 'task-123',
-      channelId: 'C123',
+      taskId: "task-123",
+      channelId: "C123",
     });
 
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('evicts the oldest seen event key when the dedupe cache reaches capacity', () => {
+  it("evicts the oldest seen event key when the dedupe cache reaches capacity", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
@@ -527,7 +550,7 @@ describe('FrontalCodeEventsClient', () => {
       client.dispatchEvent(
         createEventEnvelope({
           event_id: `evt-${index}`,
-          emittedAt: `2026-04-09T10:${String(Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}Z`,
+          emittedAt: `2026-04-09T10:${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}Z`,
           lane_id: `lane-${index}`,
         })
       );
@@ -537,37 +560,37 @@ describe('FrontalCodeEventsClient', () => {
 
     client.dispatchEvent(
       createEventEnvelope({
-        event_id: 'evt-0-replay',
-        emittedAt: '2026-04-09T10:00:00Z',
-        lane_id: 'lane-0',
+        event_id: "evt-0-replay",
+        emittedAt: "2026-04-09T10:00:00Z",
+        lane_id: "lane-0",
       })
     );
 
     expect(handler).toHaveBeenCalledTimes(514);
   });
 
-  it('schedules a reconnect after socket close when reconnecting is enabled', async () => {
+  it("schedules a reconnect after socket close when reconnecting is enabled", async () => {
     vi.useFakeTimers();
     const connectPromise = client.connect();
     const firstSocket = wsInstances[0];
-    firstSocket.emit('open');
+    firstSocket.emit("open");
     await connectPromise;
 
-    firstSocket.emit('close');
+    firstSocket.emit("close");
     expect(wsInstances).toHaveLength(1);
 
     vi.advanceTimersByTime(2_000);
     expect(wsInstances).toHaveLength(2);
   });
 
-  it('cancels a pending reconnect timer during disconnect', async () => {
+  it("cancels a pending reconnect timer during disconnect", async () => {
     vi.useFakeTimers();
     const connectPromise = client.connect();
     const firstSocket = wsInstances[0];
-    firstSocket.emit('open');
+    firstSocket.emit("open");
     await connectPromise;
 
-    firstSocket.emit('close');
+    firstSocket.emit("close");
     expect(wsInstances).toHaveLength(1);
 
     await client.disconnect();
@@ -577,7 +600,7 @@ describe('FrontalCodeEventsClient', () => {
     expect(wsInstances).toHaveLength(1);
   });
 
-  it('does not schedule duplicate reconnect timers', () => {
+  it("does not schedule duplicate reconnect timers", () => {
     vi.useFakeTimers();
     client.shouldReconnect = true;
 
@@ -588,7 +611,7 @@ describe('FrontalCodeEventsClient', () => {
     expect(wsInstances).toHaveLength(1);
   });
 
-  it('does not reconnect when reconnecting has been disabled before the timer fires', () => {
+  it("does not reconnect when reconnecting has been disabled before the timer fires", () => {
     vi.useFakeTimers();
     client.shouldReconnect = true;
 
@@ -600,26 +623,27 @@ describe('FrontalCodeEventsClient', () => {
     expect(wsInstances).toHaveLength(0);
   });
 
-  it('reschedules reconnect when a reconnect attempt fails to open', async () => {
+  it("reschedules reconnect when a reconnect attempt fails to open", async () => {
     vi.useFakeTimers();
-    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const connectPromise = client.connect();
     const firstSocket = wsInstances[0];
-    firstSocket.emit('open');
+    firstSocket.emit("open");
     await connectPromise;
 
-    firstSocket.emit('close');
+    firstSocket.emit("close");
     vi.advanceTimersByTime(2_000);
 
     const reconnectSocket = wsInstances[1];
-    reconnectSocket.emit('error', new Error('reconnect failed'));
+    reconnectSocket.emit("error", new Error("reconnect failed"));
     await Promise.resolve();
     await Promise.resolve();
 
     expect(
       errorSpy.mock.calls.some(
         ([message, error]) =>
-          message === 'Frontal Code hosted events reconnect failed' && error instanceof Error
+          message === "Frontal Code hosted events reconnect failed" &&
+          error instanceof Error
       )
     ).toBe(true);
 
@@ -627,39 +651,40 @@ describe('FrontalCodeEventsClient', () => {
     expect(wsInstances).toHaveLength(3);
   });
 
-  it('restarts immediately on close when a restart was requested', async () => {
+  it("restarts immediately on close when a restart was requested", async () => {
     const connectPromise = client.connect();
     const firstSocket = wsInstances[0];
-    firstSocket.emit('open');
+    firstSocket.emit("open");
     await connectPromise;
 
     client.restartRequested = true;
-    firstSocket.emit('close');
+    firstSocket.emit("close");
 
     expect(wsInstances).toHaveLength(2);
     expect(client.restartRequested).toBe(false);
   });
 
-  it('logs restart failures and schedules a reconnect when immediate restart open fails', async () => {
+  it("logs restart failures and schedules a reconnect when immediate restart open fails", async () => {
     vi.useFakeTimers();
-    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const connectPromise = client.connect();
     const firstSocket = wsInstances[0];
-    firstSocket.emit('open');
+    firstSocket.emit("open");
     await connectPromise;
 
     client.restartRequested = true;
-    firstSocket.emit('close');
+    firstSocket.emit("close");
 
     const restartSocket = wsInstances[1];
-    restartSocket.emit('error', new Error('restart failed'));
+    restartSocket.emit("error", new Error("restart failed"));
     await Promise.resolve();
     await Promise.resolve();
 
     expect(
       errorSpy.mock.calls.some(
         ([message, error]) =>
-          message === 'Frontal Code hosted events stream restart failed' && error instanceof Error
+          message === "Frontal Code hosted events stream restart failed" &&
+          error instanceof Error
       )
     ).toBe(true);
 

@@ -326,15 +326,18 @@ export interface FrontalCodeTerminalEventPayload {
   derived_state?: string;
 }
 
-export type FrontalCodeEventTaskSummary = FrontalCodeGeneratedHostedTaskEventSummary & {
-  task_status?: FrontalCodeTask["status"];
-  result?: string;
-  error?: string;
-};
+export type FrontalCodeEventTaskSummary =
+  FrontalCodeGeneratedHostedTaskEventSummary & {
+    task_status?: FrontalCodeTask["status"];
+    result?: string;
+    error?: string;
+  };
 
-export type FrontalCodeAppliedOrphanPolicy = FrontalCodeGeneratedAppliedOrphanPolicy;
+export type FrontalCodeAppliedOrphanPolicy =
+  FrontalCodeGeneratedAppliedOrphanPolicy;
 
-export type FrontalCodeConnectorEventPayload = FrontalCodeGeneratedConnectorEventPayload;
+export type FrontalCodeConnectorEventPayload =
+  FrontalCodeGeneratedConnectorEventPayload;
 
 export type FrontalCodeEventPayload = FrontalCodeGeneratedEventPayload;
 
@@ -399,19 +402,19 @@ export interface FrontalCodeResolveApprovalRequest {
 export interface SlackTask {
   id: string;
   slack_task_id: string;
-  frontal-code_task_id?: string;
-  user_id: string;
-  status:
-    | "pending"
+  frontal-code_task_id?: string
+user_id: string;
+status:
+| "pending"
     | "submitted"
     | "running"
     | "completed"
     | "failed"
-    | "cancelled";
-  request: FrontalCodePromptRequest;
-  response?: FrontalCodeCliResponse;
-  created_at: Date;
-  updated_at: Date;
+    | "cancelled"
+request: FrontalCodePromptRequest;
+response?: FrontalCodeCliResponse;
+created_at: Date;
+updated_at: Date;
 }
 
 export interface SlackUserPreferences {

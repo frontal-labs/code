@@ -26,10 +26,7 @@
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/frontal-code",
-      "args": [
-        "--model",
-        "sonnet"
-      ],
+      "args": ["--model", "sonnet"],
       "cwd": "${workspaceFolder}",
       "environment": [
         {
@@ -45,10 +42,7 @@
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/frontal-code",
-      "args": [
-        "prompt",
-        "summarize this repository"
-      ],
+      "args": ["prompt", "summarize this repository"],
       "cwd": "${workspaceFolder}",
       "environment": [
         {
@@ -64,12 +58,7 @@
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/frontal-code",
-      "args": [
-        "--provider",
-        "mock",
-        "prompt",
-        "test streaming"
-      ],
+      "args": ["--provider", "mock", "prompt", "test streaming"],
       "cwd": "${workspaceFolder}",
       "environment": [
         {
@@ -89,10 +78,7 @@
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/mock-gateway",
-      "args": [
-        "--bind",
-        "127.0.0.1:8765"
-      ],
+      "args": ["--bind", "127.0.0.1:8765"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "preLaunchTask": "cargo build mock service"

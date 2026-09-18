@@ -1,4 +1,4 @@
-import type { JsonValue, FrontalCodeOptions, ThreadOptions } from "./protocol.js";
+import type { FrontalCodeOptions, JsonValue, ThreadOptions } from "./protocol.js";
 import { Thread } from "./thread.js";
 
 const REQUIRED_ENV_VARS = ["CODEX_API_KEY"];

@@ -126,11 +126,10 @@ resource "kubernetes_secret" "frontal-code_server_secrets" {
 
   data = {
     "FCODE_SERVER_API_KEY"  = var.frontal-code_server_api_key
-    "ANTHROPIC_API_KEY"     = var.api_keys.anthropic
+    "FRONTAL_API_KEY"       = var.api_keys.anthropic
+    "FRONTAL_BASE_URL"      = "https://tools.frontal.dev/frontal-code"
     "OPENAI_API_KEY"        = var.api_keys.openai
     "OPENAI_BASE_URL"       = ""
-    "FRONTAL_API_KEY"       = var.api_keys.anthropic # Use Anthropic key for Frontal
-    "FRONTAL_BASE_URL"      = "https://tools.frontal.dev/frontal-code"
     "XAI_API_KEY"           = var.api_keys.xai
     "XAI_BASE_URL"          = ""
     "AZURE_OPENAI_API_KEY"  = var.api_keys.azure

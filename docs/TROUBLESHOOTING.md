@@ -110,16 +110,16 @@ ls -la ~/.frontal-code
 
 **Symptoms:**
 ```
-Error: FCODE_API_KEY not found
+Error: FRONTAL_API_KEY not found
 ```
 
 **Solutions:**
 ```bash
 # Set environment variable
-export FCODE_API_KEY="sk-ant-..."
+export FRONTAL_API_KEY="sk-ant-..."
 
 # Add to shell profile
-echo 'export FCODE_API_KEY="sk-ant-..."' >> ~/.zshrc
+echo 'export FRONTAL_API_KEY="sk-ant-..."' >> ~/.zshrc
 
 # Use config file
 frontal-code config set providers.anthropic.api_key "sk-ant-..."
@@ -138,7 +138,7 @@ Error: Invalid API key
 **Solutions:**
 ```bash
 # Verify API key format
-echo $FCODE_API_KEY | grep -E "^sk-ant-"
+echo $FRONTAL_API_KEY | grep -E "^sk-ant-"
 
 # Test API connectivity
 frontal-code auth test anthropic

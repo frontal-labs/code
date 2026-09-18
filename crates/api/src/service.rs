@@ -69,7 +69,7 @@ impl ApiServiceConfig {
                 config.working_dir = Some(PathBuf::from(workdir));
             }
         }
-        if let Ok(api_key) = env::var("FCODE_API_KEY") {
+        if let Ok(api_key) = env::var("FRONTAL_API_KEY") {
             if !api_key.trim().is_empty() {
                 config.api_key = Some(api_key);
             }
@@ -103,7 +103,7 @@ impl ApiServiceConfig {
         if !self.bind_addr.ip().is_loopback() && self.api_key.is_none() && !self.allow_insecure_bind
         {
             return Err(
-                "refusing to bind frontal-code-api to a non-loopback address without FCODE_API_KEY; set FCODE_API_ALLOW_INSECURE_BIND=true to override"
+                "refusing to bind frontal-code-api to a non-loopback address without FRONTAL_API_KEY; set FRONTAL_API_ALLOW_INSECURE_BIND=true to override"
                     .into(),
             );
         }

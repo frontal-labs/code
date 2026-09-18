@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SlackBotService } from '@/bot/slack-bot-service';
-import { server } from '../setup';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SlackBotService } from "@/bot/slack-bot-service";
 
-describe('Slack Workflow Integration Tests', () => {
+describe("Slack Workflow Integration Tests", () => {
   let slackBotService: SlackBotService;
 
   beforeEach(() => {
@@ -10,21 +9,21 @@ describe('Slack Workflow Integration Tests', () => {
     slackBotService = new SlackBotService();
   });
 
-  describe('Complete Task Creation Workflow', () => {
-    it('should handle the full task creation lifecycle', async () => {
+  describe("Complete Task Creation Workflow", () => {
+    it("should handle the full task creation lifecycle", async () => {
       // Step 1: User creates a task via slash command
       const command = {
-        token: 'xoxb-test-token',
-        team_id: 'T123456',
-        team_domain: 'test-team',
-        channel_id: 'C123456',
-        channel_name: 'general',
-        user_id: 'U123456',
-        user_name: 'test-user',
-        command: '/frontal-code-create',
-        text: 'Fix the authentication bug in the login service',
-        response_url: 'https://hooks.slack.com/test',
-        trigger_id: 'trigger-123',
+        token: "xoxb-test-token",
+        team_id: "T123456",
+        team_domain: "test-team",
+        channel_id: "C123456",
+        channel_name: "general",
+        user_id: "U123456",
+        user_name: "test-user",
+        command: "/frontal-code-create",
+        text: "Fix the authentication bug in the login service",
+        response_url: "https://hooks.slack.com/test",
+        trigger_id: "trigger-123",
       };
 
       const mockAck = vi.fn();
@@ -32,30 +31,30 @@ describe('Slack Workflow Integration Tests', () => {
 
       // Mock successful task creation
       const mockTask = {
-        slack_task_id: 'task-123',
-        status: 'pending',
+        slack_task_id: "task-123",
+        status: "pending",
         request: {
-          prompt: 'Fix the authentication bug in the login service',
+          prompt: "Fix the authentication bug in the login service",
           repository: undefined,
           branch: undefined,
           model: undefined,
           provider: undefined,
           permission_mode: undefined,
           allowed_tools: undefined,
-          priority: 'medium',
+          priority: "medium",
         },
         created_at: new Date(),
         updated_at: new Date(),
       };
 
       // Mock the task manager to return the created task
-      const { mockTaskManager } = await import('../setup');
+      const { mockTaskManager } = await import("../setup");
       mockTaskManager.createTask.mockResolvedValue(mockTask);
 
       // Get the create command handler
-      const { mockSlackApp } = await import('../setup');
+      const { mockSlackApp } = await import("../setup");
       const createHandler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === '/frontal-code-create'
+        ([cmd]) => cmd === "/frontal-code-create"
       )?.[1];
 
       // Execute the command
@@ -66,32 +65,32 @@ describe('Slack Workflow Integration Tests', () => {
 
       // Verify the response contains task creation confirmation
       expect(mockRespond).toHaveBeenCalledWith({
-        text: 'Task created successfully!',
+        text: "Task created successfully!",
         blocks: expect.arrayContaining([
           expect.objectContaining({
-            type: 'section',
+            type: "section",
             text: expect.objectContaining({
-              text: expect.stringContaining('task-123'),
+              text: expect.stringContaining("task-123"),
             }),
           }),
           expect.objectContaining({
-            type: 'actions',
+            type: "actions",
             elements: expect.arrayContaining([
               expect.objectContaining({
-                action_id: 'task_cancel',
-                value: 'task-123',
+                action_id: "task_cancel",
+                value: "task-123",
               }),
             ]),
           }),
         ]),
-        response_type: 'in_channel',
+        response_type: "in_channel",
       });
 
       // Step 2: User checks task status
       const statusCommand = {
         ...command,
-        command: '/frontal-code-status',
-        text: 'task-123',
+        command: "/frontal-code-status",
+        text: "task-123",
       };
 
       const mockStatusAck = vi.fn();
@@ -100,48 +99,52 @@ describe('Slack Workflow Integration Tests', () => {
       // Mock task status response
       mockTaskManager.getTask.mockResolvedValue(mockTask);
       mockTaskManager.getTaskProgress.mockResolvedValue({
-        task_id: 'task-123',
-        status: 'running',
-        message: 'Task is in progress - analyzing the authentication code',
+        task_id: "task-123",
+        status: "running",
+        message: "Task is in progress - analyzing the authentication code",
         progress: 25,
         artifacts: [],
       });
 
       // Get the status command handler
       const statusHandler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === '/frontal-code-status'
+        ([cmd]) => cmd === "/frontal-code-status"
       )?.[1];
 
       // Execute the status command
-      await statusHandler({ command: statusCommand, ack: mockStatusAck, respond: mockStatusRespond });
+      await statusHandler({
+        command: statusCommand,
+        ack: mockStatusAck,
+        respond: mockStatusRespond,
+      });
 
       // Verify status response
       expect(mockStatusRespond).toHaveBeenCalledWith({
         blocks: expect.arrayContaining([
           expect.objectContaining({
             text: expect.objectContaining({
-              text: expect.stringContaining('task-123'),
+              text: expect.stringContaining("task-123"),
             }),
           }),
           expect.objectContaining({
             text: expect.objectContaining({
-              text: expect.stringContaining('running'),
+              text: expect.stringContaining("running"),
             }),
           }),
           expect.objectContaining({
             text: expect.objectContaining({
-              text: expect.stringContaining('25%'),
+              text: expect.stringContaining("25%"),
             }),
           }),
         ]),
-        response_type: 'ephemeral',
+        response_type: "ephemeral",
       });
 
       // Step 3: User cancels the task
       const cancelCommand = {
         ...command,
-        command: '/frontal-code-cancel',
-        text: 'task-123',
+        command: "/frontal-code-cancel",
+        text: "task-123",
       };
 
       const mockCancelAck = vi.fn();
@@ -152,82 +155,92 @@ describe('Slack Workflow Integration Tests', () => {
 
       // Get the cancel command handler
       const cancelHandler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === '/frontal-code-cancel'
+        ([cmd]) => cmd === "/frontal-code-cancel"
       )?.[1];
 
       // Execute the cancel command
-      await cancelHandler({ command: cancelCommand, ack: mockCancelAck, respond: mockCancelRespond });
+      await cancelHandler({
+        command: cancelCommand,
+        ack: mockCancelAck,
+        respond: mockCancelRespond,
+      });
 
       // Verify cancellation response
       expect(mockCancelRespond).toHaveBeenCalledWith({
-        text: 'Task `task-123` has been cancelled.',
-        response_type: 'in_channel',
+        text: "Task `task-123` has been cancelled.",
+        response_type: "in_channel",
       });
     });
   });
 
-  describe('Error Handling Workflow', () => {
-    it('should handle validation errors gracefully', async () => {
+  describe("Error Handling Workflow", () => {
+    it("should handle validation errors gracefully", async () => {
       const invalidCommand = {
-        token: '', // Invalid token
-        team_id: 'T123456',
-        team_domain: 'test-team',
-        channel_id: 'C123456',
-        channel_name: 'general',
-        user_id: 'U123456',
-        user_name: 'test-user',
-        command: '/frontal-code-create',
-        text: 'Test task',
-        response_url: 'https://hooks.slack.com/test',
-        trigger_id: 'trigger-123',
+        token: "", // Invalid token
+        team_id: "T123456",
+        team_domain: "test-team",
+        channel_id: "C123456",
+        channel_name: "general",
+        user_id: "U123456",
+        user_name: "test-user",
+        command: "/frontal-code-create",
+        text: "Test task",
+        response_url: "https://hooks.slack.com/test",
+        trigger_id: "trigger-123",
       };
 
       const mockAck = vi.fn();
       const mockRespond = vi.fn();
 
       // Get the create command handler
-      const { mockSlackApp } = await import('../setup');
+      const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === '/frontal-code-create'
+        ([cmd]) => cmd === "/frontal-code-create"
       )?.[1];
 
       // Execute the invalid command
-      await handler({ command: invalidCommand, ack: mockAck, respond: mockRespond });
+      await handler({
+        command: invalidCommand,
+        ack: mockAck,
+        respond: mockRespond,
+      });
 
       // Verify validation error response
       expect(mockAck).toHaveBeenCalled();
       expect(mockRespond).toHaveBeenCalledWith({
-        text: expect.stringContaining('Invalid command:'),
-        response_type: 'ephemeral',
+        text: expect.stringContaining("Invalid command:"),
+        response_type: "ephemeral",
       });
     });
 
-    it('should handle service errors gracefully', async () => {
+    it("should handle service errors gracefully", async () => {
       const command = {
-        token: 'xoxb-test-token',
-        team_id: 'T123456',
-        team_domain: 'test-team',
-        channel_id: 'C123456',
-        channel_name: 'general',
-        user_id: 'U123456',
-        user_name: 'test-user',
-        command: '/frontal-code-create',
-        text: 'Test task',
-        response_url: 'https://hooks.slack.com/test',
-        trigger_id: 'trigger-123',
+        token: "xoxb-test-token",
+        team_id: "T123456",
+        team_domain: "test-team",
+        channel_id: "C123456",
+        channel_name: "general",
+        user_id: "U123456",
+        user_name: "test-user",
+        command: "/frontal-code-create",
+        text: "Test task",
+        response_url: "https://hooks.slack.com/test",
+        trigger_id: "trigger-123",
       };
 
       const mockAck = vi.fn();
       const mockRespond = vi.fn();
 
       // Mock service error
-      const { mockTaskManager } = await import('../setup');
-      mockTaskManager.createTask.mockRejectedValue(new Error('Service unavailable'));
+      const { mockTaskManager } = await import("../setup");
+      mockTaskManager.createTask.mockRejectedValue(
+        new Error("Service unavailable")
+      );
 
       // Get the create command handler
-      const { mockSlackApp } = await import('../setup');
+      const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === '/frontal-code-create'
+        ([cmd]) => cmd === "/frontal-code-create"
       )?.[1];
 
       // Execute the command
@@ -236,35 +249,35 @@ describe('Slack Workflow Integration Tests', () => {
       // Verify error response
       expect(mockAck).toHaveBeenCalled();
       expect(mockRespond).toHaveBeenCalledWith({
-        text: 'Failed to create task: Service unavailable',
-        response_type: 'ephemeral',
+        text: "Failed to create task: Service unavailable",
+        response_type: "ephemeral",
       });
     });
   });
 
-  describe('Multi-User Interaction Workflow', () => {
-    it('should handle multiple users creating tasks simultaneously', async () => {
+  describe("Multi-User Interaction Workflow", () => {
+    it("should handle multiple users creating tasks simultaneously", async () => {
       const user1Command = {
-        token: 'xoxb-test-token',
-        team_id: 'T123456',
-        team_domain: 'test-team',
-        channel_id: 'C123456',
-        channel_name: 'general',
-        user_id: 'U123456',
-        user_name: 'user1',
-        command: '/frontal-code-create',
-        text: 'User 1 task',
-        response_url: 'https://hooks.slack.com/test1',
-        trigger_id: 'trigger-123',
+        token: "xoxb-test-token",
+        team_id: "T123456",
+        team_domain: "test-team",
+        channel_id: "C123456",
+        channel_name: "general",
+        user_id: "U123456",
+        user_name: "user1",
+        command: "/frontal-code-create",
+        text: "User 1 task",
+        response_url: "https://hooks.slack.com/test1",
+        trigger_id: "trigger-123",
       };
 
       const user2Command = {
         ...user1Command,
-        user_id: 'U789012',
-        user_name: 'user2',
-        text: 'User 2 task',
-        response_url: 'https://hooks.slack.com/test2',
-        trigger_id: 'trigger-456',
+        user_id: "U789012",
+        user_name: "user2",
+        text: "User 2 task",
+        response_url: "https://hooks.slack.com/test2",
+        trigger_id: "trigger-456",
       };
 
       const mockAck1 = vi.fn();
@@ -273,33 +286,41 @@ describe('Slack Workflow Integration Tests', () => {
       const mockRespond2 = vi.fn();
 
       // Mock different tasks for each user
-      const { mockTaskManager } = await import('../setup');
+      const { mockTaskManager } = await import("../setup");
       mockTaskManager.createTask
         .mockResolvedValueOnce({
-          slack_task_id: 'task-user1-123',
-          status: 'pending',
-          request: { prompt: 'User 1 task', priority: 'medium' },
+          slack_task_id: "task-user1-123",
+          status: "pending",
+          request: { prompt: "User 1 task", priority: "medium" },
           created_at: new Date(),
           updated_at: new Date(),
         })
         .mockResolvedValueOnce({
-          slack_task_id: 'task-user2-456',
-          status: 'pending',
-          request: { prompt: 'User 2 task', priority: 'medium' },
+          slack_task_id: "task-user2-456",
+          status: "pending",
+          request: { prompt: "User 2 task", priority: "medium" },
           created_at: new Date(),
           updated_at: new Date(),
         });
 
       // Get the create command handler
-      const { mockSlackApp } = await import('../setup');
+      const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === '/frontal-code-create'
+        ([cmd]) => cmd === "/frontal-code-create"
       )?.[1];
 
       // Execute both commands concurrently
       await Promise.all([
-        handler({ command: user1Command, ack: mockAck1, respond: mockRespond1 }),
-        handler({ command: user2Command, ack: mockAck2, respond: mockRespond2 }),
+        handler({
+          command: user1Command,
+          ack: mockAck1,
+          respond: mockRespond1,
+        }),
+        handler({
+          command: user2Command,
+          ack: mockAck2,
+          respond: mockRespond2,
+        }),
       ]);
 
       // Verify both commands were handled
@@ -309,35 +330,44 @@ describe('Slack Workflow Integration Tests', () => {
       expect(mockRespond2).toHaveBeenCalled();
 
       // Verify different tasks were created
-      expect(mockTaskManager.createTask).toHaveBeenCalledWith('U123456', expect.any(Object));
-      expect(mockTaskManager.createTask).toHaveBeenCalledWith('U789012', expect.any(Object));
+      expect(mockTaskManager.createTask).toHaveBeenCalledWith(
+        "U123456",
+        expect.any(Object)
+      );
+      expect(mockTaskManager.createTask).toHaveBeenCalledWith(
+        "U789012",
+        expect.any(Object)
+      );
     });
   });
 
-  describe('Message and Interaction Workflow', () => {
-    it('should handle natural language task creation via mention', async () => {
+  describe("Message and Interaction Workflow", () => {
+    it("should handle natural language task creation via mention", async () => {
       const mentionEvent = {
-        user: 'U123456',
-        channel: 'C123456',
-        text: '<@U789012> can you help me fix the login bug?',
+        user: "U123456",
+        channel: "C123456",
+        text: "<@U789012> can you help me fix the login bug?",
       };
 
       const mockSay = vi.fn();
 
       // Mock task creation
-      const { mockTaskManager } = await import('../setup');
+      const { mockTaskManager } = await import("../setup");
       mockTaskManager.createTask.mockResolvedValue({
-        slack_task_id: 'task-mention-123',
-        status: 'pending',
-        request: { prompt: 'can you help me fix the login bug?', priority: 'medium' },
+        slack_task_id: "task-mention-123",
+        status: "pending",
+        request: {
+          prompt: "can you help me fix the login bug?",
+          priority: "medium",
+        },
         created_at: new Date(),
         updated_at: new Date(),
       });
 
       // Get the app mention handler
-      const { mockSlackApp } = await import('../setup');
+      const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.event.mock.calls.find(
-        ([event_type]) => event_type === 'app_mention'
+        ([event_type]) => event_type === "app_mention"
       )?.[1];
 
       // Execute the mention handler
@@ -345,32 +375,32 @@ describe('Slack Workflow Integration Tests', () => {
 
       // Verify task creation response
       expect(mockSay).toHaveBeenCalledWith(
-        'Task created: `task-mention-123`. I\'ll start working on it right away!'
+        "Task created: `task-mention-123`. I'll start working on it right away!"
       );
     });
 
-    it('should handle task cancellation via button interaction', async () => {
+    it("should handle task cancellation via button interaction", async () => {
       const interaction = {
-        type: 'interactive_message',
-        token: 'test-token',
-        action_ts: '1640995200.000000',
+        type: "interactive_message",
+        token: "test-token",
+        action_ts: "1640995200.000000",
         team: {
-          id: 'T123456',
-          domain: 'test-team',
+          id: "T123456",
+          domain: "test-team",
         },
         user: {
-          id: 'U123456',
-          name: 'test-user',
+          id: "U123456",
+          name: "test-user",
         },
         channel: {
-          id: 'C123456',
-          name: 'general',
+          id: "C123456",
+          name: "general",
         },
         actions: [
           {
-            name: 'task_cancel',
-            type: 'button',
-            value: 'task-cancel-123',
+            name: "task_cancel",
+            type: "button",
+            value: "task-cancel-123",
           },
         ],
       };
@@ -379,13 +409,13 @@ describe('Slack Workflow Integration Tests', () => {
       const mockRespond = vi.fn();
 
       // Mock successful cancellation
-      const { mockTaskManager } = await import('../setup');
+      const { mockTaskManager } = await import("../setup");
       mockTaskManager.cancelTask.mockResolvedValue(undefined);
 
       // Get the task cancel action handler
-      const { mockSlackApp } = await import('../setup');
+      const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.action.mock.calls.find(
-        ([action]) => action === 'task_cancel'
+        ([action]) => action === "task_cancel"
       )?.[1];
 
       // Execute the interaction handler
@@ -393,83 +423,98 @@ describe('Slack Workflow Integration Tests', () => {
 
       // Verify cancellation response
       expect(mockAck).toHaveBeenCalled();
-      expect(mockTaskManager.cancelTask).toHaveBeenCalledWith('task-cancel-123', 'U123456');
+      expect(mockTaskManager.cancelTask).toHaveBeenCalledWith(
+        "task-cancel-123",
+        "U123456"
+      );
       expect(mockRespond).toHaveBeenCalledWith({
-        text: 'Task `task-cancel-123` has been cancelled.',
+        text: "Task `task-cancel-123` has been cancelled.",
         replace_original: true,
       });
     });
   });
 
-  describe('API Integration Workflow', () => {
-    it('should integrate with Frontal Code API during task creation', async () => {
+  describe("API Integration Workflow", () => {
+    it("should integrate with Frontal Code API during task creation", async () => {
       const command = {
-        token: 'xoxb-test-token',
-        team_id: 'T123456',
-        team_domain: 'test-team',
-        channel_id: 'C123456',
-        channel_name: 'general',
-        user_id: 'U123456',
-        user_name: 'test-user',
-        command: '/frontal-code-create',
-        text: 'Create a new user profile page',
-        response_url: 'https://hooks.slack.com/test',
-        trigger_id: 'trigger-123',
+        token: "xoxb-test-token",
+        team_id: "T123456",
+        team_domain: "test-team",
+        channel_id: "C123456",
+        channel_name: "general",
+        user_id: "U123456",
+        user_name: "test-user",
+        command: "/frontal-code-create",
+        text: "Create a new user profile page",
+        response_url: "https://hooks.slack.com/test",
+        trigger_id: "trigger-123",
       };
 
       const mockAck = vi.fn();
       const mockRespond = vi.fn();
 
       // Mock task creation that would call Frontal Code API
-      const { mockTaskManager } = await import('../setup');
+      const { mockTaskManager } = await import("../setup");
       mockTaskManager.createTask.mockResolvedValue({
-        slack_task_id: 'task-api-123',
-        status: 'pending',
-        request: { prompt: 'Create a new user profile page', priority: 'medium' },
+        slack_task_id: "task-api-123",
+        status: "pending",
+        request: {
+          prompt: "Create a new user profile page",
+          priority: "medium",
+        },
         created_at: new Date(),
         updated_at: new Date(),
       });
 
       // Get the create command handler
-      const { mockSlackApp } = await import('../setup');
+      const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === '/frontal-code-create'
+        ([cmd]) => cmd === "/frontal-code-create"
       )?.[1];
 
       // Execute the command
       await handler({ command, ack: mockAck, respond: mockRespond });
 
       // Verify task creation was initiated
-      expect(mockTaskManager.createTask).toHaveBeenCalledWith('U123456', expect.objectContaining({
-        prompt: 'Create a new user profile page',
-      }));
+      expect(mockTaskManager.createTask).toHaveBeenCalledWith(
+        "U123456",
+        expect.objectContaining({
+          prompt: "Create a new user profile page",
+        })
+      );
 
       // Verify response was sent to user
       expect(mockRespond).toHaveBeenCalledWith({
-        text: 'Task created successfully!',
+        text: "Task created successfully!",
         blocks: expect.arrayContaining([
           expect.objectContaining({
-            type: 'section',
+            type: "section",
             text: expect.objectContaining({
-              text: expect.stringContaining('task-api-123'),
+              text: expect.stringContaining("task-api-123"),
             }),
           }),
         ]),
-        response_type: 'in_channel',
+        response_type: "in_channel",
       });
     });
   });
 
-  describe('Health Check Workflow', () => {
-    it('should perform comprehensive health checks', async () => {
+  describe("Health Check Workflow", () => {
+    it("should perform comprehensive health checks", async () => {
       // Mock all services as healthy
-      const { mockSlackApp, mockFrontalCodeApiClient, mockDatabaseService, mockRedisService, mockTaskManager } = await import('../setup');
-      
+      const {
+        mockSlackApp,
+        mockFrontalCodeApiClient,
+        mockDatabaseService,
+        mockRedisService,
+        mockTaskManager,
+      } = await import("../setup");
+
       mockSlackApp.client.auth.test.mockResolvedValue({
         ok: true,
-        user: 'test-bot',
-        team: 'test-team',
-        bot_id: 'B123456',
+        user: "test-bot",
+        team: "test-team",
+        bot_id: "B123456",
       });
 
       mockFrontalCodeApiClient.healthCheck.mockResolvedValue(true);
@@ -507,11 +552,19 @@ describe('Slack Workflow Integration Tests', () => {
       expect(mockTaskManager.healthCheck).toHaveBeenCalled();
     });
 
-    it('should handle partial service failures in health check', async () => {
+    it("should handle partial service failures in health check", async () => {
       // Mock some services as unhealthy
-      const { mockSlackApp, mockFrontalCodeApiClient, mockDatabaseService, mockRedisService, mockTaskManager } = await import('../setup');
-      
-      mockSlackApp.client.auth.test.mockRejectedValue(new Error('Slack API error'));
+      const {
+        mockSlackApp,
+        mockFrontalCodeApiClient,
+        mockDatabaseService,
+        mockRedisService,
+        mockTaskManager,
+      } = await import("../setup");
+
+      mockSlackApp.client.auth.test.mockRejectedValue(
+        new Error("Slack API error")
+      );
       mockFrontalCodeApiClient.healthCheck.mockResolvedValue(false);
       mockDatabaseService.healthCheck.mockResolvedValue(true);
       mockRedisService.healthCheck.mockResolvedValue(false);

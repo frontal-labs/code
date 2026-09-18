@@ -136,12 +136,12 @@ build --platforms=//bazel/platforms:linux_x86_64
 After installation, configure your API credentials:
 
 ```bash
-export FCODE_API_KEY="sk-ant-..."
+export FRONTAL_API_KEY="sk-ant-..."
 # Or use Frontal's OpenAI-compatible API gateway
 export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 # Or use an Anthropic proxy
-export FCODE_BASE_URL="https://your-proxy.com"
+export FRONTAL_BASE_URL="https://your-proxy.com"
 ```
 
 ## Verification

@@ -18,11 +18,7 @@
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "customizations": {
     "vscode": {
-      "extensions": [
-        "bazelbuild.vscode-bazel",
-        "rust-lang.rust-analyzer",
-        "esbenp.prettier-vscode"
-      ]
+      "extensions": ["bazelbuild.vscode-bazel", "rust-lang.rust-analyzer", "esbenp.prettier-vscode"]
     }
   },
   "remoteUser": "vscode"

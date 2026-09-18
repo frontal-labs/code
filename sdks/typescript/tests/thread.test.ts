@@ -1,9 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { mkdirSync } from "node:fs";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {FrontalCode} from "../src/frontal-code.js";
+import { describe, expect, it } from "vitest";
+import { FrontalCode } from "../src/frontal-code.js";
 import { MockFrontalCode } from "../src/mockCli.js";
 import type { InputEntry } from "../src/protocol.js";
 
@@ -53,9 +52,7 @@ describe("Thread.run", () => {
   });
 
   it("passes the prompt via -p and requests json streaming output", async () => {
-    const { args } = await capture((frontal_code) =>
-      frontal_code.startThread().run("my prompt"),
-    );
+    const { args } = await capture((frontal_code) => frontal_code.startThread().run("my prompt"));
     expect(args).toContain("prompt");
     expect(args).toContain("-p");
     expect(args).toContain("my prompt");
@@ -87,12 +84,8 @@ describe("Thread.run", () => {
       { type: "local_image", path: "./ui.png" },
       { type: "local_image", path: "./diagram.jpg" },
     ];
-    const { args } = await capture((frontal_code) =>
-      frontal_code.startThread().run(entries),
-    );
-    const imageIndexes = args
-      .map((a, i) => (a === "--image" ? i : -1))
-      .filter((i) => i > -1);
+    const { args } = await capture((frontal_code) => frontal_code.startThread().run(entries));
+    const imageIndexes = args.map((a, i) => (a === "--image" ? i : -1)).filter((i) => i > -1);
     expect(imageIndexes).toHaveLength(2);
     expect(args[imageIndexes[0] + 1]).toBe("./ui.png");
     expect(args[imageIndexes[1] + 1]).toBe("./diagram.jpg");
@@ -104,9 +97,7 @@ describe("Thread.run", () => {
       { type: "text", text: "line one" },
       { type: "text", text: "line two" },
     ];
-    const { args } = await capture((frontal_code) =>
-      frontal_code.startThread().run(entries),
-    );
+    const { args } = await capture((frontal_code) => frontal_code.startThread().run(entries));
     expect(args).toContain("line one\nline two");
   });
 
@@ -122,9 +113,7 @@ describe("Thread.run", () => {
     );
     expect(args).toEqual(expect.arrayContaining(["--provider", "frontal"]));
     expect(args).toEqual(expect.arrayContaining(["--model", "opus"]));
-    expect(args).toEqual(
-      expect.arrayContaining(["--permission-mode", "safe-mode"]),
-    );
+    expect(args).toEqual(expect.arrayContaining(["--permission-mode", "safe-mode"]));
   });
 
   it("passes outputSchema as a config override", async () => {
@@ -190,9 +179,7 @@ describe("Thread.run", () => {
   it("throws FrontalCodeCliError when the CLI exits non-zero", async () => {
     const mock = new MockFrontalCode({ response: "", exitCode: 2 });
     const frontal_code = new FrontalCode({ command: mock.binPath, env: mock.env() });
-    await expect(frontal_code.startThread().run("boom")).rejects.toThrow(
-      /exited with code 2/,
-    );
+    await expect(frontal_code.startThread().run("boom")).rejects.toThrow(/exited with code 2/);
   });
 
   it("ignores unparseable stdout lines", async () => {
@@ -215,12 +202,7 @@ describe("Thread.runStreamed", () => {
     for await (const event of events) {
       seen.push(event.type);
     }
-    expect(seen).toEqual([
-      "turn.started",
-      "item.completed",
-      "item.completed",
-      "turn.completed",
-    ]);
+    expect(seen).toEqual(["turn.started", "item.completed", "item.completed", "turn.completed"]);
   });
 
   it("captures the session id from the streamed turn.completed", async () => {

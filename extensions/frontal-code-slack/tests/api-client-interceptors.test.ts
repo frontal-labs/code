@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const interceptorState = vi.hoisted(() => {
   type RequestSuccess = (value: unknown) => unknown;
@@ -25,11 +25,13 @@ const interceptorState = vi.hoisted(() => {
         }),
       },
       response: {
-        use: vi.fn((onFulfilled: ResponseSuccess, onRejected: ResponseError) => {
-          captured.responseSuccess = onFulfilled;
-          captured.responseError = onRejected;
-          return 0;
-        }),
+        use: vi.fn(
+          (onFulfilled: ResponseSuccess, onRejected: ResponseError) => {
+            captured.responseSuccess = onFulfilled;
+            captured.responseError = onRejected;
+            return 0;
+          }
+        ),
       },
     },
   };
@@ -53,30 +55,30 @@ const logState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('axios', () => ({
+vi.mock("axios", () => ({
   default: {
     create: interceptorState.create,
   },
   AxiosHeaders: interceptorState.MockAxiosHeaders,
 }));
 
-vi.mock('../src/log', () => ({
+vi.mock("../src/log", () => ({
   logApiCall: logState.logApiCall,
   logger: logState.logger,
 }));
 
-vi.mock('../src/config', () => ({
+vi.mock("../src/config", () => ({
   config: {
     frontal_code: {
-      apiUrl: 'http://localhost:8787',
+      apiUrl: "http://localhost:8787",
       timeout: 30_000,
     },
   },
 }));
 
-import { FrontalCodeApiClient } from '../src/api-client';
+import { FrontalCodeApiClient } from "../src/api-client";
 
-describe('FrontalCodeApiClient interceptors', () => {
+describe("FrontalCodeApiClient interceptors", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     interceptorState.captured.requestSuccess = undefined;
@@ -85,109 +87,142 @@ describe('FrontalCodeApiClient interceptors', () => {
     interceptorState.captured.responseError = undefined;
   });
 
-  it('constructs the axios client with configured base URL, timeout, and default headers', () => {
+  it("constructs the axios client with configured base URL, timeout, and default headers", () => {
     new FrontalCodeApiClient();
 
     expect(interceptorState.create).toHaveBeenCalledWith({
-      baseURL: 'http://localhost:8787',
+      baseURL: "http://localhost:8787",
       timeout: 30_000,
       headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'frontal-code-slack-bot/1.0.0',
+        "Content-Type": "application/json",
+        "User-Agent": "frontal-code-slack-bot/1.0.0",
       },
     });
   });
 
-  it('logs request metadata and returns the request config from the request interceptor', () => {
+  it("logs request metadata and returns the request config from the request interceptor", () => {
     new FrontalCodeApiClient();
     const config = {
-      method: 'post',
-      url: '/v1/tasks',
+      method: "post",
+      url: "/v1/tasks",
     };
 
     expect(interceptorState.captured.requestSuccess?.(config)).toBe(config);
-    expect(logState.logger.debug).toHaveBeenCalledWith('Frontal Code API request', {
-      method: 'post',
-      url: '/v1/tasks',
-    });
+    expect(logState.logger.debug).toHaveBeenCalledWith(
+      "Frontal Code API request",
+      {
+        method: "post",
+        url: "/v1/tasks",
+      }
+    );
   });
 
-  it('logs and rethrows request setup failures from the request interceptor', async () => {
+  it("logs and rethrows request setup failures from the request interceptor", async () => {
     new FrontalCodeApiClient();
-    const error = new Error('bad config');
+    const error = new Error("bad config");
 
-    await expect(interceptorState.captured.requestError?.(error)).rejects.toBe(error);
-    expect(logState.logger.error).toHaveBeenCalledWith('Frontal Code API request error', error);
+    await expect(interceptorState.captured.requestError?.(error)).rejects.toBe(
+      error
+    );
+    expect(logState.logger.error).toHaveBeenCalledWith(
+      "Frontal Code API request error",
+      error
+    );
   });
 
-  it('logs successful API responses with computed duration from the response interceptor', () => {
+  it("logs successful API responses with computed duration from the response interceptor", () => {
     new FrontalCodeApiClient();
-    vi.spyOn(Date, 'now').mockReturnValue(2_500);
+    vi.spyOn(Date, "now").mockReturnValue(2_500);
     const response = {
       config: {
-        url: '/v1/tasks',
-        method: 'get',
+        url: "/v1/tasks",
+        method: "get",
         headers: {
-          'X-Start-Time': '1000',
+          "X-Start-Time": "1000",
         },
       },
     };
 
-    expect(interceptorState.captured.responseSuccess?.(response)).toBe(response);
-    expect(logState.logApiCall).toHaveBeenCalledWith('/v1/tasks', 'GET', 1500, true);
+    expect(interceptorState.captured.responseSuccess?.(response)).toBe(
+      response
+    );
+    expect(logState.logApiCall).toHaveBeenCalledWith(
+      "/v1/tasks",
+      "GET",
+      1500,
+      true
+    );
   });
 
-  it('falls back to zero duration when the response success path has no start-time header', () => {
+  it("falls back to zero duration when the response success path has no start-time header", () => {
     new FrontalCodeApiClient();
     const response = {
       config: {
-        url: '/v1/tasks',
-        method: 'get',
+        url: "/v1/tasks",
+        method: "get",
         headers: {},
       },
     };
 
-    expect(interceptorState.captured.responseSuccess?.(response)).toBe(response);
-    expect(logState.logApiCall).toHaveBeenCalledWith('/v1/tasks', 'GET', 0, true);
+    expect(interceptorState.captured.responseSuccess?.(response)).toBe(
+      response
+    );
+    expect(logState.logApiCall).toHaveBeenCalledWith(
+      "/v1/tasks",
+      "GET",
+      0,
+      true
+    );
   });
 
-  it('falls back to empty url and GET when the response success path lacks method and url', () => {
+  it("falls back to empty url and GET when the response success path lacks method and url", () => {
     new FrontalCodeApiClient();
     const response = {
       config: {
         headers: {
-          'X-Start-Time': '1000',
+          "X-Start-Time": "1000",
         },
       },
     };
-    vi.spyOn(Date, 'now').mockReturnValue(2_500);
+    vi.spyOn(Date, "now").mockReturnValue(2_500);
 
-    expect(interceptorState.captured.responseSuccess?.(response)).toBe(response);
-    expect(logState.logApiCall).toHaveBeenCalledWith('', 'GET', 1500, true);
+    expect(interceptorState.captured.responseSuccess?.(response)).toBe(
+      response
+    );
+    expect(logState.logApiCall).toHaveBeenCalledWith("", "GET", 1500, true);
   });
 
-  it('logs failed API responses with computed duration and rethrows the same error', async () => {
+  it("logs failed API responses with computed duration and rethrows the same error", async () => {
     new FrontalCodeApiClient();
-    vi.spyOn(Date, 'now').mockReturnValue(4_000);
-    const error = Object.assign(new Error('down'), {
+    vi.spyOn(Date, "now").mockReturnValue(4_000);
+    const error = Object.assign(new Error("down"), {
       config: {
-        url: '/v1/tasks/123',
-        method: 'post',
+        url: "/v1/tasks/123",
+        method: "post",
         headers: {
-          'X-Start-Time': '2500',
+          "X-Start-Time": "2500",
         },
       },
     });
 
-    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(error);
-    expect(logState.logApiCall).toHaveBeenCalledWith('/v1/tasks/123', 'POST', 1500, false);
+    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(
+      error
+    );
+    expect(logState.logApiCall).toHaveBeenCalledWith(
+      "/v1/tasks/123",
+      "POST",
+      1500,
+      false
+    );
   });
 
-  it('falls back to empty url, GET, and zero duration when the response error lacks config', async () => {
+  it("falls back to empty url, GET, and zero duration when the response error lacks config", async () => {
     new FrontalCodeApiClient();
-    const error = new Error('down');
+    const error = new Error("down");
 
-    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(error);
-    expect(logState.logApiCall).toHaveBeenCalledWith('', 'GET', 0, false);
+    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(
+      error
+    );
+    expect(logState.logApiCall).toHaveBeenCalledWith("", "GET", 0, false);
   });
 });

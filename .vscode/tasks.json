@@ -5,10 +5,7 @@
       "label": "cargo build debug",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "build",
-        "--workspace"
-      ],
+      "args": ["build", "--workspace"],
       "group": "build",
       "problemMatcher": "$rustc",
       "presentation": {
@@ -22,11 +19,7 @@
       "label": "cargo build release",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "build",
-        "--release",
-        "--workspace"
-      ],
+      "args": ["build", "--release", "--workspace"],
       "group": {
         "kind": "build",
         "isDefault": false
@@ -43,11 +36,7 @@
       "label": "cargo build mock service",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "build",
-        "-p",
-        "mock-gateway"
-      ],
+      "args": ["build", "-p", "mock-gateway"],
       "group": "build",
       "problemMatcher": "$rustc",
       "presentation": {
@@ -61,10 +50,7 @@
       "label": "cargo test",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "test",
-        "--workspace"
-      ],
+      "args": ["test", "--workspace"],
       "group": {
         "kind": "test",
         "isDefault": true
@@ -81,12 +67,7 @@
       "label": "cargo test workspace",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "test",
-        "--workspace",
-        "--",
-        "--nocapture"
-      ],
+      "args": ["test", "--workspace", "--", "--nocapture"],
       "group": "test",
       "problemMatcher": "$rustc",
       "presentation": {
@@ -100,10 +81,7 @@
       "label": "cargo check",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "check",
-        "--workspace"
-      ],
+      "args": ["check", "--workspace"],
       "group": "build",
       "problemMatcher": "$rustc",
       "presentation": {
@@ -117,13 +95,7 @@
       "label": "cargo clippy",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "clippy",
-        "--workspace",
-        "--",
-        "-D",
-        "warnings"
-      ],
+      "args": ["clippy", "--workspace", "--", "-D", "warnings"],
       "group": "build",
       "problemMatcher": "$rustc",
       "presentation": {
@@ -137,10 +109,7 @@
       "label": "cargo fmt",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "fmt",
-        "--all"
-      ],
+      "args": ["fmt", "--all"],
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -154,11 +123,7 @@
       "label": "cargo run frontal-code",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "run",
-        "--bin",
-        "frontal-code"
-      ],
+      "args": ["run", "--bin", "frontal-code"],
       "group": "build",
       "problemMatcher": "$rustc",
       "presentation": {
@@ -173,13 +138,7 @@
       "label": "frontal-code doctor",
       "type": "shell",
       "command": "cargo",
-      "args": [
-        "run",
-        "--bin",
-        "frontal-code",
-        "--",
-        "doctor"
-      ],
+      "args": ["run", "--bin", "frontal-code", "--", "doctor"],
       "group": "build",
       "problemMatcher": "$rustc",
       "presentation": {
@@ -209,10 +168,7 @@
       "label": "docker-compose up",
       "type": "shell",
       "command": "docker-compose",
-      "args": [
-        "up",
-        "-d"
-      ],
+      "args": ["up", "-d"],
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -226,9 +182,7 @@
       "label": "docker-compose down",
       "type": "shell",
       "command": "docker-compose",
-      "args": [
-        "down"
-      ],
+      "args": ["down"],
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -242,10 +196,7 @@
       "label": "docker-compose logs",
       "type": "shell",
       "command": "docker-compose",
-      "args": [
-        "logs",
-        "-f"
-      ],
+      "args": ["logs", "-f"],
       "group": "build",
       "problemMatcher": [],
       "presentation": {

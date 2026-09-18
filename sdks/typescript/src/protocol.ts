@@ -47,9 +47,7 @@ export type FrontalCodeEvent =
   | { type: "turn.failed"; error: string };
 
 /** Structured input entry accepted by {@link Thread.run}. */
-export type InputEntry =
-  | { type: "text"; text: string }
-  | { type: "local_image"; path: string };
+export type InputEntry = { type: "text"; text: string } | { type: "local_image"; path: string };
 
 /** A turn can be started with a plain prompt string or structured entries. */
 export type ThreadInput = string | InputEntry[];

@@ -2,21 +2,21 @@
 
 const config = {
   // Build configuration
-  target: 'node',
-  platform: 'node',
-  format: 'esm',
+  target: "node",
+  platform: "node",
+  format: "esm",
 
   // Development configuration
   development: {
     // Disable minification in development
     minify: false,
     // Enable source maps in development
-    sourcemap: 'external',
+    sourcemap: "external",
     // Define development constants
     define: {
-      'process.env.NODE_ENV': '"development"',
-      'globalThis.DEV': 'true'
-    }
+      "process.env.NODE_ENV": '"development"',
+      "globalThis.DEV": "true",
+    },
   },
 
   // Production configuration
@@ -25,54 +25,54 @@ const config = {
     minify: {
       whitespace: true,
       identifiers: true,
-      syntax: true
+      syntax: true,
     },
     // Enable source maps in production
-    sourcemap: 'external',
+    sourcemap: "external",
     // Define production constants
     define: {
-      'process.env.NODE_ENV': '"production"',
-      'globalThis.DEV': 'false'
-    }
+      "process.env.NODE_ENV": '"production"',
+      "globalThis.DEV": "false",
+    },
   },
 
   // External dependencies (don't bundle)
   external: [
-    '@sentry/node',
-    '@slack/bolt',
-    '@slack/web-api',
-    '@t3-oss/env-core',
-    'winston',
-    'ws',
-    'axios',
-    'zod'
+    "@sentry/node",
+    "@slack/bolt",
+    "@slack/web-api",
+    "@t3-oss/env-core",
+    "winston",
+    "ws",
+    "axios",
+    "zod",
   ],
 
   // Loader configuration for different file types
   loaders: {
     // Treat .ts files as TypeScript
-    '.ts': 'ts',
+    ".ts": "ts",
     // Treat .js files as JavaScript
-    '.js': 'js',
+    ".js": "js",
     // Treat .json files as JSON
-    '.json': 'json'
+    ".json": "json",
   },
 
   // Path aliases (matching tsconfig.json)
   alias: {
-    '@': './src',
-    '@/bot': './src/bot',
-    '@/services': './src/services',
-    '@/types': './src/types',
-    '@/utils': './src/utils'
+    "@": "./src",
+    "@/bot": "./src/bot",
+    "@/services": "./src/services",
+    "@/types": "./src/types",
+    "@/utils": "./src/utils",
   },
 
   // Test configuration
   test: {
     // Include test files
-    include: ['**/*.test.ts', '**/*.spec.ts'],
+    include: ["**/*.test.ts", "**/*.spec.ts"],
     // Exclude test files from build
-    exclude: ['**/*.test.ts', '**/*.spec.ts'],
+    exclude: ["**/*.test.ts", "**/*.spec.ts"],
   },
 
   // Node.js compatibility
@@ -83,9 +83,9 @@ const config = {
       global: true,
       process: true,
       __dirname: true,
-      __filename: true
-    }
-  }
+      __filename: true,
+    },
+  },
 };
 
 export default config;

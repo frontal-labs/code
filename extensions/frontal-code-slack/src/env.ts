@@ -25,7 +25,11 @@ export const env = createEnv({
       .describe("Slack signing secret for request verification"),
 
     // Frontal Code API Configuration
-    FCODE_API_URL: z.string().url().default("http://frontal-code-api:8787").describe("Frontal Code API base URL"),
+    FCODE_API_URL: z
+      .string()
+      .url()
+      .default("http://frontal-code-api:8787")
+      .describe("Frontal Code API base URL"),
     FCODE_API_TIMEOUT: z.coerce
       .number()
       .int()
@@ -33,11 +37,13 @@ export const env = createEnv({
       .max(300000)
       .default(30000)
       .describe("Frontal Code API request timeout in milliseconds"),
-    FCODE_API_KEY: z
+    FRONTAL_SERVER_API_KEY: z
       .string()
       .min(1)
       .optional()
-      .describe("Frontal Code API key for protected hosted control-plane routes"),
+      .describe(
+        "Frontal Code API key for protected hosted control-plane routes"
+      ),
 
     // Application Configuration
     NODE_ENV: z
@@ -48,8 +54,8 @@ export const env = createEnv({
       .enum(["error", "warn", "info", "http", "debug"])
       .default("info")
       .describe("Logging level"),
-    PORT: z
-      .coerce.number()
+    PORT: z.coerce
+      .number()
       .int()
       .min(1000)
       .max(65535)
@@ -62,21 +68,13 @@ export const env = createEnv({
       .min(1)
       .optional()
       .describe("GitHub personal access token"),
-    LINEAR_TOKEN: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("Linear API token"),
+    LINEAR_TOKEN: z.string().min(1).optional().describe("Linear API token"),
     LINEAR_API_URL: z
       .string()
       .url()
       .optional()
       .describe("Linear GraphQL endpoint (optional)"),
-    GRAPHITE_TOKEN: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("Graphite API token"),
+    GRAPHITE_TOKEN: z.string().min(1).optional().describe("Graphite API token"),
     GRAPHITE_API_URL: z
       .string()
       .url()
@@ -91,22 +89,22 @@ export const env = createEnv({
       .describe("Sentry DSN for error tracking"),
 
     // Advanced Configuration
-    MAX_CONCURRENT_TASKS: z
-      .coerce.number()
+    MAX_CONCURRENT_TASKS: z.coerce
+      .number()
       .int()
       .min(1)
       .max(100)
       .default(10)
       .describe("Maximum number of concurrent tasks"),
-    TASK_TIMEOUT: z
-      .coerce.number()
+    TASK_TIMEOUT: z.coerce
+      .number()
       .int()
       .min(60000)
       .max(7200000)
       .default(3600000)
       .describe("Task timeout in milliseconds (1 min to 2 hours)"),
-    HEALTH_CHECK_INTERVAL: z
-      .coerce.number()
+    HEALTH_CHECK_INTERVAL: z.coerce
+      .number()
       .int()
       .min(5000)
       .max(300000)
@@ -137,7 +135,7 @@ export const env = createEnv({
     FCODE_API_TIMEOUT: process.env.FCODE_API_TIMEOUT
       ? Number(process.env.FCODE_API_TIMEOUT)
       : undefined,
-    FCODE_API_KEY: process.env.FCODE_API_KEY,
+    FRONTAL_SERVER_API_KEY: process.env.FRONTAL_SERVER_API_KEY,
     NODE_ENV: process.env.NODE_ENV,
     LOG_LEVEL: process.env.LOG_LEVEL,
     PORT: process.env.PORT ? Number(process.env.PORT) : undefined,
@@ -214,7 +212,7 @@ export function getEnvConfig() {
     frontal_code: {
       apiUrl: env.FCODE_API_URL,
       timeout: env.FCODE_API_TIMEOUT,
-      apiKey: env.FCODE_API_KEY,
+      apiKey: env.FRONTAL_SERVER_API_KEY,
     },
     app: {
       nodeEnv: env.NODE_ENV,

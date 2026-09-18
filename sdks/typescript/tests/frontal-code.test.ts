@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import {FrontalCode} from "../src/frontal-code.js";
+import { describe, expect, it } from "vitest";
+import { FrontalCode } from "../src/frontal-code.js";
 import { MockFrontalCode } from "../src/mockCli.js";
 import { Thread } from "../src/thread.js";
 
@@ -58,8 +58,7 @@ describe("Frontal Code client", () => {
 
   it("routes spawned CLI calls to a mock binary", async () => {
     const mock = new MockFrontalCode({
-      response:
-        '{"type":"turn.completed","finalResponse":"hi","sessionId":"s1"}',
+      response: '{"type":"turn.completed","finalResponse":"hi","sessionId":"s1"}',
     });
     const frontal_code = new FrontalCode({
       command: mock.binPath,

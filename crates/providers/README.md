@@ -94,8 +94,8 @@ This crate provides unified client implementations for multiple AI providers inc
 ### Environment Variables
 ```bash
 # Anthropic
-export FCODE_API_KEY="sk-ant-..."
-export FCODE_BASE_URL="https://api.anthropic.com"
+export FRONTAL_API_KEY="sk-ant-..."
+export FRONTAL_BASE_URL="https://api.anthropic.com"
 
 # OpenAI
 export OPENAI_API_KEY="sk-..."

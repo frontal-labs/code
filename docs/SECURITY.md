@@ -205,7 +205,7 @@ frontal-code --sandbox container --image frontal-code-sandbox:v0.1.0
 
 ```bash
 # Set API keys in environment
-export FCODE_API_KEY="sk-ant-..."
+export FRONTAL_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
 
@@ -219,7 +219,7 @@ frontal-code prompt "analyze this code"
 {
   "providers": {
     "anthropic": {
-      "api_key": "${FCODE_API_KEY}",
+       "api_key": "${FRONTAL_API_KEY}",
       "base_url": "https://api.anthropic.com"
     }
   }

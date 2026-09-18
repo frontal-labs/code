@@ -21,9 +21,7 @@ export function toTomlLiteral(value: JsonValue): string {
   if (Array.isArray(value)) {
     return "[" + value.map(toTomlLiteral).join(", ") + "]";
   }
-  const entries = Object.entries(value).map(
-    ([key, nested]) => `${key} = ${toTomlLiteral(nested)}`,
-  );
+  const entries = Object.entries(value).map(([key, nested]) => `${key} = ${toTomlLiteral(nested)}`);
   return "{ " + entries.join(", ") + " }";
 }
 
@@ -31,17 +29,11 @@ export function toTomlLiteral(value: JsonValue): string {
  * Flatten a JSON object into dotted-path leaves. Nested objects become
  * `parent.child.key`; arrays and primitives are treated as leaves.
  */
-export function flattenConfig(
-  config: Record<string, JsonValue>,
-): Array<[string, string]> {
+export function flattenConfig(config: Record<string, JsonValue>): Array<[string, string]> {
   const out: Array<[string, string]> = [];
 
   const walk = (prefix: string, val: JsonValue): void => {
-    if (
-      val !== null &&
-      typeof val === "object" &&
-      !Array.isArray(val)
-    ) {
+    if (val !== null && typeof val === "object" && !Array.isArray(val)) {
       for (const [key, nested] of Object.entries(val)) {
         const next = prefix ? `${prefix}.${key}` : key;
         walk(next, nested);
@@ -56,9 +48,7 @@ export function flattenConfig(
 }
 
 /** Convert a config object into repeated `--config key=value` CLI arguments. */
-export function configToArgs(
-  config: Record<string, JsonValue> | undefined,
-): string[] {
+export function configToArgs(config: Record<string, JsonValue> | undefined): string[] {
   if (!config) return [];
   const args: string[] = [];
   for (const [key, literal] of flattenConfig(config)) {

@@ -19,14 +19,14 @@ frontal-code
 
 - Homebrew for CLI installation, or a Rust toolchain with `cargo` for source builds
 - One of:
-  - `FCODE_API_KEY` for direct API access
+  - `FRONTAL_API_KEY` for direct API access (Anthropic)
   - `OPENAI_API_KEY` for OpenAI
   - `XAI_API_KEY` for xAI
   - `FRONTAL_API_KEY` for Frontal's OpenAI-compatible gateway
   - `BEDROCK_API_KEY` for Bedrock-compatible gateways
   - `AZURE_OPENAI_API_KEY` for Azure OpenAI-compatible gateways
   - or local `OLLAMA_BASE_URL` (defaults to `http://localhost:11434`)
-- Optional: `FCODE_BASE_URL` when targeting a proxy or local service
+- Optional: `FRONTAL_BASE_URL` when targeting a proxy or local service
 - Optional: `FRONTAL_BASE_URL` when targeting a custom Frontal gateway URL
 
 ## Configuration
@@ -204,7 +204,7 @@ Supported providers:
 ### API key
 
 ```bash
-export FCODE_API_KEY="sk-ant-..."
+export FRONTAL_API_KEY="sk-ant-..."
 # or
 export FRONTAL_API_KEY="frontal-..."
 ```

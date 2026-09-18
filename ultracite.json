@@ -6,21 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": true,
-    "ignore": [
-      "**/node_modules/**",
-      "**/target/**",
-      "**/dist/**",
-      "**/.frontal-code/**",
-      "**/coverage/**",
-      "**/bazel-bin/**",
-      "**/bazel-out/**",
-      "**/bazel-testlogs/**",
-      "**/bazel-*",
-      "**/*.lock",
-      "**/*.sum",
-      "**/CHANGELOG.md"
-    ]
+    "ignoreUnknown": true
   },
   "formatter": {
     "enabled": true,
@@ -28,16 +14,21 @@
     "indentWidth": 2,
     "lineWidth": 100
   },
-  "organizeImports": {
-    "enabled": true
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on"
+        }
+      }
+    }
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "suspicious": {
         "noExplicitAny": "error",
-        "noConsoleLog": "warn",
         "noAssignInExpressions": "error",
         "noConfusingLabels": "error",
         "noControlCharactersInRegex": "error",
@@ -92,9 +83,7 @@
         "useAltText": "error",
         "noSvgWithoutTitle": "warn"
       },
-      "nursery": {
-        "useImportRestrictions": "off"
-      }
+      "nursery": {}
     }
   },
   "javascript": {

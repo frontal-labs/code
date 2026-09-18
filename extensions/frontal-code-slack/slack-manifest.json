@@ -24,11 +24,7 @@
         "should_escape": false
       }
     ],
-    "unfurl_domains": [
-      "github.com",
-      "gitlab.com",
-      "bitbucket.org"
-    ]
+    "unfurl_domains": ["github.com", "gitlab.com", "bitbucket.org"]
   },
   "oauth_config": {
     "redirect_urls": [

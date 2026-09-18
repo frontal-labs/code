@@ -21,6 +21,8 @@ WORKDIR /workspace
 # Copy Cargo files
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
+COPY sdks/ ./sdks/
+COPY tools/ ./tools/
 COPY tests/ ./tests/
 
 # Build the application

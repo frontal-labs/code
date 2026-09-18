@@ -9,7 +9,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-const GIT_TIMEOUT: Duration = Duration::from_mins(5);
+const GIT_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Spawn a child and wait for it to complete with a timeout, collecting stdout + stderr.
 fn wait_for_output_with_timeout(

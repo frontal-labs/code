@@ -1,6 +1,8 @@
+#[allow(unused_imports)]
 use frontal_code_sandbox::{
     build_macos_sandbox_command, FilesystemIsolationMode, SandboxRequest, SandboxStatus,
 };
+#[allow(unused_imports)]
 use std::path::Path;
 
 fn make_status(

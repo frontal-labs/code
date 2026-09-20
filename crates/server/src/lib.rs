@@ -1697,7 +1697,7 @@ async fn generic_oauth_authorize(
             created_at: Instant::now(),
         },
     );
-    states.retain(|_, v| v.created_at.elapsed() < Duration::from_secs(600));
+    states.retain(|_, v| v.created_at.elapsed() < Duration::from_mins(10));
 
     let scope = oauth.scopes.join(",");
     let authorize_url = format!(

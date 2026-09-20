@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 use super::client::{McpClientBootstrap, McpClientTransport, McpStdioTransport};
 use super::config::{McpTransport, ScopedMcpServerConfig};
@@ -2429,6 +2429,7 @@ mod tests {
             let mut manager = McpServerManager::from_servers(&servers);
 
             manager.discover_tools().await.expect("discover tools");
+            sleep(Duration::from_millis(250)).await;
             let first_error = manager
                 .call_tool(
                     &mcp_tool_name("alpha", "echo"),

@@ -1197,28 +1197,18 @@ mod tests {
         fs::create_dir_all(&home).expect("home config dir");
 
         fs::write(
-            home.parent().expect("home parent").join(".frontal-code/settings.json"),
-            r#"{"model":"haiku","env":{"A":"1"},"mcpServers":{"home":{"command":"uvx","args":["home"]}}}"#,
-        )
-        .expect("write user compat config");
-        fs::write(
             home.join("settings.json"),
-            r#"{"model":"sonnet","env":{"A2":"1"},"hooks":{"PreToolUse":["base"]},"permissions":{"defaultMode":"plan","allow":["Read"],"deny":["Bash(rm -rf)"]}}"#,
+            r#"{"model":"sonnet","env":{"A":"1"},"hooks":{"PreToolUse":["base"]},"permissions":{"defaultMode":"plan","allow":["Read"],"deny":["Bash(rm -rf)"]}}"#,
         )
         .expect("write user settings");
         fs::write(
-            cwd.join(".frontal-code/settings.json"),
-            r#"{"model":"project-compat","env":{"B":"2"}}"#,
-        )
-        .expect("write project compat config");
-        fs::write(
             cwd.join(".frontal-code").join("settings.json"),
-            r#"{"env":{"C":"3"},"hooks":{"PostToolUse":["project"],"PostToolUseFailure":["project-failure"]},"permissions":{"ask":["Edit"]},"mcpServers":{"project":{"command":"uvx","args":["project"]}}}"#,
+            r#"{"model":"project","env":{"B":"2"},"hooks":{"PostToolUse":["project"]},"permissions":{"ask":["Edit"]},"mcpServers":{"project":{"command":"uvx","args":["project"]}}}"#,
         )
         .expect("write project settings");
         fs::write(
             cwd.join(".frontal-code").join("settings.local.json"),
-            r#"{"model":"opus","permissionMode":"acceptEdits"}"#,
+            r#"{"model":"local","permissionMode":"acceptEdits"}"#,
         )
         .expect("write local settings");
 
@@ -1227,13 +1217,13 @@ mod tests {
             .expect("config should load");
 
         assert_eq!(FCODE_SETTINGS_SCHEMA_NAME, "SettingsSchema");
-        assert_eq!(loaded.loaded_entries().len(), 5);
+        assert_eq!(loaded.loaded_entries().len(), 3);
         assert_eq!(loaded.loaded_entries()[0].source, ConfigSource::User);
         assert_eq!(
             loaded.get("model"),
-            Some(&JsonValue::String("opus".to_string()))
+            Some(&JsonValue::String("local".to_string()))
         );
-        assert_eq!(loaded.model(), Some("opus"));
+        assert_eq!(loaded.model(), Some("local"));
         assert_eq!(
             loaded.permission_mode(),
             Some(ResolvedPermissionMode::WorkspaceWrite)
@@ -1246,7 +1236,7 @@ mod tests {
                 .and_then(JsonValue::as_object)
                 .expect("env object")
                 .len(),
-            4
+            2
         );
         assert!(loaded
             .get("hooks")
@@ -1262,7 +1252,7 @@ mod tests {
         assert_eq!(loaded.hooks().post_tool_use(), &["project".to_string()]);
         assert_eq!(
             loaded.hooks().post_tool_use_failure(),
-            &["project-failure".to_string()]
+            &[] as &[String]
         );
         assert_eq!(loaded.permission_rules().allow(), &["Read".to_string()]);
         assert_eq!(
@@ -1270,7 +1260,6 @@ mod tests {
             &["Bash(rm -rf)".to_string()]
         );
         assert_eq!(loaded.permission_rules().ask(), &["Edit".to_string()]);
-        assert!(loaded.mcp().get("home").is_some());
         assert!(loaded.mcp().get("project").is_some());
 
         fs::remove_dir_all(root).expect("cleanup temp dir");

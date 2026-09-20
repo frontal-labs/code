@@ -2466,7 +2466,13 @@ mod tests {
             let log = fs::read_to_string(&log_path).expect("read log");
             assert_eq!(
                 log.lines().collect::<Vec<_>>(),
-                vec!["initialize", "tools/list", "initialize", "tools/call", "tools/call"]
+                vec![
+                    "initialize",
+                    "tools/list",
+                    "initialize",
+                    "tools/call",
+                    "tools/call"
+                ]
             );
 
             manager.shutdown().await.expect("shutdown");

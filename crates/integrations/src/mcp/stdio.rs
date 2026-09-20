@@ -2430,26 +2430,22 @@ mod tests {
 
             manager.discover_tools().await.expect("discover tools");
             tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-            let first_error = manager
+            let first_response = manager
                 .call_tool(
                     &mcp_tool_name("alpha", "echo"),
                     Some(json!({"text": "reconnect"})),
                 )
                 .await
-                .expect_err("first call should fail after transport drops");
+                .expect("first tool call should succeed after auto-reset");
 
-            match first_error {
-                McpServerManagerError::Transport {
-                    server_name,
-                    method,
-                    source,
-                } => {
-                    assert_eq!(server_name, "alpha");
-                    assert_eq!(method, "tools/call");
-                    assert_eq!(source.kind(), ErrorKind::UnexpectedEof);
-                }
-                other => panic!("expected transport error, got {other:?}"),
-            }
+            assert_eq!(
+                first_response
+                    .result
+                    .as_ref()
+                    .and_then(|result| result.structured_content.as_ref())
+                    .and_then(|value| value.get("server")),
+                Some(&json!("alpha"))
+            );
 
             let response = manager
                 .call_tool(
@@ -2470,7 +2466,7 @@ mod tests {
             let log = fs::read_to_string(&log_path).expect("read log");
             assert_eq!(
                 log.lines().collect::<Vec<_>>(),
-                vec!["initialize", "tools/list", "initialize", "tools/call"]
+                vec!["initialize", "tools/list", "initialize", "tools/call", "tools/call"]
             );
 
             manager.shutdown().await.expect("shutdown");

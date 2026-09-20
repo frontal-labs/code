@@ -1250,10 +1250,7 @@ mod tests {
             .contains_key("PostToolUse"));
         assert_eq!(loaded.hooks().pre_tool_use(), &["base".to_string()]);
         assert_eq!(loaded.hooks().post_tool_use(), &["project".to_string()]);
-        assert_eq!(
-            loaded.hooks().post_tool_use_failure(),
-            &[] as &[String]
-        );
+        assert_eq!(loaded.hooks().post_tool_use_failure(), &[] as &[String]);
         assert_eq!(loaded.permission_rules().allow(), &["Read".to_string()]);
         assert_eq!(
             loaded.permission_rules().deny(),

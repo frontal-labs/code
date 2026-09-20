@@ -2,6 +2,7 @@
 use frontal_code_sandbox::{
     build_macos_sandbox_command, FilesystemIsolationMode, SandboxRequest, SandboxStatus,
 };
+#[cfg(target_os = "macos")]
 use std::path::Path;
 
 #[test]

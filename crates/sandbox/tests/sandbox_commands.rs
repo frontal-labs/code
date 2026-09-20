@@ -206,6 +206,14 @@ fn macos_command_without_network_active_omits_network_denial() {
             assert!(profile.contains("(deny file-write*)"));
         }
     }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        assert!(
+            result.is_none(),
+            "macos command should be None on non-macOS"
+        );
+    }
 }
 
 #[test]
@@ -220,5 +228,13 @@ fn macos_command_without_filesystem_active_omits_file_denial() {
             assert!(!profile.contains("(deny file-write*)"));
             assert!(profile.contains("(deny network*)"));
         }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        assert!(
+            result.is_none(),
+            "macos command should be None on non-macOS"
+        );
     }
 }

@@ -1,15 +1,18 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum JsonValue {
     Null,
     Bool(bool),
     Number(i64),
+    Float(f64),
     String(String),
     Array(Vec<JsonValue>),
     Object(BTreeMap<String, JsonValue>),
 }
+
+impl Eq for JsonValue {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JsonError {
@@ -40,6 +43,7 @@ impl JsonValue {
             Self::Null => "null".to_string(),
             Self::Bool(value) => value.to_string(),
             Self::Number(value) => value.to_string(),
+            Self::Float(value) => value.to_string(),
             Self::String(value) => render_string(value),
             Self::Array(values) => {
                 let rendered = values
@@ -110,6 +114,16 @@ impl JsonValue {
             _ => None,
         }
     }
+
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::Float(value) => Some(*value),
+            Self::Number(value) => Some(*value as f64),
+            _ => None,
+        }
+    }
 }
 
 fn render_string(value: &str) -> String {
@@ -167,7 +181,7 @@ impl<'a> Parser<'a> {
             Some('"') => self.parse_string().map(JsonValue::String),
             Some('[') => self.parse_array(),
             Some('{') => self.parse_object(),
-            Some('-' | '0'..='9') => self.parse_number().map(JsonValue::Number),
+            Some('-' | '0'..='9') => self.parse_number(),
             Some(other) => Err(JsonError::new(format!("unexpected character: {other}"))),
             None => Err(JsonError::new("unexpected end of input")),
         }
@@ -266,24 +280,83 @@ impl<'a> Parser<'a> {
         Ok(JsonValue::Object(entries))
     }
 
-    fn parse_number(&mut self) -> Result<i64, JsonError> {
+    fn parse_number(&mut self) -> Result<JsonValue, JsonError> {
         let mut value = String::new();
         if self.try_consume('-') {
             value.push('-');
         }
 
-        while let Some(ch @ '0'..='9') = self.peek() {
-            value.push(ch);
-            self.index += 1;
+        match self.peek() {
+            Some('0') => {
+                value.push('0');
+                self.index += 1;
+                if matches!(self.peek(), Some('0'..='9')) {
+                    return Err(JsonError::new("invalid number: leading zero"));
+                }
+            }
+            Some('1'..='9') => {
+                while let Some(ch @ '1'..='9') = self.peek() {
+                    value.push(ch);
+                    self.index += 1;
+                }
+                while let Some(ch @ '0'..='9') = self.peek() {
+                    value.push(ch);
+                    self.index += 1;
+                }
+            }
+            _ => return Err(JsonError::new("invalid number")),
         }
 
-        if value.is_empty() || value == "-" {
-            return Err(JsonError::new("invalid number"));
+        let mut is_float = false;
+        if self.try_consume('.') {
+            is_float = true;
+            value.push('.');
+            let mut has_fraction = false;
+            while let Some(ch @ '0'..='9') = self.peek() {
+                value.push(ch);
+                self.index += 1;
+                has_fraction = true;
+            }
+            if !has_fraction {
+                return Err(JsonError::new("invalid number: expected digit after '.'"));
+            }
         }
 
-        value
-            .parse::<i64>()
-            .map_err(|_| JsonError::new("number out of range"))
+        if matches!(self.peek(), Some('e' | 'E')) {
+            is_float = true;
+            value.push(self.next().expect("number exponent"));
+            if matches!(self.peek(), Some('+' | '-')) {
+                value.push(self.next().expect("number exponent sign"));
+            }
+            let exponent_start = self.index;
+            while let Some(ch @ '0'..='9') = self.peek() {
+                value.push(ch);
+                self.index += 1;
+            }
+            if self.index == exponent_start {
+                return Err(JsonError::new("invalid number: expected exponent digit"));
+            }
+        }
+
+        if is_float {
+            let number = value
+                .parse::<f64>()
+                .map_err(|_| JsonError::new("number out of range"))?;
+            if !number.is_finite() {
+                return Err(JsonError::new("number out of range"));
+            }
+            Ok(JsonValue::Float(number))
+        } else if let Ok(number) = value.parse::<i64>() {
+            Ok(JsonValue::Number(number))
+        } else {
+            let number = value
+                .parse::<f64>()
+                .map_err(|_| JsonError::new("number out of range"))?;
+            if !number.is_finite() {
+                return Err(JsonError::new("number out of range"));
+            }
+            Ok(JsonValue::Float(number))
+        }
     }
 
     fn expect(&mut self, expected: char) -> Result<(), JsonError> {
@@ -349,6 +422,29 @@ mod tests {
         let parsed = JsonValue::parse(&rendered).expect("json should parse");
 
         assert_eq!(parsed.as_object().expect("object").len(), 2);
+    }
+
+    #[test]
+    fn parses_decimal_and_exponent_numbers() {
+        for (source, expected) in [
+            ("0.1", 0.1_f64),
+            ("-1.25", -1.25_f64),
+            ("1e3", 1000.0_f64),
+            ("2.5E-2", 0.025_f64),
+        ] {
+            let parsed = JsonValue::parse(source).expect("number should parse");
+            match parsed {
+                JsonValue::Float(value) => assert!((value - expected).abs() < f64::EPSILON),
+                other => panic!("expected float, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_number_formats() {
+        for source in ["01", "1.", "1e", "1e+", "-"] {
+            JsonValue::parse(source).expect_err("invalid number should fail");
+        }
     }
 
     #[test]

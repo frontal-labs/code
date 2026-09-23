@@ -36,8 +36,8 @@ export class MockFrontalCode {
 
     const script = [
       "#!/usr/bin/env bash",
-      String.raw`CAP="\${FRONTAL_CODE_MOCK_CAPTURE:-/dev/null}"`,
-      String.raw`CWD="\${FRONTAL_CODE_MOCK_CWD:-/dev/null}"`,
+      'CAP="${FRONTAL_CODE_MOCK_CAPTURE:-/dev/null}"',
+      'CWD="${FRONTAL_CODE_MOCK_CWD:-/dev/null}"',
       `RESP="${this.responseFile}"`,
       `EXIT="${opts.exitCode ?? 0}"`,
       'pwd > "$CWD"',

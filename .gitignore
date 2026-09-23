@@ -35,8 +35,9 @@ extensions/frontal-code-slack/node_modules/
 # Bazel (Bzlmod)
 .bazelrc.project
 coverage/
+!tools/coverage/
+!tools/coverage/**
 bazel-bin
 bazel-out
 bazel-testlogs
 bazel-frontal-code
-

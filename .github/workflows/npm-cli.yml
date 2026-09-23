@@ -1,6 +1,7 @@
 name: Frontal Code CLI npm
 
 on:
+  push:
     branches: [main]
     paths:
       - '.github/workflows/npm-cli.yml'

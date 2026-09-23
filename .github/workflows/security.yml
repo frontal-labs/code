@@ -19,8 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Rust toolchain
-        name: Install pinned Rust toolchain
+      - name: Install pinned Rust toolchain
         run: rustup show
 
       - name: Set up Node.js
@@ -49,4 +48,3 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: critical
-

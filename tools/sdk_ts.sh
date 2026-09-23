@@ -34,6 +34,17 @@ run() {
   fi
 }
 
+if [[ ! -d node_modules ]]; then
+  if command -v npm >/dev/null 2>&1 && [[ -f package-lock.json ]]; then
+    npm ci --ignore-scripts --no-audit --no-fund
+  elif command -v bun >/dev/null 2>&1; then
+    bun install --ignore-scripts
+  else
+    echo "ERROR: cannot install TypeScript SDK dependencies" >&2
+    exit 1
+  fi
+fi
+
 case "$ACTION" in
   test) run run test ;;
   build) run run build ;;

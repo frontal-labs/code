@@ -5,6 +5,7 @@ filegroup(
     srcs = glob(
         [
             "src/**/*",
+            "scripts/**/*",
             "tests/**/*",
         ],
         exclude = [
@@ -19,7 +20,6 @@ filegroup(
 filegroup(
     name = "config_srcs",
     srcs = [
-        "biome.json",
         "bun.lock",
         "bunfig.toml",
         "package.json",
@@ -30,7 +30,9 @@ filegroup(
 
 sh_test(
     name = "lint",
+    size = "small",
     srcs = ["//tools:extension.sh"],
+    data = [":srcs", ":config_srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
     args = [
         "extensions/frontal-code-slack",
         "lint",
@@ -44,6 +46,7 @@ sh_test(
 sh_test(
     name = "build",
     srcs = ["//tools:extension.sh"],
+    data = [":srcs", ":config_srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
     args = [
         "extensions/frontal-code-slack",
         "build",
@@ -57,6 +60,7 @@ sh_test(
 sh_test(
     name = "test",
     srcs = ["//tools:extension.sh"],
+    data = [":srcs", ":config_srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
     args = [
         "extensions/frontal-code-slack",
         "test",

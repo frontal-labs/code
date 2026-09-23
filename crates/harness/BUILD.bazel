@@ -23,7 +23,9 @@ sh_test(
 
 sh_test(
     name = "fmt",
+    size = "small",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
         "frontal-code-harness",
         "fmt-check",
@@ -37,6 +39,7 @@ sh_test(
 sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
         "frontal-code-harness",
         "clippy",

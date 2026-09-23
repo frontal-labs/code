@@ -11,18 +11,19 @@ def biome_lint(name, target = ".", data = [], tags = None, **kwargs):
         srcs = ["//tools:lint.sh"],
         data = data + ["//tools:lint.sh"],
         args = [target],
+        size = "small",
         tags = tags or ["lint", "biome", "typescript"],
         **kwargs
     )
 
 def rust_lint(name, crate = None, data = [], tags = None, **kwargs):
     """Run `cargo clippy` (optionally scoped to a crate) as a Bazel test target."""
-    crate_arg = ("-p " + crate) if crate else "--workspace"
+    crate_arg = crate or ""
     native.sh_test(
         name = name,
-        srcs = ["//tools:lint.sh"],
-        data = data,
-        args = [crate_arg],
+        srcs = ["//tools:crate.sh"],
+        data = data + ["//:cargo_workspace"],
+        args = [crate_arg, "clippy"],
         tags = tags or ["lint", "rust"],
         **kwargs
     )
@@ -32,6 +33,7 @@ def rust_format(name, tags = None, **kwargs):
     native.sh_test(
         name = name,
         srcs = ["//tools:format.sh"],
+        data = ["//:cargo_workspace"],
         tags = tags or ["fmt", "rust"],
         **kwargs
     )

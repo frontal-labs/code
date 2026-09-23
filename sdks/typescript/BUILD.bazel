@@ -19,12 +19,14 @@ filegroup(
 biome_lint(
     name = "lint",
     target = "sdks/typescript",
+    data = [":typescript_sdk_srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
 )
 
 # Type-check, build, and test the SDK via Bun/Vitest.
 sh_test(
     name = "typecheck",
     srcs = ["//tools:sdk_ts.sh"],
+    data = [":typescript_sdk_srcs", "//:biome.json", "//:ultracite.json"],
     args = ["sdks/typescript", "typecheck"],
     tags = ["typescript", "test"],
 )
@@ -32,6 +34,7 @@ sh_test(
 sh_test(
     name = "build",
     srcs = ["//tools:sdk_ts.sh"],
+    data = [":typescript_sdk_srcs", "//:biome.json", "//:ultracite.json"],
     args = ["sdks/typescript", "build"],
     tags = ["typescript", "build"],
 )
@@ -39,6 +42,7 @@ sh_test(
 sh_test(
     name = "test",
     srcs = ["//tools:sdk_ts.sh"],
+    data = [":typescript_sdk_srcs"],
     args = ["sdks/typescript", "test"],
     tags = ["typescript", "test"],
 )

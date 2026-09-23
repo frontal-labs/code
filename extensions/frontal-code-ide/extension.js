@@ -1,26 +1,28 @@
 const vscode = require("vscode");
-const { execFile } = require("child_process");
+const { execFile } = require("node:child_process");
 
 function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("frontal-code.startRepl", () => startRepl()),
     vscode.commands.registerCommand("frontal-code.askSelection", () => askSelection()),
-    vscode.commands.registerCommand("frontal-code.askInput", () => askInput())
+    vscode.commands.registerCommand("frontal-code.askInput", () => askInput()),
   );
 }
 
-function deactivate() {}
+function deactivate() {
+  // Intentionally empty: VS Code owns extension teardown.
+}
 
 function config() {
   return vscode.workspace.getConfiguration("frontal-code");
 }
 
-function frontal-codeCliPath() {
+function frontalCodeCliPath() {
   const value = config().get("cliPath", "frontal-code");
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : "frontal-code";
 }
 
-function frontal-codeModelArgs() {
+function frontalCodeModelArgs() {
   const model = config().get("defaultModel", "");
   if (typeof model === "string" && model.trim().length > 0) {
     return ["--model", model.trim()];
@@ -31,15 +33,15 @@ function frontal-codeModelArgs() {
 function startRepl() {
   const terminal = vscode.window.createTerminal("Frontal Code");
   terminal.show(true);
-  terminal.sendText(frontal-codeCliPath(), true);
+  terminal.sendText(frontalCodeCliPath(), true);
 }
 
 async function askInput() {
   const question = await vscode.window.showInputBox({
     prompt: "Ask Frontal Code",
-    placeHolder: "Explain the active file"
+    placeHolder: "Explain the active file",
   });
-  if (!question || !question.trim()) {
+  if (!question?.trim()) {
     return;
   }
   await runFrontalCodePrompt(question.trim());
@@ -58,9 +60,9 @@ async function askSelection() {
   }
   const question = await vscode.window.showInputBox({
     prompt: "What should Frontal Code do with this selection?",
-    placeHolder: "Explain this code"
+    placeHolder: "Explain this code",
   });
-  if (!question || !question.trim()) {
+  if (!question?.trim()) {
     return;
   }
   const prompt = `${question.trim()}\n\nSelected code:\n${selected}`;
@@ -72,19 +74,19 @@ async function runFrontalCodePrompt(prompt) {
   output.show(true);
   output.appendLine("Running Frontal Code...");
 
-  const args = [...frontal-codeModelArgs(), "--output-format", "text", "prompt", prompt];
+  const args = [...frontalCodeModelArgs(), "--output-format", "text", "prompt", prompt];
   const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
   const execOptions = cwd ? { cwd, maxBuffer: 16 * 1024 * 1024 } : { maxBuffer: 16 * 1024 * 1024 };
 
   const startedAt = Date.now();
-  execFile(frontal-codeCliPath(), args, execOptions, (error, stdout, stderr) => {
+  execFile(frontalCodeCliPath(), args, execOptions, (error, stdout, stderr) => {
     const elapsedMs = Date.now() - startedAt;
     output.appendLine(`Frontal Code finished in ${elapsedMs} ms.`);
-    if (stdout && stdout.trim()) {
+    if (stdout?.trim()) {
       output.appendLine("");
       output.appendLine(stdout.trimEnd());
     }
-    if (stderr && stderr.trim()) {
+    if (stderr?.trim()) {
       output.appendLine("");
       output.appendLine("stderr:");
       output.appendLine(stderr.trimEnd());
@@ -103,5 +105,5 @@ async function runFrontalCodePrompt(prompt) {
 
 module.exports = {
   activate,
-  deactivate
+  deactivate,
 };

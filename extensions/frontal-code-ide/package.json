@@ -11,6 +11,9 @@
     "Other"
   ],
   "main": "./extension.js",
+  "scripts": {
+    "build": "node --check extension.js"
+  },
   "activationEvents": [
     "onCommand:frontal-code.startRepl",
     "onCommand:frontal-code.askSelection",

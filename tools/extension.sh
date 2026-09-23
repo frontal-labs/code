@@ -44,11 +44,6 @@ if ! command -v bun >/dev/null 2>&1; then
   exit 1
 fi
 
-has_script() {
-  local script="$1"
-  bun -e 'const pkg = await Bun.file("package.json").json(); process.exit(pkg.scripts?.[process.argv[1]] ? 0 : 1)' "$script" >/dev/null 2>&1
-}
-
 ensure_dependencies() {
   if [[ -d node_modules ]]; then
     return
@@ -74,18 +69,10 @@ case "$ACTION" in
     fi
     ;;
   build)
-    if [[ ! -f package.json ]] || ! has_script build; then
-      echo "ERROR: no build script in $EXTENSION/package.json" >&2
-      exit 1
-    fi
     ensure_dependencies
     bun run build
     ;;
   test)
-    if ! has_script test; then
-      echo "ERROR: no test script in $EXTENSION/package.json" >&2
-      exit 1
-    fi
     ensure_dependencies
     bun run test
     ;;

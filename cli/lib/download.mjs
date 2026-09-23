@@ -9,8 +9,8 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { detectTarget, UnsupportedPlatformError } from "./platform.mjs";
 
 export const RELEASE_BASE = "https://github.com/frontal-labs/frontal-code/releases/download";
@@ -21,7 +21,7 @@ export function releaseAssetUrl(version, assetName) {
   return `${RELEASE_BASE}/${tag}/${assetName}`;
 }
 
-export async function fetchUrl(url, { redirects = 5 } = {}) {
+export async function fetchUrl(url) {
   const res = await fetch(url, { redirect: "follow" });
   if (res.status === 404) {
     const err = new Error(`Release asset not found: ${url}`);
@@ -61,7 +61,7 @@ function extractTarball(tarballPath, target, destDir) {
   execFileSync("tar", ["-xzf", tarballPath, "-C", outDir], { stdio: "inherit" });
 }
 
-async function downloadTo({ version, destDir, log = () => {} }) {
+async function downloadTo({ version, destDir, log = () => undefined }) {
   const { target, assetName, ext, binName } = detectTarget();
   const url = releaseAssetUrl(version, assetName);
   log(`Downloading ${assetName} (${target}) from ${url}`);
@@ -107,7 +107,7 @@ async function downloadTo({ version, destDir, log = () => {} }) {
 }
 
 // Public entry point. Returns the resolved binary path under vendor/.
-export async function downloadRelease({ version, destDir, log = () => {} }) {
+export async function downloadRelease({ version, destDir, log = () => undefined }) {
   if (!version || /dev$/.test(version) || version === "0.0.0") {
     throw new Error(
       `Refusing to download for dev version "${version}". Use a tagged release version.`,

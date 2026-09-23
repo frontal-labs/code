@@ -90,8 +90,8 @@ These control the **npm launcher only** (not the agent):
 
 | Variable | Effect |
 | --- | --- |
-| `FCODE_SKIP_DOWNLOAD=1` | Skip the postinstall binary download entirely. |
-| `FCODE_FORCE_DOWNLOAD=1` | Force (re)download even when a binary already exists or CI skips are set (used by `npm run download`). |
+| `FRONTAL_CODE_SKIP_DOWNLOAD=1` | Skip the postinstall binary download entirely. |
+| `FRONTAL_CODE_FORCE_DOWNLOAD=1` | Force (re)download even when a binary already exists or CI skips are set (used by `npm run download`). |
 | `npm_config_offline=true` | Offline install → download is skipped automatically. |
 
 ## Supported platforms

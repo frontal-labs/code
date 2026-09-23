@@ -121,10 +121,10 @@ export class Thread {
       ...(this.frontal_code.options.config ?? {}),
     };
     if (this.frontal_code.options.baseUrl) {
-      config["frontal_base_url"] = this.frontal_code.options.baseUrl;
+      config.frontal_base_url = this.frontal_code.options.baseUrl;
     }
     if (this.options.skipGitRepoCheck) {
-      config["skip_git_repo_check"] = true;
+      config.skip_git_repo_check = true;
     }
     if (this.options.config) {
       Object.assign(config, this.options.config);
@@ -133,7 +133,7 @@ export class Thread {
       Object.assign(config, runOptions.config);
     }
     if (runOptions.outputSchema !== undefined) {
-      config["output_schema"] = JSON.stringify(runOptions.outputSchema);
+      config.output_schema = JSON.stringify(runOptions.outputSchema);
     }
     return config;
   }

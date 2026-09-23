@@ -38,26 +38,26 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 
 ```bash
 # General settings
-export FCODE_LOG_LEVEL="info"  # debug, info, warn, error
-export FCODE_CONFIG_DIR="$HOME/.frontal-code"
-export FCODE_DATA_DIR="$HOME/.frontal-code/data"
+export FRONTAL_CODE_LOG_LEVEL="info"  # debug, info, warn, error
+export FRONTAL_CODE_CONFIG_DIR="$HOME/.frontal-code"
+export FRONTAL_CODE_DATA_DIR="$HOME/.frontal-code/data"
 
 # Provider selection
-export FCODE_DEFAULT_PROVIDER="anthropic"  # anthropic, openai, xai
-export FCODE_DEFAULT_MODEL="claude-opus-5"
+export FRONTAL_CODE_DEFAULT_PROVIDER="anthropic"  # anthropic, openai, xai
+export FRONTAL_CODE_DEFAULT_MODEL="claude-opus-5"
 
 # Permission settings
-export FCODE_PERMISSION_MODE="danger-full-access"  # danger-full-access, safe-mode, ask-permissions
-export FCODE_ALLOWED_TOOLS="bash,read,write,edit,grep"
+export FRONTAL_CODE_PERMISSION_MODE="danger-full-access"  # danger-full-access, safe-mode, ask-permissions
+export FRONTAL_CODE_ALLOWED_TOOLS="bash,read,write,edit,grep"
 
 # Session settings
-export FCODE_SESSION_DIR="$HOME/.frontal-code/sessions"
-export FCODE_AUTO_SAVE_SESSIONS="true"
-export FCODE_MAX_SESSIONS="100"
+export FRONTAL_CODE_SESSION_DIR="$HOME/.frontal-code/sessions"
+export FRONTAL_CODE_AUTO_SAVE_SESSIONS="true"
+export FRONTAL_CODE_MAX_SESSIONS="100"
 
 # MCP settings
-export FCODE_MCP_SERVERS_DIR="$HOME/.frontal-code/mcp-servers"
-export FCODE_MCP_TIMEOUT="30"
+export FRONTAL_CODE_MCP_SERVERS_DIR="$HOME/.frontal-code/mcp-servers"
+export FRONTAL_CODE_MCP_TIMEOUT="30"
 ```
 
 ## Config File Format
@@ -96,17 +96,17 @@ The `.frontal-code/settings.json` config file uses JSON format with the followin
   "session": {
     "auto_save": true,
     "max_sessions": 100,
-    "session_dir": "${FCODE_SESSION_DIR}",
+    "session_dir": "${FRONTAL_CODE_SESSION_DIR}",
     "resume_last_session": false
   },
   "mcp": {
-    "servers_dir": "${FCODE_MCP_SERVERS_DIR}",
+    "servers_dir": "${FRONTAL_CODE_MCP_SERVERS_DIR}",
     "timeout": 30,
     "auto_start": [],
     "enabled": true
   },
   "plugins": {
-    "plugins_dir": "${FCODE_CONFIG_DIR}/plugins",
+    "plugins_dir": "${FRONTAL_CODE_CONFIG_DIR}/plugins",
     "auto_load": [],
     "enabled": true
   },
@@ -395,13 +395,13 @@ frontal-code --show-tool-calls prompt "list files"
 
 ```bash
 # Disable telemetry
-export FCODE_TELEMETRY_ENABLED=false
+export FRONTAL_CODE_TELEMETRY_ENABLED=false
 
 # Set sample rate
-export FCODE_TELEMETRY_SAMPLE_RATE=0.1
+export FRONTAL_CODE_TELEMETRY_SAMPLE_RATE=0.1
 
 # Custom endpoint
-export FCODE_TELEMETRY_ENDPOINT="https://my-telemetry.example.com"
+export FRONTAL_CODE_TELEMETRY_ENDPOINT="https://my-telemetry.example.com"
 ```
 
 ## Advanced Configuration

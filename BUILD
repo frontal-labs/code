@@ -1,6 +1,11 @@
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["MODULE.bazel"])
+exports_files([
+    "MODULE.bazel",
+    ".gitignore",
+    "biome.json",
+    "ultracite.json",
+])
 
 # Buildifier from @buildifier_prebuilt, exposed for Bazel formatter targets.
 alias(
@@ -23,6 +28,7 @@ filegroup(
         "//:.cargo/config.toml",
         "//:rust-toolchain.toml",
         "//crates:all_crates",
+        "//crates/plugins:bundled_plugins",
         "//examples:srcs",
         "//sdks/rust:rust_sdk_srcs",
         "//tests:all_test_crates",

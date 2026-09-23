@@ -59,82 +59,78 @@ export class FrontalCodeApiClient {
       (error) => {
         logger.error("Frontal Code API request error", error as Error);
         return Promise.reject(error);
-      }
+      },
     );
 
     // Response interceptor for logging
     this.client.interceptors.response.use(
       (response) => {
         const startTime = response.config.headers?.["X-Start-Time"]
-          ? Number.parseInt(response.config.headers["X-Start-Time"] as string)
+          ? Number.parseInt(response.config.headers["X-Start-Time"] as string, 10)
           : 0;
         const duration = startTime ? Date.now() - startTime : 0;
         logApiCall(
           response.config.url || "",
           response.config.method?.toUpperCase() || "GET",
           duration,
-          true
+          true,
         );
         return response;
       },
       (error) => {
         const startTime = error.config?.headers?.["X-Start-Time"]
-          ? Number.parseInt(error.config.headers["X-Start-Time"] as string)
+          ? Number.parseInt(error.config.headers["X-Start-Time"] as string, 10)
           : 0;
         const duration = startTime ? Date.now() - startTime : 0;
         logApiCall(
           error.config?.url || "",
           error.config?.method?.toUpperCase() || "GET",
           duration,
-          false
+          false,
         );
         return Promise.reject(error);
-      }
+      },
     );
   }
 
-  async submitPrompt(
-    request: FrontalCodePromptRequest
-  ): Promise<FrontalCodeCliResponse> {
+  async submitPrompt(request: FrontalCodePromptRequest): Promise<FrontalCodeCliResponse> {
     const startTime = Date.now();
 
     try {
-      const response: AxiosResponse<FrontalCodeCliResponse> =
-        await this.client.post("/v1/prompt", request, {
+      const response: AxiosResponse<FrontalCodeCliResponse> = await this.client.post(
+        "/v1/prompt",
+        request,
+        {
           headers: new AxiosHeaders({
             "X-Start-Time": startTime.toString(),
           }),
-        } as InternalAxiosRequestConfig);
+        } as InternalAxiosRequestConfig,
+      );
 
       return response.data;
     } catch (error) {
-      logger.error(
-        "Failed to submit prompt to Frontal Code API",
-        error as Error
-      );
+      logger.error("Failed to submit prompt to Frontal Code API", error as Error);
       throw new Error(`Frontal Code API error: ${(error as Error).message}`);
     }
   }
 
-  async runCliCommand(
-    request: FrontalCodeCliRequest
-  ): Promise<FrontalCodeCliResponse> {
+  async runCliCommand(request: FrontalCodeCliRequest): Promise<FrontalCodeCliResponse> {
     const startTime = Date.now();
 
     try {
-      const response: AxiosResponse<FrontalCodeCliResponse> =
-        await this.client.post("/v1/cli/run", request, {
+      const response: AxiosResponse<FrontalCodeCliResponse> = await this.client.post(
+        "/v1/cli/run",
+        request,
+        {
           headers: new AxiosHeaders({
             "X-Start-Time": startTime.toString(),
           }),
-        } as InternalAxiosRequestConfig);
+        } as InternalAxiosRequestConfig,
+      );
 
       return response.data;
     } catch (error) {
-      logger.error(
-        "Failed to run CLI command via Frontal Code API",
-        error as Error
-      );
+      logger.error("Failed to run CLI command via Frontal Code API", error as Error);
       throw new Error(`Frontal Code API error: ${(error as Error).message}`);
     }
   }
@@ -143,19 +139,18 @@ export class FrontalCodeApiClient {
     const startTime = Date.now();
 
     try {
-      const response: AxiosResponse<FrontalCodeStatusResponse> =
-        await this.client.get("/v1/status", {
+      const response: AxiosResponse<FrontalCodeStatusResponse> = await this.client.get(
+        "/v1/status",
+        {
           headers: new AxiosHeaders({
             "X-Start-Time": startTime.toString(),
           }),
-        } as InternalAxiosRequestConfig);
+        } as InternalAxiosRequestConfig,
+      );
 
       return response.data;
     } catch (error) {
-      logger.error(
-        "Failed to get status from Frontal Code API",
-        error as Error
-      );
+      logger.error("Failed to get status from Frontal Code API", error as Error);
       throw new Error(`Frontal Code API error: ${(error as Error).message}`);
     }
   }
@@ -164,19 +159,18 @@ export class FrontalCodeApiClient {
     const startTime = Date.now();
 
     try {
-      const response: AxiosResponse<FrontalCodeSandboxResponse> =
-        await this.client.get("/v1/sandbox", {
+      const response: AxiosResponse<FrontalCodeSandboxResponse> = await this.client.get(
+        "/v1/sandbox",
+        {
           headers: new AxiosHeaders({
             "X-Start-Time": startTime.toString(),
           }),
-        } as InternalAxiosRequestConfig);
+        } as InternalAxiosRequestConfig,
+      );
 
       return response.data;
     } catch (error) {
-      logger.error(
-        "Failed to get sandbox status from Frontal Code API",
-        error as Error
-      );
+      logger.error("Failed to get sandbox status from Frontal Code API", error as Error);
       throw new Error(`Frontal Code API error: ${(error as Error).message}`);
     }
   }
@@ -197,10 +191,7 @@ export class FrontalCodeApiClient {
 
       return response.data;
     } catch (error) {
-      logger.error(
-        "Failed to get version from Frontal Code API",
-        error as Error
-      );
+      logger.error("Failed to get version from Frontal Code API", error as Error);
       throw new Error(`Frontal Code API error: ${(error as Error).message}`);
     }
   }
@@ -215,12 +206,12 @@ export class FrontalCodeApiClient {
     }
   }
 
-  async createTask(
-    request: FrontalCodeCreateTaskRequest
-  ): Promise<FrontalCodeCreateTaskResponse> {
+  async createTask(request: FrontalCodeCreateTaskRequest): Promise<FrontalCodeCreateTaskResponse> {
     try {
-      const response: AxiosResponse<FrontalCodeCreateTaskResponse> =
-        await this.client.post("/v1/tasks", request);
+      const response: AxiosResponse<FrontalCodeCreateTaskResponse> = await this.client.post(
+        "/v1/tasks",
+        request,
+      );
       return response.data;
     } catch (error) {
       logger.error("Task creation failed", error as Error);
@@ -230,9 +221,7 @@ export class FrontalCodeApiClient {
 
   async getTask(taskId: string): Promise<FrontalCodeTask> {
     try {
-      const response: AxiosResponse<FrontalCodeTask> = await this.client.get(
-        `/v1/tasks/${taskId}`
-      );
+      const response: AxiosResponse<FrontalCodeTask> = await this.client.get(`/v1/tasks/${taskId}`);
       return response.data;
     } catch (error) {
       logger.error("Task lookup failed", error as Error, { taskId });
@@ -240,16 +229,11 @@ export class FrontalCodeApiClient {
     }
   }
 
-  async listTasks(
-    query: FrontalCodeListTasksQuery = {}
-  ): Promise<FrontalCodeTask[]> {
+  async listTasks(query: FrontalCodeListTasksQuery = {}): Promise<FrontalCodeTask[]> {
     try {
-      const response: AxiosResponse<FrontalCodeTask[]> = await this.client.get(
-        "/v1/tasks",
-        {
-          params: query,
-        }
-      );
+      const response: AxiosResponse<FrontalCodeTask[]> = await this.client.get("/v1/tasks", {
+        params: query,
+      });
       return response.data;
     } catch (error) {
       logger.error("Task listing failed", error as Error, { ...query });
@@ -258,13 +242,15 @@ export class FrontalCodeApiClient {
   }
 
   async getOrphanPolicy(
-    query: FrontalCodeOrphanPolicyQuery = {}
+    query: FrontalCodeOrphanPolicyQuery = {},
   ): Promise<FrontalCodeOrphanPolicyResponse> {
     try {
-      const response: AxiosResponse<FrontalCodeOrphanPolicyResponse> =
-        await this.client.get("/v1/policies/orphans", {
+      const response: AxiosResponse<FrontalCodeOrphanPolicyResponse> = await this.client.get(
+        "/v1/policies/orphans",
+        {
           params: query,
-        });
+        },
+      );
       return response.data;
     } catch (error) {
       logger.error("Orphan policy lookup failed", error as Error, { ...query });
@@ -272,9 +258,7 @@ export class FrontalCodeApiClient {
     }
   }
 
-  async updateTaskContext(
-    request: FrontalCodeUpdateTaskContextRequest
-  ): Promise<FrontalCodeTask> {
+  async updateTaskContext(request: FrontalCodeUpdateTaskContextRequest): Promise<FrontalCodeTask> {
     try {
       const response: AxiosResponse<FrontalCodeTask> = await this.client.post(
         `/v1/tasks/${request.taskId}/context`,
@@ -284,7 +268,7 @@ export class FrontalCodeApiClient {
           channel_id: request.channel_id,
           thread_ts: request.thread_ts,
           approval_message_ts: request.approval_message_ts,
-        }
+        },
       );
       return response.data;
     } catch (error) {
@@ -326,7 +310,7 @@ export class FrontalCodeApiClient {
       value?: string;
       userId: string;
       context: SlackBody;
-    }
+    },
   ): Promise<{ blocks: SlackBlock[] }> {
     try {
       const response = await this.client.post(
@@ -336,7 +320,7 @@ export class FrontalCodeApiClient {
           value: request.value,
           user_id: request.userId,
           context: request.context,
-        }
+        },
       );
       return response.data;
     } catch (error) {
@@ -345,9 +329,7 @@ export class FrontalCodeApiClient {
     }
   }
 
-  async resolveTaskApproval(
-    request: FrontalCodeResolveApprovalRequest
-  ): Promise<FrontalCodeTask> {
+  async resolveTaskApproval(request: FrontalCodeResolveApprovalRequest): Promise<FrontalCodeTask> {
     try {
       const response: AxiosResponse<FrontalCodeTask> = await this.client.post(
         `/v1/tasks/${request.taskId}/approval`,
@@ -356,7 +338,7 @@ export class FrontalCodeApiClient {
           action: request.action,
           resolved_by: request.resolvedBy,
           reason: request.reason,
-        }
+        },
       );
       return response.data;
     } catch (error) {
@@ -371,17 +353,14 @@ export class FrontalCodeApiClient {
 
   async sendConnectorEvent(
     connector: string,
-    request: { type: string; userId: string; data: unknown }
+    request: { type: string; userId: string; data: unknown },
   ): Promise<void> {
     try {
-      await this.client.post(
-        `/v1/connectors/${encodeURIComponent(connector)}/events`,
-        {
-          type: request.type,
-          user_id: request.userId,
-          data: request.data,
-        }
-      );
+      await this.client.post(`/v1/connectors/${encodeURIComponent(connector)}/events`, {
+        type: request.type,
+        user_id: request.userId,
+        data: request.data,
+      });
     } catch (error) {
       logger.error("Slack event processing failed", error as Error);
       throw error;

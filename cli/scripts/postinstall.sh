@@ -6,7 +6,7 @@
 # authority that reports a missing binary to the user at run time.
 #
 # Skip conditions (exit 0 quietly):
-#   - FCODE_SKIP_DOWNLOAD=1
+#   - FRONTAL_CODE_SKIP_DOWNLOAD=1
 #   - npm_config_offline (npm/pnpm/yarn offline)
 #   - npm_config_ignore_scripts (already handled by npm, but be safe)
 #   - dev version (0.0.0-dev / *-dev) -> expect a local cargo build
@@ -18,8 +18,8 @@ PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PKG_ROOT"
 
 # Check skip conditions.
-if [ "${FCODE_SKIP_DOWNLOAD:-}" = "1" ]; then
-  echo "[frontal-code:postinstall] skipping download (FCODE_SKIP_DOWNLOAD=1)."
+if [ "${FRONTAL_CODE_SKIP_DOWNLOAD:-}" = "1" ]; then
+  echo "[frontal-code:postinstall] skipping download (FRONTAL_CODE_SKIP_DOWNLOAD=1)."
   exit 0
 fi
 

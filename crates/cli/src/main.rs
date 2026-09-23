@@ -88,7 +88,7 @@ const DEFAULT_DATE: &str = "2026-03-31";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_TARGET: Option<&str> = option_env!("TARGET");
 const GIT_SHA: Option<&str> = option_env!("GIT_SHA");
-const FCODE_TELEMETRY_PATH: &str = "FCODE_TELEMETRY_PATH";
+const FRONTAL_CODE_TELEMETRY_PATH: &str = "FRONTAL_CODE_TELEMETRY_PATH";
 const INTERNAL_PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(3);
 const PRIMARY_SESSION_EXTENSION: &str = "jsonl";
 const LEGACY_SESSION_EXTENSION: &str = "json";
@@ -219,7 +219,7 @@ struct TelemetryResolution {
 fn resolve_telemetry_config(
     runtime_config: Option<&frontal_code_runtime::RuntimeConfig>,
 ) -> TelemetryResolution {
-    if let Ok(path) = env::var(FCODE_TELEMETRY_PATH) {
+    if let Ok(path) = env::var(FRONTAL_CODE_TELEMETRY_PATH) {
         let trimmed = path.trim();
         if !trimmed.is_empty() {
             return TelemetryResolution {
@@ -3032,16 +3032,16 @@ fn run_hosted_command(
 }
 
 fn hosted_server_url() -> String {
-    env::var("FCODE_SERVER_URL")
+    env::var("FRONTAL_CODE_SERVER_URL")
         .ok()
-        .or_else(|| env::var("FCODE_SERVER_BASE_URL").ok())
+        .or_else(|| env::var("FRONTAL_CODE_SERVER_BASE_URL").ok())
         .map(|value| value.trim().trim_end_matches('/').to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| DEFAULT_HOSTED_SERVER_URL.to_string())
 }
 
 fn hosted_server_api_key() -> Option<String> {
-    env::var("FCODE_SERVER_API_KEY")
+    env::var("FRONTAL_CODE_SERVER_API_KEY")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
@@ -3280,7 +3280,7 @@ fn update_hosted_task_github(
 }
 
 fn hosted_git_author_name() -> String {
-    env::var("FCODE_GIT_AUTHOR_NAME")
+    env::var("FRONTAL_CODE_GIT_AUTHOR_NAME")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
@@ -3288,7 +3288,7 @@ fn hosted_git_author_name() -> String {
 }
 
 fn hosted_git_author_email() -> String {
-    env::var("FCODE_GIT_AUTHOR_EMAIL")
+    env::var("FRONTAL_CODE_GIT_AUTHOR_EMAIL")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
@@ -3670,8 +3670,8 @@ fn run_hosted_task_worker(
 fn load_hosted_task_worker_payload(
     task_id: &str,
 ) -> Result<HostedTaskWorkerPayload, Box<dyn std::error::Error>> {
-    let task_file = env::var("FCODE_HOSTED_TASK_FILE")
-        .map_err(|_| "FCODE_HOSTED_TASK_FILE must be set for hosted task runs")?;
+    let task_file = env::var("FRONTAL_CODE_HOSTED_TASK_FILE")
+        .map_err(|_| "FRONTAL_CODE_HOSTED_TASK_FILE must be set for hosted task runs")?;
     let payload: HostedTaskWorkerPayload = serde_json::from_slice(&fs::read(task_file)?)?;
     if payload.task_id != task_id {
         return Err(format!(
@@ -7699,7 +7699,7 @@ fn telemetry_config_file_label(resolution: &TelemetryResolution) -> &'static str
 }
 
 fn telemetry_env_override_value() -> Option<String> {
-    env::var(FCODE_TELEMETRY_PATH)
+    env::var(FRONTAL_CODE_TELEMETRY_PATH)
         .ok()
         .filter(|value| !value.trim().is_empty())
 }
@@ -10939,7 +10939,7 @@ mod tests {
         HostedEventStatus, HostedEventTopic, HostedEventWatchQuery, HostedTaskGithubResponse,
         HostedTaskListQuery, HostedTaskWorkerPayload, InternalPromptProgressEvent,
         InternalPromptProgressState, LiveCli, LocalHelpTopic, SlashCommand, StatusUsage,
-        DEFAULT_MODEL, FCODE_TELEMETRY_PATH,
+        DEFAULT_MODEL, FRONTAL_CODE_TELEMETRY_PATH,
     };
     use frontal_code_api::{ApiError, MessageResponse, OutputContentBlock, Usage};
     use frontal_code_events::EventIdentifiers;
@@ -11252,16 +11252,16 @@ mod tests {
         )
         .expect("project config should write");
 
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_permission_mode = std::env::var("RUSTY_CLAUDE_PERMISSION_MODE").ok();
-        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
+        std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &config_home);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
 
         let resolved = with_current_dir(&cwd, super::default_permission_mode);
 
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         match original_permission_mode {
             Some(value) => std::env::set_var("RUSTY_CLAUDE_PERMISSION_MODE", value),
@@ -11287,16 +11287,16 @@ mod tests {
         )
         .expect("project config should write");
 
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_permission_mode = std::env::var("RUSTY_CLAUDE_PERMISSION_MODE").ok();
-        std::env::set_var("FCODE_CONFIG_HOME", &config_home);
+        std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &config_home);
         std::env::set_var("RUSTY_CLAUDE_PERMISSION_MODE", "read-only");
 
         let resolved = with_current_dir(&cwd, super::default_permission_mode);
 
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         match original_permission_mode {
             Some(value) => std::env::set_var("RUSTY_CLAUDE_PERMISSION_MODE", value),
@@ -11942,17 +11942,20 @@ mod tests {
     #[test]
     fn hosted_server_url_prefers_env_and_trims_trailing_slash() {
         let _guard = env_lock();
-        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
-        std::env::remove_var("FCODE_SERVER_BASE_URL");
+        std::env::set_var(
+            "FRONTAL_CODE_SERVER_URL",
+            "http://hosted.frontal-code.test/",
+        );
+        std::env::remove_var("FRONTAL_CODE_SERVER_BASE_URL");
         assert_eq!(hosted_server_url(), "http://hosted.frontal-code.test");
-        std::env::remove_var("FCODE_SERVER_URL");
+        std::env::remove_var("FRONTAL_CODE_SERVER_URL");
 
         std::env::set_var(
-            "FCODE_SERVER_BASE_URL",
+            "FRONTAL_CODE_SERVER_BASE_URL",
             "http://fallback.frontal-code.test/",
         );
         assert_eq!(hosted_server_url(), "http://fallback.frontal-code.test");
-        std::env::remove_var("FCODE_SERVER_BASE_URL");
+        std::env::remove_var("FRONTAL_CODE_SERVER_BASE_URL");
     }
 
     #[test]
@@ -11984,7 +11987,7 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        std::env::set_var("FCODE_HOSTED_TASK_FILE", &payload_path);
+        std::env::set_var("FRONTAL_CODE_HOSTED_TASK_FILE", &payload_path);
 
         let payload =
             load_hosted_task_worker_payload("task_123").expect("payload should load successfully");
@@ -12002,7 +12005,7 @@ mod tests {
         assert_eq!(payload.permission_mode.as_deref(), Some("workspace-write"));
         assert_eq!(payload.allowed_tools, vec!["git".to_string()]);
 
-        std::env::remove_var("FCODE_HOSTED_TASK_FILE");
+        std::env::remove_var("FRONTAL_CODE_HOSTED_TASK_FILE");
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -12040,9 +12043,9 @@ mod tests {
     fn publish_hosted_repo_changes_commits_and_pushes_branch() {
         let _guard = env_lock();
         let previous_token = std::env::var_os("GITHUB_TOKEN");
-        let previous_api_base = std::env::var_os("FCODE_GITHUB_API_BASE");
+        let previous_api_base = std::env::var_os("FRONTAL_CODE_GITHUB_API_BASE");
         std::env::remove_var("GITHUB_TOKEN");
-        std::env::remove_var("FCODE_GITHUB_API_BASE");
+        std::env::remove_var("FRONTAL_CODE_GITHUB_API_BASE");
 
         let remote = temp_dir();
         let repo = temp_dir();
@@ -12117,8 +12120,8 @@ mod tests {
             None => std::env::remove_var("GITHUB_TOKEN"),
         }
         match previous_api_base {
-            Some(value) => std::env::set_var("FCODE_GITHUB_API_BASE", value),
-            None => std::env::remove_var("FCODE_GITHUB_API_BASE"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_GITHUB_API_BASE", value),
+            None => std::env::remove_var("FRONTAL_CODE_GITHUB_API_BASE"),
         }
         let _ = fs::remove_dir_all(remote);
         let _ = fs::remove_dir_all(repo);
@@ -12875,20 +12878,20 @@ mod tests {
     #[test]
     fn telemetry_resolution_prefers_env_over_config() {
         let _guard = env_lock();
-        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        std::env::set_var(FRONTAL_CODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
         let config = frontal_code_runtime::RuntimeConfig::empty();
 
         let resolution = resolve_telemetry_config(Some(&config));
         assert_eq!(resolution.source, "env");
         assert_eq!(resolution.path.as_deref(), Some("/tmp/from-env.jsonl"));
 
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
     }
 
     #[test]
     fn telemetry_report_uses_sectioned_layout() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let report = render_telemetry_report(None).expect("telemetry report should render");
         assert!(report.contains("Telemetry"));
         assert!(report.contains("Enabled"));
@@ -12900,7 +12903,7 @@ mod tests {
     #[test]
     fn telemetry_report_shows_highest_precedence_config_file() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
@@ -12933,7 +12936,7 @@ mod tests {
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
-        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        std::env::set_var(FRONTAL_CODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
 
         let report = with_current_dir(&cwd, || {
             render_telemetry_report(None).expect("telemetry report should render")
@@ -12943,14 +12946,14 @@ mod tests {
         assert!(report.contains(".frontal-code/settings.local.json"));
         assert!(report.contains("Env override     /tmp/from-env.jsonl"));
 
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
 
     #[test]
     fn telemetry_report_status_target_shows_requested_scope_details() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
@@ -12980,7 +12983,7 @@ mod tests {
     #[test]
     fn config_telemetry_report_shows_effective_precedence_details() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
@@ -13015,7 +13018,7 @@ mod tests {
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
-        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        std::env::set_var(FRONTAL_CODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
 
         let report = with_current_dir(&cwd, || {
             render_config_report(Some("telemetry")).expect("telemetry config report should render")
@@ -13025,7 +13028,7 @@ mod tests {
         assert!(report.contains(".frontal-code/settings.local.json"));
         assert!(report.contains("Env override     /tmp/from-env.jsonl"));
 
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
 
@@ -13092,7 +13095,7 @@ mod tests {
     #[test]
     fn config_telemetry_json_includes_effective_resolution_details() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
@@ -13135,7 +13138,7 @@ mod tests {
             r#"{"telemetry":{"enabled":true,"path":"local/log.jsonl"}}"#,
         )
         .expect("local settings");
-        std::env::set_var(FCODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
+        std::env::set_var(FRONTAL_CODE_TELEMETRY_PATH, "/tmp/from-env.jsonl");
 
         let value = with_current_dir(&cwd, || {
             config_json_value(Some("telemetry")).expect("telemetry config json should render")
@@ -13148,14 +13151,14 @@ mod tests {
             .expect("config path")
             .ends_with(".frontal-code/settings.local.json"));
 
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
 
     #[test]
     fn telemetry_status_json_includes_requested_target_details() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
@@ -13190,7 +13193,7 @@ mod tests {
     #[test]
     fn config_json_marks_supported_sections_as_unset_when_missing() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
@@ -13235,7 +13238,7 @@ mod tests {
     #[test]
     fn telemetry_update_writes_project_settings_json() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(&cwd).expect("cwd should exist");
 
@@ -13263,7 +13266,7 @@ mod tests {
     #[test]
     fn telemetry_update_preserves_existing_path_when_disabling() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(cwd.join(".frontal-code")).expect("frontal-code dir should exist");
         fs::write(
@@ -13286,7 +13289,7 @@ mod tests {
     #[test]
     fn telemetry_update_can_write_local_settings_json() {
         let _guard = env_lock();
-        std::env::remove_var(FCODE_TELEMETRY_PATH);
+        std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         let cwd = temp_dir();
         fs::create_dir_all(&cwd).expect("cwd should exist");
 

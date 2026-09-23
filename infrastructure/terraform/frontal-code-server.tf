@@ -96,16 +96,16 @@ resource "kubernetes_config_map" "frontal-code_server_config" {
   }
 
   data = {
-    "FCODE_SERVER_HOST"                       = "0.0.0.0"
-    "FCODE_SERVER_PORT"                       = "8788"
-    "FCODE_SERVER_LANE_TRANSPORT"             = "tools-agent"
-    "FCODE_SERVER_RECONCILE_INTERVAL_SECS"    = "15"
-    "FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS" = "0"
-    "FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS"     = "0"
-    "FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS"    = "0"
-    "FCODE_SERVER_ORPHAN_POLICY_RULES"        = "[]"
-    "FCODE_SERVER_STATE_FILE"                 = "/var/lib/frontal-code/server/state.json"
-    "FCODE_AGENT_STORE"                       = "/var/lib/frontal-code/agents"
+    "FRONTAL_CODE_SERVER_HOST"                       = "0.0.0.0"
+    "FRONTAL_CODE_SERVER_PORT"                       = "8788"
+    "FRONTAL_CODE_SERVER_LANE_TRANSPORT"             = "tools-agent"
+    "FRONTAL_CODE_SERVER_RECONCILE_INTERVAL_SECS"    = "15"
+    "FRONTAL_CODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS" = "0"
+    "FRONTAL_CODE_SERVER_ORPHAN_AUTO_RETRY_SECS"     = "0"
+    "FRONTAL_CODE_SERVER_ORPHAN_AUTO_CANCEL_SECS"    = "0"
+    "FRONTAL_CODE_SERVER_ORPHAN_POLICY_RULES"        = "[]"
+    "FRONTAL_CODE_SERVER_STATE_FILE"                 = "/var/lib/frontal-code/server/state.json"
+    "FRONTAL_CODE_AGENT_STORE"                       = "/var/lib/frontal-code/agents"
     "RUST_LOG"                                = "info"
   }
 
@@ -125,7 +125,7 @@ resource "kubernetes_secret" "frontal-code_server_secrets" {
   }
 
   data = {
-    "FCODE_SERVER_API_KEY"  = var.frontal-code_server_api_key
+    "FRONTAL_CODE_SERVER_API_KEY"  = var.frontal-code_server_api_key
     "FRONTAL_API_KEY"       = var.api_keys.anthropic
     "FRONTAL_BASE_URL"      = "https://tools.frontal.dev/frontal-code"
     "OPENAI_API_KEY"        = var.api_keys.openai

@@ -158,7 +158,7 @@ Update your Frontal Code CLI configuration to use the new URLs:
 
 ```bash
 export FRONTAL_BASE_URL="https://tools.frontal.dev/frontal-code"
-export FCODE_HOSTED_CALLBACK_URL="https://tools.frontal.dev/frontal-code/webhooks/tasks"
+export FRONTAL_CODE_HOSTED_CALLBACK_URL="https://tools.frontal.dev/frontal-code/webhooks/tasks"
 ```
 
 ## Security Features

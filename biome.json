@@ -18,6 +18,7 @@
       "!**/bazel-out",
       "!**/bazel-testlogs",
       "!**/bazel-*",
+      "!**/src/generated",
       "!**/*.lock",
       "!**/*.sum"
     ]

@@ -17,7 +17,7 @@ sh_binary(
     name = "frontal-code",
     srcs = ["//tools:crate.sh"],
     args = [
-        "cli",
+        "frontal-code-cli",
         "run",
     ],
 )
@@ -25,8 +25,9 @@ sh_binary(
 sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
-        "cli",
+        "frontal-code-cli",
         "test",
     ],
     tags = [
@@ -37,9 +38,11 @@ sh_test(
 
 sh_test(
     name = "fmt",
+    size = "small",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
-        "cli",
+        "frontal-code-cli",
         "fmt-check",
     ],
     tags = [
@@ -51,8 +54,9 @@ sh_test(
 sh_test(
     name = "lint",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
-        "cli",
+        "frontal-code-cli",
         "clippy",
     ],
     tags = [

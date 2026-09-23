@@ -309,14 +309,14 @@ impl PluginTool {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .env("FCODE_PLUGIN_ID", &self.plugin_id)
-            .env("FCODE_PLUGIN_NAME", &self.plugin_name)
-            .env("FCODE_TOOL_NAME", &self.definition.name)
-            .env("FCODE_TOOL_INPUT", &input_json);
+            .env("FRONTAL_CODE_PLUGIN_ID", &self.plugin_id)
+            .env("FRONTAL_CODE_PLUGIN_NAME", &self.plugin_name)
+            .env("FRONTAL_CODE_TOOL_NAME", &self.definition.name)
+            .env("FRONTAL_CODE_TOOL_INPUT", &input_json);
         if let Some(root) = &self.root {
             process
                 .current_dir(root)
-                .env("FCODE_PLUGIN_ROOT", root.display().to_string());
+                .env("FRONTAL_CODE_PLUGIN_ROOT", root.display().to_string());
         }
 
         let mut child = process.spawn()?;
@@ -2422,7 +2422,7 @@ mod tests {
         let script_path = root.join("tools").join("echo-json.sh");
         write_file(
             &script_path,
-            "#!/bin/sh\nINPUT=$(cat)\nprintf '{\"plugin\":\"%s\",\"tool\":\"%s\",\"input\":%s}\\n' \"$FCODE_PLUGIN_ID\" \"$FCODE_TOOL_NAME\" \"$INPUT\"\n",
+            "#!/bin/sh\nINPUT=$(cat)\nprintf '{\"plugin\":\"%s\",\"tool\":\"%s\",\"input\":%s}\\n' \"$FRONTAL_CODE_PLUGIN_ID\" \"$FRONTAL_CODE_TOOL_NAME\" \"$INPUT\"\n",
         );
         #[cfg(unix)]
         {

@@ -14,6 +14,7 @@ filegroup(
 sh_test(
     name = "core_config_example",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
         "frontal-code-core",
         "run",

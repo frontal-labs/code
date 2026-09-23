@@ -27,6 +27,12 @@ else
   exit 1
 fi
 
+case "$TARGET" in
+  cli|sdks/typescript|extensions/*)
+    exit 0
+    ;;
+esac
+
 if ! command -v cargo >/dev/null 2>&1; then
   echo "ERROR: cargo not found on PATH; cannot run clippy" >&2
   exit 1

@@ -11,6 +11,7 @@ filegroup(
 sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
         "frontal-code-repo",
         "test",
@@ -23,7 +24,9 @@ sh_test(
 
 sh_test(
     name = "fmt",
+    size = "small",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
         "frontal-code-repo",
         "fmt-check",
@@ -36,7 +39,9 @@ sh_test(
 
 sh_test(
     name = "lint",
+    size = "small",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
         "frontal-code-repo",
         "clippy",

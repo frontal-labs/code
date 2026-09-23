@@ -1,6 +1,6 @@
 services:
   frontal-code-server:
     environment:
-      FCODE_SERVER_LANE_TRANSPORT: ${FCODE_SERVER_LANE_TRANSPORT:-local-docker}
+      FRONTAL_CODE_SERVER_LANE_TRANSPORT: ${FRONTAL_CODE_SERVER_LANE_TRANSPORT:-local-docker}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

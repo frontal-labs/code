@@ -2429,7 +2429,7 @@ mod tests {
             let mut manager = McpServerManager::from_servers(&servers);
 
             manager.discover_tools().await.expect("discover tools");
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             let first_response = manager
                 .call_tool(
                     &mcp_tool_name("alpha", "echo"),

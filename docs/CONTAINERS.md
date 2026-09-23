@@ -135,7 +135,7 @@ RUN mkdir -p /home/frontal-code/.frontal-code && \
 USER frontal-code
 
 # Set environment
-ENV FCODE_DATA_DIR=/home/frontal-code/.frontal-code
+ENV FRONTAL_CODE_DATA_DIR=/home/frontal-code/.frontal-code
 ENV PATH=/usr/local/bin:$PATH
 
 # Health check
@@ -200,9 +200,9 @@ services:
       - ./:/app
       - frontal-code-data:/home/frontal-code/.frontal-code
     environment:
-      - FCODE_LOG_LEVEL=debug
+      - FRONTAL_CODE_LOG_LEVEL=debug
       - FRONTAL_API_KEY=${FRONTAL_API_KEY}
-      - FCODE_DEFAULT_MODEL=claude-sonnet-4-6
+      - FRONTAL_CODE_DEFAULT_MODEL=claude-sonnet-4-6
     working_dir: /app
     command: repl
     restart: unless-stopped
@@ -238,9 +238,9 @@ services:
         delay: 5s
         max_attempts: 3
     environment:
-      - FCODE_LOG_LEVEL=info
+      - FRONTAL_CODE_LOG_LEVEL=info
       - FRONTAL_API_KEY=${FRONTAL_API_KEY}
-      - FCODE_PERMISSION_MODE=safe-mode
+      - FRONTAL_CODE_PERMISSION_MODE=safe-mode
     volumes:
       - frontal-code-config:/home/frontal-code/.frontal-code
       - frontal-code-sessions:/home/frontal-code/.frontal-code/sessions
@@ -286,8 +286,8 @@ services:
   frontal-code:
     image: frontal-code/cli:v0.1.0
     environment:
-      - FCODE_TELEMETRY_ENABLED=true
-      - FCODE_TELEMETRY_ENDPOINT=http://prometheus:9090/metrics
+      - FRONTAL_CODE_TELEMETRY_ENABLED=true
+      - FRONTAL_CODE_TELEMETRY_ENDPOINT=http://prometheus:9090/metrics
     depends_on:
       - prometheus
       - grafana
@@ -414,16 +414,16 @@ spec:
           containerPort: 8080
           protocol: TCP
         env:
-        - name: FCODE_LOG_LEVEL
+        - name: FRONTAL_CODE_LOG_LEVEL
           value: "info"
         - name: FRONTAL_API_KEY
           valueFrom:
             secretKeyRef:
               name: frontal-code-secrets
               key: anthropic-api-key
-        - name: FCODE_DEFAULT_MODEL
+        - name: FRONTAL_CODE_DEFAULT_MODEL
           value: "claude-sonnet-4-6"
-        - name: FCODE_PERMISSION_MODE
+        - name: FRONTAL_CODE_PERMISSION_MODE
           value: "safe-mode"
         resources:
           requests:
@@ -741,11 +741,11 @@ resources:
 
 ```yaml
 env:
-  - name: FCODE_CONNECTION_POOL_SIZE
+  - name: FRONTAL_CODE_CONNECTION_POOL_SIZE
     value: "10"
-  - name: FCODE_CONNECTION_TIMEOUT
+  - name: FRONTAL_CODE_CONNECTION_TIMEOUT
     value: "30"
-  - name: FCODE_KEEP_ALIVE
+  - name: FRONTAL_CODE_KEEP_ALIVE
     value: "true"
 ```
 

@@ -108,7 +108,7 @@ spec:
             secretKeyRef:
               name: slack-secrets
               key: signing-secret
-        - name: FCODE_API_URL
+        - name: FRONTAL_CODE_API_URL
           value: "http://frontal-code-api:8788"
         resources:
           requests:
@@ -217,8 +217,8 @@ SLACK_APP_TOKEN=xapp-production-app-token
 SLACK_SIGNING_SECRET=production-signing-secret
 
 # Frontal Code Server
-FCODE_API_URL=https://frontal-code-api.your-domain.com
-FCODE_API_TIMEOUT=30000
+FRONTAL_CODE_API_URL=https://frontal-code-api.your-domain.com
+FRONTAL_CODE_API_TIMEOUT=30000
 
 # Application
 NODE_ENV=production

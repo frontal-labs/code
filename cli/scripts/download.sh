@@ -4,5 +4,5 @@
 set -euo pipefail
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PKG_ROOT"
-export FCODE_FORCE_DOWNLOAD=1
+export FRONTAL_CODE_FORCE_DOWNLOAD=1
 exec ./scripts/postinstall.sh

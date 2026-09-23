@@ -6,17 +6,17 @@ process.env.LOG_LEVEL = "error";
 process.env.SLACK_BOT_TOKEN = "xoxb-test-token";
 process.env.SLACK_APP_TOKEN = "xapp-test-token";
 process.env.SLACK_SIGNING_SECRET = "test-signing-secret-with-at-least-32-chars";
-process.env.FCODE_API_URL = "http://localhost:8787";
+process.env.FRONTAL_CODE_API_URL = "http://localhost:8787";
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test_db";
 process.env.REDIS_URL = "redis://localhost:6379";
 
 // Global test setup
 beforeAll(() => {
   // Mock console methods to reduce noise in tests
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  vi.spyOn(console, "info").mockImplementation(() => {});
-  vi.spyOn(console, "warn").mockImplementation(() => {});
-  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "log").mockImplementation(() => undefined);
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterAll(() => {
@@ -58,11 +58,11 @@ export const createMockTaskCreationRequest = (overrides = {}) => ({
 });
 
 export const createMockSlackTask = (overrides = {}) => ({
-  id: '123',
-  slack_task_id: 'task-123',
-  frontal-code_task_id: 'frontal-code-123',
-  user_id: 'U123456',
-  status: 'pending',
+  id: "123",
+  slack_task_id: "task-123",
+  frontal_code_task_id: "frontal-code-123",
+  user_id: "U123456",
+  status: "pending",
   request: createMockTaskCreationRequest(),
   created_at: new Date(),
   updated_at: new Date(),

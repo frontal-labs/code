@@ -27,9 +27,7 @@
     "unfurl_domains": ["github.com", "gitlab.com", "bitbucket.org"]
   },
   "oauth_config": {
-    "redirect_urls": [
-      "https://your-frontal-code-server.com/slack/oauth/callback"
-    ],
+    "redirect_urls": ["https://your-frontal-code-server.com/slack/oauth/callback"],
     "scopes": {
       "user": [
         "channels:read",

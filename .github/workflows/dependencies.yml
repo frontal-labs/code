@@ -23,8 +23,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Rust toolchain
-        name: Install pinned Rust toolchain
+      - name: Install pinned Rust toolchain
         run: rustup show
         
       - name: Update dependencies
@@ -64,8 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Rust toolchain
-        name: Install pinned Rust toolchain
+      - name: Install pinned Rust toolchain
         run: rustup show
         
       - name: Check outdated dependencies
@@ -76,5 +74,5 @@ jobs:
           
       - name: Check for security advisories
         run: |
-          cargo install cargo-audit
+          cargo install cargo-audit --locked
           cargo audit

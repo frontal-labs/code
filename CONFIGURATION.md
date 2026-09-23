@@ -144,8 +144,8 @@ The main configuration file is `config/project.json`:
 
 The system looks for `project.json` in this order:
 
-1. `$FCODE_CONFIG_HOME/project.json` - Custom config directory
-2. `$FCODE_HOME/project.json` - Frontal Code home directory  
+1. `$FRONTAL_CODE_CONFIG_HOME/project.json` - Custom config directory
+2. `$FRONTAL_CODE_HOME/project.json` - Frontal Code home directory
 3. `~/.frontal-code/project.json` - User's home directory
 4. `config/project.json` - Project-local configuration
 
@@ -200,20 +200,20 @@ Environment variables override configuration file settings:
 ### Core Configuration Overrides
 ```bash
 # Runtime settings
-export FCODE_DEFAULT_PROVIDER="openai"
+export FRONTAL_CODE_DEFAULT_PROVIDER="openai"
 export RUSTY_CLAUDE_PERMISSION_MODE="workspace-write"
-export FCODE_LOG_LEVEL="debug"
+export FRONTAL_CODE_LOG_LEVEL="debug"
 
 # Feature flags
-export FCODE_ENABLE_TELEMETRY="false"
-export FCODE_ENABLE_PLUGINS="true"
-export FCODE_ENABLE_CACHING="true"
+export FRONTAL_CODE_ENABLE_TELEMETRY="false"
+export FRONTAL_CODE_ENABLE_PLUGINS="true"
+export FRONTAL_CODE_ENABLE_CACHING="true"
 
 # Paths
-export FCODE_CONFIG_HOME="/custom/config/path"
-export FCODE_HOME="/custom/frontal-code/home"
-export FCODE_CACHE_DIR="/custom/cache"
-export FCODE_LOGS_DIR="/custom/logs"
+export FRONTAL_CODE_CONFIG_HOME="/custom/config/path"
+export FRONTAL_CODE_HOME="/custom/frontal-code/home"
+export FRONTAL_CODE_CACHE_DIR="/custom/cache"
+export FRONTAL_CODE_LOGS_DIR="/custom/logs"
 ```
 
 ### API Provider Variables
@@ -238,8 +238,8 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 ### Service Variables
 ```bash
 # Memory/Pinecone
-export FCODE_MEMORY_PINECONE_URL="https://index.pinecone.io"
-export FCODE_MEMORY_PINECONE_API_KEY="..."
+export FRONTAL_CODE_MEMORY_PINECONE_URL="https://index.pinecone.io"
+export FRONTAL_CODE_MEMORY_PINECONE_API_KEY="..."
 ```
 
 ## Legacy Runtime Configuration

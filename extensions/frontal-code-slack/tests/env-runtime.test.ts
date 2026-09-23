@@ -4,8 +4,8 @@ const REQUIRED_ENV = {
   SLACK_BOT_TOKEN: "xoxb-test-token",
   SLACK_APP_TOKEN: "xapp-test-token",
   SLACK_SIGNING_SECRET: "test-signing-secret-with-at-least-32-chars",
-  FCODE_API_URL: "http://localhost:8787",
-  FCODE_API_TIMEOUT: "30000",
+  FRONTAL_CODE_API_URL: "http://localhost:8787",
+  FRONTAL_CODE_API_TIMEOUT: "30000",
   NODE_ENV: "test",
   LOG_LEVEL: "error",
   PORT: "3000",
@@ -14,9 +14,7 @@ const REQUIRED_ENV = {
   HEALTH_CHECK_INTERVAL: "30000",
 } as const;
 
-async function loadEnvModule(
-  extraEnv: Record<string, string | undefined> = {}
-) {
+function loadEnvModule(extraEnv: Record<string, string | undefined> = {}) {
   vi.resetModules();
   for (const [key, value] of Object.entries({ ...REQUIRED_ENV, ...extraEnv })) {
     if (value === undefined) {
@@ -53,12 +51,10 @@ describe("Environment runtime branches", () => {
 
   it("logs validation success for the compatibility helper", async () => {
     const module = await loadEnvModule();
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     module.validateEnvConfig();
 
-    expect(logSpy).toHaveBeenCalledWith(
-      "Environment variables validated successfully"
-    );
+    expect(logSpy).toHaveBeenCalledWith("Environment variables validated successfully");
   });
 });

@@ -294,7 +294,7 @@ fn run_case(case: ScenarioCase, workspace: &HarnessWorkspace, base_url: &str) ->
         .env_clear()
         .env("FRONTAL_API_KEY", "test-parity-key")
         .env("FRONTAL_BASE_URL", base_url)
-        .env("FCODE_CONFIG_HOME", &workspace.config_home)
+        .env("FRONTAL_CODE_CONFIG_HOME", &workspace.config_home)
         .env("HOME", &workspace.home)
         .env("NO_COLOR", "1")
         .env("PATH", "/usr/bin:/bin")
@@ -407,7 +407,7 @@ fn prepare_plugin_fixture(workspace: &HarnessWorkspace) {
     let script_path = tool_dir.join("echo-json.sh");
     fs::write(
         &script_path,
-        "#!/bin/sh\nINPUT=$(cat)\nprintf '{\"plugin\":\"%s\",\"tool\":\"%s\",\"input\":%s}\\n' \"$FCODE_PLUGIN_ID\" \"$FCODE_TOOL_NAME\" \"$INPUT\"\n",
+        "#!/bin/sh\nINPUT=$(cat)\nprintf '{\"plugin\":\"%s\",\"tool\":\"%s\",\"input\":%s}\\n' \"$FRONTAL_CODE_PLUGIN_ID\" \"$FRONTAL_CODE_TOOL_NAME\" \"$INPUT\"\n",
     )
     .expect("plugin script should write");
     let mut permissions = fs::metadata(&script_path)

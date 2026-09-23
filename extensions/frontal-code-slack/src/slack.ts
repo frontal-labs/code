@@ -62,11 +62,11 @@ export class SlackInterface {
     this.frontalCodeApi = new FrontalCodeApiClient();
     this.frontalCodeEvents = new FrontalCodeEventsClient(
       (query) => this.frontalCodeApi.getEventsWebSocketUrl(query),
-      () => this.frontalCodeApi.getEventsWebSocketHeaders()
+      () => this.frontalCodeApi.getEventsWebSocketHeaders(),
     );
     this.frontalCodeEvents.onTrackedTaskEvent(async (event, task) => {
-        await this.handleFrontalCodeTaskEvent(event, task);
-      });
+      await this.handleFrontalCodeTaskEvent(event, task);
+    });
     this.setupEventHandlers();
   }
 
@@ -75,24 +75,18 @@ export class SlackInterface {
     this.app.message(async ({ message }) => {
       // Forward messages to Frontal Code AI
       const slackMessage = message as SlackMessage;
-      if (
-        !slackMessage.text ||
-        !slackMessage.user ||
-        slackMessage.bot_id ||
-        slackMessage.subtype
-      ) {
+      if (!slackMessage.text || !slackMessage.user || slackMessage.bot_id || slackMessage.subtype) {
         return;
       }
 
       const threadTs = slackMessage.thread_ts || slackMessage.ts;
-      const task =
-        await this.frontalCodeApi.createTask({
-          prompt: slackMessage.text,
-          user_id: slackMessage.user,
-          channel_id: slackMessage.channel,
-          thread_ts: threadTs,
-          source: "slack",
-        });
+      const task = await this.frontalCodeApi.createTask({
+        prompt: slackMessage.text,
+        user_id: slackMessage.user,
+        channel_id: slackMessage.channel,
+        thread_ts: threadTs,
+        source: "slack",
+      });
 
       await this.registerTask(
         task,
@@ -102,7 +96,7 @@ export class SlackInterface {
           threadTs,
           userId: slackMessage.user,
         },
-        slackMessage.text
+        slackMessage.text,
       );
     });
 
@@ -111,8 +105,7 @@ export class SlackInterface {
       const policyQuery = this.parseOrphanPolicyCommand(command.text);
       if (policyQuery) {
         try {
-          const policy =
-            await this.frontalCodeApi.getOrphanPolicy(policyQuery);
+          const policy = await this.frontalCodeApi.getOrphanPolicy(policyQuery);
           await ack(this.buildOrphanPolicyCommandResponse(policy));
         } catch (error) {
           await ack({
@@ -125,13 +118,12 @@ export class SlackInterface {
 
       await ack();
 
-      const task =
-        await this.frontalCodeApi.createTask({
-          prompt: command.text,
-          user_id: command.user_id,
-          channel_id: command.channel_id,
-          source: "slack",
-        });
+      const task = await this.frontalCodeApi.createTask({
+        prompt: command.text,
+        user_id: command.user_id,
+        channel_id: command.channel_id,
+        source: "slack",
+      });
 
       await this.registerTask(
         task,
@@ -140,17 +132,14 @@ export class SlackInterface {
           channelId: command.channel_id,
           userId: command.user_id,
         },
-        command.text
+        command.text,
       );
     });
 
     // Handle interactions (buttons, modals, etc.)
     this.app.action({ action_id: /^.*$/ }, async ({ action, ack, body }) => {
       await ack();
-      await this.handleSlackAction(
-        action as SlackAction,
-        body as unknown as SlackBody
-      );
+      await this.handleSlackAction(action as SlackAction, body as unknown as SlackBody);
     });
 
     // Handle events (user joins, reactions, etc.)
@@ -158,10 +147,10 @@ export class SlackInterface {
       // Forward events to Frontal Code AI for processing
       const slackEvent = event as { type: string; user?: string };
       await this.frontalCodeApi.sendConnectorEvent("slack", {
-          type: slackEvent.type,
-          userId: slackEvent.user || "",
-          data: event,
-        });
+        type: slackEvent.type,
+        userId: slackEvent.user || "",
+        data: event,
+      });
     });
   }
 
@@ -170,7 +159,7 @@ export class SlackInterface {
     try {
       await this.syncTrackedTasksFromFrontalCode();
       await this.app.start();
-      (await this.frontal) - codeEvents.connect();
+      await this.frontalCodeEvents.connect();
       logger.info("Slack WebSocket interface connected");
     } catch (error) {
       logger.error("Failed to connect to Slack", error as Error);
@@ -181,7 +170,7 @@ export class SlackInterface {
   // Disconnect WebSocket
   async disconnect(): Promise<void> {
     try {
-      (await this.frontal) - codeEvents.disconnect();
+      await this.frontalCodeEvents.disconnect();
       await this.app.stop();
       logger.info("Slack WebSocket interface disconnected");
     } catch (error) {
@@ -194,9 +183,7 @@ export class SlackInterface {
   async healthCheck(): Promise<{ slack: boolean; frontal_code: boolean }> {
     try {
       const slackConnected =
-        (
-          this.app as unknown as { isListening?: () => boolean }
-        ).isListening?.() || false;
+        (this.app as unknown as { isListening?: () => boolean }).isListening?.() || false;
       const frontalCodeConnected = await this.frontalCodeApi.healthCheck();
 
       return {
@@ -215,7 +202,7 @@ export class SlackInterface {
   private async registerTask(
     task: FrontalCodeCreateTaskResponse,
     trackedTask: FrontalCodeTrackedTask,
-    prompt: string
+    prompt: string,
   ): Promise<void> {
     const message = this.formatTaskCreatedMessage(task, prompt);
     const response = await this.app.client.chat.postMessage({
@@ -231,28 +218,22 @@ export class SlackInterface {
     this.upsertTrackedTask(nextTask);
     try {
       await this.frontalCodeApi.updateTaskContext({
-          taskId: nextTask.taskId,
-          source: "slack",
-          user_id: nextTask.userId,
-          channel_id: nextTask.channelId,
-          thread_ts: nextTask.threadTs,
-        });
+        taskId: nextTask.taskId,
+        source: "slack",
+        user_id: nextTask.userId,
+        channel_id: nextTask.channelId,
+        thread_ts: nextTask.threadTs,
+      });
     } catch (error) {
-      logger.warn(
-        "Failed to persist Slack task thread anchor to Frontal Code",
-        {
-          taskId: nextTask.taskId,
-          error: (error as Error).message,
-        }
-      );
+      logger.warn("Failed to persist Slack task thread anchor to Frontal Code", {
+        taskId: nextTask.taskId,
+        error: (error as Error).message,
+      });
     }
     this.frontalCodeEvents.trackTask(nextTask);
   }
 
-  private async handleSlackAction(
-    action: SlackAction,
-    body: SlackBody
-  ): Promise<void> {
+  private async handleSlackAction(action: SlackAction, body: SlackBody): Promise<void> {
     if (this.isOrphanApprovalAction(action)) {
       await this.handleOrphanApprovalAction(action, body);
       return;
@@ -262,13 +243,12 @@ export class SlackInterface {
       return;
     }
 
-    const response =
-      await this.frontalCodeApi.sendConnectorInteraction("slack", {
-        action: action.action_id,
-        value: action.value,
-        userId: body.user.id,
-        context: body,
-      });
+    const response = await this.frontalCodeApi.sendConnectorInteraction("slack", {
+      action: action.action_id,
+      value: action.value,
+      userId: body.user.id,
+      context: body,
+    });
 
     await this.app.client.chat.update({
       channel: body.channel.id,
@@ -293,29 +273,23 @@ export class SlackInterface {
     );
   }
 
-  private async handleOrphanApprovalAction(
-    action: SlackAction,
-    body: SlackBody
-  ): Promise<void> {
+  private async handleOrphanApprovalAction(action: SlackAction, body: SlackBody): Promise<void> {
     const taskId = action.value;
     if (!taskId) {
       return;
     }
 
-    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(
-      ".retry"
-    )
+    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(".retry")
       ? "retry"
       : "cancel";
-    const approvalTs =
-      this.approvalMessageTsByTask.get(taskId) || body.message.ts;
+    const approvalTs = this.approvalMessageTsByTask.get(taskId) || body.message.ts;
 
     if (this.approvalResolved.has(taskId)) {
       await this.updateApprovalMessage(
         body.channel.id,
         approvalTs,
         `Approval for task ${taskId} was already resolved.`,
-        this.buildApprovalResolvedBlocks(taskId, "already_resolved")
+        this.buildApprovalResolvedBlocks(taskId, "already_resolved"),
       );
       return;
     }
@@ -325,7 +299,7 @@ export class SlackInterface {
         body.channel.id,
         approvalTs,
         `Approval for task ${taskId} is already being processed.`,
-        this.buildApprovalProcessingBlocks(taskId, actionName)
+        this.buildApprovalProcessingBlocks(taskId, actionName),
       );
       return;
     }
@@ -337,18 +311,17 @@ export class SlackInterface {
       body.channel.id,
       approvalTs,
       `Processing approval for task ${taskId}: ${actionName}.`,
-      this.buildApprovalProcessingBlocks(taskId, actionName)
+      this.buildApprovalProcessingBlocks(taskId, actionName),
     );
 
     try {
-      const task =
-        await this.frontalCodeApi.resolveTaskApproval({
-          taskId,
-          approvalKind: "orphaned_hosted_agent",
-          action: actionName,
-          resolvedBy: body.user.id,
-          reason: "resolved from Slack approval action",
-        });
+      const task = await this.frontalCodeApi.resolveTaskApproval({
+        taskId,
+        approvalKind: "orphaned_hosted_agent",
+        action: actionName,
+        resolvedBy: body.user.id,
+        reason: "resolved from Slack approval action",
+      });
 
       this.approvalInFlight.delete(taskId);
       this.approvalResolved.add(taskId);
@@ -361,8 +334,8 @@ export class SlackInterface {
           task.task_id,
           actionName,
           task.worker_status,
-          task.worker_id
-        )
+          task.worker_id,
+        ),
       );
     } catch (error) {
       this.approvalInFlight.delete(taskId);
@@ -370,7 +343,7 @@ export class SlackInterface {
         body.channel.id,
         approvalTs,
         `Approval failed for task ${taskId}.`,
-        this.buildApprovalErrorBlocks(taskId, error as Error)
+        this.buildApprovalErrorBlocks(taskId, error as Error),
       );
       throw error;
     }
@@ -378,26 +351,23 @@ export class SlackInterface {
 
   private async handleGithubFollowupApprovalAction(
     action: SlackAction,
-    body: SlackBody
+    body: SlackBody,
   ): Promise<void> {
     const taskId = action.value;
     if (!taskId) {
       return;
     }
-    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(
-      ".retry"
-    )
+    const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(".retry")
       ? "retry"
       : "ack";
-    const approvalTs =
-      this.approvalMessageTsByTask.get(taskId) || body.message.ts;
+    const approvalTs = this.approvalMessageTsByTask.get(taskId) || body.message.ts;
 
     if (this.approvalResolved.has(taskId)) {
       await this.updateApprovalMessage(
         body.channel.id,
         approvalTs,
         `Follow-up for task ${taskId} was already resolved.`,
-        this.buildApprovalResolvedBlocks(taskId, "already_resolved")
+        this.buildApprovalResolvedBlocks(taskId, "already_resolved"),
       );
       return;
     }
@@ -407,27 +377,26 @@ export class SlackInterface {
         body.channel.id,
         approvalTs,
         `Follow-up for task ${taskId} is already being processed.`,
-        this.buildApprovalProcessingBlocks(taskId, actionName)
+        this.buildApprovalProcessingBlocks(taskId, actionName),
       );
       return;
     }
 
     this.approvalInFlight.add(taskId);
     try {
-      const result =
-        await this.frontalCodeApi.resolveTaskApproval({
-          taskId,
-          approvalKind: "github_review_followup",
-          action: actionName,
-          resolvedBy: body.user.name || body.user.id,
-        });
+      const result = await this.frontalCodeApi.resolveTaskApproval({
+        taskId,
+        approvalKind: "github_review_followup",
+        action: actionName,
+        resolvedBy: body.user.name || body.user.id,
+      });
       this.approvalResolved.add(taskId);
       this.approvalInFlight.delete(taskId);
       await this.updateApprovalMessage(
         body.channel.id,
         approvalTs,
         `Follow-up resolved for task ${taskId}.`,
-        this.buildApprovalResolvedBlocks(taskId, actionName)
+        this.buildApprovalResolvedBlocks(taskId, actionName),
       );
       this.trackTask(result);
     } catch (error) {
@@ -436,7 +405,7 @@ export class SlackInterface {
         body.channel.id,
         approvalTs,
         `Follow-up for task ${taskId} failed: ${(error as Error).message}`,
-        this.buildApprovalErrorBlocks(taskId, error as Error)
+        this.buildApprovalErrorBlocks(taskId, error as Error),
       );
     }
   }
@@ -445,7 +414,7 @@ export class SlackInterface {
     channel: string,
     ts: string,
     text: string,
-    blocks: SlackBlock[]
+    blocks: SlackBlock[],
   ): Promise<void> {
     await this.app.client.chat.update({
       channel,
@@ -457,7 +426,7 @@ export class SlackInterface {
 
   private async handleFrontalCodeTaskEvent(
     event: FrontalCodeEventEnvelope,
-    task?: FrontalCodeTrackedTask
+    task?: FrontalCodeTrackedTask,
   ): Promise<void> {
     const resolvedTask = await this.resolveTrackedTaskForEvent(event, task);
     if (!resolvedTask) {
@@ -472,10 +441,7 @@ export class SlackInterface {
 
     await this.postExternalStatusUpdates(event, message.text);
 
-    if (
-      event.event === "approval.requested" &&
-      this.approvalResolved.has(nextTask.taskId)
-    ) {
+    if (event.event === "approval.requested" && this.approvalResolved.has(nextTask.taskId)) {
       return;
     }
 
@@ -508,21 +474,18 @@ export class SlackInterface {
       this.approvalMessageTsByTask.set(nextTask.taskId, response.ts as string);
       try {
         await this.frontalCodeApi.updateTaskContext({
-            taskId: nextTask.taskId,
-            source: "slack",
-            user_id: nextTask.userId,
-            channel_id: nextTask.channelId,
-            thread_ts: nextTask.threadTs,
-            approval_message_ts: response.ts as string,
-          });
+          taskId: nextTask.taskId,
+          source: "slack",
+          user_id: nextTask.userId,
+          channel_id: nextTask.channelId,
+          thread_ts: nextTask.threadTs,
+          approval_message_ts: response.ts as string,
+        });
       } catch (error) {
-        logger.warn(
-          "Failed to persist Slack approval message linkage to Frontal Code",
-          {
-            taskId: nextTask.taskId,
-            error: (error as Error).message,
-          }
-        );
+        logger.warn("Failed to persist Slack approval message linkage to Frontal Code", {
+          taskId: nextTask.taskId,
+          error: (error as Error).message,
+        });
       }
     }
 
@@ -533,7 +496,7 @@ export class SlackInterface {
 
   private async postExternalStatusUpdates(
     event: FrontalCodeEventEnvelope,
-    fallbackText: string
+    fallbackText: string,
   ): Promise<void> {
     const payload = event.payload;
     if (!payload) {
@@ -541,19 +504,14 @@ export class SlackInterface {
     }
 
     const hasLinear =
-      payload.linear_issue_id ||
-      payload.linear_issue_identifier ||
-      payload.linear_issue_url;
+      payload.linear_issue_id || payload.linear_issue_identifier || payload.linear_issue_url;
     const hasGraphite =
-      payload.graphite_stack_id ||
-      payload.graphite_head_branch ||
-      payload.graphite_base_branch;
+      payload.graphite_stack_id || payload.graphite_head_branch || payload.graphite_base_branch;
     if (!hasLinear && !hasGraphite) {
       return;
     }
 
-    const message =
-      this.buildExternalStatusMessage(event) ?? fallbackText ?? undefined;
+    const message = this.buildExternalStatusMessage(event) ?? fallbackText ?? undefined;
     if (!message) {
       return;
     }
@@ -561,13 +519,13 @@ export class SlackInterface {
     if (hasLinear) {
       try {
         await this.frontalCodeApi.postLinearStatus({
-            issueId: payload.linear_issue_id,
-            identifier: payload.linear_issue_identifier,
-            url: payload.linear_issue_url,
-            state: payload.linear_issue_state,
-            taskId: event.task_id,
-            message,
-          });
+          issueId: payload.linear_issue_id,
+          identifier: payload.linear_issue_identifier,
+          url: payload.linear_issue_url,
+          state: payload.linear_issue_state,
+          taskId: event.task_id,
+          message,
+        });
       } catch (error) {
         logger.warn("Failed to post Linear status", {
           error: (error as Error).message,
@@ -578,12 +536,12 @@ export class SlackInterface {
     if (hasGraphite) {
       try {
         await this.frontalCodeApi.postGraphiteStatus({
-            stackId: payload.graphite_stack_id,
-            headBranch: payload.graphite_head_branch,
-            baseBranch: payload.graphite_base_branch,
-            taskId: event.task_id,
-            message,
-          });
+          stackId: payload.graphite_stack_id,
+          headBranch: payload.graphite_head_branch,
+          baseBranch: payload.graphite_base_branch,
+          taskId: event.task_id,
+          message,
+        });
       } catch (error) {
         logger.warn("Failed to post Graphite status", {
           error: (error as Error).message,
@@ -592,9 +550,7 @@ export class SlackInterface {
     }
   }
 
-  private buildExternalStatusMessage(
-    event: FrontalCodeEventEnvelope
-  ): string | undefined {
+  private buildExternalStatusMessage(event: FrontalCodeEventEnvelope): string | undefined {
     const summary = this.readEventTaskSummary(event);
     const syntheticTask: FrontalCodeTrackedTask = {
       taskId: event.task_id || summary?.work_item_id || "task",
@@ -608,7 +564,7 @@ export class SlackInterface {
 
   private async resolveTrackedTaskForEvent(
     event: FrontalCodeEventEnvelope,
-    task?: FrontalCodeTrackedTask
+    task?: FrontalCodeTrackedTask,
   ): Promise<FrontalCodeTrackedTask | undefined> {
     const taskId = event.task_id;
     if (!taskId) {
@@ -637,39 +593,28 @@ export class SlackInterface {
       }
       this.syncDerivedApprovalState(snapshot);
       if (snapshot.approval_message_ts) {
-        this.approvalMessageTsByTask.set(
-          snapshotTask.taskId,
-          snapshot.approval_message_ts
-        );
+        this.approvalMessageTsByTask.set(snapshotTask.taskId, snapshot.approval_message_ts);
       }
       this.upsertTrackedTask(snapshotTask);
       this.frontalCodeEvents.trackTask(snapshotTask);
       return snapshotTask;
     } catch (error) {
-      logger.warn(
-        "Failed to resolve Slack task routing from Frontal Code event",
-        {
-          taskId,
-          error: (error as Error).message,
-        }
-      );
+      logger.warn("Failed to resolve Slack task routing from Frontal Code event", {
+        taskId,
+        error: (error as Error).message,
+      });
       return undefined;
     }
   }
 
-  private formatTaskCreatedMessage(
-    task: FrontalCodeCreateTaskResponse,
-    prompt: string
-  ): string {
+  private formatTaskCreatedMessage(task: FrontalCodeCreateTaskResponse, prompt: string): string {
     const parts = [`Task created: ${task.task_id}`, `Prompt: ${prompt}`];
 
     if (task.plan_kind) {
       parts.push(`Lane: ${task.plan_kind}`);
     }
     if (task.worker_status) {
-      parts.push(
-        `Worker: ${task.worker_status}${task.worker_id ? ` (${task.worker_id})` : ""}`
-      );
+      parts.push(`Worker: ${task.worker_status}${task.worker_id ? ` (${task.worker_id})` : ""}`);
     }
 
     return parts.join("\n");
@@ -677,7 +622,7 @@ export class SlackInterface {
 
   private formatFrontalCodeEvent(
     event: FrontalCodeEventEnvelope,
-    task: FrontalCodeTrackedTask
+    task: FrontalCodeTrackedTask,
   ): SlackMessagePayload | null {
     const summary = this.readEventTaskSummary(event);
     const taskLabel = this.describeTask(task.taskId, summary);
@@ -700,7 +645,7 @@ export class SlackInterface {
         const resultText = (payload?.result as string) || task.result || "";
         const truncated =
           resultText && resultText.length > 2800
-            ? resultText.substring(0, 2800) + "\n\n... (truncated)"
+            ? `${resultText.substring(0, 2800)}\n\n... (truncated)`
             : resultText || "";
         const text = truncated
           ? `${taskLabel} completed:\n\n${truncated}`
@@ -710,12 +655,7 @@ export class SlackInterface {
       case "approval.requested":
         return this.formatApprovalRequestedEvent(event, task);
       case "approval.resolved":
-        return this.formatApprovalResolvedEvent(
-          task,
-          taskLabel,
-          event,
-          summary
-        );
+        return this.formatApprovalResolvedEvent(task, taskLabel, event, summary);
       case "memory.captured":
         return { text: `Memory captured for ${taskLabel.toLowerCase()}.` };
       case "connector.event.received":
@@ -727,10 +667,10 @@ export class SlackInterface {
 
   private formatConnectorEvent(
     taskLabel: string,
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): SlackMessagePayload | null {
     const payload = event.payload;
-    if (!payload || payload.connector !== "github") {
+    if (payload?.connector !== "github") {
       return null;
     }
 
@@ -738,34 +678,39 @@ export class SlackInterface {
     const data = this.readConnectorEventData(payload.data);
     const actor = this.readConnectorString(data, "user_id", "sender_login");
     const prNumber =
-      this.readConnectorNumber(data, "pr_number") ??
-      this.readConnectorNumber(data, "number");
+      this.readConnectorNumber(data, "pr_number") ?? this.readConnectorNumber(data, "number");
     const htmlUrl = this.readConnectorString(data, "html_url");
     const commentBody = this.readConnectorString(data, "comment_body");
     const reviewBody = this.readConnectorString(data, "review_body");
     const reviewState = this.readConnectorString(data, "review_state");
     const prMerged = data?.pr_merged === true;
+    const prSuffix = prNumber ? ` #${prNumber}` : "";
+    const prOnSuffix = prNumber ? ` on PR #${prNumber}` : "";
+    const actorSuffix = actor ? ` by ${actor}` : "";
+    const actorFromSuffix = actor ? ` from ${actor}` : "";
+    const urlSuffix = htmlUrl ? ` ${htmlUrl}` : "";
+    const reviewSuffix = reviewState ? ` (${reviewState.toLowerCase()})` : "";
 
     switch (connectorType) {
       case "pull_request.synchronize":
         return {
-          text: `${taskLabel} received a GitHub PR update${prNumber ? ` (#${prNumber})` : ""}${actor ? ` from ${actor}` : ""}.${htmlUrl ? ` ${htmlUrl}` : ""}`,
+          text: `${taskLabel} received a GitHub PR update${prNumber ? ` (#${prNumber})` : ""}${actorFromSuffix}.${urlSuffix}`,
         };
       case "pull_request.closed":
         return {
-          text: `${taskLabel} linked GitHub PR${prNumber ? ` #${prNumber}` : ""} was ${prMerged ? "merged" : "closed"}${actor ? ` by ${actor}` : ""}.${htmlUrl ? ` ${htmlUrl}` : ""}`,
+          text: `${taskLabel} linked GitHub PR${prSuffix} was ${prMerged ? "merged" : "closed"}${actorSuffix}.${urlSuffix}`,
         };
       case "pull_request.reopened":
         return {
-          text: `${taskLabel} linked GitHub PR${prNumber ? ` #${prNumber}` : ""} was reopened${actor ? ` by ${actor}` : ""}.${htmlUrl ? ` ${htmlUrl}` : ""}`,
+          text: `${taskLabel} linked GitHub PR${prSuffix} was reopened${actorSuffix}.${urlSuffix}`,
         };
       case "pull_request_review.submitted":
         return {
-          text: `${taskLabel} received a GitHub review${prNumber ? ` on PR #${prNumber}` : ""}${actor ? ` from ${actor}` : ""}${reviewState ? ` (${reviewState.toLowerCase()})` : ""}: ${reviewBody || "new review feedback"}`,
+          text: `${taskLabel} received a GitHub review${prOnSuffix}${actorFromSuffix}${reviewSuffix}: ${reviewBody || "new review feedback"}`,
         };
       case "issue_comment.created":
         return {
-          text: `${taskLabel} received a GitHub comment${prNumber ? ` on PR #${prNumber}` : ""}${actor ? ` from ${actor}` : ""}: ${commentBody || "new review feedback"}`,
+          text: `${taskLabel} received a GitHub comment${prOnSuffix}${actorFromSuffix}: ${commentBody || "new review feedback"}`,
         };
       default:
         return null;
@@ -775,10 +720,9 @@ export class SlackInterface {
   private formatTaskRoutedEvent(
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): SlackMessagePayload {
-    const planKind =
-      summary.plan_kind || event.payload?.plan_kind || "assigned";
+    const planKind = summary.plan_kind || event.payload?.plan_kind || "assigned";
     const laneCount = event.payload?.lane_count;
     return {
       text: `${taskLabel} routed to ${planKind}${laneCount ? ` (${laneCount} lanes)` : ""}.`,
@@ -787,11 +731,9 @@ export class SlackInterface {
 
   private formatTaskCancelledEvent(
     taskLabel: string,
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): SlackMessagePayload {
-    const policyText = this.describeOrphanPolicy(
-      this.readOrphanPolicy(event.payload)
-    );
+    const policyText = this.describeOrphanPolicy(this.readOrphanPolicy(event.payload));
     return {
       text: `${taskLabel} was cancelled.${policyText ? ` ${policyText}` : ""}`,
     };
@@ -800,11 +742,10 @@ export class SlackInterface {
   private formatLaneStartedEvent(
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): SlackMessagePayload {
     const role = event.payload?.role || "lane";
-    const workerStatus =
-      summary.worker_status || event.payload?.worker_status || event.status;
+    const workerStatus = summary.worker_status || event.payload?.worker_status || event.status;
     const workerId = summary.worker_id || event.payload?.worker_id;
     return {
       text: `${taskLabel} ${role} started with worker ${workerStatus}${workerId ? ` (${workerId})` : ""}.`,
@@ -814,10 +755,9 @@ export class SlackInterface {
   private formatLaneFailedEvent(
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): SlackMessagePayload {
-    const error =
-      summary.error || event.payload?.error || "lane execution failed";
+    const error = summary.error || event.payload?.error || "lane execution failed";
     return {
       text: `${taskLabel} failed: ${error}`,
     };
@@ -825,13 +765,10 @@ export class SlackInterface {
 
   private formatLaneBlockedEvent(
     taskLabel: string,
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): SlackMessagePayload {
-    const reason =
-      event.payload?.reason || event.payload?.detail || "waiting for input";
-    const policyText = this.describeOrphanPolicy(
-      this.readOrphanPolicy(event.payload)
-    );
+    const reason = event.payload?.reason || event.payload?.detail || "waiting for input";
+    const policyText = this.describeOrphanPolicy(this.readOrphanPolicy(event.payload));
     return {
       text: `${taskLabel} is blocked: ${reason}${policyText ? ` ${policyText}` : ""}`,
     };
@@ -841,7 +778,7 @@ export class SlackInterface {
     task: FrontalCodeTrackedTask,
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): SlackMessagePayload {
     const action = event.payload?.action || "updated";
     const workerStatus = summary.worker_status || event.payload?.worker_status;
@@ -854,27 +791,20 @@ export class SlackInterface {
     }
     return {
       text: `Approval resolved for ${taskLabel.toLowerCase()}: ${action}.`,
-      blocks: this.buildApprovalResolvedBlocks(
-        task.taskId,
-        action,
-        workerStatus,
-        workerId
-      ),
+      blocks: this.buildApprovalResolvedBlocks(task.taskId, action, workerStatus, workerId),
     };
   }
 
   private formatApprovalRequestedEvent(
     event: FrontalCodeEventEnvelope,
-    task: FrontalCodeTrackedTask
+    task: FrontalCodeTrackedTask,
   ): SlackMessagePayload {
     const summary = this.readEventTaskSummary(event);
     const payload = event.payload;
     const taskLabel = this.describeTask(task.taskId, summary);
     const approvalKind = payload?.approval_kind;
     const reason = payload?.reason || "Task requires approval.";
-    const policyText = this.describeOrphanPolicy(
-      this.readOrphanPolicy(payload)
-    );
+    const policyText = this.describeOrphanPolicy(this.readOrphanPolicy(payload));
 
     if (approvalKind === "orphaned_hosted_agent") {
       return {
@@ -964,9 +894,7 @@ export class SlackInterface {
     };
   }
 
-  private readEventTaskSummary(
-    event: FrontalCodeEventEnvelope
-  ): FrontalCodeEventTaskSummary {
+  private readEventTaskSummary(event: FrontalCodeEventEnvelope): FrontalCodeEventTaskSummary {
     const payload = event.payload;
     if (!payload) {
       return {};
@@ -1001,7 +929,7 @@ export class SlackInterface {
   }
 
   private readConnectorEventData(
-    data: FrontalCodeEventPayload["data"]
+    data: FrontalCodeEventPayload["data"],
   ): Record<string, unknown> | undefined {
     return data && typeof data === "object" && !Array.isArray(data)
       ? (data as Record<string, unknown>)
@@ -1036,7 +964,7 @@ export class SlackInterface {
 
   private hydrateTrackedTaskFromEvent(
     task: FrontalCodeTrackedTask,
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): FrontalCodeTrackedTask {
     const summary = this.readEventTaskSummary(event);
     const nextChannelId = summary.channel_id || task.channelId;
@@ -1065,7 +993,7 @@ export class SlackInterface {
 
   private readTrackedTaskFromEventSummary(
     taskId: string,
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): FrontalCodeTrackedTask | undefined {
     const summary = this.readEventTaskSummary(event);
     if (!summary.channel_id) {
@@ -1080,19 +1008,14 @@ export class SlackInterface {
     };
   }
 
-  private describeTask(
-    taskId: string,
-    summary: FrontalCodeEventTaskSummary
-  ): string {
+  private describeTask(taskId: string, summary: FrontalCodeEventTaskSummary): string {
     if (summary.repository) {
       return `Task ${taskId} (${summary.repository})`;
     }
     return `Task ${taskId}`;
   }
 
-  private parseOrphanPolicyCommand(
-    text: string
-  ): FrontalCodeOrphanPolicyQuery | null {
+  private parseOrphanPolicyCommand(text: string): FrontalCodeOrphanPolicyQuery | null {
     const trimmed = text.trim();
     if (!trimmed) {
       return null;
@@ -1124,22 +1047,16 @@ export class SlackInterface {
     return query;
   }
 
-  private buildOrphanPolicyCommandResponse(
-    policy: FrontalCodeOrphanPolicyResponse
-  ): {
+  private buildOrphanPolicyCommandResponse(policy: FrontalCodeOrphanPolicyResponse): {
     response_type: "ephemeral";
     text: string;
     blocks: SlackBlock[];
   } {
     const preview = policy.preview
       ? [
-          policy.preview.repository
-            ? `repo=${policy.preview.repository}`
-            : undefined,
+          policy.preview.repository ? `repo=${policy.preview.repository}` : undefined,
           policy.preview.source ? `source=${policy.preview.source}` : undefined,
-          policy.preview.priority
-            ? `priority=${policy.preview.priority}`
-            : undefined,
+          policy.preview.priority ? `priority=${policy.preview.priority}` : undefined,
         ]
           .filter((value): value is string => Boolean(value))
           .join(", ")
@@ -1148,8 +1065,7 @@ export class SlackInterface {
     const ruleLines = this.formatOrphanPolicyRuleLines(policy);
 
     const effectivePolicyText =
-      this.describeOrphanPolicy(policy.effective_policy) ||
-      "Policy unavailable.";
+      this.describeOrphanPolicy(policy.effective_policy) || "Policy unavailable.";
     const defaultPolicyText =
       this.describeOrphanPolicy(policy.default_policy) || "Policy unavailable.";
 
@@ -1176,14 +1092,12 @@ export class SlackInterface {
   }
 
   private readOrphanPolicy(
-    payload?: FrontalCodeEventPayload
+    payload?: FrontalCodeEventPayload,
   ): FrontalCodeAppliedOrphanPolicy | undefined {
     return payload?.orphan_policy;
   }
 
-  private describeOrphanPolicy(
-    policy?: FrontalCodeAppliedOrphanPolicy
-  ): string | undefined {
+  private describeOrphanPolicy(policy?: FrontalCodeAppliedOrphanPolicy): string | undefined {
     if (!policy) {
       return undefined;
     }
@@ -1194,9 +1108,7 @@ export class SlackInterface {
       policy.match_priority ? `priority=${policy.match_priority}` : undefined,
     ].filter((value): value is string => Boolean(value));
     const policyScope =
-      selectors.length > 0
-        ? `${policy.source} (${selectors.join(", ")})`
-        : policy.source;
+      selectors.length > 0 ? `${policy.source} (${selectors.join(", ")})` : policy.source;
     const steps = [
       `approval ${policy.approval_delay_secs}s`,
       policy.auto_retry_after_secs !== undefined
@@ -1210,9 +1122,7 @@ export class SlackInterface {
     return `Policy: ${policyScope}; ${steps.join(", ")}.`;
   }
 
-  private formatOrphanPolicyRuleLines(
-    policy: FrontalCodeOrphanPolicyResponse
-  ): string[] {
+  private formatOrphanPolicyRuleLines(policy: FrontalCodeOrphanPolicyResponse): string[] {
     if (policy.configured_rules.length === 0) {
       return ["No scoped rules configured."];
     }
@@ -1224,7 +1134,7 @@ export class SlackInterface {
 
   private formatOrphanPolicyRuleLine(
     rule: FrontalCodeOrphanPolicyResponse["configured_rules"][number],
-    index: number
+    index: number,
   ): string {
     const selectors = [
       rule.repository ? `repo=${rule.repository}` : undefined,
@@ -1234,12 +1144,8 @@ export class SlackInterface {
       .filter((value): value is string => Boolean(value))
       .join(", ");
     const timing = [
-      rule.approval_delay_secs !== undefined
-        ? `approval ${rule.approval_delay_secs}s`
-        : undefined,
-      rule.auto_retry_after_secs !== undefined
-        ? `retry ${rule.auto_retry_after_secs}s`
-        : undefined,
+      rule.approval_delay_secs !== undefined ? `approval ${rule.approval_delay_secs}s` : undefined,
+      rule.auto_retry_after_secs !== undefined ? `retry ${rule.auto_retry_after_secs}s` : undefined,
       rule.auto_cancel_after_secs !== undefined
         ? `cancel ${rule.auto_cancel_after_secs}s`
         : undefined,
@@ -1252,7 +1158,7 @@ export class SlackInterface {
 
   private buildApprovalProcessingBlocks(
     taskId: string,
-    action: FrontalCodeApprovalAction
+    action: FrontalCodeApprovalAction,
   ): SlackBlock[] {
     return [
       {
@@ -1269,7 +1175,7 @@ export class SlackInterface {
     taskId: string,
     action: string,
     workerStatus?: string,
-    workerId?: string
+    workerId?: string,
   ): SlackBlock[] {
     const detail =
       workerStatus && workerId
@@ -1330,11 +1236,10 @@ export class SlackInterface {
 
   private async syncTrackedTasksFromFrontalCode(): Promise<void> {
     try {
-      const activeTasks =
-        await this.frontalCodeApi.listTasks({
-          source: "slack",
-          status: "pending,running",
-        });
+      const activeTasks = await this.frontalCodeApi.listTasks({
+        source: "slack",
+        status: "pending,running",
+      });
 
       let merged = 0;
       for (const task of activeTasks) {
@@ -1348,10 +1253,7 @@ export class SlackInterface {
         }
         this.upsertTrackedTask(trackedTask);
         if (task.approval_message_ts) {
-          this.approvalMessageTsByTask.set(
-            trackedTask.taskId,
-            task.approval_message_ts
-          );
+          this.approvalMessageTsByTask.set(trackedTask.taskId, task.approval_message_ts);
         }
         this.syncDerivedApprovalState(task);
         this.frontalCodeEvents.trackTask(trackedTask);
@@ -1401,9 +1303,7 @@ export class SlackInterface {
     this.trackedTasks.set(task.taskId, mergedTask);
   }
 
-  private sanitizeTrackedTask(
-    task: FrontalCodeTrackedTask
-  ): FrontalCodeTrackedTask {
+  private sanitizeTrackedTask(task: FrontalCodeTrackedTask): FrontalCodeTrackedTask {
     return {
       taskId: task.taskId,
       channelId: task.channelId,
@@ -1424,7 +1324,7 @@ export class SlackInterface {
     this.approvalResolved.delete(task.task_id);
   }
 
-  private async cleanupTaskState(taskId: string): Promise<void> {
+  private cleanupTaskState(taskId: string): void {
     this.trackedTasks.delete(taskId);
     this.frontalCodeEvents.untrackTask(taskId);
     this.approvalMessageTsByTask.delete(taskId);

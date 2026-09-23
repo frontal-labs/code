@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { detectTarget, UnsupportedPlatformError } from "../lib/platform.mjs";
+import { detectTarget } from "../lib/platform.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = resolve(__dirname, "..");
@@ -14,7 +14,9 @@ const SKIP = process.platform === "win32";
 
 // Run the real postinstall in a throwaway package copy with a fake vendored
 // binary, asserting dev-version + skip-env short-circuits without network.
-test("postinstall skips on FCODE_SKIP_DOWNLOAD without touching network", { skip: SKIP }, () => {
+test("postinstall skips on FRONTAL_CODE_SKIP_DOWNLOAD without touching network", {
+  skip: SKIP,
+}, () => {
   const { target, binName } = detectTarget();
   const fakeRoot = mkdtempSync(join(tmpdir(), "frontal-code-pi-"));
   try {
@@ -32,7 +34,7 @@ test("postinstall skips on FCODE_SKIP_DOWNLOAD without touching network", { skip
 
     const res = spawnSync("bash", [POSTINSTALL], {
       cwd: fakeRoot,
-      env: { ...process.env, FCODE_SKIP_DOWNLOAD: "1", PATH: process.env.PATH },
+      env: { ...process.env, FRONTAL_CODE_SKIP_DOWNLOAD: "1", PATH: process.env.PATH },
       encoding: "utf8",
     });
     assert.equal(res.status, 0);
@@ -71,7 +73,7 @@ test("postinstall fails gracefully (exit 0) when offline download fails", { skip
     );
     const res = spawnSync("bash", [POSTINSTALL], {
       cwd: fakeRoot,
-      env: { ...process.env, PATH: process.env.PATH, FCODE_FORCE_DOWNLOAD: "1" },
+      env: { ...process.env, PATH: process.env.PATH, FRONTAL_CODE_FORCE_DOWNLOAD: "1" },
       encoding: "utf8",
       timeout: 15000,
     });

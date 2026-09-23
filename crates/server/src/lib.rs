@@ -169,22 +169,22 @@ impl ServerConfig {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut config = Self::default();
 
-        if let Ok(host) = env::var("FCODE_SERVER_HOST") {
+        if let Ok(host) = env::var("FRONTAL_CODE_SERVER_HOST") {
             let ip: IpAddr = host.parse()?;
             config.bind_addr = SocketAddr::new(ip, config.bind_addr.port());
         }
 
-        if let Ok(port) = env::var("FCODE_SERVER_PORT") {
+        if let Ok(port) = env::var("FRONTAL_CODE_SERVER_PORT") {
             let port: u16 = port.parse()?;
             config.bind_addr = SocketAddr::new(config.bind_addr.ip(), port);
         }
 
-        if let Ok(limit) = env::var("FCODE_SERVER_EVENT_REPLAY_LIMIT") {
+        if let Ok(limit) = env::var("FRONTAL_CODE_SERVER_EVENT_REPLAY_LIMIT") {
             let limit: usize = limit.parse()?;
             config.event_replay_limit = limit.max(1);
         }
 
-        if let Ok(kind) = env::var("FCODE_SERVER_LANE_TRANSPORT") {
+        if let Ok(kind) = env::var("FRONTAL_CODE_SERVER_LANE_TRANSPORT") {
             config.lane_transport_kind = match kind.trim().to_ascii_lowercase().as_str() {
                 "docker" | "local-docker" | "local_docker" => LaneTransportKind::LocalDocker,
                 "tools-agent" | "tools_agent" | "agent" => LaneTransportKind::ToolsAgent,
@@ -192,64 +192,64 @@ impl ServerConfig {
             };
         }
 
-        if let Ok(api_key) = env::var("FCODE_SERVER_API_KEY") {
+        if let Ok(api_key) = env::var("FRONTAL_CODE_SERVER_API_KEY") {
             let api_key = api_key.trim();
             if !api_key.is_empty() {
                 config.api_key = Some(api_key.to_string());
             }
         }
 
-        if let Ok(path) = env::var("FCODE_SERVER_WORKSPACE_ROOT") {
+        if let Ok(path) = env::var("FRONTAL_CODE_SERVER_WORKSPACE_ROOT") {
             let path = path.trim();
             if !path.is_empty() {
                 config.workspace_root = PathBuf::from(path);
             }
         }
 
-        if let Ok(image) = env::var("FCODE_SERVER_DOCKER_IMAGE") {
+        if let Ok(image) = env::var("FRONTAL_CODE_SERVER_DOCKER_IMAGE") {
             let image = image.trim();
             if !image.is_empty() {
                 config.docker_image = image.to_string();
             }
         }
 
-        if let Ok(url) = env::var("FCODE_SERVER_CALLBACK_URL") {
+        if let Ok(url) = env::var("FRONTAL_CODE_SERVER_CALLBACK_URL") {
             let url = url.trim().trim_end_matches('/');
             if !url.is_empty() {
                 config.docker_server_url = url.to_string();
             }
         }
 
-        if let Ok(interval) = env::var("FCODE_SERVER_RECONCILE_INTERVAL_SECS") {
+        if let Ok(interval) = env::var("FRONTAL_CODE_SERVER_RECONCILE_INTERVAL_SECS") {
             let interval: u64 = interval.parse()?;
             config.reconcile_interval = (interval > 0).then(|| Duration::from_secs(interval));
         }
 
-        if let Ok(path) = env::var("FCODE_SERVER_STATE_FILE") {
+        if let Ok(path) = env::var("FRONTAL_CODE_SERVER_STATE_FILE") {
             let path = path.trim();
             config.state_file = (!path.is_empty()).then(|| PathBuf::from(path));
         }
 
-        if let Ok(delay) = env::var("FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS") {
+        if let Ok(delay) = env::var("FRONTAL_CODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS") {
             let delay: u64 = delay.parse()?;
             config.orphan_approval_delay = Duration::from_secs(delay);
         }
 
-        if let Ok(delay) = env::var("FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS") {
+        if let Ok(delay) = env::var("FRONTAL_CODE_SERVER_ORPHAN_AUTO_RETRY_SECS") {
             let delay: u64 = delay.parse()?;
             config.orphan_auto_retry_after = (delay > 0).then(|| Duration::from_secs(delay));
         }
 
-        if let Ok(delay) = env::var("FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS") {
+        if let Ok(delay) = env::var("FRONTAL_CODE_SERVER_ORPHAN_AUTO_CANCEL_SECS") {
             let delay: u64 = delay.parse()?;
             config.orphan_auto_cancel_after = (delay > 0).then(|| Duration::from_secs(delay));
         }
 
-        if let Ok(rules) = env::var("FCODE_SERVER_ORPHAN_POLICY_RULES") {
+        if let Ok(rules) = env::var("FRONTAL_CODE_SERVER_ORPHAN_POLICY_RULES") {
             let rules = rules.trim();
             if !rules.is_empty() {
                 config.orphan_policy_rules = serde_json::from_str(rules).map_err(|error| {
-                    format!("invalid FCODE_SERVER_ORPHAN_POLICY_RULES: {error}")
+                    format!("invalid FRONTAL_CODE_SERVER_ORPHAN_POLICY_RULES: {error}")
                 })?;
             }
         }
@@ -1579,7 +1579,7 @@ pub fn app(state: Arc<ServerState>) -> Router {
 
 /// Environment variable that lets an operator deliberately run the control
 /// plane with no API key (local development, or a trusted private network).
-const ALLOW_ANONYMOUS_ENV: &str = "FCODE_SERVER_ALLOW_ANONYMOUS";
+const ALLOW_ANONYMOUS_ENV: &str = "FRONTAL_CODE_SERVER_ALLOW_ANONYMOUS";
 
 fn is_truthy(value: &str) -> bool {
     matches!(
@@ -1602,16 +1602,16 @@ fn check_auth_posture(config: &ServerConfig) -> Result<(), String> {
     let allowed = env::var(ALLOW_ANONYMOUS_ENV).is_ok_and(|value| is_truthy(&value));
     if !allowed {
         return Err(format!(
-            "refusing to start: FCODE_SERVER_API_KEY is not set, so every control-plane \
+            "refusing to start: FRONTAL_CODE_SERVER_API_KEY is not set, so every control-plane \
              route (task create/cancel/complete/approval, connector events, the event \
              stream) would accept unauthenticated requests.\n\
-             Set FCODE_SERVER_API_KEY to a secret, or set {ALLOW_ANONYMOUS_ENV}=1 to \
+             Set FRONTAL_CODE_SERVER_API_KEY to a secret, or set {ALLOW_ANONYMOUS_ENV}=1 to \
              accept an open control plane on a trusted network."
         ));
     }
 
     eprintln!(
-        "warning: {ALLOW_ANONYMOUS_ENV} is set and FCODE_SERVER_API_KEY is not — the \
+        "warning: {ALLOW_ANONYMOUS_ENV} is set and FRONTAL_CODE_SERVER_API_KEY is not — the \
          control plane will accept unauthenticated requests on {}",
         config.bind_addr
     );
@@ -1647,10 +1647,12 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
             }
         });
     }
-    if let Ok(raw) = env::var("FCODE_INTEGRATIONS_CONFIG") {
+    if let Ok(raw) = env::var("FRONTAL_CODE_INTEGRATIONS_CONFIG") {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
             if let Err(err) = register_integrations_from_json(&value) {
-                eprintln!("failed to register integrations from FCODE_INTEGRATIONS_CONFIG: {err}");
+                eprintln!(
+                    "failed to register integrations from FRONTAL_CODE_INTEGRATIONS_CONFIG: {err}"
+                );
             }
         }
     }
@@ -1680,7 +1682,7 @@ async fn generic_oauth_authorize(
 
     let client_id = std::env::var(&oauth.client_id_env)
         .map_err(|_| AppError::internal(format!("{} not set", oauth.client_id_env)))?;
-    let redirect_uri = std::env::var("FCODE_OAUTH_REDIRECT_BASE").map_or_else(
+    let redirect_uri = std::env::var("FRONTAL_CODE_OAUTH_REDIRECT_BASE").map_or_else(
         |_| format!("https://frontal-code.fly.dev/v1/oauth/{provider}/callback"),
         |base| format!("{base}/v1/oauth/{provider}/callback"),
     );
@@ -2958,7 +2960,7 @@ fn verify_hmac_signature(secret: &str, signature_header: Option<&str>, body: &[u
     mac.verify_slice(&expected).is_ok()
 }
 
-/// Webhook sources map onto `FCODE_<SOURCE>_WEBHOOK_SECRET`, so restrict them to
+/// Webhook sources map onto `FRONTAL_CODE_<SOURCE>_WEBHOOK_SECRET`, so restrict them to
 /// a shape that can only name a variable an operator deliberately created.
 fn is_valid_webhook_source(source: &str) -> bool {
     !source.is_empty()
@@ -2983,7 +2985,7 @@ async fn integration_webhook(
     // This route sits outside the control-plane auth layer, so the signature is
     // the only thing standing between an anonymous POST and task-state
     // mutation. An unconfigured secret is a rejection, never a bypass.
-    let secret_env = format!("FCODE_{}_WEBHOOK_SECRET", source.to_uppercase());
+    let secret_env = format!("FRONTAL_CODE_{}_WEBHOOK_SECRET", source.to_uppercase());
     let Ok(secret) = env::var(&secret_env) else {
         return StatusCode::UNAUTHORIZED;
     };
@@ -3547,20 +3549,23 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
         let image = self.image.clone();
         let mut container_env = BTreeMap::from([
-            ("FCODE_SERVER_URL".to_string(), self.server_url.clone()),
             (
-                "FCODE_HOSTED_TASK_FILE".to_string(),
+                "FRONTAL_CODE_SERVER_URL".to_string(),
+                self.server_url.clone(),
+            ),
+            (
+                "FRONTAL_CODE_HOSTED_TASK_FILE".to_string(),
                 "/workspace/.frontal-code-hosted/task.json".to_string(),
             ),
         ]);
         if let Some(api_key) = &self.server_api_key {
-            container_env.insert("FCODE_SERVER_API_KEY".to_string(), api_key.clone());
+            container_env.insert("FRONTAL_CODE_SERVER_API_KEY".to_string(), api_key.clone());
         }
         for key in [
             "GITHUB_TOKEN",
-            "FCODE_GITHUB_API_BASE",
-            "FCODE_GIT_AUTHOR_NAME",
-            "FCODE_GIT_AUTHOR_EMAIL",
+            "FRONTAL_CODE_GITHUB_API_BASE",
+            "FRONTAL_CODE_GIT_AUTHOR_NAME",
+            "FRONTAL_CODE_GIT_AUTHOR_EMAIL",
         ] {
             if let Ok(value) = env::var(key) {
                 if !value.trim().is_empty() {
@@ -4966,20 +4971,23 @@ mod tests {
             ]
         );
         assert_eq!(
-            launched[0].env.get("FCODE_SERVER_URL").map(String::as_str),
+            launched[0]
+                .env
+                .get("FRONTAL_CODE_SERVER_URL")
+                .map(String::as_str),
             Some("http://host.docker.internal:8788")
         );
         assert_eq!(
             launched[0]
                 .env
-                .get("FCODE_HOSTED_TASK_FILE")
+                .get("FRONTAL_CODE_HOSTED_TASK_FILE")
                 .map(String::as_str),
             Some("/workspace/.frontal-code-hosted/task.json")
         );
         assert_eq!(
             launched[0]
                 .env
-                .get("FCODE_SERVER_API_KEY")
+                .get("FRONTAL_CODE_SERVER_API_KEY")
                 .map(String::as_str),
             Some("server-secret")
         );
@@ -5508,9 +5516,9 @@ mod tests {
         let state = Arc::new(ServerState::with_lane_transport_and_policy_rules(
             DEFAULT_EVENT_REPLAY_LIMIT,
             Arc::new(InMemoryLaneWorkerTransport::default()),
-            Duration::from_secs(120),
-            Some(Duration::from_secs(60)),
-            Some(Duration::from_secs(600)),
+            Duration::from_mins(2),
+            Some(Duration::from_mins(1)),
+            Some(Duration::from_mins(10)),
             vec![OrphanPolicyRule {
                 repository: Some("repo-ops".to_string()),
                 source: Some("slack".to_string()),
@@ -5551,7 +5559,7 @@ mod tests {
         let state = Arc::new(ServerState::with_lane_transport_and_policy_rules(
             DEFAULT_EVENT_REPLAY_LIMIT,
             Arc::new(InMemoryLaneWorkerTransport::default()),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
             None,
             vec![OrphanPolicyRule {
@@ -6396,7 +6404,7 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
             None,
         ));
@@ -6513,9 +6521,9 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
-            Some(Duration::from_secs(60)),
+            Some(Duration::from_mins(1)),
         ));
         let router = app(state.clone());
 
@@ -6609,8 +6617,8 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
-            Some(Duration::from_secs(60)),
+            Duration::from_mins(5),
+            Some(Duration::from_mins(1)),
             None,
         ));
         let router = app(state.clone());
@@ -6706,8 +6714,8 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(120),
-            Some(Duration::from_secs(60)),
+            Duration::from_mins(2),
+            Some(Duration::from_mins(1)),
             None,
         ));
         let router = app(state.clone());
@@ -6791,7 +6799,7 @@ mod tests {
                 manifest_file: manifest_file.display().to_string(),
                 output_file: output_file.display().to_string(),
             }),
-            Duration::from_secs(300),
+            Duration::from_mins(5),
             None,
             None,
             vec![OrphanPolicyRule {
@@ -7250,7 +7258,10 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_webhook_route_correlates_pull_request_event_to_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7374,7 +7385,10 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_webhook_route_persists_closed_merge_state_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7485,7 +7499,10 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_review_webhook_requests_followup_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7587,7 +7604,10 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_review_approval_webhook_clears_followup_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7701,7 +7721,10 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_route_emits_unmatched_event_without_task_binding() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7760,7 +7783,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_LINEAR_WEBHOOK_SECRET", Some("secret"));
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_LINEAR_WEBHOOK_SECRET", Some("secret"));
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
@@ -7802,7 +7825,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GRAPHITE_WEBHOOK_SECRET", Some("secret"));
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET", Some("secret"));
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
@@ -7844,7 +7867,10 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_matches_task_and_updates_context() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_LINEAR_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_LINEAR_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7916,7 +7942,10 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_no_match_returns_accepted() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_LINEAR_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_LINEAR_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -7938,7 +7967,10 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_matches_task_and_updates_context() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GRAPHITE_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -8006,7 +8038,10 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_no_match_returns_accepted() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GRAPHITE_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -8028,7 +8063,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
         let state = Arc::new(ServerState::new(10));
 
         let payload = json!({
@@ -8058,7 +8093,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_accepts_valid_x_hub_signature_256() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
         let state = Arc::new(ServerState::new(10));
 
         let payload = json!({
@@ -8121,7 +8156,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_rejects_delivery_when_no_secret_is_configured() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", None);
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", None);
         let router = app(Arc::new(ServerState::default()));
 
         let response = router
@@ -8142,7 +8177,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_rejects_delivery_when_secret_is_blank() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some("   "));
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some("   "));
         let router = app(Arc::new(ServerState::default()));
 
         let response = router
@@ -8177,7 +8212,7 @@ mod tests {
         assert!(config.api_key.is_none());
 
         let error = check_auth_posture(&config).expect_err("missing API key should be refused");
-        assert!(error.contains("FCODE_SERVER_API_KEY"));
+        assert!(error.contains("FRONTAL_CODE_SERVER_API_KEY"));
     }
 
     #[test]
@@ -8204,7 +8239,10 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_routes_remain_public_when_control_plane_api_key_is_configured() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FCODE_GITHUB_WEBHOOK_SECRET", Some(TEST_WEBHOOK_SECRET));
+        let _secret = EnvVarGuard::set(
+            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
+            Some(TEST_WEBHOOK_SECRET),
+        );
         let state = Arc::new(
             ServerState::new(10).with_control_plane_api_key(Some("top-secret".to_string())),
         );
@@ -9279,18 +9317,21 @@ mod tests {
 
     #[test]
     fn server_config_parses_local_docker_lane_transport_kind() {
-        let previous = env::var_os("FCODE_SERVER_LANE_TRANSPORT");
-        let previous_workspace_root = env::var_os("FCODE_SERVER_WORKSPACE_ROOT");
-        let previous_docker_image = env::var_os("FCODE_SERVER_DOCKER_IMAGE");
-        let previous_callback_url = env::var_os("FCODE_SERVER_CALLBACK_URL");
-        env::set_var("FCODE_SERVER_LANE_TRANSPORT", "local-docker");
+        let previous = env::var_os("FRONTAL_CODE_SERVER_LANE_TRANSPORT");
+        let previous_workspace_root = env::var_os("FRONTAL_CODE_SERVER_WORKSPACE_ROOT");
+        let previous_docker_image = env::var_os("FRONTAL_CODE_SERVER_DOCKER_IMAGE");
+        let previous_callback_url = env::var_os("FRONTAL_CODE_SERVER_CALLBACK_URL");
+        env::set_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT", "local-docker");
         env::set_var(
-            "FCODE_SERVER_WORKSPACE_ROOT",
+            "FRONTAL_CODE_SERVER_WORKSPACE_ROOT",
             "/tmp/frontal-code-server-workspaces",
         );
-        env::set_var("FCODE_SERVER_DOCKER_IMAGE", "frontal-code-worker:test");
         env::set_var(
-            "FCODE_SERVER_CALLBACK_URL",
+            "FRONTAL_CODE_SERVER_DOCKER_IMAGE",
+            "frontal-code-worker:test",
+        );
+        env::set_var(
+            "FRONTAL_CODE_SERVER_CALLBACK_URL",
             "http://docker.internal.test:8788/",
         );
 
@@ -9304,20 +9345,20 @@ mod tests {
         assert_eq!(config.docker_server_url, "http://docker.internal.test:8788");
 
         match previous {
-            Some(value) => env::set_var("FCODE_SERVER_LANE_TRANSPORT", value),
-            None => env::remove_var("FCODE_SERVER_LANE_TRANSPORT"),
+            Some(value) => env::set_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT", value),
+            None => env::remove_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT"),
         }
         match previous_workspace_root {
-            Some(value) => env::set_var("FCODE_SERVER_WORKSPACE_ROOT", value),
-            None => env::remove_var("FCODE_SERVER_WORKSPACE_ROOT"),
+            Some(value) => env::set_var("FRONTAL_CODE_SERVER_WORKSPACE_ROOT", value),
+            None => env::remove_var("FRONTAL_CODE_SERVER_WORKSPACE_ROOT"),
         }
         match previous_docker_image {
-            Some(value) => env::set_var("FCODE_SERVER_DOCKER_IMAGE", value),
-            None => env::remove_var("FCODE_SERVER_DOCKER_IMAGE"),
+            Some(value) => env::set_var("FRONTAL_CODE_SERVER_DOCKER_IMAGE", value),
+            None => env::remove_var("FRONTAL_CODE_SERVER_DOCKER_IMAGE"),
         }
         match previous_callback_url {
-            Some(value) => env::set_var("FCODE_SERVER_CALLBACK_URL", value),
-            None => env::remove_var("FCODE_SERVER_CALLBACK_URL"),
+            Some(value) => env::set_var("FRONTAL_CODE_SERVER_CALLBACK_URL", value),
+            None => env::remove_var("FRONTAL_CODE_SERVER_CALLBACK_URL"),
         }
     }
 

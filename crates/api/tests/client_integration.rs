@@ -696,7 +696,7 @@ async fn send_message_tracks_unexpected_prompt_cache_breaks() {
 
 #[tokio::test]
 async fn live_stream_smoke_test() {
-    if std::env::var_os("FCODE_RUN_LIVE_TESTS").is_none() {
+    if std::env::var_os("FRONTAL_CODE_RUN_LIVE_TESTS").is_none() {
         return;
     }
 
@@ -707,7 +707,8 @@ async fn live_stream_smoke_test() {
     };
     let mut stream = client
         .stream_message(&MessageRequest {
-            model: std::env::var("FCODE_MODEL").unwrap_or_else(|_| "claude-sonnet-4-5".to_string()),
+            model: std::env::var("FRONTAL_CODE_MODEL")
+                .unwrap_or_else(|_| "claude-sonnet-4-5".to_string()),
             max_tokens: 32,
             messages: vec![InputMessage::user_text(
                 "Reply with exactly: hello from rust",

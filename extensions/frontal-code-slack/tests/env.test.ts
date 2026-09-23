@@ -5,8 +5,8 @@ const BASE_ENV = {
   SLACK_BOT_TOKEN: "xoxb-test-token",
   SLACK_APP_TOKEN: "xapp-test-token",
   SLACK_SIGNING_SECRET: "test-signing-secret-with-at-least-32-chars",
-  FCODE_API_URL: "http://localhost:8787",
-  FCODE_API_TIMEOUT: "30000",
+  FRONTAL_CODE_API_URL: "http://localhost:8787",
+  FRONTAL_CODE_API_TIMEOUT: "30000",
   NODE_ENV: "test",
   LOG_LEVEL: "error",
   PORT: "3000",
@@ -18,9 +18,7 @@ const BASE_ENV = {
   SKIP_ENV_VALIDATION: "",
 } as const;
 
-async function importFreshEnvModule(
-  overrides: Record<string, string | undefined> = {}
-) {
+function importFreshEnvModule(overrides: Record<string, string | undefined> = {}) {
   vi.resetModules();
 
   for (const key of Object.keys(BASE_ENV)) {
@@ -59,20 +57,18 @@ describe("Environment Variables", () => {
     });
 
     it("should have Frontal Code API configuration", () => {
-      expect(env.FCODE_API_URL).toBeDefined();
-      expect(env.FCODE_API_URL).toMatch(/^https?:\/\//);
-      expect(env.FCODE_API_TIMEOUT).toBeDefined();
-      expect(env.FCODE_API_TIMEOUT).toBeGreaterThanOrEqual(1000);
-      expect(env.FCODE_API_TIMEOUT).toBeLessThanOrEqual(300000);
+      expect(env.FRONTAL_CODE_API_URL).toBeDefined();
+      expect(env.FRONTAL_CODE_API_URL).toMatch(/^https?:\/\//);
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeDefined();
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeGreaterThanOrEqual(1000);
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeLessThanOrEqual(300000);
     });
 
     it("should have application configuration", () => {
       expect(env.NODE_ENV).toBeDefined();
       expect(["development", "production", "test"]).toContain(env.NODE_ENV);
       expect(env.LOG_LEVEL).toBeDefined();
-      expect(["error", "warn", "info", "http", "debug"]).toContain(
-        env.LOG_LEVEL
-      );
+      expect(["error", "warn", "info", "http", "debug"]).toContain(env.LOG_LEVEL);
       expect(env.PORT).toBeDefined();
       expect(env.PORT).toBeGreaterThanOrEqual(1000);
       expect(env.PORT).toBeLessThanOrEqual(65535);
@@ -84,7 +80,7 @@ describe("Environment Variables", () => {
       const config = getEnvConfig();
 
       expect(config).toHaveProperty("slack");
-      expect(config).toHaveProperty("frontal-code");
+      expect(config).toHaveProperty("frontalCode");
       expect(config).toHaveProperty("app");
       expect(config).toHaveProperty("limits");
 
@@ -112,8 +108,8 @@ describe("Environment Variables", () => {
       expect(config.slack.botToken).toBe(env.SLACK_BOT_TOKEN);
       expect(config.slack.appToken).toBe(env.SLACK_APP_TOKEN);
       expect(config.slack.signingSecret).toBe(env.SLACK_SIGNING_SECRET);
-      expect(config.frontalCode.apiUrl).toBe(env.FCODE_API_URL);
-      expect(config.frontalCode.timeout).toBe(env.FCODE_API_TIMEOUT);
+      expect(config.frontalCode.apiUrl).toBe(env.FRONTAL_CODE_API_URL);
+      expect(config.frontalCode.timeout).toBe(env.FRONTAL_CODE_API_TIMEOUT);
       expect(config.app.nodeEnv).toBe(env.NODE_ENV);
       expect(config.app.logLevel).toBe(env.LOG_LEVEL);
       expect(config.app.port).toBe(env.PORT);
@@ -145,18 +141,17 @@ describe("Environment Variables", () => {
 
   describe("runtime coercion and validation", () => {
     it("coerces numeric runtime env strings into numbers on fresh module load", async () => {
-      const { env: freshEnv, getEnvConfig: loadConfig } =
-        await importFreshEnvModule({
-          FCODE_API_TIMEOUT: "45000",
-          PORT: "4567",
-          MAX_CONCURRENT_TASKS: "7",
-          TASK_TIMEOUT: "120000",
-          HEALTH_CHECK_INTERVAL: "15000",
-        });
+      const { env: freshEnv, getEnvConfig: loadConfig } = await importFreshEnvModule({
+        FRONTAL_CODE_API_TIMEOUT: "45000",
+        PORT: "4567",
+        MAX_CONCURRENT_TASKS: "7",
+        TASK_TIMEOUT: "120000",
+        HEALTH_CHECK_INTERVAL: "15000",
+      });
 
       const config = loadConfig();
 
-      expect(freshEnv.FCODE_API_TIMEOUT).toBe(45000);
+      expect(freshEnv.FRONTAL_CODE_API_TIMEOUT).toBe(45000);
       expect(freshEnv.PORT).toBe(4567);
       expect(freshEnv.MAX_CONCURRENT_TASKS).toBe(7);
       expect(freshEnv.TASK_TIMEOUT).toBe(120000);
@@ -167,8 +162,8 @@ describe("Environment Variables", () => {
 
     it("treats empty strings as undefined and falls back to schema defaults", async () => {
       const { env: freshEnv } = await importFreshEnvModule({
-        FCODE_API_URL: "",
-        FCODE_API_TIMEOUT: "",
+        FRONTAL_CODE_API_URL: "",
+        FRONTAL_CODE_API_TIMEOUT: "",
         LOG_LEVEL: "",
         PORT: "",
         MAX_CONCURRENT_TASKS: "",
@@ -176,8 +171,8 @@ describe("Environment Variables", () => {
         HEALTH_CHECK_INTERVAL: "",
       });
 
-      expect(freshEnv.FCODE_API_URL).toBe("http://frontal-code-api:8787");
-      expect(freshEnv.FCODE_API_TIMEOUT).toBe(30000);
+      expect(freshEnv.FRONTAL_CODE_API_URL).toBe("http://frontal-code-api:8787");
+      expect(freshEnv.FRONTAL_CODE_API_TIMEOUT).toBe(30000);
       expect(freshEnv.LOG_LEVEL).toBe("info");
       expect(freshEnv.PORT).toBe(3000);
       expect(freshEnv.MAX_CONCURRENT_TASKS).toBe(10);
@@ -186,17 +181,15 @@ describe("Environment Variables", () => {
     });
 
     it("throws a validation error for invalid runtime env values", async () => {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
       await expect(
         importFreshEnvModule({
           SLACK_BOT_TOKEN: "invalid-token",
-        })
+        }),
       ).rejects.toThrow("Environment variable validation failed");
 
-      expect(errorSpy).toHaveBeenCalledWith(
-        "Environment variable validation failed:"
-      );
+      expect(errorSpy).toHaveBeenCalledWith("Environment variable validation failed:");
     });
 
     it("throws on client-side access to server env variables", async () => {
@@ -210,17 +203,14 @@ describe("Environment Variables", () => {
         const { env: clientEnv } = await importFreshEnvModule();
 
         expect(() => clientEnv.SLACK_BOT_TOKEN).toThrow(
-          "Attempted to access server-side environment variable 'SLACK_BOT_TOKEN' on the client"
+          "Attempted to access server-side environment variable 'SLACK_BOT_TOKEN' on the client",
         );
       } finally {
-        if (originalWindow === undefined) {
-          delete (globalThis as { window?: unknown }).window;
-        } else {
-          Object.defineProperty(globalThis, "window", {
-            value: originalWindow,
-            configurable: true,
-          });
-        }
+        Object.defineProperty(globalThis, "window", {
+          value: originalWindow,
+          configurable: true,
+          writable: true,
+        });
       }
     });
   });

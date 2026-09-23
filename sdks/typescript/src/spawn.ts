@@ -69,6 +69,8 @@ export async function* streamEvents(
       child.once("close", (code) => resolve(code));
     });
     if (code !== null && code !== 0) {
+      // The generator must surface a non-zero child exit even when iteration ends early.
+      // biome-ignore lint/correctness/noUnsafeFinally: preserve child-process failures
       throw new FrontalCodeCliError(
         `frontal-code exited with code ${code}: ${stderrBuffer.trim()}`,
         code,

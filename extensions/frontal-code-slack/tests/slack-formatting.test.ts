@@ -12,7 +12,7 @@ import type {
 type TestableSlackInterface = SlackInterface & {
   formatFrontalCodeEvent(
     event: FrontalCodeEventEnvelope,
-    task: FrontalCodeTrackedTask
+    task: FrontalCodeTrackedTask,
   ): {
     text: string;
     blocks?: Array<{
@@ -22,33 +22,27 @@ type TestableSlackInterface = SlackInterface & {
     }>;
   } | null;
   parseOrphanPolicyCommand(
-    text: string
+    text: string,
   ): { repository?: string; source?: string; priority?: string } | null;
   buildOrphanPolicyCommandResponse(policy: FrontalCodeOrphanPolicyResponse): {
     response_type: "ephemeral";
     text: string;
     blocks: Array<{ type: string; text?: { text: string } }>;
   };
-  describeOrphanPolicy(
-    policy?: FrontalCodeAppliedOrphanPolicy
-  ): string | undefined;
-  formatOrphanPolicyRuleLines(
-    policy: FrontalCodeOrphanPolicyResponse
-  ): string[];
-  readEventTaskSummary(
-    event: FrontalCodeEventEnvelope
-  ): FrontalCodeEventTaskSummary;
+  describeOrphanPolicy(policy?: FrontalCodeAppliedOrphanPolicy): string | undefined;
+  formatOrphanPolicyRuleLines(policy: FrontalCodeOrphanPolicyResponse): string[];
+  readEventTaskSummary(event: FrontalCodeEventEnvelope): FrontalCodeEventTaskSummary;
   formatLaneStartedEvent(
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): {
     text: string;
   };
   formatLaneFailedEvent(
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): {
     text: string;
   };
@@ -59,18 +53,18 @@ type TestableSlackInterface = SlackInterface & {
       worker_status?: string;
       worker_id?: string;
     },
-    prompt: string
+    prompt: string,
   ): string;
   formatTaskRoutedEvent(
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): {
     text: string;
   };
   formatLaneBlockedEvent(
     taskLabel: string,
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): {
     text: string;
   };
@@ -78,7 +72,7 @@ type TestableSlackInterface = SlackInterface & {
     task: FrontalCodeTrackedTask,
     taskLabel: string,
     event: FrontalCodeEventEnvelope,
-    summary: FrontalCodeEventTaskSummary
+    summary: FrontalCodeEventTaskSummary,
   ): {
     text: string;
     blocks?: Array<{
@@ -89,7 +83,7 @@ type TestableSlackInterface = SlackInterface & {
   };
   buildApprovalProcessingBlocks(
     taskId: string,
-    action: FrontalCodeApprovalAction
+    action: FrontalCodeApprovalAction,
   ): Array<{
     type: string;
     text?: { text: string };
@@ -98,14 +92,14 @@ type TestableSlackInterface = SlackInterface & {
     taskId: string,
     action: string,
     workerStatus?: string,
-    workerId?: string
+    workerId?: string,
   ): Array<{
     type: string;
     text?: { text: string };
   }>;
   buildApprovalErrorBlocks(
     taskId: string,
-    error: Error
+    error: Error,
   ): Array<{
     type: string;
     text?: { text: string };
@@ -113,7 +107,7 @@ type TestableSlackInterface = SlackInterface & {
   }>;
   formatApprovalRequestedEvent(
     event: FrontalCodeEventEnvelope,
-    task: FrontalCodeTrackedTask
+    task: FrontalCodeTrackedTask,
   ): {
     text: string;
     blocks?: Array<{
@@ -133,7 +127,7 @@ describe("SlackInterface formatting helpers", () => {
     const slack = createSlackInterface();
 
     const query = slack.parseOrphanPolicyCommand(
-      "policy orphans repo=frontal-code/slack source=slack priority=high"
+      "policy orphans repo=frontal-code/slack source=slack priority=high",
     );
 
     expect(query).toEqual({
@@ -147,7 +141,7 @@ describe("SlackInterface formatting helpers", () => {
     const slack = createSlackInterface();
 
     const query = slack.parseOrphanPolicyCommand(
-      "policy orphans repo=frontal-code/slack source= priority=high invalid unknown=value"
+      "policy orphans repo=frontal-code/slack source= priority=high invalid unknown=value",
     );
 
     expect(query).toEqual({
@@ -168,7 +162,7 @@ describe("SlackInterface formatting helpers", () => {
     const slack = createSlackInterface();
 
     const query = slack.parseOrphanPolicyCommand(
-      "policy orphans foo=bar repo=frontal-code/slack broken source= priority=high"
+      "policy orphans foo=bar repo=frontal-code/slack broken source= priority=high",
     );
 
     expect(query).toEqual({
@@ -208,9 +202,7 @@ describe("SlackInterface formatting helpers", () => {
 
     expect(response.response_type).toBe("ephemeral");
     expect(response.text).toContain("repo=frontal-code/slack");
-    expect(response.blocks[1]?.text?.text).toContain(
-      "1. repo=frontal-code/slack, source=slack"
-    );
+    expect(response.blocks[1]?.text?.text).toContain("1. repo=frontal-code/slack, source=slack");
   });
 
   it("renders orphan policy previews without selectors or scoped rules", () => {
@@ -227,12 +219,8 @@ describe("SlackInterface formatting helpers", () => {
       configured_rules: [],
     });
 
-    expect(response.text).toContain(
-      "Orphan policy: Policy: default; approval 60s."
-    );
-    expect(response.blocks[1]?.text?.text).toContain(
-      "No scoped rules configured."
-    );
+    expect(response.text).toContain("Orphan policy: Policy: default; approval 60s.");
+    expect(response.blocks[1]?.text?.text).toContain("No scoped rules configured.");
   });
 
   it("renders orphan policy previews when only non-repository selectors are present", () => {
@@ -256,9 +244,7 @@ describe("SlackInterface formatting helpers", () => {
     });
 
     expect(response.text).toContain("preview for source=slack, priority=high");
-    expect(response.blocks[0]?.text?.text).toContain(
-      "Selectors: source=slack, priority=high"
-    );
+    expect(response.blocks[0]?.text?.text).toContain("Selectors: source=slack, priority=high");
   });
 
   it("renders policy unavailable fallbacks when effective and default policies are missing", () => {
@@ -272,18 +258,10 @@ describe("SlackInterface formatting helpers", () => {
       configured_rules: [],
     });
 
-    expect(response.text).toContain(
-      "preview for repo=frontal-code/slack: Policy unavailable."
-    );
-    expect(response.blocks[0]?.text?.text).toContain(
-      "Effective: Policy unavailable."
-    );
-    expect(response.blocks[0]?.text?.text).toContain(
-      "Default: Policy unavailable."
-    );
-    expect(response.blocks[1]?.text?.text).toContain(
-      "No scoped rules configured."
-    );
+    expect(response.text).toContain("preview for repo=frontal-code/slack: Policy unavailable.");
+    expect(response.blocks[0]?.text?.text).toContain("Effective: Policy unavailable.");
+    expect(response.blocks[0]?.text?.text).toContain("Default: Policy unavailable.");
+    expect(response.blocks[1]?.text?.text).toContain("No scoped rules configured.");
   });
 
   it("formats orphan policy text with selectors and optional retry/cancel timing", () => {
@@ -298,9 +276,9 @@ describe("SlackInterface formatting helpers", () => {
         approval_delay_secs: 30,
         auto_retry_after_secs: 90,
         auto_cancel_after_secs: 300,
-      })
+      }),
     ).toBe(
-      "Policy: rule (repo=frontal-code/slack, source=slack, priority=high); approval 30s, auto-retry 90s, auto-cancel 300s."
+      "Policy: rule (repo=frontal-code/slack, source=slack, priority=high); approval 30s, auto-retry 90s, auto-cancel 300s.",
     );
     expect(slack.describeOrphanPolicy()).toBeUndefined();
   });
@@ -429,7 +407,7 @@ describe("SlackInterface formatting helpers", () => {
           worker_id: "worker-123",
         },
       },
-      {}
+      {},
     );
 
     expect(message).toEqual({
@@ -446,8 +424,8 @@ describe("SlackInterface formatting helpers", () => {
           task_id: "task-123",
           worker_status: "ready_for_prompt",
         },
-        "Investigate flaky test"
-      )
+        "Investigate flaky test",
+      ),
     ).toContain("Worker: ready_for_prompt");
   });
 
@@ -467,7 +445,7 @@ describe("SlackInterface formatting helpers", () => {
           plan_kind: "reviewer",
         },
       },
-      {}
+      {},
     );
 
     expect(message).toEqual({
@@ -493,7 +471,7 @@ describe("SlackInterface formatting helpers", () => {
       },
       {
         plan_kind: "implementer",
-      }
+      },
     );
 
     expect(message).toEqual({
@@ -514,7 +492,7 @@ describe("SlackInterface formatting helpers", () => {
         emittedAt: "2026-04-09T10:10:02Z",
         task_id: "task-123",
       },
-      {}
+      {},
     );
 
     expect(message).toEqual({
@@ -540,7 +518,7 @@ describe("SlackInterface formatting helpers", () => {
       },
       {
         error: "summary error",
-      }
+      },
     );
 
     expect(message).toEqual({
@@ -561,7 +539,7 @@ describe("SlackInterface formatting helpers", () => {
         emittedAt: "2026-04-09T10:10:03Z",
         task_id: "task-123",
       },
-      {}
+      {},
     );
 
     expect(message).toEqual({
@@ -627,13 +605,11 @@ describe("SlackInterface formatting helpers", () => {
           worker_id: "worker-123",
         },
       },
-      {}
+      {},
     );
 
     expect(message.text).toBe("Approval resolved for task task-123: updated.");
-    expect(message.blocks?.[0]?.text?.text).toContain(
-      "Worker: ready_for_prompt (worker-123)"
-    );
+    expect(message.blocks?.[0]?.text?.text).toContain("Worker: ready_for_prompt (worker-123)");
   });
 
   it("formats github follow-up resolution separately from orphan approvals", () => {
@@ -657,7 +633,7 @@ describe("SlackInterface formatting helpers", () => {
           action: "cleared",
         },
       },
-      {}
+      {},
     );
 
     expect(message.text).toBe("GitHub follow-up cleared for task task-123.");
@@ -669,9 +645,7 @@ describe("SlackInterface formatting helpers", () => {
 
     const blocks = slack.buildApprovalProcessingBlocks("task-123", "retry");
 
-    expect(blocks[0]?.text?.text).toContain(
-      "Processing approval for task task-123"
-    );
+    expect(blocks[0]?.text?.text).toContain("Processing approval for task task-123");
     expect(blocks[0]?.text?.text).toContain("retry");
   });
 
@@ -682,23 +656,17 @@ describe("SlackInterface formatting helpers", () => {
       "task-123",
       "retry",
       "ready_for_prompt",
-      "worker-123"
+      "worker-123",
     );
 
     expect(blocks[0]?.text?.text).toContain("Action: `retry`");
-    expect(blocks[0]?.text?.text).toContain(
-      "Worker: ready_for_prompt (worker-123)"
-    );
+    expect(blocks[0]?.text?.text).toContain("Worker: ready_for_prompt (worker-123)");
   });
 
   it("builds approval resolved blocks with only worker status", () => {
     const slack = createSlackInterface();
 
-    const blocks = slack.buildApprovalResolvedBlocks(
-      "task-123",
-      "cancel",
-      "cancelled"
-    );
+    const blocks = slack.buildApprovalResolvedBlocks("task-123", "cancel", "cancelled");
 
     expect(blocks[0]?.text?.text).toContain("Action: `cancel`");
     expect(blocks[0]?.text?.text).toContain("Worker: cancelled");
@@ -707,10 +675,7 @@ describe("SlackInterface formatting helpers", () => {
   it("builds approval resolved blocks without worker details", () => {
     const slack = createSlackInterface();
 
-    const blocks = slack.buildApprovalResolvedBlocks(
-      "task-123",
-      "already_resolved"
-    );
+    const blocks = slack.buildApprovalResolvedBlocks("task-123", "already_resolved");
 
     expect(blocks[0]?.text?.text).toContain("Action: `already_resolved`");
     expect(blocks[0]?.text?.text).not.toContain("Worker:");
@@ -719,10 +684,7 @@ describe("SlackInterface formatting helpers", () => {
   it("builds approval error blocks with retry and cancel actions", () => {
     const slack = createSlackInterface();
 
-    const blocks = slack.buildApprovalErrorBlocks(
-      "task-123",
-      new Error("provider failed")
-    );
+    const blocks = slack.buildApprovalErrorBlocks("task-123", new Error("provider failed"));
     const actions = blocks.find((block) => block.type === "actions");
 
     expect(blocks[0]?.text?.text).toContain("provider failed");
@@ -769,10 +731,7 @@ describe("SlackInterface formatting helpers", () => {
       "orphaned_hosted_agent.retry",
       "orphaned_hosted_agent.cancel",
     ]);
-    expect(actions?.elements?.map((element) => element.value)).toEqual([
-      "task-123",
-      "task-123",
-    ]);
+    expect(actions?.elements?.map((element) => element.value)).toEqual(["task-123", "task-123"]);
   });
 
   it("formats non-orphan approval requests as a simple waiting message", () => {
@@ -798,7 +757,7 @@ describe("SlackInterface formatting helpers", () => {
           repository: "frontal-code/slack",
         },
       },
-      task
+      task,
     );
 
     expect(message).toEqual({
@@ -829,21 +788,18 @@ describe("SlackInterface formatting helpers", () => {
           repository: "frontal-code/slack",
         },
       },
-      task
+      task,
     );
 
     expect(message.text).toBe(
-      "Task task-123 (frontal-code/slack) needs follow-up: GitHub review requested changes."
+      "Task task-123 (frontal-code/slack) needs follow-up: GitHub review requested changes.",
     );
     const actions = message.blocks?.find((block) => block.type === "actions");
     expect(actions?.elements?.map((element) => element.action_id)).toEqual([
       "github_review_followup.ack",
       "github_review_followup.retry",
     ]);
-    expect(actions?.elements?.map((element) => element.value)).toEqual([
-      "task-123",
-      "task-123",
-    ]);
+    expect(actions?.elements?.map((element) => element.value)).toEqual(["task-123", "task-123"]);
   });
 
   it("formats blocked lane events with orphan policy detail in the message text", () => {
@@ -875,14 +831,14 @@ describe("SlackInterface formatting helpers", () => {
           },
         },
       },
-      task
+      task,
     );
 
     expect(message?.text).toContain(
-      "Task task-123 (frontal-code/slack) is blocked: executor heartbeat expired"
+      "Task task-123 (frontal-code/slack) is blocked: executor heartbeat expired",
     );
     expect(message?.text).toContain(
-      "Policy: rule (repo=frontal-code/slack); approval 60s, auto-cancel 300s."
+      "Policy: rule (repo=frontal-code/slack); approval 60s, auto-cancel 300s.",
     );
   });
 
@@ -914,7 +870,7 @@ describe("SlackInterface formatting helpers", () => {
           },
         },
       },
-      task
+      task,
     );
 
     expect(message).toEqual({
@@ -943,7 +899,7 @@ describe("SlackInterface formatting helpers", () => {
           channel_id: "C123",
         },
       },
-      task
+      task,
     );
 
     expect(message).toEqual({
@@ -970,8 +926,8 @@ describe("SlackInterface formatting helpers", () => {
           emittedAt: "2026-04-09T10:00:09Z",
           task_id: "task-123",
         },
-        task
-      )
+        task,
+      ),
     ).toBeNull();
 
     expect(
@@ -988,8 +944,8 @@ describe("SlackInterface formatting helpers", () => {
             type: "reaction_added",
           },
         },
-        task
-      )
+        task,
+      ),
     ).toBeNull();
   });
 
@@ -1020,7 +976,7 @@ describe("SlackInterface formatting helpers", () => {
           },
         },
       },
-      task
+      task,
     );
 
     expect(prUpdate).toEqual({
@@ -1046,7 +1002,7 @@ describe("SlackInterface formatting helpers", () => {
           },
         },
       },
-      task
+      task,
     );
 
     expect(merged).toEqual({
@@ -1072,7 +1028,7 @@ describe("SlackInterface formatting helpers", () => {
           },
         },
       },
-      task
+      task,
     );
 
     expect(review).toEqual({
@@ -1097,7 +1053,7 @@ describe("SlackInterface formatting helpers", () => {
           },
         },
       },
-      task
+      task,
     );
 
     expect(comment).toEqual({
@@ -1126,7 +1082,7 @@ describe("SlackInterface formatting helpers", () => {
           repository: "frontal-code/slack",
         },
       },
-      task
+      task,
     );
 
     expect(message).toEqual({
@@ -1152,9 +1108,7 @@ describe("SlackInterface formatting helpers", () => {
       ],
     });
 
-    expect(response.blocks[1]?.text?.text).toContain(
-      "1. source=slack -> inherit defaults"
-    );
+    expect(response.blocks[1]?.text?.text).toContain("1. source=slack -> inherit defaults");
   });
 
   it("falls back to the default lane failure message when no error details are present", () => {
@@ -1178,7 +1132,7 @@ describe("SlackInterface formatting helpers", () => {
           channel_id: "C123",
         },
       },
-      task
+      task,
     );
 
     expect(message).toEqual({
@@ -1211,7 +1165,7 @@ describe("SlackInterface formatting helpers", () => {
           worker_id: "worker-123",
         },
       },
-      task
+      task,
     );
 
     expect(message).toEqual({
@@ -1240,7 +1194,7 @@ describe("SlackInterface formatting helpers", () => {
           channel_id: "C123",
         },
       },
-      task
+      task,
     );
 
     expect(message).toEqual({
@@ -1262,7 +1216,7 @@ describe("SlackInterface formatting helpers", () => {
       {
         taskId: "task-123",
         channelId: "C123",
-      }
+      },
     );
 
     const invalidStatusMessage = slack.formatFrontalCodeEvent(
@@ -1281,7 +1235,7 @@ describe("SlackInterface formatting helpers", () => {
       {
         taskId: "task-123",
         channelId: "C123",
-      }
+      },
     );
 
     expect(noPayloadMessage).toEqual({

@@ -55,8 +55,8 @@ SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_SIGNING_SECRET=your-signing-secret
 
 # Frontal Code server
-FCODE_API_URL=http://127.0.0.1:8788
-FCODE_API_TIMEOUT=30000
+FRONTAL_CODE_API_URL=http://127.0.0.1:8788
+FRONTAL_CODE_API_TIMEOUT=30000
 
 # App
 NODE_ENV=development

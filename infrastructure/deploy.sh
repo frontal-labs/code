@@ -113,7 +113,7 @@ verify_deployment() {
     
     # Get outputs
     TOOLS_URL=$(terraform output -raw tools_domain_url)
-    FCODE_URL=$(terraform output -raw frontal-code_tools_url)
+    FRONTAL_CODE_URL=$(terraform output -raw frontal-code_tools_url)
     NLB_DNS=$(terraform output -raw nginx_ingress_load_balancer)
     
     log_info "Waiting for DNS propagation..."
@@ -151,10 +151,10 @@ show_results() {
     cd "$TERRAFORM_DIR"
     
     TOOLS_URL=$(terraform output -raw tools_domain_url)
-    FCODE_URL=$(terraform output -raw frontal-code_tools_url)
+    FRONTAL_CODE_URL=$(terraform output -raw frontal-code_tools_url)
     NLB_DNS=$(terraform output -raw nginx_ingress_load_balancer)
-    FCODE_SERVER_DEPLOYMENT=$(terraform output -raw frontal-code_server_deployment)
-    FCODE_SLACK_DEPLOYMENT=$(terraform output -raw frontal-code_slack_deployment)
+    FRONTAL_CODE_SERVER_DEPLOYMENT=$(terraform output -raw frontal-code_server_deployment)
+    FRONTAL_CODE_SLACK_DEPLOYMENT=$(terraform output -raw frontal-code_slack_deployment)
     ENVIRONMENT_INFO=$(terraform output -json environment_info)
     
     echo
@@ -166,12 +166,12 @@ show_results() {
     echo
     echo "URLs:"
     echo "  Tools Landing Page: $TOOLS_URL"
-    echo "  Frontal Code API Endpoint: $FCODE_URL"
+    echo "  Frontal Code API Endpoint: $FRONTAL_CODE_URL"
     echo "  NLB DNS Name: $NLB_DNS"
     echo
     echo "Deployments:"
-    echo "  Frontal Code Server: $FCODE_SERVER_DEPLOYMENT"
-    echo "  Frontal Code Slack: $FCODE_SLACK_DEPLOYMENT"
+    echo "  Frontal Code Server: $FRONTAL_CODE_SERVER_DEPLOYMENT"
+    echo "  Frontal Code Slack: $FRONTAL_CODE_SLACK_DEPLOYMENT"
     echo
     
     # Show storage info if frontal-code-server is deployed
@@ -195,13 +195,13 @@ show_results() {
     fi
     
     echo "Environment variables for Frontal Code CLI:"
-    echo "export FRONTAL_BASE_URL=\"$FCODE_URL\""
-    echo "export FCODE_HOSTED_CALLBACK_URL=\"$FCODE_URL/webhooks/tasks\""
+    echo "export FRONTAL_BASE_URL=\"$FRONTAL_CODE_URL\""
+    echo "export FRONTAL_CODE_HOSTED_CALLBACK_URL=\"$FRONTAL_CODE_URL/webhooks/tasks\""
     echo
     echo "Next steps:"
     echo "1. Update your Frontal Code CLI configuration with the URLs above"
     echo "2. Test the deployment by visiting: $TOOLS_URL"
-    echo "3. Check the Frontal Code API health: $FCODE_URL/health"
+    echo "3. Check the Frontal Code API health: $FRONTAL_CODE_URL/health"
     echo "4. Verify Slack integration is working (if deployed)"
     echo "5. Check Kubernetes resources:"
     echo "   kubectl get pods -n $(echo "$ENVIRONMENT_INFO" | jq -r '.namespace')"

@@ -7,7 +7,7 @@ use crate::json::JsonValue;
 use crate::sandbox::{FilesystemIsolationMode, SandboxConfig};
 
 /// Schema name advertised by generated settings files.
-pub const FCODE_SETTINGS_SCHEMA_NAME: &str = "SettingsSchema";
+pub const FRONTAL_CODE_SETTINGS_SCHEMA_NAME: &str = "SettingsSchema";
 
 /// Origin of a loaded settings file in the configuration precedence chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -508,7 +508,7 @@ impl RuntimeTelemetryConfig {
 #[must_use]
 /// Returns the default per-user config directory used by the runtime.
 pub fn default_config_home() -> PathBuf {
-    std::env::var_os("FCODE_CONFIG_HOME")
+    std::env::var_os("FRONTAL_CODE_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".frontal-code")))
         .unwrap_or_else(|| PathBuf::from(".frontal-code"))
@@ -747,7 +747,11 @@ fn parse_optional_plugin_config(root: &JsonValue) -> Result<RuntimePluginConfig,
     let plugins = expect_object(plugins_value, "merged settings.plugins")?;
 
     if let Some(enabled_value) = plugins.get("enabled") {
-        config.enabled_plugins = parse_bool_map(enabled_value, "merged settings.plugins.enabled")?;
+        if enabled_value.as_bool().is_some() {
+        } else {
+            config.enabled_plugins =
+                parse_bool_map(enabled_value, "merged settings.plugins.enabled")?;
+        }
     }
     config.external_directories =
         optional_string_array(plugins, "externalDirectories", "merged settings.plugins")?
@@ -1147,7 +1151,7 @@ mod tests {
     use super::{
         deep_merge_objects, parse_permission_mode_label, ConfigLoader, ConfigSource,
         McpServerConfig, McpTransport, ResolvedPermissionMode, RuntimeHookConfig,
-        RuntimePluginConfig, FCODE_SETTINGS_SCHEMA_NAME,
+        RuntimePluginConfig, FRONTAL_CODE_SETTINGS_SCHEMA_NAME,
     };
     use crate::json::JsonValue;
     use crate::sandbox::FilesystemIsolationMode;
@@ -1189,6 +1193,76 @@ mod tests {
     }
 
     #[test]
+    fn accepts_boolean_plugin_enabled_setting() {
+        let root = temp_dir();
+        let cwd = root.join("project");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
+        fs::create_dir_all(&home).expect("home config dir");
+
+        fs::write(
+            home.join("settings.json"),
+            r#"{
+              "plugins": {
+                "enabled": true,
+                "externalDirectories": ["./external-plugins"]
+              }
+            }"#,
+        )
+        .expect("write plugin settings with boolean enabled");
+
+        let loaded = ConfigLoader::new(&cwd, &home)
+            .load()
+            .expect("config should load");
+
+        assert_eq!(loaded.plugins().enabled_plugins().len(), 0);
+        assert_eq!(
+            loaded.plugins().external_directories(),
+            &["./external-plugins".to_string()]
+        );
+
+        fs::remove_dir_all(root).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn boolean_plugin_enabled_does_not_override_enabled_plugins_map() {
+        let root = temp_dir();
+        let cwd = root.join("project");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
+        fs::create_dir_all(&home).expect("home config dir");
+
+        fs::write(
+            home.join("settings.json"),
+            r#"{
+              "enabledPlugins": {
+                "core@builtin": true
+              },
+              "plugins": {
+                "enabled": false,
+                "externalDirectories": ["./external-plugins"]
+              }
+            }"#,
+        )
+        .expect("write plugin settings with boolean enabled and enabledPlugins map");
+
+        let loaded = ConfigLoader::new(&cwd, &home)
+            .load()
+            .expect("config should load");
+
+        assert_eq!(
+            loaded.plugins().enabled_plugins().get("core@builtin"),
+            Some(&true)
+        );
+        assert_eq!(
+            loaded.plugins().external_directories(),
+            &["./external-plugins".to_string()]
+        );
+
+        fs::remove_dir_all(root).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn loads_and_merges_claude_code_config_files_by_precedence() {
         let root = temp_dir();
         let cwd = root.join("project");
@@ -1216,7 +1290,7 @@ mod tests {
             .load()
             .expect("config should load");
 
-        assert_eq!(FCODE_SETTINGS_SCHEMA_NAME, "SettingsSchema");
+        assert_eq!(FRONTAL_CODE_SETTINGS_SCHEMA_NAME, "SettingsSchema");
         assert_eq!(loaded.loaded_entries().len(), 3);
         assert_eq!(loaded.loaded_entries()[0].source, ConfigSource::User);
         assert_eq!(

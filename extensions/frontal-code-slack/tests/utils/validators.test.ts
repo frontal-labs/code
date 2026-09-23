@@ -15,10 +15,7 @@ import {
   validateTaskCreationRequest,
   validateUserPreferences,
 } from "@/utils/validators";
-import {
-  createMockSlackCommand,
-  createMockTaskCreationRequest,
-} from "../setup";
+import { createMockSlackCommand, createMockTaskCreationRequest } from "../setup";
 
 describe("Validators", () => {
   describe("validateSlackCommand", () => {
@@ -235,12 +232,7 @@ describe("Validators", () => {
     });
 
     it("should reject invalid branch names", () => {
-      const invalidNames = [
-        "branch with spaces",
-        "branch@with$symbols",
-        "branch#with#hash",
-        "",
-      ];
+      const invalidNames = ["branch with spaces", "branch@with$symbols", "branch#with#hash", ""];
 
       invalidNames.forEach((name) => {
         const result = validateBranchName(name);
@@ -390,10 +382,7 @@ describe("Validators", () => {
 
     describe("isValidSlackAppToken", () => {
       it("should validate valid Slack app tokens", () => {
-        const validTokens = [
-          "xapp-1-1234567890-ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-          "xapp-A-1-A",
-        ];
+        const validTokens = ["xapp-1-1234567890-ABCDEFGHIJKLMNOPQRSTUVWXYZ", "xapp-A-1-A"];
 
         validTokens.forEach((token) => {
           expect(isValidSlackAppToken(token)).toBe(true);
@@ -417,11 +406,7 @@ describe("Validators", () => {
 
     describe("isValidSlackSigningSecret", () => {
       it("should validate valid signing secrets", () => {
-        const validSecrets = [
-          "a".repeat(32),
-          "a".repeat(64),
-          "abcdefghijklmnopqrstuvwxyz123456",
-        ];
+        const validSecrets = ["a".repeat(32), "a".repeat(64), "abcdefghijklmnopqrstuvwxyz123456"];
 
         validSecrets.forEach((secret) => {
           expect(isValidSlackSigningSecret(secret)).toBe(true);

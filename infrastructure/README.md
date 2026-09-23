@@ -15,7 +15,7 @@ The configuration is split into:
 ## Assumptions
 
 - The current production surface is `frontal-code-server` on port `8788`.
-- The Slack connector talks to the server via `FCODE_API_URL`.
+- The Slack connector talks to the server via `FRONTAL_CODE_API_URL`.
 - Slack runs in Socket Mode, so it does not require public inbound traffic from Slack.
 - Hosted-agent state should survive restarts.
 - Code and repository changes, when performed by hosted agents, happen relative to the server container working directory. This stack mounts a writable shared workspace at `/workspace` for that purpose.
@@ -39,7 +39,7 @@ The configuration is split into:
 
 1. Copy `compose/.env.example` to `compose/.env`.
 2. Fill in Slack credentials and at least one provider key.
-3. (Optional) To enable Linear/Graphite tracking: set `FCODE_LINEAR_API_TOKEN` / `FCODE_GRAPHITE_API_TOKEN` and, if you enforce webhook signatures, `FCODE_LINEAR_WEBHOOK_SECRET` / `FCODE_GRAPHITE_WEBHOOK_SECRET`.
+3. (Optional) To enable Linear/Graphite tracking: set `FRONTAL_CODE_LINEAR_API_TOKEN` / `FRONTAL_CODE_GRAPHITE_API_TOKEN` and, if you enforce webhook signatures, `FRONTAL_CODE_LINEAR_WEBHOOK_SECRET` / `FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET`.
 4. Set `FRONTAL_SERVER_API_KEY` in `compose/.env`, and set the same shared secret as `FRONTAL_SERVER_API_KEY`
    for any connector calling the hosted control plane.
 5. Start the stack:
@@ -49,14 +49,14 @@ docker compose --env-file infrastructure/compose/.env -f infrastructure/compose/
 ```
 
 By default the main API is published on `http://127.0.0.1:8788`. Override
-`FCODE_SERVER_PUBLISH_ADDR` in `compose/.env` only when you intentionally need a wider bind.
+`FRONTAL_CODE_SERVER_PUBLISH_ADDR` in `compose/.env` only when you intentionally need a wider bind.
 
 ### Local Docker Worker Mode
 
 To run hosted tasks inside sibling Docker worker containers:
 
-1. Set `FCODE_SERVER_LANE_TRANSPORT=local-docker` in `compose/.env`.
-2. If worker callbacks must reach the published port, set `FCODE_SERVER_PUBLISH_ADDR=0.0.0.0`
+1. Set `FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker` in `compose/.env`.
+2. If worker callbacks must reach the published port, set `FRONTAL_CODE_SERVER_PUBLISH_ADDR=0.0.0.0`
    in `compose/.env`.
 3. Build the worker image:
 
@@ -76,9 +76,9 @@ docker compose --env-file infrastructure/compose/.env \
 In this mode:
 
 - `frontal-code-server` uses `/var/run/docker.sock` to launch worker containers
-- workers default to `FCODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
-- workers call back to the server through `FCODE_SERVER_CALLBACK_URL`
-- per-task repo checkouts live under `FCODE_SERVER_WORKSPACE_ROOT`
+- workers default to `FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
+- workers call back to the server through `FRONTAL_CODE_SERVER_CALLBACK_URL`
+- per-task repo checkouts live under `FRONTAL_CODE_SERVER_WORKSPACE_ROOT`
 
 ## Kubernetes
 

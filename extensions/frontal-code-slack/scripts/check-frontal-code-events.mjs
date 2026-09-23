@@ -5,29 +5,18 @@ import { join, resolve } from "node:path";
 
 const extensionRoot = resolve(import.meta.dirname, "..");
 const workspaceRoot = resolve(extensionRoot, "..", "..");
-const generatedFile = resolve(
-  extensionRoot,
-  "src/generated/frontal-code-events.ts"
-);
+const generatedFile = resolve(extensionRoot, "src/generated/frontal-code-events.ts");
 const tempDir = mkdtempSync(join(tmpdir(), "frontal-code-events-check-"));
 const tempFile = join(tempDir, "frontal-code-events.ts");
 
 try {
   execFileSync(
     "cargo",
-    [
-      "run",
-      "-p",
-      "frontal-code-events",
-      "--bin",
-      "export-typescript",
-      "--",
-      tempFile,
-    ],
+    ["run", "-p", "frontal-code-events", "--bin", "export-typescript", "--", tempFile],
     {
       cwd: workspaceRoot,
       stdio: "pipe",
-    }
+    },
   );
 
   const expected = readFileSync(tempFile, "utf8");
@@ -38,7 +27,7 @@ try {
         "Generated Frontal Code event bindings are stale.",
         "Run `npm run sync:frontal-code-events` in extensions/frontal-code-slack and commit the updated file.",
         "",
-      ].join("\n")
+      ].join("\n"),
     );
     process.exit(1);
   }

@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { MockWebSocket, wsInstances } = vi.hoisted(() => {
-  const wsInstances: Array<InstanceType<typeof MockWebSocket>> = [];
+  const wsInstances: InstanceType<typeof MockWebSocket>[] = [];
 
   class MockWebSocket {
     static OPEN = 1;
 
     public readonly url: string;
     public readyState = 0;
-    private readonly handlers = new Map<
-      string,
-      Array<(...args: unknown[]) => void>
-    >();
+    private readonly handlers = new Map<string, Array<(...args: unknown[]) => void>>();
 
     constructor(url: string) {
       this.url = url;
@@ -50,7 +47,7 @@ vi.mock("../src/config", () => ({
       logLevel: "error",
       port: 3000,
     },
-    frontal_code: {
+    frontalCode: {
       apiUrl: "https://frontal-code.example.com/",
       timeout: 30_000,
     },
@@ -73,12 +70,9 @@ describe("Legacy FrontalCodeEventsClient", () => {
   });
 
   it("builds a websocket URL from the hosted API URL", () => {
-    const client =
-      new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
+    const client = new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
 
-    expect(client.buildWsUrl()).toBe(
-      "wss://frontal-code.example.com/v1/events/ws"
-    );
+    expect(client.buildWsUrl()).toBe("wss://frontal-code.example.com/v1/events/ws");
   });
 
   it("builds a ws URL from a non-secure hosted API URL", async () => {
@@ -90,21 +84,19 @@ describe("Legacy FrontalCodeEventsClient", () => {
           logLevel: "error",
           port: 3000,
         },
-        frontal_code: {
+        frontalCode: {
           apiUrl: "http://frontal-code.example.com/",
           timeout: 30_000,
         },
       },
     }));
 
-    const { FrontalCodeEventsClient: HttpFrontalCodeEventsClient } =
-      await import("../src/events-client");
-    const client =
-      new HttpFrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
-
-    expect(client.buildWsUrl()).toBe(
-      "ws://frontal-code.example.com/v1/events/ws"
+    const { FrontalCodeEventsClient: HttpFrontalCodeEventsClient } = await import(
+      "../src/events-client"
     );
+    const client = new HttpFrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
+
+    expect(client.buildWsUrl()).toBe("ws://frontal-code.example.com/v1/events/ws");
 
     vi.doMock("../src/config", () => ({
       config: {
@@ -113,7 +105,7 @@ describe("Legacy FrontalCodeEventsClient", () => {
           logLevel: "error",
           port: 3000,
         },
-        frontal_code: {
+        frontalCode: {
           apiUrl: "https://frontal-code.example.com/",
           timeout: 30_000,
         },
@@ -122,17 +114,14 @@ describe("Legacy FrontalCodeEventsClient", () => {
   });
 
   it("builds a ws URL from an http API base by mutating the shared config object", () => {
-    const client =
-      new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
+    const client = new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
     const originalUrl = config.frontalCode.apiUrl;
-    config.frontal-code.apiUrl = "http://frontal-code.example.com/";
+    config.frontalCode.apiUrl = "http://frontal-code.example.com/";
 
     try {
-      expect(client.buildWsUrl()).toBe(
-        "ws://frontal-code.example.com/v1/events/ws"
-      );
+      expect(client.buildWsUrl()).toBe("ws://frontal-code.example.com/v1/events/ws");
     } finally {
-      config.frontal-code.apiUrl = originalUrl;
+      config.frontalCode.apiUrl = originalUrl;
     }
   });
 
@@ -145,7 +134,7 @@ describe("Legacy FrontalCodeEventsClient", () => {
           logLevel: "error",
           port: 3000,
         },
-        frontal_code: {
+        frontalCode: {
           apiUrl: "ws://frontal-code.example.com/",
           timeout: 30_000,
         },
@@ -155,12 +144,9 @@ describe("Legacy FrontalCodeEventsClient", () => {
     const { FrontalCodeEventsClient: WsFrontalCodeEventsClient } = await import(
       "../src/events-client"
     );
-    const client =
-      new WsFrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
+    const client = new WsFrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
 
-    expect(client.buildWsUrl()).toBe(
-      "ws://frontal-code.example.com/v1/events/ws"
-    );
+    expect(client.buildWsUrl()).toBe("ws://frontal-code.example.com/v1/events/ws");
 
     vi.doMock("../src/config", () => ({
       config: {
@@ -169,7 +155,7 @@ describe("Legacy FrontalCodeEventsClient", () => {
           logLevel: "error",
           port: 3000,
         },
-        frontal_code: {
+        frontalCode: {
           apiUrl: "https://frontal-code.example.com/",
           timeout: 30_000,
         },
@@ -180,7 +166,7 @@ describe("Legacy FrontalCodeEventsClient", () => {
   it("dispatches parsed event payloads to registered handlers", () => {
     const client = new FrontalCodeEventsClient();
     const handler = vi.fn();
-    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
     client.onEvent(handler);
     client.connect();
 
@@ -196,26 +182,23 @@ describe("Legacy FrontalCodeEventsClient", () => {
           status: "running",
           emittedAt: "2026-04-09T10:00:00Z",
           task_id: "task-123",
-        })
-      )
+        }),
+      ),
     );
 
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({
         event: "lane.started",
         task_id: "task-123",
-      })
+      }),
     );
-    expect(infoSpy).toHaveBeenCalledWith(
-      "Connected to Frontal Code event stream",
-      {
-        url: "wss://frontal-code.example.com/v1/events/ws",
-      }
-    );
+    expect(infoSpy).toHaveBeenCalledWith("Connected to Frontal Code event stream", {
+      url: "wss://frontal-code.example.com/v1/events/ws",
+    });
   });
 
   it("logs malformed event payloads without dispatching handlers", () => {
-    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
     const client = new FrontalCodeEventsClient();
     const handler = vi.fn();
     client.onEvent(handler);
@@ -225,15 +208,11 @@ describe("Legacy FrontalCodeEventsClient", () => {
     socket.emit("message", Buffer.from("not-json"));
 
     expect(handler).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledWith(
-      "Failed to parse Frontal Code event",
-      expect.any(Error)
-    );
+    expect(errorSpy).toHaveBeenCalledWith("Failed to parse Frontal Code event", expect.any(Error));
   });
 
   it("does not reconnect when an open socket already exists", () => {
-    const client =
-      new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
+    const client = new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
     client.ws = {
       readyState: MockWebSocket.OPEN,
       close: vi.fn(),
@@ -273,8 +252,7 @@ describe("Legacy FrontalCodeEventsClient", () => {
 
   it("cancels a pending reconnect when the client is closed", () => {
     vi.useFakeTimers();
-    const client =
-      new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
+    const client = new FrontalCodeEventsClient() as TestableLegacyFrontalCodeEventsClient;
     client.connect();
 
     const firstSocket = wsInstances[0];

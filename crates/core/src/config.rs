@@ -227,16 +227,16 @@ impl ProjectConfig {
 
     /// Get the default configuration file path
     pub fn get_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-        // Check for FCODE_CONFIG_HOME environment variable first
-        if let Ok(config_home) = env::var("FCODE_CONFIG_HOME") {
+        // Check for FRONTAL_CODE_CONFIG_HOME environment variable first
+        if let Ok(config_home) = env::var("FRONTAL_CODE_CONFIG_HOME") {
             let config_path = PathBuf::from(config_home).join("project.json");
             if config_path.exists() {
                 return Ok(config_path);
             }
         }
 
-        // Check for FCODE_HOME environment variable
-        if let Ok(frontal_code_home) = env::var("FCODE_HOME") {
+        // Check for FRONTAL_CODE_HOME environment variable
+        if let Ok(frontal_code_home) = env::var("FRONTAL_CODE_HOME") {
             let config_path = PathBuf::from(frontal_code_home).join("project.json");
             if config_path.exists() {
                 return Ok(config_path);

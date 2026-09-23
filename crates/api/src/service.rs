@@ -48,23 +48,23 @@ impl ApiServiceConfig {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut config = Self::default();
 
-        if let Ok(host) = env::var("FCODE_API_HOST") {
+        if let Ok(host) = env::var("FRONTAL_CODE_API_HOST") {
             let ip: IpAddr = host.parse()?;
             config.bind_addr = SocketAddr::new(ip, config.bind_addr.port());
         }
 
-        if let Ok(port) = env::var("FCODE_API_PORT") {
+        if let Ok(port) = env::var("FRONTAL_CODE_API_PORT") {
             let parsed: u16 = port.parse()?;
             config.bind_addr = SocketAddr::new(config.bind_addr.ip(), parsed);
         }
 
-        if let Ok(bin) = env::var("FCODE_CLI_BIN") {
+        if let Ok(bin) = env::var("FRONTAL_CODE_CLI_BIN") {
             if !bin.trim().is_empty() {
                 config.cli_bin = Some(PathBuf::from(bin));
             }
         }
 
-        if let Ok(workdir) = env::var("FCODE_API_WORKDIR") {
+        if let Ok(workdir) = env::var("FRONTAL_CODE_API_WORKDIR") {
             if !workdir.trim().is_empty() {
                 config.working_dir = Some(PathBuf::from(workdir));
             }
@@ -74,7 +74,7 @@ impl ApiServiceConfig {
                 config.api_key = Some(api_key);
             }
         }
-        if let Ok(allowed) = env::var("FCODE_API_ALLOWED_COMMANDS") {
+        if let Ok(allowed) = env::var("FRONTAL_CODE_API_ALLOWED_COMMANDS") {
             let parsed = allowed
                 .split(',')
                 .map(str::trim)
@@ -85,14 +85,14 @@ impl ApiServiceConfig {
                 config.allowed_commands = Some(parsed);
             }
         }
-        if let Ok(timeout_ms) = env::var("FCODE_API_COMMAND_TIMEOUT_MS") {
+        if let Ok(timeout_ms) = env::var("FRONTAL_CODE_API_COMMAND_TIMEOUT_MS") {
             let parsed: u64 = timeout_ms.parse()?;
             config.command_timeout_ms = parsed;
         }
-        if let Ok(value) = env::var("FCODE_API_ALLOW_INSECURE_BIND") {
+        if let Ok(value) = env::var("FRONTAL_CODE_API_ALLOW_INSECURE_BIND") {
             config.allow_insecure_bind = parse_bool_env(&value);
         }
-        if let Ok(value) = env::var("FCODE_API_ALLOW_DANGEROUS_PERMISSIONS") {
+        if let Ok(value) = env::var("FRONTAL_CODE_API_ALLOW_DANGEROUS_PERMISSIONS") {
             config.allow_dangerous_permissions = parse_bool_env(&value);
         }
 
@@ -449,7 +449,7 @@ fn resolve_cli_bin(configured: Option<PathBuf>) -> PathBuf {
         return path;
     }
 
-    if let Ok(path) = env::var("FCODE_CLI_BIN") {
+    if let Ok(path) = env::var("FRONTAL_CODE_CLI_BIN") {
         if !path.trim().is_empty() {
             return PathBuf::from(path);
         }

@@ -12,16 +12,26 @@ if [[ -n "${TEST_TMPDIR:-}" ]]; then
   WORKSPACE_DIR="$TEST_TMPDIR/cargo-workspace"
   rm -rf "$WORKSPACE_DIR"
   mkdir -p "$WORKSPACE_DIR"
+  SOURCE_ROOT="$REPO_ROOT"
+  if [[ ! -f "$SOURCE_ROOT/Cargo.toml" ]]; then
+    LOCKFILE="$(find "$REPO_ROOT" -type f -name Cargo.lock -print -quit)"
+    if [[ -n "$LOCKFILE" ]]; then
+      SOURCE_ROOT="$(dirname "$LOCKFILE")"
+    elif [[ -d "$REPO_ROOT/cargo_workspace" ]]; then
+      SOURCE_ROOT="$REPO_ROOT/cargo_workspace"
+    fi
+  fi
   (
-    cd "$REPO_ROOT"
-    find . -type f \
+    cd "$SOURCE_ROOT"
+    find . \( -type f -o -type l \) \
       ! -path "./bazel-*" \
       ! -path "./target/*" \
       ! -path "*/node_modules/*" \
       ! -path "*/dist/*" \
       ! -path "*/coverage/*" \
       ! -path "*/.git/*" \
-      -print0 | while IFS= read -r -d '' f; do
+    -print0 | while IFS= read -r -d '' f; do
+      [[ -f "$f" ]] || continue
       rel="${f#./}"
       mkdir -p "$WORKSPACE_DIR/$(dirname "$rel")"
       cp -L "$f" "$WORKSPACE_DIR/$rel"
@@ -41,10 +51,10 @@ ACTION="${2:-test}"
 shift 2
 
 case "$ACTION" in
-  test) cargo test --offline -p "$CRATE" "$@" ;;
+  test) cargo test -p "$CRATE" "$@" ;;
   fmt-check) cargo fmt -p "$CRATE" -- --check ;;
-  clippy) cargo clippy --offline -p "$CRATE" --all-targets -- -D warnings ;;
-  run) cargo run --offline -q -p "$CRATE" -- "$@" ;;
-  build) cargo build --offline -p "$CRATE" "$@" ;;
+  clippy) cargo clippy -p "$CRATE" --all-targets -- -D warnings ;;
+  run) cargo run -q -p "$CRATE" "$@" ;;
+  build) cargo build -p "$CRATE" "$@" ;;
   *) echo "unknown action: $ACTION" >&2; exit 2 ;;
 esac

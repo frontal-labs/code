@@ -54,7 +54,7 @@ describe("Slack Workflow Integration Tests", () => {
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
       const createHandler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/frontal-code-create"
+        ([cmd]) => cmd === "/frontal-code-create",
       )?.[1];
 
       // Execute the command
@@ -108,7 +108,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Get the status command handler
       const statusHandler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/frontal-code-status"
+        ([cmd]) => cmd === "/frontal-code-status",
       )?.[1];
 
       // Execute the status command
@@ -155,7 +155,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Get the cancel command handler
       const cancelHandler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/frontal-code-cancel"
+        ([cmd]) => cmd === "/frontal-code-cancel",
       )?.[1];
 
       // Execute the cancel command
@@ -195,7 +195,7 @@ describe("Slack Workflow Integration Tests", () => {
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/frontal-code-create"
+        ([cmd]) => cmd === "/frontal-code-create",
       )?.[1];
 
       // Execute the invalid command
@@ -233,14 +233,12 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Mock service error
       const { mockTaskManager } = await import("../setup");
-      mockTaskManager.createTask.mockRejectedValue(
-        new Error("Service unavailable")
-      );
+      mockTaskManager.createTask.mockRejectedValue(new Error("Service unavailable"));
 
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/frontal-code-create"
+        ([cmd]) => cmd === "/frontal-code-create",
       )?.[1];
 
       // Execute the command
@@ -306,7 +304,7 @@ describe("Slack Workflow Integration Tests", () => {
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/frontal-code-create"
+        ([cmd]) => cmd === "/frontal-code-create",
       )?.[1];
 
       // Execute both commands concurrently
@@ -330,14 +328,8 @@ describe("Slack Workflow Integration Tests", () => {
       expect(mockRespond2).toHaveBeenCalled();
 
       // Verify different tasks were created
-      expect(mockTaskManager.createTask).toHaveBeenCalledWith(
-        "U123456",
-        expect.any(Object)
-      );
-      expect(mockTaskManager.createTask).toHaveBeenCalledWith(
-        "U789012",
-        expect.any(Object)
-      );
+      expect(mockTaskManager.createTask).toHaveBeenCalledWith("U123456", expect.any(Object));
+      expect(mockTaskManager.createTask).toHaveBeenCalledWith("U789012", expect.any(Object));
     });
   });
 
@@ -367,7 +359,7 @@ describe("Slack Workflow Integration Tests", () => {
       // Get the app mention handler
       const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.event.mock.calls.find(
-        ([event_type]) => event_type === "app_mention"
+        ([event_type]) => event_type === "app_mention",
       )?.[1];
 
       // Execute the mention handler
@@ -375,7 +367,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Verify task creation response
       expect(mockSay).toHaveBeenCalledWith(
-        "Task created: `task-mention-123`. I'll start working on it right away!"
+        "Task created: `task-mention-123`. I'll start working on it right away!",
       );
     });
 
@@ -415,7 +407,7 @@ describe("Slack Workflow Integration Tests", () => {
       // Get the task cancel action handler
       const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.action.mock.calls.find(
-        ([action]) => action === "task_cancel"
+        ([action]) => action === "task_cancel",
       )?.[1];
 
       // Execute the interaction handler
@@ -423,10 +415,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Verify cancellation response
       expect(mockAck).toHaveBeenCalled();
-      expect(mockTaskManager.cancelTask).toHaveBeenCalledWith(
-        "task-cancel-123",
-        "U123456"
-      );
+      expect(mockTaskManager.cancelTask).toHaveBeenCalledWith("task-cancel-123", "U123456");
       expect(mockRespond).toHaveBeenCalledWith({
         text: "Task `task-cancel-123` has been cancelled.",
         replace_original: true,
@@ -469,7 +458,7 @@ describe("Slack Workflow Integration Tests", () => {
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
       const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/frontal-code-create"
+        ([cmd]) => cmd === "/frontal-code-create",
       )?.[1];
 
       // Execute the command
@@ -480,7 +469,7 @@ describe("Slack Workflow Integration Tests", () => {
         "U123456",
         expect.objectContaining({
           prompt: "Create a new user profile page",
-        })
+        }),
       );
 
       // Verify response was sent to user
@@ -562,9 +551,7 @@ describe("Slack Workflow Integration Tests", () => {
         mockTaskManager,
       } = await import("../setup");
 
-      mockSlackApp.client.auth.test.mockRejectedValue(
-        new Error("Slack API error")
-      );
+      mockSlackApp.client.auth.test.mockRejectedValue(new Error("Slack API error"));
       mockFrontalCodeApiClient.healthCheck.mockResolvedValue(false);
       mockDatabaseService.healthCheck.mockResolvedValue(true);
       mockRedisService.healthCheck.mockResolvedValue(false);

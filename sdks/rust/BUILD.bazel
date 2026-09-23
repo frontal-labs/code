@@ -1,4 +1,4 @@
-load("//tools:lint.bzl", "rust_lint", "rust_format")
+load("//tools:lint.bzl", "rust_lint")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -14,8 +14,13 @@ filegroup(
 )
 
 # Format check for the Rust SDK.
-rust_format(
+sh_test(
     name = "fmt",
+    size = "small",
+    srcs = ["//tools:sdk_rust.sh"],
+    data = ["//:cargo_workspace"],
+    args = ["fmt-check"],
+    tags = ["fmt", "rust"],
 )
 
 # Clippy (with -D warnings) for the Rust SDK.
@@ -28,6 +33,7 @@ rust_lint(
 sh_test(
     name = "test",
     srcs = ["//tools:sdk_rust.sh"],
+    data = ["//:cargo_workspace"],
     args = ["test"],
     tags = ["rust", "test"],
 )

@@ -147,7 +147,7 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
             "model",
         ],
         &[(
-            "FCODE_CONFIG_HOME",
+            "FRONTAL_CODE_CONFIG_HOME",
             config_home.to_str().expect("utf8 path"),
         )],
     );

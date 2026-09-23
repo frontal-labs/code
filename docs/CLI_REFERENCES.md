@@ -672,10 +672,10 @@ frontal-code prompt --stream "Generate a long story"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `FCODE_CONFIG_DIR` | Configuration directory | `~/.frontal-code` |
-| `FCODE_DATA_DIR` | Data directory | `~/.frontal-code/data` |
-| `FCODE_LOG_LEVEL` | Log level | `info` |
-| `FCODE_SESSION_DIR` | Session directory | `~/.frontal-code/sessions` |
+| `FRONTAL_CODE_CONFIG_DIR` | Configuration directory | `~/.frontal-code` |
+| `FRONTAL_CODE_DATA_DIR` | Data directory | `~/.frontal-code/data` |
+| `FRONTAL_CODE_LOG_LEVEL` | Log level | `info` |
+| `FRONTAL_CODE_SESSION_DIR` | Session directory | `~/.frontal-code/sessions` |
 | `RUST_LOG` | Rust log level | `info` |
 
 ## Configuration Files

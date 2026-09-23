@@ -19,10 +19,10 @@ export function toTomlLiteral(value: JsonValue): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return "[" + value.map(toTomlLiteral).join(", ") + "]";
+    return `[${value.map(toTomlLiteral).join(", ")}]`;
   }
   const entries = Object.entries(value).map(([key, nested]) => `${key} = ${toTomlLiteral(nested)}`);
-  return "{ " + entries.join(", ") + " }";
+  return `{ ${entries.join(", ")} }`;
 }
 
 /**

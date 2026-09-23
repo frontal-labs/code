@@ -19,7 +19,7 @@ tasks. Both of its authentication boundaries are closed by default.
 
 ### Control plane
 
-Set `FCODE_SERVER_API_KEY` before starting the server. Clients present it as
+Set `FRONTAL_CODE_SERVER_API_KEY` before starting the server. Clients present it as
 either `x-api-key: <key>` or `Authorization: Bearer <key>`; the comparison is
 constant-time.
 
@@ -29,7 +29,7 @@ development, or a host reachable only from inside your own perimeter — opt in
 explicitly:
 
 ```bash
-FCODE_SERVER_ALLOW_ANONYMOUS=1 frontal-code-server
+FRONTAL_CODE_SERVER_ALLOW_ANONYMOUS=1 frontal-code-server
 ```
 
 That path logs a warning naming the bind address on every start.
@@ -38,10 +38,10 @@ That path logs a warning naming the bind address on every start.
 
 `POST /v1/webhooks/<source>` sits outside the control-plane auth layer, so its
 HMAC signature is the only thing protecting it. Each source needs its own
-secret, named `FCODE_<SOURCE>_WEBHOOK_SECRET`:
+secret, named `FRONTAL_CODE_<SOURCE>_WEBHOOK_SECRET`:
 
 ```bash
-export FCODE_GITHUB_WEBHOOK_SECRET="..."
+export FRONTAL_CODE_GITHUB_WEBHOOK_SECRET="..."
 ```
 
 A delivery is rejected with `401` when the secret is missing or blank, when the

@@ -17,8 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Rust toolchain
-        name: Install pinned Rust toolchain
+      - name: Install pinned Rust toolchain
         run: rustup show
         
       - name: Cache cargo registry

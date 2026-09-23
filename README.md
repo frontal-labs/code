@@ -57,8 +57,8 @@ Frontal Code now uses a centralized configuration system located at `config/proj
 
 The system looks for `project.json` in this order:
 
-1. `$FCODE_CONFIG_HOME/project.json` - Custom config directory
-2. `$FCODE_HOME/project.json` - Frontal Code home directory  
+1. `$FRONTAL_CODE_CONFIG_HOME/project.json` - Custom config directory
+2. `$FRONTAL_CODE_HOME/project.json` - Frontal Code home directory
 3. `~/.frontal-code/project.json` - User's home directory
 4. `config/project.json` - Project-local configuration
 

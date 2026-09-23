@@ -24,14 +24,14 @@ pub use vector_pinecone_adapter::{
     ReqwestPineconeTransport,
 };
 
-const FCODE_MEMORY_METADATA_PATH: &str = "FCODE_MEMORY_METADATA_PATH";
-const FCODE_MEMORY_PINECONE_URL: &str = "FCODE_MEMORY_PINECONE_URL";
-const FCODE_MEMORY_PINECONE_NAMESPACE: &str = "FCODE_MEMORY_PINECONE_NAMESPACE";
-const FCODE_MEMORY_PINECONE_API_KEY: &str = "FCODE_MEMORY_PINECONE_API_KEY";
-const FCODE_MEMORY_NEO4J_URL: &str = "FCODE_MEMORY_NEO4J_URL";
-const FCODE_MEMORY_NEO4J_DATABASE: &str = "FCODE_MEMORY_NEO4J_DATABASE";
-const FCODE_MEMORY_NEO4J_USERNAME: &str = "FCODE_MEMORY_NEO4J_USERNAME";
-const FCODE_MEMORY_NEO4J_PASSWORD: &str = "FCODE_MEMORY_NEO4J_PASSWORD";
+const FRONTAL_CODE_MEMORY_METADATA_PATH: &str = "FRONTAL_CODE_MEMORY_METADATA_PATH";
+const FRONTAL_CODE_MEMORY_PINECONE_URL: &str = "FRONTAL_CODE_MEMORY_PINECONE_URL";
+const FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE: &str = "FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE";
+const FRONTAL_CODE_MEMORY_PINECONE_API_KEY: &str = "FRONTAL_CODE_MEMORY_PINECONE_API_KEY";
+const FRONTAL_CODE_MEMORY_NEO4J_URL: &str = "FRONTAL_CODE_MEMORY_NEO4J_URL";
+const FRONTAL_CODE_MEMORY_NEO4J_DATABASE: &str = "FRONTAL_CODE_MEMORY_NEO4J_DATABASE";
+const FRONTAL_CODE_MEMORY_NEO4J_USERNAME: &str = "FRONTAL_CODE_MEMORY_NEO4J_USERNAME";
+const FRONTAL_CODE_MEMORY_NEO4J_PASSWORD: &str = "FRONTAL_CODE_MEMORY_NEO4J_PASSWORD";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MemoryScope {
@@ -235,14 +235,14 @@ impl MemoryBackendConfig {
     #[must_use]
     pub fn from_env() -> Self {
         Self {
-            metadata_path: env_var(FCODE_MEMORY_METADATA_PATH).map(PathBuf::from),
-            pinecone_url: env_var(FCODE_MEMORY_PINECONE_URL),
-            pinecone_namespace: env_var(FCODE_MEMORY_PINECONE_NAMESPACE),
-            pinecone_api_key: env_var(FCODE_MEMORY_PINECONE_API_KEY),
-            neo4j_url: env_var(FCODE_MEMORY_NEO4J_URL),
-            neo4j_database: env_var(FCODE_MEMORY_NEO4J_DATABASE),
-            neo4j_username: env_var(FCODE_MEMORY_NEO4J_USERNAME),
-            neo4j_password: env_var(FCODE_MEMORY_NEO4J_PASSWORD),
+            metadata_path: env_var(FRONTAL_CODE_MEMORY_METADATA_PATH).map(PathBuf::from),
+            pinecone_url: env_var(FRONTAL_CODE_MEMORY_PINECONE_URL),
+            pinecone_namespace: env_var(FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE),
+            pinecone_api_key: env_var(FRONTAL_CODE_MEMORY_PINECONE_API_KEY),
+            neo4j_url: env_var(FRONTAL_CODE_MEMORY_NEO4J_URL),
+            neo4j_database: env_var(FRONTAL_CODE_MEMORY_NEO4J_DATABASE),
+            neo4j_username: env_var(FRONTAL_CODE_MEMORY_NEO4J_USERNAME),
+            neo4j_password: env_var(FRONTAL_CODE_MEMORY_NEO4J_PASSWORD),
         }
     }
 }

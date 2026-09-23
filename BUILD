@@ -28,6 +28,7 @@ filegroup(
         "//:.cargo/config.toml",
         "//:rust-toolchain.toml",
         "//crates:all_crates",
+        "//crates/plugins:bundled_plugins",
         "//examples:srcs",
         "//sdks/rust:rust_sdk_srcs",
         "//tests:all_test_crates",

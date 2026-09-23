@@ -33,6 +33,7 @@ rust_lint(
 sh_test(
     name = "test",
     srcs = ["//tools:sdk_rust.sh"],
+    data = ["//:cargo_workspace"],
     args = ["test"],
     tags = ["rust", "test"],
 )

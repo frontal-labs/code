@@ -20,7 +20,7 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 
 echo "==> Building cli with cargo (release)"
-( cd "$REPO_ROOT" && cargo build --release -p cli )
+( cd "$REPO_ROOT" && cargo build --release -p frontal-code-cli )
 
 # Determine target triple dir name (mirror lib/platform.mjs: darwin/arm64 -> macos-arm64).
 OS="$(uname -s)"; ARCH="$(uname -m)"

@@ -11,6 +11,7 @@ filegroup(
 sh_test(
     name = "test",
     srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
     args = [
         "frontal-code-integrations",
         "test",

@@ -31,6 +31,7 @@ exports_files([
 sh_test(
     name = "third_party_check",
     srcs = ["third_party_check.sh"],
+    data = ["//:MODULE.bazel", "//third_party:repos.bzl"],
     tags = ["check"],
 )
 

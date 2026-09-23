@@ -25,13 +25,11 @@ const interceptorState = vi.hoisted(() => {
         }),
       },
       response: {
-        use: vi.fn(
-          (onFulfilled: ResponseSuccess, onRejected: ResponseError) => {
-            captured.responseSuccess = onFulfilled;
-            captured.responseError = onRejected;
-            return 0;
-          }
-        ),
+        use: vi.fn((onFulfilled: ResponseSuccess, onRejected: ResponseError) => {
+          captured.responseSuccess = onFulfilled;
+          captured.responseError = onRejected;
+          return 0;
+        }),
       },
     },
   };
@@ -69,7 +67,7 @@ vi.mock("../src/log", () => ({
 
 vi.mock("../src/config", () => ({
   config: {
-    frontal_code: {
+    frontalCode: {
       apiUrl: "http://localhost:8787",
       timeout: 30_000,
     },
@@ -108,26 +106,18 @@ describe("FrontalCodeApiClient interceptors", () => {
     };
 
     expect(interceptorState.captured.requestSuccess?.(config)).toBe(config);
-    expect(logState.logger.debug).toHaveBeenCalledWith(
-      "Frontal Code API request",
-      {
-        method: "post",
-        url: "/v1/tasks",
-      }
-    );
+    expect(logState.logger.debug).toHaveBeenCalledWith("Frontal Code API request", {
+      method: "post",
+      url: "/v1/tasks",
+    });
   });
 
   it("logs and rethrows request setup failures from the request interceptor", async () => {
     new FrontalCodeApiClient();
     const error = new Error("bad config");
 
-    await expect(interceptorState.captured.requestError?.(error)).rejects.toBe(
-      error
-    );
-    expect(logState.logger.error).toHaveBeenCalledWith(
-      "Frontal Code API request error",
-      error
-    );
+    await expect(interceptorState.captured.requestError?.(error)).rejects.toBe(error);
+    expect(logState.logger.error).toHaveBeenCalledWith("Frontal Code API request error", error);
   });
 
   it("logs successful API responses with computed duration from the response interceptor", () => {
@@ -143,15 +133,8 @@ describe("FrontalCodeApiClient interceptors", () => {
       },
     };
 
-    expect(interceptorState.captured.responseSuccess?.(response)).toBe(
-      response
-    );
-    expect(logState.logApiCall).toHaveBeenCalledWith(
-      "/v1/tasks",
-      "GET",
-      1500,
-      true
-    );
+    expect(interceptorState.captured.responseSuccess?.(response)).toBe(response);
+    expect(logState.logApiCall).toHaveBeenCalledWith("/v1/tasks", "GET", 1500, true);
   });
 
   it("falls back to zero duration when the response success path has no start-time header", () => {
@@ -164,15 +147,8 @@ describe("FrontalCodeApiClient interceptors", () => {
       },
     };
 
-    expect(interceptorState.captured.responseSuccess?.(response)).toBe(
-      response
-    );
-    expect(logState.logApiCall).toHaveBeenCalledWith(
-      "/v1/tasks",
-      "GET",
-      0,
-      true
-    );
+    expect(interceptorState.captured.responseSuccess?.(response)).toBe(response);
+    expect(logState.logApiCall).toHaveBeenCalledWith("/v1/tasks", "GET", 0, true);
   });
 
   it("falls back to empty url and GET when the response success path lacks method and url", () => {
@@ -186,9 +162,7 @@ describe("FrontalCodeApiClient interceptors", () => {
     };
     vi.spyOn(Date, "now").mockReturnValue(2_500);
 
-    expect(interceptorState.captured.responseSuccess?.(response)).toBe(
-      response
-    );
+    expect(interceptorState.captured.responseSuccess?.(response)).toBe(response);
     expect(logState.logApiCall).toHaveBeenCalledWith("", "GET", 1500, true);
   });
 
@@ -205,24 +179,15 @@ describe("FrontalCodeApiClient interceptors", () => {
       },
     });
 
-    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(
-      error
-    );
-    expect(logState.logApiCall).toHaveBeenCalledWith(
-      "/v1/tasks/123",
-      "POST",
-      1500,
-      false
-    );
+    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(error);
+    expect(logState.logApiCall).toHaveBeenCalledWith("/v1/tasks/123", "POST", 1500, false);
   });
 
   it("falls back to empty url, GET, and zero duration when the response error lacks config", async () => {
     new FrontalCodeApiClient();
     const error = new Error("down");
 
-    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(
-      error
-    );
+    await expect(interceptorState.captured.responseError?.(error)).rejects.toBe(error);
     expect(logState.logApiCall).toHaveBeenCalledWith("", "GET", 0, false);
   });
 });

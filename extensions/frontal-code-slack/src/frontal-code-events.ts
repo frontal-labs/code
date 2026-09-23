@@ -8,11 +8,9 @@ import type {
 
 type TrackedTaskHandler = (
   event: FrontalCodeEventEnvelope,
-  task?: FrontalCodeTrackedTask
+  task?: FrontalCodeTrackedTask,
 ) => Promise<void> | void;
-type FrontalCodeEventsUrlBuilder = (
-  query?: FrontalCodeEventStreamQuery
-) => string;
+type FrontalCodeEventsUrlBuilder = (query?: FrontalCodeEventStreamQuery) => string;
 type FrontalCodeEventsHeadersBuilder = () => Record<string, string> | undefined;
 
 const RECENT_EVENTS_PER_TASK = 12;
@@ -31,11 +29,10 @@ export class FrontalCodeEventsClient {
   private reconnectTimer?: NodeJS.Timeout;
   private shouldReconnect = false;
   private restartRequested = false;
-  private currentUrl?: string;
 
   constructor(
     urlBuilder: FrontalCodeEventsUrlBuilder,
-    headersBuilder: FrontalCodeEventsHeadersBuilder = () => undefined
+    headersBuilder: FrontalCodeEventsHeadersBuilder = () => undefined,
   ) {
     this.urlBuilder = urlBuilder;
     this.headersBuilder = headersBuilder;
@@ -117,10 +114,7 @@ export class FrontalCodeEventsClient {
           if (this.restartRequested) {
             this.restartRequested = false;
             this.openSocket().catch((error) => {
-              logger.error(
-                "Frontal Code hosted events stream restart failed",
-                error as Error
-              );
+              logger.error("Frontal Code hosted events stream restart failed", error as Error);
               this.scheduleReconnect();
             });
           } else {
@@ -148,10 +142,7 @@ export class FrontalCodeEventsClient {
         return;
       }
       this.openSocket().catch((error) => {
-        logger.error(
-          "Frontal Code hosted events reconnect failed",
-          error as Error
-        );
+        logger.error("Frontal Code hosted events reconnect failed", error as Error);
         this.scheduleReconnect();
       });
     }, RECONNECT_DELAY_MS);
@@ -184,17 +175,14 @@ export class FrontalCodeEventsClient {
 
   private dispatchEvent(
     event: FrontalCodeEventEnvelope,
-    hintedTask?: FrontalCodeTrackedTask
+    hintedTask?: FrontalCodeTrackedTask,
   ): void {
     const taskId = event.task_id;
     if (!taskId) {
       return;
     }
 
-    const task =
-      hintedTask ||
-      this.taskHints.get(taskId) ||
-      this.readTrackedTaskFromEvent(event);
+    const task = hintedTask || this.taskHints.get(taskId) || this.readTrackedTaskFromEvent(event);
     if (task && !this.taskHints.has(taskId)) {
       this.taskHints.set(taskId, task);
     }
@@ -215,20 +203,16 @@ export class FrontalCodeEventsClient {
 
     for (const handler of this.handlers) {
       void Promise.resolve(handler(event, task)).catch((error) => {
-        logger.error(
-          "Frontal Code hosted event handler failed",
-          error as Error,
-          {
-            event: event.event,
-            taskId,
-          }
-        );
+        logger.error("Frontal Code hosted event handler failed", error as Error, {
+          event: event.event,
+          taskId,
+        });
       });
     }
   }
 
   private readTrackedTaskFromEvent(
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): FrontalCodeTrackedTask | undefined {
     const payload = event.payload;
     if (!payload) {

@@ -94,10 +94,7 @@ describe("log helpers", () => {
     expect(innerLogger.warn).toHaveBeenCalledWith("warn message", {
       scope: "warn",
     });
-    expect(sentry.captureMessage).toHaveBeenCalledWith(
-      "warn message",
-      "warning"
-    );
+    expect(sentry.captureMessage).toHaveBeenCalledWith("warn message", "warning");
   });
 
   it("captures exceptions and plain error messages in production error logs", async () => {
@@ -114,7 +111,7 @@ describe("log helpers", () => {
         taskId: "task-123",
         error: "boom",
         stack: expect.any(String),
-      })
+      }),
     );
     expect(innerLogger.error).toHaveBeenNthCalledWith(
       2,
@@ -122,13 +119,10 @@ describe("log helpers", () => {
       expect.objectContaining({
         error: undefined,
         stack: undefined,
-      })
+      }),
     );
     expect(sentry.captureException).toHaveBeenCalledWith(error);
-    expect(sentry.captureMessage).toHaveBeenCalledWith(
-      "error without exception",
-      "error"
-    );
+    expect(sentry.captureMessage).toHaveBeenCalledWith("error without exception", "error");
   });
 
   it("logs task, API, Slack, user, system, security, database, and redis helper events", async () => {
@@ -150,14 +144,14 @@ describe("log helpers", () => {
         prompt: "x".repeat(100),
         category: "task",
         action: "created",
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenCalledWith(
       "Task status changed",
       expect.objectContaining({
         oldStatus: "pending",
         newStatus: "running",
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenCalledWith(
       "API call",
@@ -166,7 +160,7 @@ describe("log helpers", () => {
         method: "POST",
         duration: 25,
         success: true,
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenCalledWith(
       "Slack event",
@@ -174,7 +168,7 @@ describe("log helpers", () => {
         eventType: "message",
         userId: "U123",
         channelId: "C123",
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenCalledWith(
       "User action",
@@ -184,14 +178,14 @@ describe("log helpers", () => {
         taskId: "task-123",
         category: "user",
         event_type: "action",
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenCalledWith(
       "System event",
       expect.objectContaining({
         event: "booted",
         region: "eu-west",
-      })
+      }),
     );
     expect(module.innerLogger.warn).toHaveBeenCalledWith(
       "Security event",
@@ -199,7 +193,7 @@ describe("log helpers", () => {
         event: "permission_denied",
         userId: "U123",
         channelId: "C123",
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenCalledWith(
       "Database operation",
@@ -208,7 +202,7 @@ describe("log helpers", () => {
         table: "tasks",
         duration: 10,
         rows: 1,
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenCalledWith(
       "Redis operation",
@@ -217,7 +211,7 @@ describe("log helpers", () => {
         key: "task:123",
         duration: 5,
         cache: "tasks",
-      })
+      }),
     );
   });
 
@@ -234,7 +228,7 @@ describe("log helpers", () => {
         status: "healthy",
         latency: 12,
         category: "health",
-      })
+      }),
     );
     expect(module.innerLogger.error).toHaveBeenCalledWith(
       "Health check - frontal-code",
@@ -243,7 +237,7 @@ describe("log helpers", () => {
         status: "unhealthy",
         reason: "timeout",
         category: "health",
-      })
+      }),
     );
   });
 
@@ -274,7 +268,7 @@ describe("log helpers", () => {
         operation: "sync",
         duration: 42,
         tasks: 3,
-      })
+      }),
     );
     expect(module.innerLogger.info).toHaveBeenLastCalledWith(
       "Performance metric",
@@ -283,7 +277,7 @@ describe("log helpers", () => {
         duration: 125,
         source: "slack",
         result: "ok",
-      })
+      }),
     );
 
     vi.useRealTimers();

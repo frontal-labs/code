@@ -9,7 +9,7 @@ export interface Config {
   };
 
   // Frontal Code API Configuration
-  frontal_code: {
+  frontalCode: {
     apiUrl: string;
     timeout: number;
     apiKey?: string;

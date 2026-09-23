@@ -12,19 +12,14 @@ interface MockHttpClient {
   post: ReturnType<typeof vi.fn>;
 }
 
-function installMockHttpClient(
-  client: FrontalCodeApiClient,
-  mockHttpClient: MockHttpClient
-): void {
+function installMockHttpClient(client: FrontalCodeApiClient, mockHttpClient: MockHttpClient): void {
   Object.defineProperty(client, "client", {
     value: mockHttpClient,
     configurable: true,
   });
 }
 
-function createTaskSnapshot(
-  overrides: Partial<FrontalCodeTask> = {}
-): FrontalCodeTask {
+function createTaskSnapshot(overrides: Partial<FrontalCodeTask> = {}): FrontalCodeTask {
   return {
     task_id: "task-123",
     prompt: "Investigate flaky test",
@@ -58,7 +53,7 @@ describe("FrontalCodeApiClient", () => {
     });
 
     expect(url).toBe(
-      "ws://localhost:8787/v1/events/ws?source=slack&status=running&repository=frontal-code%2Fslack&limit=25"
+      "ws://localhost:8787/v1/events/ws?source=slack&status=running&repository=frontal-code%2Fslack&limit=25",
     );
   });
 
@@ -70,7 +65,7 @@ describe("FrontalCodeApiClient", () => {
     });
 
     expect(secureClient.getEventsWebSocketUrl({ source: "slack" })).toBe(
-      "wss://frontal-code.example.com/v1/events/ws?source=slack"
+      "wss://frontal-code.example.com/v1/events/ws?source=slack",
     );
   });
 
@@ -97,7 +92,7 @@ describe("FrontalCodeApiClient", () => {
       },
       expect.objectContaining({
         headers: expect.anything(),
-      })
+      }),
     );
     expect(response).toEqual(responseBody);
   });
@@ -108,7 +103,7 @@ describe("FrontalCodeApiClient", () => {
     await expect(
       client.submitPrompt({
         prompt: "Fix the failing Slack test",
-      })
+      }),
     ).rejects.toThrow("Frontal Code API error: timeout");
   });
 
@@ -135,7 +130,7 @@ describe("FrontalCodeApiClient", () => {
       },
       expect.objectContaining({
         headers: expect.anything(),
-      })
+      }),
     );
     expect(response).toEqual(responseBody);
   });
@@ -146,7 +141,7 @@ describe("FrontalCodeApiClient", () => {
     await expect(
       client.runCliCommand({
         args: ["status"],
-      })
+      }),
     ).rejects.toThrow("Frontal Code API error: cli timeout");
   });
 
@@ -181,14 +176,14 @@ describe("FrontalCodeApiClient", () => {
       "/v1/status",
       expect.objectContaining({
         headers: expect.anything(),
-      })
+      }),
     );
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(
       2,
       "/v1/version",
       expect.objectContaining({
         headers: expect.anything(),
-      })
+      }),
     );
   });
 
@@ -196,7 +191,7 @@ describe("FrontalCodeApiClient", () => {
     mockHttpClient.get.mockRejectedValue(new Error("version unavailable"));
 
     await expect(client.getVersion()).rejects.toThrow(
-      "Frontal Code API error: version unavailable"
+      "Frontal Code API error: version unavailable",
     );
   });
 
@@ -206,15 +201,9 @@ describe("FrontalCodeApiClient", () => {
       .mockRejectedValueOnce(new Error("sandbox down"))
       .mockRejectedValueOnce(new Error("version down"));
 
-    await expect(client.getStatus()).rejects.toThrow(
-      "Frontal Code API error: status down"
-    );
-    await expect(client.getSandboxStatus()).rejects.toThrow(
-      "Frontal Code API error: sandbox down"
-    );
-    await expect(client.getVersion()).rejects.toThrow(
-      "Frontal Code API error: version down"
-    );
+    await expect(client.getStatus()).rejects.toThrow("Frontal Code API error: status down");
+    await expect(client.getSandboxStatus()).rejects.toThrow("Frontal Code API error: sandbox down");
+    await expect(client.getVersion()).rejects.toThrow("Frontal Code API error: version down");
   });
 
   it("creates tasks and resolves approvals through the hosted task routes", async () => {
@@ -239,7 +228,7 @@ describe("FrontalCodeApiClient", () => {
         prompt: "Investigate flaky test",
         source: "slack",
         channel_id: "C123",
-      })
+      }),
     ).resolves.toEqual(created);
 
     await expect(
@@ -249,7 +238,7 @@ describe("FrontalCodeApiClient", () => {
         action: "cancel",
         resolvedBy: "U123",
         reason: "User approved cancellation",
-      })
+      }),
     ).resolves.toEqual(approved);
 
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(1, "/v1/tasks", {
@@ -257,16 +246,12 @@ describe("FrontalCodeApiClient", () => {
       source: "slack",
       channel_id: "C123",
     });
-    expect(mockHttpClient.post).toHaveBeenNthCalledWith(
-      2,
-      "/v1/tasks/task-123/approval",
-      {
-        approval_kind: "orphaned_hosted_agent",
-        action: "cancel",
-        resolved_by: "U123",
-        reason: "User approved cancellation",
-      }
-    );
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(2, "/v1/tasks/task-123/approval", {
+      approval_kind: "orphaned_hosted_agent",
+      action: "cancel",
+      resolved_by: "U123",
+      reason: "User approved cancellation",
+    });
   });
 
   it("looks up a single task and the effective orphan policy", async () => {
@@ -297,20 +282,16 @@ describe("FrontalCodeApiClient", () => {
       .mockResolvedValueOnce({ data: policy });
 
     await expect(client.getTask("task-123")).resolves.toEqual(task);
-    await expect(
-      client.getOrphanPolicy({ repository: "frontal-code/slack" })
-    ).resolves.toEqual(policy);
+    await expect(client.getOrphanPolicy({ repository: "frontal-code/slack" })).resolves.toEqual(
+      policy,
+    );
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, "/v1/tasks/task-123");
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      2,
-      "/v1/policies/orphans",
-      {
-        params: {
-          repository: "frontal-code/slack",
-        },
-      }
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, "/v1/policies/orphans", {
+      params: {
+        repository: "frontal-code/slack",
+      },
+    });
   });
 
   it("passes list task filters through to the hosted tasks endpoint", async () => {
@@ -354,16 +335,13 @@ describe("FrontalCodeApiClient", () => {
 
     const response = await client.updateTaskContext(request);
 
-    expect(mockHttpClient.post).toHaveBeenCalledWith(
-      "/v1/tasks/task-123/context",
-      {
-        source: "slack",
-        user_id: "U123",
-        channel_id: "C123",
-        thread_ts: "1710000000.100",
-        approval_message_ts: "1710000000.200",
-      }
-    );
+    expect(mockHttpClient.post).toHaveBeenCalledWith("/v1/tasks/task-123/context", {
+      source: "slack",
+      user_id: "U123",
+      channel_id: "C123",
+      thread_ts: "1710000000.100",
+      approval_message_ts: "1710000000.200",
+    });
     expect(response).toEqual(task);
   });
 
@@ -391,15 +369,12 @@ describe("FrontalCodeApiClient", () => {
       context: request,
     });
 
-    expect(mockHttpClient.post).toHaveBeenCalledWith(
-      "/v1/connectors/slack/interactions",
-      {
-        action: "orphaned_hosted_agent.retry",
-        value: "task-123",
-        user_id: "U123",
-        context: request,
-      }
-    );
+    expect(mockHttpClient.post).toHaveBeenCalledWith("/v1/connectors/slack/interactions", {
+      action: "orphaned_hosted_agent.retry",
+      value: "task-123",
+      user_id: "U123",
+      context: request,
+    });
     expect(response).toEqual({ blocks });
   });
 
@@ -412,14 +387,11 @@ describe("FrontalCodeApiClient", () => {
       data: { reaction: "eyes" },
     });
 
-    expect(mockHttpClient.post).toHaveBeenCalledWith(
-      "/v1/connectors/slack/events",
-      {
-        type: "reaction_added",
-        user_id: "U123",
-        data: { reaction: "eyes" },
-      }
-    );
+    expect(mockHttpClient.post).toHaveBeenCalledWith("/v1/connectors/slack/events", {
+      type: "reaction_added",
+      user_id: "U123",
+      data: { reaction: "eyes" },
+    });
   });
 
   it("returns false when the hosted health check fails", async () => {
@@ -465,16 +437,14 @@ describe("FrontalCodeApiClient", () => {
       "/v1/sandbox",
       expect.objectContaining({
         headers: expect.anything(),
-      })
+      }),
     );
     expect(response).toEqual(sandbox);
   });
 
   it("rethrows checkSandboxStatus failures after logging them", async () => {
     const failure = new Error("sandbox unavailable");
-    const sandboxSpy = vi
-      .spyOn(client, "getSandboxStatus")
-      .mockRejectedValue(failure);
+    const sandboxSpy = vi.spyOn(client, "getSandboxStatus").mockRejectedValue(failure);
 
     await expect(client.checkSandboxStatus()).rejects.toBe(failure);
     expect(sandboxSpy).toHaveBeenCalled();
@@ -484,7 +454,7 @@ describe("FrontalCodeApiClient", () => {
     mockHttpClient.get.mockRejectedValue(new Error("sandbox unavailable"));
 
     await expect(client.checkSandboxStatus()).rejects.toThrow(
-      "Frontal Code API error: sandbox unavailable"
+      "Frontal Code API error: sandbox unavailable",
     );
   });
 
@@ -502,20 +472,18 @@ describe("FrontalCodeApiClient", () => {
       .mockRejectedValueOnce(failure);
 
     await expect(client.getTask("task-123")).rejects.toBe(failure);
-    await expect(client.getOrphanPolicy({ source: "slack" })).rejects.toBe(
-      failure
-    );
+    await expect(client.getOrphanPolicy({ source: "slack" })).rejects.toBe(failure);
     await expect(client.listTasks({ source: "slack" })).rejects.toBe(failure);
     await expect(
       client.createTask({
         prompt: "Investigate flaky test",
-      })
+      }),
     ).rejects.toBe(failure);
     await expect(
       client.updateTaskContext({
         taskId: "task-123",
         channel_id: "C123",
-      })
+      }),
     ).rejects.toBe(failure);
     await expect(
       client.sendConnectorInteraction("slack", {
@@ -526,21 +494,21 @@ describe("FrontalCodeApiClient", () => {
           channel: { id: "C123" },
           message: { ts: "1710000000.100" },
         },
-      })
+      }),
     ).rejects.toBe(failure);
     await expect(
       client.sendConnectorEvent("slack", {
         type: "reaction_added",
         userId: "U123",
         data: { reaction: "eyes" },
-      })
+      }),
     ).rejects.toBe(failure);
     await expect(
       client.resolveTaskApproval({
         taskId: "task-123",
         approvalKind: "orphaned_hosted_agent",
         action: "retry",
-      })
+      }),
     ).rejects.toBe(failure);
   });
 
@@ -557,7 +525,7 @@ describe("FrontalCodeApiClient", () => {
         prompt: "Investigate flaky test",
         source: "slack",
         channel_id: "C123",
-      })
+      }),
     ).rejects.toBe(failure);
     await expect(client.listTasks({ source: "slack" })).rejects.toBe(failure);
     await expect(
@@ -565,14 +533,14 @@ describe("FrontalCodeApiClient", () => {
         taskId: "task-123",
         source: "slack",
         channel_id: "C123",
-      })
+      }),
     ).rejects.toBe(failure);
     await expect(
       client.sendConnectorEvent("slack", {
         type: "reaction_added",
         userId: "U123",
         data: { reaction: "eyes" },
-      })
+      }),
     ).rejects.toBe(failure);
   });
 
@@ -592,7 +560,7 @@ describe("FrontalCodeApiClient", () => {
     });
 
     expect(url).toBe(
-      "wss://frontal-code.example.com/v1/events/ws?source=slack&channel_id=C123&limit=10"
+      "wss://frontal-code.example.com/v1/events/ws?source=slack&channel_id=C123&limit=10",
     );
   });
 });

@@ -328,9 +328,7 @@ describe("Slack Types", () => {
       expect(typeof user.id).toBe("string");
       expect(typeof user.name).toBe("string");
       expect(typeof user.real_name).toBe("string");
-      expect(user.email === undefined || typeof user.email === "string").toBe(
-        true
-      );
+      expect(user.email === undefined || typeof user.email === "string").toBe(true);
     });
 
     it("should validate SlackCommand structure at runtime", () => {
@@ -389,8 +387,7 @@ describe("Slack Types", () => {
         ],
       };
 
-      const interaction =
-        data as import("@/types/slack-types").SlackInteraction;
+      const interaction = data as import("@/types/slack-types").SlackInteraction;
 
       expect(typeof interaction.type).toBe("string");
       expect(typeof interaction.token).toBe("string");

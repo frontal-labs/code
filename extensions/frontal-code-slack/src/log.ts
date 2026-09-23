@@ -21,10 +21,7 @@ const winstonLogger = winston.createLogger({
     winston.format.timestamp(),
     config.app.nodeEnv === "production"
       ? winston.format.json()
-      : winston.format.combine(
-          winston.format.colorize(),
-          winston.format.simple()
-        )
+      : winston.format.combine(winston.format.colorize(), winston.format.simple()),
   ),
   transports: [new winston.transports.Console()],
 });
@@ -74,11 +71,7 @@ export const logger: Logger = {
 };
 
 // Structured logging helpers
-export const logTaskCreation = (
-  taskId: string,
-  userId: string,
-  prompt: string
-): void => {
+export const logTaskCreation = (taskId: string, userId: string, prompt: string): void => {
   logger.info("Task created", {
     taskId,
     userId,
@@ -88,11 +81,7 @@ export const logTaskCreation = (
   });
 };
 
-export const logTaskStatusChange = (
-  taskId: string,
-  oldStatus: string,
-  newStatus: string
-): void => {
+export const logTaskStatusChange = (taskId: string, oldStatus: string, newStatus: string): void => {
   logger.info("Task status changed", {
     taskId,
     oldStatus,
@@ -106,7 +95,7 @@ export const logApiCall = (
   endpoint: string,
   method: string,
   duration: number,
-  success: boolean
+  success: boolean,
 ): void => {
   logger.info("API call", {
     endpoint,
@@ -118,11 +107,7 @@ export const logApiCall = (
   });
 };
 
-export const logSlackEvent = (
-  eventType: string,
-  userId: string,
-  channelId: string
-): void => {
+export const logSlackEvent = (eventType: string, userId: string, channelId: string): void => {
   logger.info("Slack event", {
     eventType,
     userId,
@@ -132,11 +117,7 @@ export const logSlackEvent = (
   });
 };
 
-export const logUserAction = (
-  userId: string,
-  userAction: string,
-  details?: LogMeta
-): void => {
+export const logUserAction = (userId: string, userAction: string, details?: LogMeta): void => {
   logger.info("User action", {
     userId,
     action: userAction,
@@ -155,11 +136,7 @@ export const logSystemEvent = (event: string, details?: LogMeta): void => {
   });
 };
 
-export const logSecurityEvent = (
-  event: string,
-  userId: string,
-  details?: LogMeta
-): void => {
+export const logSecurityEvent = (event: string, userId: string, details?: LogMeta): void => {
   logger.warn("Security event", {
     event,
     userId,
@@ -170,11 +147,7 @@ export const logSecurityEvent = (
 };
 
 // Performance logging
-export const logPerformance = (
-  operation: string,
-  duration: number,
-  details?: LogMeta
-): void => {
+export const logPerformance = (operation: string, duration: number, details?: LogMeta): void => {
   logger.info("Performance metric", {
     operation,
     duration,
@@ -188,7 +161,7 @@ export const logPerformance = (
 export const logHealthCheck = (
   service: string,
   status: "healthy" | "unhealthy",
-  details?: LogMeta
+  details?: LogMeta,
 ): void => {
   if (status === "healthy") {
     logger.info(`Health check - ${service}`, {
@@ -214,7 +187,7 @@ export const logDatabaseOperation = (
   operation: string,
   table: string,
   duration?: number,
-  details?: LogMeta
+  details?: LogMeta,
 ): void => {
   logger.info("Database operation", {
     operation,
@@ -231,7 +204,7 @@ export const logRedisOperation = (
   operation: string,
   key?: string,
   duration?: number,
-  details?: LogMeta
+  details?: LogMeta,
 ): void => {
   logger.info("Redis operation", {
     operation,
@@ -247,7 +220,7 @@ export const logRedisOperation = (
 export const createErrorContext = (
   userId?: string,
   taskId?: string,
-  channelId?: string
+  channelId?: string,
 ): LogMeta => {
   const context: LogMeta = {};
 
@@ -286,10 +259,7 @@ export class PerformanceTimer {
 }
 
 // Create a performance timer
-export const startTimer = (
-  operation: string,
-  details?: LogMeta
-): PerformanceTimer => {
+export const startTimer = (operation: string, details?: LogMeta): PerformanceTimer => {
   return new PerformanceTimer(operation, details);
 };
 

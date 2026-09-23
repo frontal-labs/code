@@ -27,16 +27,14 @@ export class FrontalCodeEventsClient {
               "x-api-key": config.frontalCode.apiKey,
             },
           }
-        : undefined
+        : undefined,
     );
     this.ws.on("open", () => {
       logger.info("Connected to Frontal Code event stream", { url: this.url });
     });
     this.ws.on("message", (payload) => {
       try {
-        const event = JSON.parse(
-          payload.toString()
-        ) as FrontalCodeEventEnvelope;
+        const event = JSON.parse(payload.toString()) as FrontalCodeEventEnvelope;
         for (const handler of this.handlers) {
           handler(event);
         }
@@ -83,9 +81,7 @@ export class FrontalCodeEventsClient {
 
   private buildWsUrl(): string {
     const base = config.frontalCode.apiUrl.replace(/\/+$/, "");
-    const wsBase = base.replace(/^http/, (match) =>
-      match === "https" ? "wss" : "ws"
-    );
+    const wsBase = base.replace(/^http/, (match) => (match === "https" ? "wss" : "ws"));
     return `${wsBase}/v1/events/ws`;
   }
 }

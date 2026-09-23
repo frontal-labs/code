@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const slackState = vi.hoisted(() => {
-  let messageHandler:
-    | ((args: { message: unknown }) => Promise<void>)
-    | undefined;
+  let messageHandler: ((args: { message: unknown }) => Promise<void>) | undefined;
   let commandHandler:
     | ((args: {
         command: { text: string; user_id: string; channel_id: string };
@@ -11,11 +9,7 @@ const slackState = vi.hoisted(() => {
       }) => Promise<void>)
     | undefined;
   let actionHandler:
-    | ((args: {
-        action: unknown;
-        ack: () => Promise<void> | void;
-        body: unknown;
-      }) => Promise<void>)
+    | ((args: { action: unknown; ack: () => Promise<void> | void; body: unknown }) => Promise<void>)
     | undefined;
   let eventHandler: ((args: { event: unknown }) => Promise<void>) | undefined;
 
@@ -36,8 +30,6 @@ const slackState = vi.hoisted(() => {
     start = appStart;
     stop = appStop;
     isListening = isListening;
-
-    constructor(_options: unknown) {}
 
     message(handler: typeof messageHandler): void {
       messageHandler = handler;
@@ -76,8 +68,7 @@ const slackState = vi.hoisted(() => {
   };
 });
 
-const frontal;
--codeApiState = vi.hoisted(() => {
+const frontalCodeApiState = vi.hoisted(() => {
   const createTask = vi.fn();
   const getOrphanPolicy = vi.fn();
   const sendConnectorEvent = vi.fn();
@@ -101,11 +92,8 @@ const frontal;
   };
 });
 
-const frontal;
--codeEventsState = vi.hoisted(() => {
-  let trackedHandler:
-    | ((event: unknown, task: unknown) => Promise<void> | void)
-    | undefined;
+const frontalCodeEventsState = vi.hoisted(() => {
+  let trackedHandler: ((event: unknown, task: unknown) => Promise<void> | void) | undefined;
 
   const connect = vi.fn();
   const disconnect = vi.fn();
@@ -113,7 +101,7 @@ const frontal;
   const untrackTask = vi.fn();
   const onTrackedTaskEvent = vi.fn((handler: typeof trackedHandler) => {
     trackedHandler = handler;
-    return () => {};
+    return () => undefined;
   });
 
   class MockFrontalCodeEventsClient {
@@ -122,8 +110,6 @@ const frontal;
     trackTask = trackTask;
     untrackTask = untrackTask;
     onTrackedTaskEvent = onTrackedTaskEvent;
-
-    constructor(_builder: unknown) {}
   }
 
   return {
@@ -149,8 +135,7 @@ vi.mock("../src/api-client", () => ({
 }));
 
 vi.mock("../src/frontal-code-events", () => ({
-  FrontalCodeEventsClient:
-    frontalCodeEventsState.MockFrontalCodeEventsClient,
+  FrontalCodeEventsClient: frontalCodeEventsState.MockFrontalCodeEventsClient,
 }));
 
 vi.mock("../src/config", () => ({
@@ -165,7 +150,7 @@ vi.mock("../src/config", () => ({
       appToken: "xapp-test",
       signingSecret: "secret",
     },
-    frontal_code: {
+    frontalCode: {
       apiUrl: "http://localhost:8787",
       timeout: 30_000,
     },
@@ -187,30 +172,24 @@ describe("SlackInterface constructor wiring", () => {
         SlackInterface.prototype as unknown as {
           handleFrontalCodeTaskEvent: (...args: unknown[]) => Promise<void>;
         },
-        "handleFrontalCodeTaskEvent"
+        "handleFrontalCodeTaskEvent",
       )
       .mockResolvedValue(undefined);
-    const slack = new SlackInterface();
+    const _slack = new SlackInterface();
 
     expect(frontalCodeApiState.getEventsWebSocketUrl).not.toHaveBeenCalled();
-    expect(frontalCodeEventsState.onTrackedTaskEvent).toHaveBeenCalledTimes(
-      1
-    );
+    expect(frontalCodeEventsState.onTrackedTaskEvent).toHaveBeenCalledTimes(1);
     expect(slackState.getMessageHandler()).toBeTypeOf("function");
     expect(slackState.getCommandHandler()).toBeTypeOf("function");
     expect(slackState.getActionHandler()).toBeTypeOf("function");
     expect(slackState.getEventHandler()).toBeTypeOf("function");
 
-    (await frontal) -
-      codeEventsState.getTrackedHandler()?.(
-        { event: "lane.started" },
-        { taskId: "task-123" }
-      );
-
-    expect(handleSpy).toHaveBeenCalledWith(
+    await frontalCodeEventsState.getTrackedHandler()?.(
       { event: "lane.started" },
-      { taskId: "task-123" }
+      { taskId: "task-123" },
     );
+
+    expect(handleSpy).toHaveBeenCalledWith({ event: "lane.started" }, { taskId: "task-123" });
   });
 
   it("ignores Slack message events without a user-facing prompt", async () => {
@@ -243,15 +222,14 @@ describe("SlackInterface constructor wiring", () => {
         SlackInterface.prototype as unknown as {
           registerTask: (...args: unknown[]) => Promise<void>;
         },
-        "registerTask"
+        "registerTask",
       )
       .mockResolvedValue(undefined);
-    frontal -
-      codeApiState.createTask.mockResolvedValue({
-        task_id: "task-123",
-        status: "running",
-        message: "created",
-      });
+    frontalCodeApiState.createTask.mockResolvedValue({
+      task_id: "task-123",
+      status: "running",
+      message: "created",
+    });
     new SlackInterface();
 
     await slackState.getMessageHandler()?.({
@@ -278,18 +256,17 @@ describe("SlackInterface constructor wiring", () => {
         threadTs: "1710000000.100",
         userId: "U123",
       },
-      "Investigate flaky test"
+      "Investigate flaky test",
     );
   });
 
   it("acknowledges and returns policy previews for /ai policy orphans", async () => {
     const ack = vi.fn();
-    frontal -
-      codeApiState.getOrphanPolicy.mockResolvedValue({
-        default_policy: { source: "default", approval_delay_secs: 60 },
-        effective_policy: { source: "default", approval_delay_secs: 60 },
-        configured_rules: [],
-      });
+    frontalCodeApiState.getOrphanPolicy.mockResolvedValue({
+      default_policy: { source: "default", approval_delay_secs: 60 },
+      effective_policy: { source: "default", approval_delay_secs: 60 },
+      configured_rules: [],
+    });
     new SlackInterface();
 
     await slackState.getCommandHandler()?.({
@@ -305,17 +282,14 @@ describe("SlackInterface constructor wiring", () => {
     expect(ack).toHaveBeenCalledWith(
       expect.objectContaining({
         response_type: "ephemeral",
-      })
+      }),
     );
     expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
   });
 
   it("acknowledges policy preview failures with an ephemeral error response", async () => {
     const ack = vi.fn();
-    frontal -
-      codeApiState.getOrphanPolicy.mockRejectedValue(
-        new Error("policy unavailable")
-      );
+    frontalCodeApiState.getOrphanPolicy.mockRejectedValue(new Error("policy unavailable"));
     new SlackInterface();
 
     await slackState.getCommandHandler()?.({
@@ -341,15 +315,14 @@ describe("SlackInterface constructor wiring", () => {
         SlackInterface.prototype as unknown as {
           registerTask: (...args: unknown[]) => Promise<void>;
         },
-        "registerTask"
+        "registerTask",
       )
       .mockResolvedValue(undefined);
-    frontal -
-      codeApiState.createTask.mockResolvedValue({
-        task_id: "task-456",
-        status: "running",
-        message: "created",
-      });
+    frontalCodeApiState.createTask.mockResolvedValue({
+      task_id: "task-456",
+      status: "running",
+      message: "created",
+    });
     new SlackInterface();
 
     await slackState.getCommandHandler()?.({
@@ -375,7 +348,7 @@ describe("SlackInterface constructor wiring", () => {
         channelId: "C123",
         userId: "U123",
       },
-      "Fix the flaky test"
+      "Fix the flaky test",
     );
   });
 
@@ -386,7 +359,7 @@ describe("SlackInterface constructor wiring", () => {
         SlackInterface.prototype as unknown as {
           handleSlackAction: (...args: unknown[]) => Promise<void>;
         },
-        "handleSlackAction"
+        "handleSlackAction",
       )
       .mockResolvedValue(undefined);
     new SlackInterface();
@@ -418,18 +391,15 @@ describe("SlackInterface constructor wiring", () => {
       },
     });
 
-    expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith(
-      "slack",
-      {
+    expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith("slack", {
+      type: "reaction_added",
+      userId: "U123",
+      data: {
         type: "reaction_added",
-        userId: "U123",
-        data: {
-          type: "reaction_added",
-          user: "U123",
-          reaction: "eyes",
-        },
-      }
-    );
+        user: "U123",
+        reaction: "eyes",
+      },
+    });
   });
 
   it("forwards Slack events without a user as connector events with an empty user id", async () => {
@@ -442,16 +412,13 @@ describe("SlackInterface constructor wiring", () => {
       },
     });
 
-    expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith(
-      "slack",
-      {
+    expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith("slack", {
+      type: "member_joined_channel",
+      userId: "",
+      data: {
         type: "member_joined_channel",
-        userId: "",
-        data: {
-          type: "member_joined_channel",
-          channel: "C123",
-        },
-      }
-    );
+        channel: "C123",
+      },
+    });
   });
 });

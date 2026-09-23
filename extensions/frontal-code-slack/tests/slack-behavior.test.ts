@@ -17,27 +17,24 @@ type TestableSlackInterface = SlackInterface & {
   registerTask(
     task: FrontalCodeCreateTaskResponse,
     trackedTask: FrontalCodeTrackedTask,
-    prompt: string
+    prompt: string,
   ): Promise<void>;
-  handleSlackAction(
-    action: { action_id: string; value?: string },
-    body: SlackBody
-  ): Promise<void>;
+  handleSlackAction(action: { action_id: string; value?: string }, body: SlackBody): Promise<void>;
   handleOrphanApprovalAction(
     action: { action_id: string; value?: string },
-    body: SlackBody
+    body: SlackBody,
   ): Promise<void>;
   handleFrontalCodeTaskEvent(
     event: FrontalCodeEventEnvelope,
-    task?: FrontalCodeTrackedTask
+    task?: FrontalCodeTrackedTask,
   ): Promise<void>;
   resolveTrackedTaskForEvent(
     event: FrontalCodeEventEnvelope,
-    task?: FrontalCodeTrackedTask
+    task?: FrontalCodeTrackedTask,
   ): Promise<FrontalCodeTrackedTask | undefined>;
   hydrateTrackedTaskFromEvent(
     task: FrontalCodeTrackedTask,
-    event: FrontalCodeEventEnvelope
+    event: FrontalCodeEventEnvelope,
   ): FrontalCodeTrackedTask;
   upsertTrackedTask(task: FrontalCodeTrackedTask): void;
   syncTrackedTasksFromFrontalCode(): Promise<void>;
@@ -48,9 +45,7 @@ type TestableSlackInterface = SlackInterface & {
 };
 
 function createTestSlackInterface() {
-  const slack = Object.create(
-    SlackInterface.prototype
-  ) as TestableSlackInterface;
+  const slack = Object.create(SlackInterface.prototype) as TestableSlackInterface;
   const postMessage = vi.fn();
   const updateMessage = vi.fn();
   const updateTaskContext = vi.fn();
@@ -79,7 +74,7 @@ function createTestSlackInterface() {
         },
       },
     },
-    frontal-codeApi: {
+    frontalCodeApi: {
       updateTaskContext,
       getTask,
       listTasks,
@@ -87,7 +82,7 @@ function createTestSlackInterface() {
       healthCheck,
       sendConnectorInteraction,
     },
-    frontal-codeEvents: {
+    frontalCodeEvents: {
       connect: connectEvents,
       disconnect: disconnectEvents,
       trackTask,
@@ -120,7 +115,7 @@ function createTestSlackInterface() {
 }
 
 function createTrackedTask(
-  overrides: Partial<FrontalCodeTrackedTask> = {}
+  overrides: Partial<FrontalCodeTrackedTask> = {},
 ): FrontalCodeTrackedTask {
   return {
     taskId: "task-123",
@@ -132,7 +127,7 @@ function createTrackedTask(
 }
 
 function createTaskResponse(
-  overrides: Partial<FrontalCodeCreateTaskResponse> = {}
+  overrides: Partial<FrontalCodeCreateTaskResponse> = {},
 ): FrontalCodeCreateTaskResponse {
   return {
     task_id: "task-123",
@@ -142,9 +137,7 @@ function createTaskResponse(
   };
 }
 
-function createTaskSnapshot(
-  overrides: Partial<FrontalCodeTask> = {}
-): FrontalCodeTask {
+function createTaskSnapshot(overrides: Partial<FrontalCodeTask> = {}): FrontalCodeTask {
   return {
     task_id: "task-123",
     prompt: "Investigate flaky test",
@@ -155,9 +148,7 @@ function createTaskSnapshot(
   };
 }
 
-function createEvent(
-  overrides: Partial<FrontalCodeEventEnvelope> = {}
-): FrontalCodeEventEnvelope {
+function createEvent(overrides: Partial<FrontalCodeEventEnvelope> = {}): FrontalCodeEventEnvelope {
   return {
     event_id: "evt-123",
     topic: "approval",
@@ -183,8 +174,7 @@ describe("SlackInterface behavior", () => {
   });
 
   it("registers a created task, persists thread context, and tracks it for Frontal Code events", async () => {
-    const { slack, postMessage, updateTaskContext, trackTask } =
-      createTestSlackInterface();
+    const { slack, postMessage, updateTaskContext, trackTask } = createTestSlackInterface();
     const task = createTaskResponse({
       plan_kind: "implementer",
       worker_status: "ready",
@@ -223,9 +213,8 @@ describe("SlackInterface behavior", () => {
   });
 
   it("connects by syncing tasks, starting Slack, and connecting Frontal Code events", async () => {
-    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    const { slack, listTasks, appStart, connectEvents } =
-      createTestSlackInterface();
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+    const { slack, listTasks, appStart, connectEvents } = createTestSlackInterface();
     listTasks.mockResolvedValue([]);
     appStart.mockResolvedValue(undefined);
     connectEvents.mockResolvedValue(undefined);
@@ -242,22 +231,18 @@ describe("SlackInterface behavior", () => {
   });
 
   it("rethrows connect failures after logging them", async () => {
-    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
-    const { slack, listTasks, appStart, connectEvents } =
-      createTestSlackInterface();
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+    const { slack, listTasks, appStart, connectEvents } = createTestSlackInterface();
     listTasks.mockResolvedValue([]);
     appStart.mockResolvedValue(undefined);
     connectEvents.mockRejectedValue(new Error("ws down"));
 
     await expect(slack.connect()).rejects.toThrow("ws down");
-    expect(errorSpy).toHaveBeenCalledWith(
-      "Failed to connect to Slack",
-      expect.any(Error)
-    );
+    expect(errorSpy).toHaveBeenCalledWith("Failed to connect to Slack", expect.any(Error));
   });
 
   it("disconnects Frontal Code events before stopping Slack", async () => {
-    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
     const { slack, disconnectEvents, appStop } = createTestSlackInterface();
     disconnectEvents.mockResolvedValue(undefined);
     appStop.mockResolvedValue(undefined);
@@ -266,22 +251,17 @@ describe("SlackInterface behavior", () => {
 
     expect(disconnectEvents).toHaveBeenCalled();
     expect(appStop).toHaveBeenCalled();
-    expect(infoSpy).toHaveBeenCalledWith(
-      "Slack WebSocket interface disconnected"
-    );
+    expect(infoSpy).toHaveBeenCalledWith("Slack WebSocket interface disconnected");
   });
 
   it("rethrows disconnect failures after logging them", async () => {
-    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
     const { slack, disconnectEvents, appStop } = createTestSlackInterface();
     disconnectEvents.mockRejectedValue(new Error("disconnect failed"));
 
     await expect(slack.disconnect()).rejects.toThrow("disconnect failed");
     expect(appStop).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledWith(
-      "Failed to disconnect from Slack",
-      expect.any(Error)
-    );
+    expect(errorSpy).toHaveBeenCalledWith("Failed to disconnect from Slack", expect.any(Error));
   });
 
   it("reports Slack and Frontal Code health from the live clients", async () => {
@@ -297,7 +277,7 @@ describe("SlackInterface behavior", () => {
 
   it("treats Slack as disconnected when the Bolt client does not expose isListening", async () => {
     const { slack, healthCheck } = createTestSlackInterface();
-    delete (slack.app as { isListening?: () => boolean }).isListening;
+    (slack.app as { isListening?: () => boolean }).isListening = undefined;
     healthCheck.mockResolvedValue(true);
 
     await expect(slack.healthCheck()).resolves.toEqual({
@@ -307,7 +287,7 @@ describe("SlackInterface behavior", () => {
   });
 
   it("returns a degraded health response when health checks throw", async () => {
-    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
     const { slack, isListening } = createTestSlackInterface();
     isListening.mockImplementation(() => {
       throw new Error("listener unavailable");
@@ -317,23 +297,19 @@ describe("SlackInterface behavior", () => {
       slack: false,
       frontal_code: false,
     });
-    expect(errorSpy).toHaveBeenCalledWith(
-      "Health check failed",
-      expect.any(Error)
-    );
+    expect(errorSpy).toHaveBeenCalledWith("Health check failed", expect.any(Error));
   });
 
   it("still tracks a task when thread-anchor persistence back to Frontal Code fails", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const { slack, postMessage, updateTaskContext, trackTask } =
-      createTestSlackInterface();
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const { slack, postMessage, updateTaskContext, trackTask } = createTestSlackInterface();
     postMessage.mockResolvedValue({ ts: "1710000000.250" });
     updateTaskContext.mockRejectedValue(new Error("frontal-code unavailable"));
 
     await slack.registerTask(
       createTaskResponse(),
       createTrackedTask({ threadTs: undefined }),
-      "Investigate flaky test"
+      "Investigate flaky test",
     );
 
     expect(trackTask).toHaveBeenCalledWith({
@@ -348,13 +324,12 @@ describe("SlackInterface behavior", () => {
       expect.objectContaining({
         taskId: "task-123",
         error: "frontal-code unavailable",
-      })
+      }),
     );
   });
 
   it("routes generic connector actions through the hosted connector interaction endpoint", async () => {
-    const { slack, sendConnectorInteraction, updateMessage } =
-      createTestSlackInterface();
+    const { slack, sendConnectorInteraction, updateMessage } = createTestSlackInterface();
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -374,7 +349,7 @@ describe("SlackInterface behavior", () => {
         action_id: "connector.action",
         value: "task-123",
       },
-      body
+      body,
     );
 
     expect(sendConnectorInteraction).toHaveBeenCalledWith("slack", {
@@ -392,9 +367,7 @@ describe("SlackInterface behavior", () => {
 
   it("routes orphan approval actions through the dedicated approval handler", async () => {
     const { slack, sendConnectorInteraction } = createTestSlackInterface();
-    const approvalSpy = vi
-      .spyOn(slack, "handleOrphanApprovalAction")
-      .mockResolvedValue(undefined);
+    const approvalSpy = vi.spyOn(slack, "handleOrphanApprovalAction").mockResolvedValue(undefined);
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -406,7 +379,7 @@ describe("SlackInterface behavior", () => {
         action_id: "orphaned_hosted_agent.retry",
         value: "task-123",
       },
-      body
+      body,
     );
 
     expect(approvalSpy).toHaveBeenCalledWith(
@@ -414,7 +387,7 @@ describe("SlackInterface behavior", () => {
         action_id: "orphaned_hosted_agent.retry",
         value: "task-123",
       },
-      body
+      body,
     );
     expect(sendConnectorInteraction).not.toHaveBeenCalled();
   });
@@ -433,7 +406,7 @@ describe("SlackInterface behavior", () => {
         action_id: "orphaned_hosted_agent.retry",
         value: "task-123",
       },
-      body
+      body,
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
@@ -459,7 +432,7 @@ describe("SlackInterface behavior", () => {
         action_id: "orphaned_hosted_agent.cancel",
         value: "task-123",
       },
-      body
+      body,
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
@@ -471,8 +444,7 @@ describe("SlackInterface behavior", () => {
   });
 
   it("ignores orphan approval actions that do not carry a task id", async () => {
-    const { slack, updateMessage, resolveTaskApproval } =
-      createTestSlackInterface();
+    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -483,7 +455,7 @@ describe("SlackInterface behavior", () => {
       {
         action_id: "orphaned_hosted_agent.retry",
       },
-      body
+      body,
     );
 
     expect(updateMessage).not.toHaveBeenCalled();
@@ -491,8 +463,7 @@ describe("SlackInterface behavior", () => {
   });
 
   it("resolves orphan approvals through Frontal Code and updates the approval message twice", async () => {
-    const { slack, updateMessage, resolveTaskApproval } =
-      createTestSlackInterface();
+    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -503,7 +474,7 @@ describe("SlackInterface behavior", () => {
         status: "running",
         worker_status: "ready_for_prompt",
         worker_id: "worker-123",
-      })
+      }),
     );
 
     await slack.handleOrphanApprovalAction(
@@ -511,7 +482,7 @@ describe("SlackInterface behavior", () => {
         action_id: "orphaned_hosted_agent.retry",
         value: "task-123",
       },
-      body
+      body,
     );
 
     expect(resolveTaskApproval).toHaveBeenCalledWith({
@@ -527,7 +498,7 @@ describe("SlackInterface behavior", () => {
         channel: "C123",
         ts: "1710000000.540",
         text: "Processing approval for task task-123: retry.",
-      })
+      }),
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
@@ -535,15 +506,14 @@ describe("SlackInterface behavior", () => {
         channel: "C123",
         ts: "1710000000.540",
         text: "Approval resolved for task task-123: retry.",
-      })
+      }),
     );
     expect(slack.approvalInFlight.has("task-123")).toBe(false);
     expect(slack.approvalResolved.has("task-123")).toBe(true);
   });
 
   it("updates the approval message with an error state when resolution fails", async () => {
-    const { slack, updateMessage, resolveTaskApproval } =
-      createTestSlackInterface();
+    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -557,28 +527,27 @@ describe("SlackInterface behavior", () => {
           action_id: "orphaned_hosted_agent.cancel",
           value: "task-123",
         },
-        body
-      )
+        body,
+      ),
     ).rejects.toThrow("provider down");
 
     expect(updateMessage).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         text: "Processing approval for task task-123: cancel.",
-      })
+      }),
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         text: "Approval failed for task task-123.",
-      })
+      }),
     );
     expect(slack.approvalInFlight.has("task-123")).toBe(false);
   });
 
   it("resolves orphan approvals, updates the message twice, and marks the approval resolved", async () => {
-    const { slack, updateMessage, resolveTaskApproval } =
-      createTestSlackInterface();
+    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -588,7 +557,7 @@ describe("SlackInterface behavior", () => {
       createTaskSnapshot({
         worker_status: "ready_for_prompt",
         worker_id: "worker-123",
-      })
+      }),
     );
 
     await slack.handleOrphanApprovalAction(
@@ -596,7 +565,7 @@ describe("SlackInterface behavior", () => {
         action_id: "orphaned_hosted_agent.retry",
         value: "task-123",
       },
-      body
+      body,
     );
 
     expect(resolveTaskApproval).toHaveBeenCalledWith({
@@ -613,7 +582,7 @@ describe("SlackInterface behavior", () => {
         ts: "1710000000.530",
         text: "Processing approval for task task-123: retry.",
         blocks: expect.any(Array),
-      })
+      }),
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
@@ -622,18 +591,15 @@ describe("SlackInterface behavior", () => {
         ts: "1710000000.530",
         text: "Approval resolved for task task-123: retry.",
         blocks: expect.any(Array),
-      })
+      }),
     );
     expect(slack.approvalInFlight.has("task-123")).toBe(false);
     expect(slack.approvalResolved.has("task-123")).toBe(true);
-    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
-      "1710000000.530"
-    );
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe("1710000000.530");
   });
 
   it("shows an approval error state, clears in-flight state, and rethrows when resolution fails", async () => {
-    const { slack, updateMessage, resolveTaskApproval } =
-      createTestSlackInterface();
+    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -648,8 +614,8 @@ describe("SlackInterface behavior", () => {
           action_id: "orphaned_hosted_agent.cancel",
           value: "task-123",
         },
-        body
-      )
+        body,
+      ),
     ).rejects.toBe(failure);
 
     expect(updateMessage).toHaveBeenNthCalledWith(
@@ -659,7 +625,7 @@ describe("SlackInterface behavior", () => {
         ts: "1710000000.540",
         text: "Processing approval for task task-123: cancel.",
         blocks: expect.any(Array),
-      })
+      }),
     );
     expect(updateMessage).toHaveBeenNthCalledWith(
       2,
@@ -668,18 +634,15 @@ describe("SlackInterface behavior", () => {
         ts: "1710000000.540",
         text: "Approval failed for task task-123.",
         blocks: expect.any(Array),
-      })
+      }),
     );
     expect(slack.approvalInFlight.has("task-123")).toBe(false);
     expect(slack.approvalResolved.has("task-123")).toBe(false);
-    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
-      "1710000000.540"
-    );
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe("1710000000.540");
   });
 
   it("leaves the approval marked in-flight when the initial Slack approval update fails", async () => {
-    const { slack, updateMessage, resolveTaskApproval } =
-      createTestSlackInterface();
+    const { slack, updateMessage, resolveTaskApproval } = createTestSlackInterface();
     const body: SlackBody = {
       user: { id: "U123" },
       channel: { id: "C123" },
@@ -693,21 +656,18 @@ describe("SlackInterface behavior", () => {
           action_id: "orphaned_hosted_agent.retry",
           value: "task-123",
         },
-        body
-      )
+        body,
+      ),
     ).rejects.toThrow("slack update failed");
 
     expect(resolveTaskApproval).not.toHaveBeenCalled();
     expect(slack.approvalInFlight.has("task-123")).toBe(true);
     expect(slack.approvalResolved.has("task-123")).toBe(false);
-    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
-      "1710000000.550"
-    );
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe("1710000000.550");
   });
 
   it("posts approval-request events into the task thread and persists the approval message ts", async () => {
-    const { slack, postMessage, updateTaskContext } =
-      createTestSlackInterface();
+    const { slack, postMessage, updateTaskContext } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
     postMessage.mockResolvedValue({ ts: "1710000000.300" });
     updateTaskContext.mockResolvedValue({});
@@ -720,9 +680,7 @@ describe("SlackInterface behavior", () => {
       blocks: expect.any(Array),
       thread_ts: "1710000000.100",
     });
-    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
-      "1710000000.300"
-    );
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe("1710000000.300");
     expect(updateTaskContext).toHaveBeenCalledWith({
       taskId: "task-123",
       source: "slack",
@@ -735,9 +693,7 @@ describe("SlackInterface behavior", () => {
 
   it("returns without posting when an Frontal Code event cannot be resolved to a tracked task", async () => {
     const { slack, postMessage } = createTestSlackInterface();
-    const resolveSpy = vi
-      .spyOn(slack, "resolveTrackedTaskForEvent")
-      .mockResolvedValue(undefined);
+    const resolveSpy = vi.spyOn(slack, "resolveTrackedTaskForEvent").mockResolvedValue(undefined);
 
     await slack.handleFrontalCodeTaskEvent(createEvent());
 
@@ -756,9 +712,8 @@ describe("SlackInterface behavior", () => {
   });
 
   it("keeps the posted approval message even when approval-message persistence back to Frontal Code fails", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const { slack, postMessage, updateTaskContext } =
-      createTestSlackInterface();
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const { slack, postMessage, updateTaskContext } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
     postMessage.mockResolvedValue({ ts: "1710000000.301" });
     updateTaskContext.mockRejectedValue(new Error("persist failed"));
@@ -766,15 +721,13 @@ describe("SlackInterface behavior", () => {
     await slack.handleFrontalCodeTaskEvent(createEvent(), trackedTask);
 
     expect(postMessage).toHaveBeenCalled();
-    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
-      "1710000000.301"
-    );
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe("1710000000.301");
     expect(warnSpy).toHaveBeenCalledWith(
       "Failed to persist Slack approval message linkage to Frontal Code",
       expect.objectContaining({
         taskId: "task-123",
         error: "persist failed",
-      })
+      }),
     );
   });
 
@@ -796,7 +749,7 @@ describe("SlackInterface behavior", () => {
           repository: "frontal-code/slack",
         },
       }),
-      trackedTask
+      trackedTask,
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
@@ -811,16 +764,13 @@ describe("SlackInterface behavior", () => {
   });
 
   it("cleans up tracked task state after a terminal approval-resolved update succeeds", async () => {
-    const { slack, postMessage, updateMessage, untrackTask } =
-      createTestSlackInterface();
+    const { slack, postMessage, updateMessage, untrackTask } = createTestSlackInterface();
     const trackedTask = createTrackedTask();
     slack.trackedTasks.set("task-123", trackedTask);
     slack.approvalMessageTsByTask.set("task-123", "1710000000.300");
     slack.approvalInFlight.add("task-123");
     updateMessage.mockResolvedValue({});
-    vi.spyOn(slack as never, "isTerminalFrontalCodeEvent").mockReturnValue(
-      true
-    );
+    vi.spyOn(slack as never, "isTerminalFrontalCodeEvent").mockReturnValue(true);
 
     await slack.handleFrontalCodeTaskEvent(
       createEvent({
@@ -834,7 +784,7 @@ describe("SlackInterface behavior", () => {
           repository: "frontal-code/slack",
         },
       }),
-      trackedTask
+      trackedTask,
     );
 
     expect(updateMessage).toHaveBeenCalledWith({
@@ -866,7 +816,7 @@ describe("SlackInterface behavior", () => {
           channel_id: "C123",
         },
       }),
-      trackedTask
+      trackedTask,
     );
 
     expect(updateMessage).not.toHaveBeenCalled();
@@ -887,7 +837,7 @@ describe("SlackInterface behavior", () => {
         event: "task.created",
         status: "pending",
       }),
-      createTrackedTask()
+      createTrackedTask(),
     );
 
     expect(postMessage).not.toHaveBeenCalled();
@@ -916,7 +866,7 @@ describe("SlackInterface behavior", () => {
           repository: "frontal-code/slack",
         },
       }),
-      trackedTask
+      trackedTask,
     );
 
     expect(postMessage).toHaveBeenCalledWith({
@@ -948,15 +898,13 @@ describe("SlackInterface behavior", () => {
             repository: "frontal-code/slack",
           },
         }),
-        trackedTask
-      )
+        trackedTask,
+      ),
     ).rejects.toThrow("slack update failed");
 
     expect(untrackTask).not.toHaveBeenCalled();
     expect(slack.trackedTasks.get("task-123")).toEqual(trackedTask);
-    expect(slack.approvalMessageTsByTask.get("task-123")).toBe(
-      "1710000000.300"
-    );
+    expect(slack.approvalMessageTsByTask.get("task-123")).toBe("1710000000.300");
     expect(slack.approvalInFlight.has("task-123")).toBe(false);
     expect(slack.approvalResolved.has("task-123")).toBe(true);
   });
@@ -980,7 +928,7 @@ describe("SlackInterface behavior", () => {
           repository: "frontal-code/slack",
         },
       }),
-      trackedTask
+      trackedTask,
     );
 
     expect(postMessage).toHaveBeenCalledWith({
@@ -1005,14 +953,14 @@ describe("SlackInterface behavior", () => {
         thread_ts: "1710000000.900",
         user_id: "U999",
         approval_message_ts: "1710000001.000",
-      })
+      }),
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
         task_id: "task-unknown",
         payload: {},
-      })
+      }),
     );
 
     expect(getTask).toHaveBeenCalledWith("task-unknown");
@@ -1028,9 +976,7 @@ describe("SlackInterface behavior", () => {
       threadTs: "1710000000.900",
       userId: "U999",
     });
-    expect(slack.approvalMessageTsByTask.get("task-unknown")).toBe(
-      "1710000001.000"
-    );
+    expect(slack.approvalMessageTsByTask.get("task-unknown")).toBe("1710000001.000");
   });
 
   it("returns no tracked task when an event arrives without a task id", async () => {
@@ -1039,7 +985,7 @@ describe("SlackInterface behavior", () => {
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
         task_id: undefined,
-      })
+      }),
     );
 
     expect(resolvedTask).toBeUndefined();
@@ -1054,7 +1000,7 @@ describe("SlackInterface behavior", () => {
         channelId: "C123",
         threadTs: undefined,
         userId: undefined,
-      })
+      }),
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
@@ -1065,7 +1011,7 @@ describe("SlackInterface behavior", () => {
           user_id: "U999",
           repository: "frontal-code/slack",
         },
-      })
+      }),
     );
 
     expect(resolvedTask).toEqual({
@@ -1088,7 +1034,7 @@ describe("SlackInterface behavior", () => {
           thread_ts: "1710000000.456",
           user_id: "U456",
         },
-      })
+      }),
     );
 
     expect(getTask).not.toHaveBeenCalled();
@@ -1118,7 +1064,7 @@ describe("SlackInterface behavior", () => {
           user_id: "U777",
           repository: "frontal-code/slack",
         },
-      })
+      }),
     );
 
     expect(getTask).not.toHaveBeenCalled();
@@ -1138,7 +1084,7 @@ describe("SlackInterface behavior", () => {
   });
 
   it("returns no tracked task when fallback Frontal Code lookup fails", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     const { slack, getTask } = createTestSlackInterface();
     getTask.mockRejectedValue(new Error("not found"));
 
@@ -1146,7 +1092,7 @@ describe("SlackInterface behavior", () => {
       createEvent({
         task_id: "task-missing",
         payload: {},
-      })
+      }),
     );
 
     expect(resolvedTask).toBeUndefined();
@@ -1155,7 +1101,7 @@ describe("SlackInterface behavior", () => {
       expect.objectContaining({
         taskId: "task-missing",
         error: "not found",
-      })
+      }),
     );
   });
 
@@ -1167,14 +1113,14 @@ describe("SlackInterface behavior", () => {
         channel_id: undefined,
         thread_ts: "1710000000.901",
         user_id: "U901",
-      })
+      }),
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
       createEvent({
         task_id: "task-no-routing",
         payload: {},
-      })
+      }),
     );
 
     expect(resolvedTask).toBeUndefined();
@@ -1237,19 +1183,16 @@ describe("SlackInterface behavior", () => {
   });
 
   it("logs and continues when startup sync from Frontal Code fails", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     const { slack, listTasks, trackTask } = createTestSlackInterface();
     listTasks.mockRejectedValue(new Error("frontal-code down"));
 
     await slack.syncTrackedTasksFromFrontalCode();
 
     expect(trackTask).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to synchronize Slack tasks from Frontal Code",
-      {
-        error: "frontal-code down",
-      }
-    );
+    expect(warnSpy).toHaveBeenCalledWith("Failed to synchronize Slack tasks from Frontal Code", {
+      error: "frontal-code down",
+    });
   });
 
   it("hydrates known tracked tasks with newer routing details from later events", async () => {
@@ -1260,7 +1203,7 @@ describe("SlackInterface behavior", () => {
         channelId: "C123",
         threadTs: undefined,
         userId: undefined,
-      })
+      }),
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
@@ -1271,7 +1214,7 @@ describe("SlackInterface behavior", () => {
           user_id: "U456",
           repository: "frontal-code/slack",
         },
-      })
+      }),
     );
 
     expect(getTask).not.toHaveBeenCalled();
@@ -1293,7 +1236,7 @@ describe("SlackInterface behavior", () => {
         channelId: "C123",
         threadTs: "1710000000.100",
         userId: "U123",
-      })
+      }),
     );
 
     const resolvedTask = await slack.resolveTrackedTaskForEvent(
@@ -1303,7 +1246,7 @@ describe("SlackInterface behavior", () => {
           user_id: "U456",
           repository: "frontal-code/slack",
         },
-      })
+      }),
     );
 
     expect(resolvedTask).toEqual({
@@ -1326,8 +1269,8 @@ describe("SlackInterface behavior", () => {
           payload: {
             repository: "frontal-code/slack",
           },
-        })
-      )
+        }),
+      ),
     ).toBe(task);
   });
 
@@ -1340,7 +1283,7 @@ describe("SlackInterface behavior", () => {
         channelId: "C456",
         threadTs: undefined,
         userId: "U456",
-      })
+      }),
     );
 
     expect(slack.trackedTasks.get("task-123")).toEqual({

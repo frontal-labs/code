@@ -32,5 +32,5 @@ pub use types::{
 pub use frontal_code_telemetry::{
     AnalyticsEvent, AnthropicRequestProfile, ClientIdentity, JsonlTelemetrySink,
     MemoryTelemetrySink, SessionTraceRecord, SessionTracer, TelemetryEvent, TelemetrySink,
-    DEFAULT_FCODE_VERSION,
+    DEFAULT_FRONTAL_CODE_VERSION,
 };

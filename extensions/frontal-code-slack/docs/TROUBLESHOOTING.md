@@ -111,21 +111,21 @@ telnet api.slack.com 443
 1. **Check Frontal Code API Connection**
    ```bash
    # Test API connectivity
-   curl -f $FCODE_API_URL/health
+   curl -f $FRONTAL_CODE_API_URL/health
    
    # Check API timeout
-   curl -w "@curl-format.txt" -o /dev/null -s "$FCODE_API_URL/health"
+   curl -w "@curl-format.txt" -o /dev/null -s "$FRONTAL_CODE_API_URL/health"
    ```
 
 2. **Verify API Configuration**
    ```bash
    # Check API URL format
-   echo $FCODE_API_URL | grep -E "^https?://"
+   echo $FRONTAL_CODE_API_URL | grep -E "^https?://"
    
    # Test with curl
    curl -H "Content-Type: application/json" \
         -d '{"prompt":"test","source":"troubleshoot"}' \
-        "$FCODE_API_URL/tasks"
+        "$FRONTAL_CODE_API_URL/tasks"
    ```
 
 3. **Check Request Logs**
@@ -148,10 +148,10 @@ telnet api.slack.com 443
 **API Connection Issues:**
 ```bash
 # Update API URL in .env
-FCODE_API_URL=https://frontal-code-api.your-domain.com
+FRONTAL_CODE_API_URL=https://frontal-code-api.your-domain.com
 
 # Increase timeout
-FCODE_API_TIMEOUT=60000
+FRONTAL_CODE_API_TIMEOUT=60000
 
 # Restart service
 systemctl restart frontal-code-slack
@@ -170,7 +170,7 @@ const request = {
 **Authentication Issues:**
 ```bash
 # Add API token if required
-FCODE_API_TOKEN=your-api-token-here
+FRONTAL_CODE_API_TOKEN=your-api-token-here
 ```
 
 ### 3. WebSocket Connection Issues
@@ -502,7 +502,7 @@ class MessageQueue {
 1. **Check Environment Variables**
    ```bash
    # Verify all required variables
-   env | grep -E "^(SLACK|FCODE|NODE_ENV)"
+   env | grep -E "^(SLACK|FRONTAL_CODE|NODE_ENV)"
    
    # Check for missing variables
    comm -23 <(sort .env.example) <(sort .env)
@@ -548,7 +548,7 @@ import Joi from 'joi';
 const configSchema = Joi.object({
   SLACK_BOT_TOKEN: Joi.string().pattern(/^xoxb-/).required(),
   SLACK_APP_TOKEN: Joi.string().pattern(/^xapp-/).required(),
-  FCODE_API_URL: Joi.string().uri().required(),
+  FRONTAL_CODE_API_URL: Joi.string().uri().required(),
   PORT: Joi.number().port().default(3000)
 });
 
@@ -587,7 +587,7 @@ telnet frontal-code-api.your-domain.com 8788
 
 # Test HTTP connectivity
 curl -v https://api.slack.com/api/auth.test
-curl -v $FCODE_API_URL/health
+curl -v $FRONTAL_CODE_API_URL/health
 ```
 
 ### Performance Profiling

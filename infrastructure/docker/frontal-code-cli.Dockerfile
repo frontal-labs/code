@@ -65,7 +65,7 @@ USER frontal-code
 
 # Environment variables
 ENV CARGO_TERM_COLOR=always
-ENV FCODE_HOME=/workspace/.frontal-code
+ENV FRONTAL_CODE_HOME=/workspace/.frontal-code
 ENV SANDBOX_HOME=/workspace/.sandbox-home
 
 # Health check

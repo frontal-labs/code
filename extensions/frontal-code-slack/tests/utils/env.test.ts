@@ -18,11 +18,11 @@ describe("Environment Variables", () => {
     });
 
     it("should have Frontal Code API configuration", () => {
-      expect(env.FCODE_API_URL).toBeDefined();
-      expect(env.FCODE_API_URL).toMatch(/^https?:\/\//);
-      expect(env.FCODE_API_TIMEOUT).toBeDefined();
-      expect(env.FCODE_API_TIMEOUT).toBeGreaterThanOrEqual(1000);
-      expect(env.FCODE_API_TIMEOUT).toBeLessThanOrEqual(300000);
+      expect(env.FRONTAL_CODE_API_URL).toBeDefined();
+      expect(env.FRONTAL_CODE_API_URL).toMatch(/^https?:\/\//);
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeDefined();
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeGreaterThanOrEqual(1000);
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeLessThanOrEqual(300000);
     });
 
     it("should have database and Redis URLs", () => {
@@ -36,9 +36,7 @@ describe("Environment Variables", () => {
       expect(env.NODE_ENV).toBeDefined();
       expect(["development", "production", "test"]).toContain(env.NODE_ENV);
       expect(env.LOG_LEVEL).toBeDefined();
-      expect(["error", "warn", "info", "http", "debug"]).toContain(
-        env.LOG_LEVEL
-      );
+      expect(["error", "warn", "info", "http", "debug"]).toContain(env.LOG_LEVEL);
       expect(env.PORT).toBeDefined();
       expect(env.PORT).toBeGreaterThanOrEqual(1000);
       expect(env.PORT).toBeLessThanOrEqual(65535);
@@ -58,9 +56,7 @@ describe("Environment Variables", () => {
 
     it("should have optional GitHub token", () => {
       // GitHub token is optional, so it can be undefined
-      expect(
-        env.GITHUB_TOKEN === undefined || typeof env.GITHUB_TOKEN === "string"
-      ).toBe(true);
+      expect(env.GITHUB_TOKEN === undefined || typeof env.GITHUB_TOKEN === "string").toBe(true);
     });
   });
 
@@ -101,8 +97,8 @@ describe("Environment Variables", () => {
       expect(config.slack.appToken).toBe(env.SLACK_APP_TOKEN);
       expect(config.slack.signingSecret).toBe(env.SLACK_SIGNING_SECRET);
 
-      expect(config.frontalCode.apiUrl).toBe(env.FCODE_API_URL);
-      expect(config.frontalCode.timeout).toBe(env.FCODE_API_TIMEOUT);
+      expect(config.frontalCode.apiUrl).toBe(env.FRONTAL_CODE_API_URL);
+      expect(config.frontalCode.timeout).toBe(env.FRONTAL_CODE_API_TIMEOUT);
 
       expect(config.database.url).toBe(env.DATABASE_URL);
       expect(config.redis.url).toBe(env.REDIS_URL);
@@ -141,8 +137,8 @@ describe("Environment Variables", () => {
   describe("Default Values", () => {
     it("should use default values when environment variables are not set", () => {
       // These are set in the test setup, but we can verify they match expected defaults
-      expect(env.FCODE_API_URL).toBe("http://localhost:8787");
-      expect(env.FCODE_API_TIMEOUT).toBe(30000);
+      expect(env.FRONTAL_CODE_API_URL).toBe("http://localhost:8787");
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBe(30000);
       expect(env.NODE_ENV).toBe("test");
       expect(env.LOG_LEVEL).toBe("error");
       expect(env.PORT).toBe(3000);
@@ -157,8 +153,8 @@ describe("Environment Variables", () => {
       expect(typeof env.SLACK_BOT_TOKEN).toBe("string");
       expect(typeof env.SLACK_APP_TOKEN).toBe("string");
       expect(typeof env.SLACK_SIGNING_SECRET).toBe("string");
-      expect(typeof env.FCODE_API_URL).toBe("string");
-      expect(typeof env.FCODE_API_TIMEOUT).toBe("number");
+      expect(typeof env.FRONTAL_CODE_API_URL).toBe("string");
+      expect(typeof env.FRONTAL_CODE_API_TIMEOUT).toBe("number");
       expect(typeof env.DATABASE_URL).toBe("string");
       expect(typeof env.REDIS_URL).toBe("string");
       expect(typeof env.NODE_ENV).toBe("string");
@@ -167,9 +163,7 @@ describe("Environment Variables", () => {
       expect(typeof env.MAX_CONCURRENT_TASKS).toBe("number");
       expect(typeof env.TASK_TIMEOUT).toBe("number");
       expect(typeof env.HEALTH_CHECK_INTERVAL).toBe("number");
-      expect(
-        env.GITHUB_TOKEN === undefined || typeof env.GITHUB_TOKEN === "string"
-      ).toBe(true);
+      expect(env.GITHUB_TOKEN === undefined || typeof env.GITHUB_TOKEN === "string").toBe(true);
     });
   });
 
@@ -180,14 +174,14 @@ describe("Environment Variables", () => {
     });
 
     it("should validate URL formats", () => {
-      expect(env.FCODE_API_URL).toMatch(/^https?:\/\/.+/);
+      expect(env.FRONTAL_CODE_API_URL).toMatch(/^https?:\/\/.+/);
       expect(env.DATABASE_URL).toMatch(/^postgresql:\/\/.+/);
       expect(env.REDIS_URL).toMatch(/^redis:\/\/.+/);
     });
 
     it("should validate numeric ranges", () => {
-      expect(env.FCODE_API_TIMEOUT).toBeGreaterThanOrEqual(1000);
-      expect(env.FCODE_API_TIMEOUT).toBeLessThanOrEqual(300000);
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeGreaterThanOrEqual(1000);
+      expect(env.FRONTAL_CODE_API_TIMEOUT).toBeLessThanOrEqual(300000);
       expect(env.PORT).toBeGreaterThanOrEqual(1000);
       expect(env.PORT).toBeLessThanOrEqual(65535);
       expect(env.MAX_CONCURRENT_TASKS).toBeGreaterThanOrEqual(1);
@@ -200,9 +194,7 @@ describe("Environment Variables", () => {
 
     it("should validate enum values", () => {
       expect(["development", "production", "test"]).toContain(env.NODE_ENV);
-      expect(["error", "warn", "info", "http", "debug"]).toContain(
-        env.LOG_LEVEL
-      );
+      expect(["error", "warn", "info", "http", "debug"]).toContain(env.LOG_LEVEL);
     });
   });
 });

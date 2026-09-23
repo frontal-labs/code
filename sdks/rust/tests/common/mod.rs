@@ -32,8 +32,8 @@ impl MockFrontalCode {
 
     let script = format!(
       "#!/usr/bin/env bash\n\
-             CAP=\"${{FCODE_MOCK_CAPTURE:-/dev/null}}\"\n\
-             CWD=\"${{FCODE_MOCK_CWD:-/dev/null}}\"\n\
+             CAP=\"${{FRONTAL_CODE_MOCK_CAPTURE:-/dev/null}}\"\n\
+             CWD=\"${{FRONTAL_CODE_MOCK_CWD:-/dev/null}}\"\n\
              RESP=\"{resp}\"\n\
              EXIT=\"{exit}\"\n\
              pwd > \"$CWD\"\n\
@@ -61,11 +61,11 @@ impl MockFrontalCode {
   pub fn env(&self) -> HashMap<String, String> {
     let mut map = HashMap::new();
     map.insert(
-      "FCODE_MOCK_CAPTURE".into(),
+      "FRONTAL_CODE_MOCK_CAPTURE".into(),
       self.capture_path.to_string_lossy().into_owned(),
     );
     map.insert(
-      "FCODE_MOCK_CWD".into(),
+      "FRONTAL_CODE_MOCK_CWD".into(),
       self.cwd_path.to_string_lossy().into_owned(),
     );
     map.insert("PATH".into(), std::env::var("PATH").unwrap_or_default());

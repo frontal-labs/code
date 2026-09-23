@@ -5,8 +5,8 @@ process.env.LOG_LEVEL = "error";
 process.env.SLACK_BOT_TOKEN = "xoxb-test-token";
 process.env.SLACK_APP_TOKEN = "xapp-test-token";
 process.env.SLACK_SIGNING_SECRET = "test-signing-secret-with-at-least-32-chars";
-process.env.FCODE_API_URL = "http://localhost:8787";
-process.env.FCODE_API_TIMEOUT = "30000";
+process.env.FRONTAL_CODE_API_URL = "http://localhost:8787";
+process.env.FRONTAL_CODE_API_TIMEOUT = "30000";
 process.env.PORT = "3000";
 process.env.MAX_CONCURRENT_TASKS = "10";
 process.env.TASK_TIMEOUT = "3600000";
@@ -16,10 +16,10 @@ process.env.SENTRY_DSN = "";
 process.env.SKIP_ENV_VALIDATION = "";
 
 beforeAll(() => {
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  vi.spyOn(console, "info").mockImplementation(() => {});
-  vi.spyOn(console, "warn").mockImplementation(() => {});
-  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "log").mockImplementation(() => undefined);
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterAll(() => {

@@ -668,8 +668,8 @@ logical name to an MCP `server` plus the tool names it exposes and optional OAut
           "auth_url": "https://github.com/login/oauth/authorize",
           "token_url": "https://github.com/login/oauth/access_token",
           "scopes": ["repo", "read:org", "workflow"],
-          "client_id_env": "FCODE_GITHUB_CLIENT_ID",
-          "client_secret_env": "FCODE_GITHUB_CLIENT_SECRET"
+          "client_id_env": "FRONTAL_CODE_GITHUB_CLIENT_ID",
+          "client_secret_env": "FRONTAL_CODE_GITHUB_CLIENT_SECRET"
         }
       }
     }

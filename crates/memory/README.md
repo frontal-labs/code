@@ -27,11 +27,11 @@ This crate powers memory tools such as `MemoryUpsert`, `MemorySearch`, and `Know
 
 Runtime backend selection is environment-driven:
 
-- `FCODE_MEMORY_METADATA_PATH` enables `PersistentFileMetadataStore`
-- `FCODE_MEMORY_PINECONE_URL` points at the Pinecone index host
-- `FCODE_MEMORY_PINECONE_API_KEY` adds Pinecone API-key auth
-- `FCODE_MEMORY_PINECONE_NAMESPACE` prefixes per-scope namespaces inside Pinecone
-- `FCODE_MEMORY_NEO4J_URL` + `FCODE_MEMORY_NEO4J_DATABASE` enable Neo4j KG storage
-- `FCODE_MEMORY_NEO4J_USERNAME` + `FCODE_MEMORY_NEO4J_PASSWORD` add Neo4j basic auth
+- `FRONTAL_CODE_MEMORY_METADATA_PATH` enables `PersistentFileMetadataStore`
+- `FRONTAL_CODE_MEMORY_PINECONE_URL` points at the Pinecone index host
+- `FRONTAL_CODE_MEMORY_PINECONE_API_KEY` adds Pinecone API-key auth
+- `FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE` prefixes per-scope namespaces inside Pinecone
+- `FRONTAL_CODE_MEMORY_NEO4J_URL` + `FRONTAL_CODE_MEMORY_NEO4J_DATABASE` enable Neo4j KG storage
+- `FRONTAL_CODE_MEMORY_NEO4J_USERNAME` + `FRONTAL_CODE_MEMORY_NEO4J_PASSWORD` add Neo4j basic auth
 
 If those variables are absent, the crate falls back to in-memory metadata/vector/graph stores.

@@ -10,9 +10,9 @@ use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
 use zip::ZipWriter;
 
-const FCODE_CONFIG_DIR: &str = ".frontal-code";
+const FRONTAL_CODE_CONFIG_DIR: &str = ".frontal-code";
 const IDE_CONFIG_FILE: &str = "ide.json";
-const FCODE_EXTENSION_DIR: &str = "extensions/frontal-code-ide";
+const FRONTAL_CODE_EXTENSION_DIR: &str = "extensions/frontal-code-ide";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -259,10 +259,14 @@ pub fn setup_editor_integration(
 
 pub fn package_extension(workspace_root: &Path) -> Result<PathBuf, IdeIntegrationError> {
     let extension_path = find_extension_dev_path(workspace_root).ok_or_else(|| {
-        IdeIntegrationError::ExtensionSourceNotFound(workspace_root.join(FCODE_EXTENSION_DIR))
+        IdeIntegrationError::ExtensionSourceNotFound(
+            workspace_root.join(FRONTAL_CODE_EXTENSION_DIR),
+        )
     })?;
     let metadata = read_extension_metadata(&extension_path)?;
-    let package_dir = workspace_root.join(FCODE_CONFIG_DIR).join("extensions");
+    let package_dir = workspace_root
+        .join(FRONTAL_CODE_CONFIG_DIR)
+        .join("extensions");
     fs::create_dir_all(&package_dir)?;
     let package_path = package_dir.join(format!("frontal-code-ide-{}.vsix", metadata.version));
     write_vsix_archive(&extension_path, &metadata, &package_path)?;
@@ -270,11 +274,15 @@ pub fn package_extension(workspace_root: &Path) -> Result<PathBuf, IdeIntegratio
 }
 
 fn ide_config_path(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(FCODE_CONFIG_DIR).join(IDE_CONFIG_FILE)
+    workspace_root
+        .join(FRONTAL_CODE_CONFIG_DIR)
+        .join(IDE_CONFIG_FILE)
 }
 
 fn find_packaged_extension(workspace_root: &Path) -> Option<PathBuf> {
-    let dir = workspace_root.join(FCODE_CONFIG_DIR).join("extensions");
+    let dir = workspace_root
+        .join(FRONTAL_CODE_CONFIG_DIR)
+        .join("extensions");
     let entries = fs::read_dir(dir).ok()?;
     entries
         .filter_map(|entry| entry.ok().map(|value| value.path()))
@@ -385,7 +393,7 @@ fn macos_fallback_binary(target: IdeTarget) -> Option<PathBuf> {
 
 fn find_extension_dev_path(workspace_root: &Path) -> Option<PathBuf> {
     for base in workspace_root.ancestors() {
-        let candidate = base.join(FCODE_EXTENSION_DIR);
+        let candidate = base.join(FRONTAL_CODE_EXTENSION_DIR);
         if candidate.join("package.json").is_file() {
             return Some(candidate);
         }

@@ -36,8 +36,8 @@ export class MockFrontalCode {
 
     const script = [
       "#!/usr/bin/env bash",
-      'CAP="${FCODE_MOCK_CAPTURE:-/dev/null}"',
-      'CWD="${FCODE_MOCK_CWD:-/dev/null}"',
+      String.raw`CAP="\${FRONTAL_CODE_MOCK_CAPTURE:-/dev/null}"`,
+      String.raw`CWD="\${FRONTAL_CODE_MOCK_CWD:-/dev/null}"`,
       `RESP="${this.responseFile}"`,
       `EXIT="${opts.exitCode ?? 0}"`,
       'pwd > "$CWD"',
@@ -55,8 +55,8 @@ export class MockFrontalCode {
   /** Environment values that route a spawned CLI to this mock. */
   env(extra: Record<string, string> = {}): Record<string, string> {
     return {
-      FCODE_MOCK_CAPTURE: this.captureFile,
-      FCODE_MOCK_CWD: this.cwdFile,
+      FRONTAL_CODE_MOCK_CAPTURE: this.captureFile,
+      FRONTAL_CODE_MOCK_CWD: this.cwdFile,
       ...extra,
     };
   }

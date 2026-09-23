@@ -153,7 +153,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
 
     // when
     let output = command_in(&temp_dir)
-        .env("FCODE_CONFIG_HOME", &config_home)
+        .env("FRONTAL_CODE_CONFIG_HOME", &config_home)
         .env("HOME", temp_dir.join("home"))
         .args([
             "--resume",
@@ -203,7 +203,7 @@ fn doctor_command_runs_as_a_local_shell_entrypoint() {
 
     // when
     let output = command_in(&temp_dir)
-        .env("FCODE_CONFIG_HOME", &config_home)
+        .env("FRONTAL_CODE_CONFIG_HOME", &config_home)
         .env_remove("FRONTAL_API_KEY")
         .env_remove("FRONTAL_AUTH_TOKEN")
         .env("FRONTAL_BASE_URL", "http://127.0.0.1:9")
@@ -231,7 +231,7 @@ fn local_subcommand_help_does_not_fall_through_to_runtime_or_provider_calls() {
     fs::create_dir_all(&config_home).expect("config home should exist");
 
     let doctor_help = command_in(&temp_dir)
-        .env("FCODE_CONFIG_HOME", &config_home)
+        .env("FRONTAL_CODE_CONFIG_HOME", &config_home)
         .env_remove("FRONTAL_API_KEY")
         .env_remove("FRONTAL_AUTH_TOKEN")
         .env("FRONTAL_BASE_URL", "http://127.0.0.1:9")
@@ -239,7 +239,7 @@ fn local_subcommand_help_does_not_fall_through_to_runtime_or_provider_calls() {
         .output()
         .expect("doctor help should launch");
     let status_help = command_in(&temp_dir)
-        .env("FCODE_CONFIG_HOME", &config_home)
+        .env("FRONTAL_CODE_CONFIG_HOME", &config_home)
         .env_remove("FRONTAL_API_KEY")
         .env_remove("FRONTAL_AUTH_TOKEN")
         .env("FRONTAL_BASE_URL", "http://127.0.0.1:9")

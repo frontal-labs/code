@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const STARTER_FCODE_JSON: &str = concat!(
+const STARTER_FRONTAL_CODE_JSON: &str = concat!(
     "{\n",
     "  \"permissions\": {\n",
     "    \"defaultMode\": \"dontAsk\"\n",
@@ -92,7 +92,7 @@ pub(crate) fn initialize_repo(cwd: &Path) -> Result<InitReport, Box<dyn std::err
     let frontal_code_json = cwd.join(".frontal-code/settings.json");
     artifacts.push(InitArtifact {
         name: ".frontal-code/settings.json",
-        status: write_file_if_missing(&frontal_code_json, STARTER_FCODE_JSON)?,
+        status: write_file_if_missing(&frontal_code_json, STARTER_FRONTAL_CODE_JSON)?,
     });
 
     let gitignore = cwd.join(".gitignore");

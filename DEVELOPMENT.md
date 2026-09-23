@@ -56,9 +56,9 @@ DATABASE_URL=postgresql://frontal-code:frontal-code_password@localhost:5432/fron
 WEBHOOK_SECRET=your_webhook_secret_here
 
 # Configuration overrides
-FCODE_LOG_LEVEL=debug
-FCODE_PERMISSION_MODE=permissive
-FCODE_CONFIG_HOME=./dev-config
+FRONTAL_CODE_LOG_LEVEL=debug
+FRONTAL_CODE_PERMISSION_MODE=permissive
+FRONTAL_CODE_CONFIG_HOME=./dev-config
 ```
 
 ### Core Configuration Development
@@ -76,7 +76,7 @@ let config = ProjectConfig::load_or_default();
 let manager = ConfigurationManager::load_with_cwd(".")?;
 
 // Enable development-specific features
-if std::env::var("FCODE_DEV_MODE").is_ok() {
+if std::env::var("FRONTAL_CODE_DEV_MODE").is_ok() {
     println!("Development mode enabled");
     println!("Telemetry: {}", config.features.enable_telemetry);
     println!("Plugins: {}", config.features.enable_plugins);
@@ -89,13 +89,13 @@ Test configuration changes without affecting your main setup:
 
 ```bash
 # Test with custom config directory
-export FCODE_CONFIG_HOME=./test-config
+export FRONTAL_CODE_CONFIG_HOME=./test-config
 frontal-code /doctor
 
 # Test with specific config file
 cp config/project.json config/test-project.json
 # Edit test-project.json
-FCODE_CONFIG_HOME=./test-config frontal-code /doctor
+FRONTAL_CODE_CONFIG_HOME=./test-config frontal-code /doctor
 ```
 
 ## Pre-commit Hooks
@@ -185,9 +185,9 @@ KEYS *
 ### Pinecone
 ```bash
 # Export Pinecone settings before running memory-backed flows
-export FCODE_MEMORY_PINECONE_URL=https://YOUR_INDEX_HOST
-export FCODE_MEMORY_PINECONE_API_KEY=your_pinecone_api_key_here
-export FCODE_MEMORY_PINECONE_NAMESPACE=dev
+export FRONTAL_CODE_MEMORY_PINECONE_URL=https://YOUR_INDEX_HOST
+export FRONTAL_CODE_MEMORY_PINECONE_API_KEY=your_pinecone_api_key_here
+export FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE=dev
 
 # Run the focused tool integration test against a configured backend
 cargo test -p frontal-code-tools env_backed_memory_tools_route_requests_to_pinecone_and_neo4j -- --nocapture

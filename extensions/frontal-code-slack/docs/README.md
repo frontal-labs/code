@@ -43,8 +43,8 @@ SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_SIGNING_SECRET=your-signing-secret
 
 # Frontal Code Server
-FCODE_API_URL=http://127.0.0.1:8788
-FCODE_API_TIMEOUT=30000
+FRONTAL_CODE_API_URL=http://127.0.0.1:8788
+FRONTAL_CODE_API_TIMEOUT=30000
 
 # Application
 NODE_ENV=development
@@ -198,7 +198,7 @@ Enable:
 
 **Tasks not creating:**
 - Confirm Frontal Code server is accessible
-- Check `FCODE_API_URL` configuration
+- Check `FRONTAL_CODE_API_URL` configuration
 - Verify API authentication
 
 **WebSocket connection issues:**

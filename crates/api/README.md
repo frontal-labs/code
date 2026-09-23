@@ -17,10 +17,10 @@ By default it binds to `127.0.0.1:8787`.
 
 ## Environment Variables
 
-- `FCODE_API_HOST` (default: `127.0.0.1`)
-- `FCODE_API_PORT` (default: `8787`)
-- `FCODE_CLI_BIN` (optional path to `frontal-code` binary)
-- `FCODE_API_WORKDIR` (optional working directory for executed CLI commands)
+- `FRONTAL_CODE_API_HOST` (default: `127.0.0.1`)
+- `FRONTAL_CODE_API_PORT` (default: `8787`)
+- `FRONTAL_CODE_CLI_BIN` (optional path to `frontal-code` binary)
+- `FRONTAL_CODE_API_WORKDIR` (optional working directory for executed CLI commands)
 - `FRONTAL_API_KEY` (required API key for server authentication; accepts `x-api-key` or `Authorization: Bearer ...`)
 
 ## REST Endpoints

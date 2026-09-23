@@ -2607,7 +2607,7 @@ fn discover_definition_roots(cwd: &Path, leaf: &str) -> Vec<(DefinitionSource, P
         );
     }
 
-    if let Ok(frontal_code_config_home) = env::var("FCODE_CONFIG_HOME") {
+    if let Ok(frontal_code_config_home) = env::var("FRONTAL_CODE_CONFIG_HOME") {
         push_unique_root(
             &mut roots,
             DefinitionSource::UserFrontalCodeConfigHome,
@@ -2708,7 +2708,7 @@ fn discover_skill_roots(cwd: &Path) -> Vec<SkillRoot> {
         );
     }
 
-    if let Ok(frontal_code_config_home) = env::var("FCODE_CONFIG_HOME") {
+    if let Ok(frontal_code_config_home) = env::var("FRONTAL_CODE_CONFIG_HOME") {
         let frontal_code_config_home = PathBuf::from(frontal_code_config_home);
         push_unique_skill_root(
             &mut roots,
@@ -2869,7 +2869,7 @@ fn install_skill_into(
 }
 
 fn default_skill_install_root() -> std::io::Result<PathBuf> {
-    if let Ok(frontal_code_config_home) = env::var("FCODE_CONFIG_HOME") {
+    if let Ok(frontal_code_config_home) = env::var("FRONTAL_CODE_CONFIG_HOME") {
         return Ok(PathBuf::from(frontal_code_config_home).join("skills"));
     }
     if let Ok(codex_home) = env::var("CODEX_HOME") {
@@ -2880,7 +2880,7 @@ fn default_skill_install_root() -> std::io::Result<PathBuf> {
     }
     Err(std::io::Error::new(
         std::io::ErrorKind::NotFound,
-        "unable to resolve a skills install root; set FCODE_CONFIG_HOME or HOME",
+        "unable to resolve a skills install root; set FRONTAL_CODE_CONFIG_HOME or HOME",
     ))
 }
 
@@ -3572,7 +3572,7 @@ fn render_agents_usage(unexpected: Option<&str>) -> String {
         "Agents".to_string(),
         "  Usage            /agents [list|help]".to_string(),
         "  Direct CLI       frontal-code agents".to_string(),
-        "  Sources          .frontal-code/agents, ~/.frontal-code/agents, $FCODE_CONFIG_HOME/agents".to_string(),
+        "  Sources          .frontal-code/agents, ~/.frontal-code/agents, $FRONTAL_CODE_CONFIG_HOME/agents".to_string(),
     ];
     if let Some(args) = unexpected {
         lines.push(format!("  Unexpected       {args}"));
@@ -3587,7 +3587,7 @@ fn render_agents_usage_json(unexpected: Option<&str>) -> Value {
         "usage": {
             "slash_command": "/agents [list|help]",
             "direct_cli": "frontal-code agents [list|help]",
-            "sources": [".frontal-code/agents", "~/.frontal-code/agents", "$FCODE_CONFIG_HOME/agents"],
+            "sources": [".frontal-code/agents", "~/.frontal-code/agents", "$FRONTAL_CODE_CONFIG_HOME/agents"],
         },
         "unexpected": unexpected,
     })
@@ -3600,7 +3600,7 @@ fn render_skills_usage(unexpected: Option<&str>) -> String {
         "  Alias            /skill".to_string(),
         "  Direct CLI       frontal-code skills [list|install <path>|help|<skill> [args]]".to_string(),
         "  Invoke           /skills help overview -> $help overview".to_string(),
-        "  Install root     $FCODE_CONFIG_HOME/skills or ~/.frontal-code/skills".to_string(),
+        "  Install root     $FRONTAL_CODE_CONFIG_HOME/skills or ~/.frontal-code/skills".to_string(),
         "  Sources          .frontal-code/skills, .omc/skills, .agents/skills, .codex/skills, .claude/skills, ~/.frontal-code/skills, ~/.omc/skills, ~/.claude/skills/omc-learned, ~/.codex/skills, ~/.claude/skills, legacy /commands".to_string(),
     ];
     if let Some(args) = unexpected {
@@ -3618,7 +3618,7 @@ fn render_skills_usage_json(unexpected: Option<&str>) -> Value {
             "aliases": ["/skill"],
             "direct_cli": "frontal-code skills [list|install <path>|help|<skill> [args]]",
             "invoke": "/skills help overview -> $help overview",
-            "install_root": "$FCODE_CONFIG_HOME/skills or ~/.frontal-code/skills",
+            "install_root": "$FRONTAL_CODE_CONFIG_HOME/skills or ~/.frontal-code/skills",
             "sources": [
                 ".frontal-code/skills",
                 ".omc/skills",
@@ -4970,7 +4970,7 @@ mod tests {
         assert!(agents_help.contains("Usage            /agents [list|help]"));
         assert!(agents_help.contains("Direct CLI       frontal-code agents"));
         assert!(agents_help.contains(
-            "Sources          .frontal-code/agents, ~/.frontal-code/agents, $FCODE_CONFIG_HOME/agents"
+            "Sources          .frontal-code/agents, ~/.frontal-code/agents, $FRONTAL_CODE_CONFIG_HOME/agents"
         ));
 
         let agents_unexpected =
@@ -4983,8 +4983,9 @@ mod tests {
             .contains("Usage            /skills [list|install <path>|help|<skill> [args]]"));
         assert!(skills_help.contains("Alias            /skill"));
         assert!(skills_help.contains("Invoke           /skills help overview -> $help overview"));
-        assert!(skills_help
-            .contains("Install root     $FCODE_CONFIG_HOME/skills or ~/.frontal-code/skills"));
+        assert!(skills_help.contains(
+            "Install root     $FRONTAL_CODE_CONFIG_HOME/skills or ~/.frontal-code/skills"
+        ));
         assert!(skills_help.contains(".omc/skills"));
         assert!(skills_help.contains(".agents/skills"));
         assert!(skills_help.contains("~/.claude/skills/omc-learned"));

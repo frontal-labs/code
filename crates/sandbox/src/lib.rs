@@ -331,8 +331,8 @@ pub fn build_docker_sandbox_command(
         return None;
     }
 
-    let image =
-        env::var("FCODE_SANDBOX_DOCKER_IMAGE").unwrap_or_else(|_| "busybox:1.36".to_string());
+    let image = env::var("FRONTAL_CODE_SANDBOX_DOCKER_IMAGE")
+        .unwrap_or_else(|_| "busybox:1.36".to_string());
     let mut args = vec![
         "run".to_string(),
         "--rm".to_string(),
@@ -402,11 +402,11 @@ fn sandbox_env(cwd: &Path, status: &SandboxStatus) -> Vec<(String, String)> {
         ("HOME".to_string(), sandbox_home.display().to_string()),
         ("TMPDIR".to_string(), sandbox_tmp.display().to_string()),
         (
-            "FCODE_SANDBOX_FILESYSTEM_MODE".to_string(),
+            "FRONTAL_CODE_SANDBOX_FILESYSTEM_MODE".to_string(),
             status.filesystem_mode.as_str().to_string(),
         ),
         (
-            "FCODE_SANDBOX_ALLOWED_MOUNTS".to_string(),
+            "FRONTAL_CODE_SANDBOX_ALLOWED_MOUNTS".to_string(),
             status.allowed_mounts.join(":"),
         ),
     ];
@@ -449,7 +449,7 @@ fn docker_available() -> bool {
 }
 
 fn docker_backend_enabled() -> bool {
-    env::var("FCODE_SANDBOX_ENABLE_DOCKER")
+    env::var("FRONTAL_CODE_SANDBOX_ENABLE_DOCKER")
         .ok()
         .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
 }

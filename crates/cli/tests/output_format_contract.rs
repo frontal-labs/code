@@ -225,7 +225,7 @@ fn inventory_commands_emit_structured_json_when_requested() {
         &[
             ("HOME", isolated_home.to_str().expect("utf8 home")),
             (
-                "FCODE_CONFIG_HOME",
+                "FRONTAL_CODE_CONFIG_HOME",
                 isolated_config.to_str().expect("utf8 config home"),
             ),
             (
@@ -290,7 +290,7 @@ fn agents_command_emits_structured_agent_entries_when_requested() {
         &[
             ("HOME", home.to_str().expect("utf8 home")),
             (
-                "FCODE_CONFIG_HOME",
+                "FRONTAL_CODE_CONFIG_HOME",
                 isolated_config.to_str().expect("utf8 config home"),
             ),
             (
@@ -460,7 +460,7 @@ fn resumed_inventory_commands_emit_structured_json_when_requested() {
         ],
         &[
             (
-                "FCODE_CONFIG_HOME",
+                "FRONTAL_CODE_CONFIG_HOME",
                 config_home.to_str().expect("utf8 config home"),
             ),
             ("HOME", home.to_str().expect("utf8 home")),
@@ -481,7 +481,7 @@ fn resumed_inventory_commands_emit_structured_json_when_requested() {
         ],
         &[
             (
-                "FCODE_CONFIG_HOME",
+                "FRONTAL_CODE_CONFIG_HOME",
                 config_home.to_str().expect("utf8 config home"),
             ),
             ("HOME", home.to_str().expect("utf8 home")),
@@ -504,7 +504,7 @@ fn resumed_inventory_commands_emit_structured_json_when_requested() {
         ],
         &[
             (
-                "FCODE_CONFIG_HOME",
+                "FRONTAL_CODE_CONFIG_HOME",
                 config_home.to_str().expect("utf8 config home"),
             ),
             ("HOME", home.to_str().expect("utf8 home")),

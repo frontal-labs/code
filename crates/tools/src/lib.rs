@@ -40,7 +40,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
-const FCODE_TOOL_TELEMETRY_PATH: &str = "FCODE_TOOL_TELEMETRY_PATH";
+const FRONTAL_CODE_TOOL_TELEMETRY_PATH: &str = "FRONTAL_CODE_TOOL_TELEMETRY_PATH";
 
 /// Global task registry shared across tool invocations within a session.
 fn global_lsp_registry() -> &'static LspRegistry {
@@ -196,7 +196,7 @@ struct ToolTelemetry {
 impl ToolTelemetry {
     #[must_use]
     fn from_env() -> Self {
-        env::var(FCODE_TOOL_TELEMETRY_PATH)
+        env::var(FRONTAL_CODE_TOOL_TELEMETRY_PATH)
             .ok()
             .map(|path| path.trim().to_string())
             .filter(|path| !path.is_empty())
@@ -3410,7 +3410,7 @@ fn normalize_fetch_url(url: &str) -> Result<String, String> {
 }
 
 fn build_search_url(query: &str) -> Result<reqwest::Url, String> {
-    if let Ok(base) = std::env::var("FCODE_WEB_SEARCH_BASE_URL") {
+    if let Ok(base) = std::env::var("FRONTAL_CODE_WEB_SEARCH_BASE_URL") {
         let mut url = reqwest::Url::parse(&base).map_err(|error| error.to_string())?;
         url.query_pairs_mut().append_pair("q", query);
         return Ok(url);
@@ -3755,7 +3755,7 @@ fn validate_todos(todos: &[TodoItem]) -> Result<(), String> {
 }
 
 fn todo_store_path() -> Result<std::path::PathBuf, String> {
-    if let Ok(path) = std::env::var("FCODE_TODO_STORE") {
+    if let Ok(path) = std::env::var("FRONTAL_CODE_TODO_STORE") {
         return Ok(std::path::PathBuf::from(path));
     }
     let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
@@ -3804,7 +3804,7 @@ fn skill_lookup_roots() -> Vec<SkillLookupRoot> {
         push_project_skill_lookup_roots(&mut roots, &cwd);
     }
 
-    if let Ok(frontal_code_config_home) = std::env::var("FCODE_CONFIG_HOME") {
+    if let Ok(frontal_code_config_home) = std::env::var("FRONTAL_CODE_CONFIG_HOME") {
         push_prefixed_skill_lookup_roots(
             &mut roots,
             std::path::Path::new(&frontal_code_config_home),
@@ -4686,15 +4686,15 @@ fn maybe_report_hosted_task_completion(
 }
 
 fn read_hosted_server_url() -> Option<String> {
-    env::var("FCODE_SERVER_URL")
+    env::var("FRONTAL_CODE_SERVER_URL")
         .ok()
-        .or_else(|| env::var("FCODE_SERVER_BASE_URL").ok())
+        .or_else(|| env::var("FRONTAL_CODE_SERVER_BASE_URL").ok())
         .map(|value| value.trim().trim_end_matches('/').to_string())
         .filter(|value| !value.is_empty())
 }
 
 fn read_hosted_server_api_key() -> Option<String> {
-    env::var("FCODE_SERVER_API_KEY")
+    env::var("FRONTAL_CODE_SERVER_API_KEY")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
@@ -5355,7 +5355,7 @@ fn canonical_tool_token(value: &str) -> String {
 }
 
 fn agent_store_dir() -> Result<std::path::PathBuf, String> {
-    if let Ok(path) = std::env::var("FCODE_AGENT_STORE") {
+    if let Ok(path) = std::env::var("FRONTAL_CODE_AGENT_STORE") {
         return Ok(std::path::PathBuf::from(path));
     }
     let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
@@ -6103,7 +6103,7 @@ fn config_file_for_scope(scope: ConfigScope) -> Result<PathBuf, String> {
 }
 
 fn config_home_dir() -> Result<PathBuf, String> {
-    if let Ok(path) = std::env::var("FCODE_CONFIG_HOME") {
+    if let Ok(path) = std::env::var("FRONTAL_CODE_CONFIG_HOME") {
         return Ok(PathBuf::from(path));
     }
     let home = std::env::var("HOME").map_err(|_| String::from("HOME is not set"))?;
@@ -7070,7 +7070,7 @@ mod tests {
         }));
 
         std::env::set_var(
-            "FCODE_WEB_SEARCH_BASE_URL",
+            "FRONTAL_CODE_WEB_SEARCH_BASE_URL",
             format!("http://{}/search", server.addr()),
         );
         let result = execute_tool(
@@ -7082,7 +7082,7 @@ mod tests {
             }),
         )
         .expect("WebSearch should succeed");
-        std::env::remove_var("FCODE_WEB_SEARCH_BASE_URL");
+        std::env::remove_var("FRONTAL_CODE_WEB_SEARCH_BASE_URL");
 
         let output: serde_json::Value = serde_json::from_str(&result).expect("valid json");
         assert_eq!(output["query"], "rust web search");
@@ -7123,7 +7123,7 @@ mod tests {
         }));
 
         std::env::set_var(
-            "FCODE_WEB_SEARCH_BASE_URL",
+            "FRONTAL_CODE_WEB_SEARCH_BASE_URL",
             format!("http://{}/fallback", server.addr()),
         );
         let result = execute_tool(
@@ -7133,7 +7133,7 @@ mod tests {
             }),
         )
         .expect("WebSearch fallback parsing should succeed");
-        std::env::remove_var("FCODE_WEB_SEARCH_BASE_URL");
+        std::env::remove_var("FRONTAL_CODE_WEB_SEARCH_BASE_URL");
 
         let output: serde_json::Value = serde_json::from_str(&result).expect("valid json");
         let results = output["results"].as_array().expect("results array");
@@ -7146,10 +7146,10 @@ mod tests {
         assert_eq!(content[0]["url"], "https://example.com/one");
         assert_eq!(content[1]["url"], "https://docs.rs/tokio");
 
-        std::env::set_var("FCODE_WEB_SEARCH_BASE_URL", "://bad-base-url");
+        std::env::set_var("FRONTAL_CODE_WEB_SEARCH_BASE_URL", "://bad-base-url");
         let error = execute_tool("WebSearch", &json!({ "query": "generic links" }))
             .expect_err("invalid base URL should fail");
-        std::env::remove_var("FCODE_WEB_SEARCH_BASE_URL");
+        std::env::remove_var("FRONTAL_CODE_WEB_SEARCH_BASE_URL");
         assert!(error.contains("relative URL without a base") || error.contains("empty host"));
     }
 
@@ -7216,7 +7216,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let path = temp_path("todos.json");
-        std::env::set_var("FCODE_TODO_STORE", &path);
+        std::env::set_var("FRONTAL_CODE_TODO_STORE", &path);
 
         let first = execute_tool(
             "TodoWrite",
@@ -7242,7 +7242,7 @@ mod tests {
             }),
         )
         .expect("TodoWrite should succeed");
-        std::env::remove_var("FCODE_TODO_STORE");
+        std::env::remove_var("FRONTAL_CODE_TODO_STORE");
         let _ = std::fs::remove_file(path);
 
         let second_output: serde_json::Value = serde_json::from_str(&second).expect("valid json");
@@ -7263,7 +7263,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let path = temp_path("todos-errors.json");
-        std::env::set_var("FCODE_TODO_STORE", &path);
+        std::env::set_var("FRONTAL_CODE_TODO_STORE", &path);
 
         let empty = execute_tool("TodoWrite", &json!({ "todos": [] }))
             .expect_err("empty todos should fail");
@@ -7303,7 +7303,7 @@ mod tests {
             }),
         )
         .expect("completed todos should succeed");
-        std::env::remove_var("FCODE_TODO_STORE");
+        std::env::remove_var("FRONTAL_CODE_TODO_STORE");
         let _ = fs::remove_file(path);
 
         let output: serde_json::Value = serde_json::from_str(&nudge).expect("valid json");
@@ -7431,11 +7431,11 @@ mod tests {
         .expect("skill file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_current_dir(&nested).expect("set cwd");
 
@@ -7455,8 +7455,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7490,11 +7490,11 @@ mod tests {
         .expect("agents skill file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_current_dir(&nested).expect("set cwd");
 
@@ -7526,8 +7526,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7555,11 +7555,11 @@ mod tests {
         .expect("learned skill file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_claude_config_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_var("CLAUDE_CONFIG_DIR", &claude_config_dir);
 
@@ -7578,8 +7578,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7615,11 +7615,11 @@ mod tests {
         .expect("direct command file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_claude_config_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_var("CLAUDE_CONFIG_DIR", &claude_config_dir);
 
@@ -7651,8 +7651,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7683,11 +7683,11 @@ mod tests {
         .expect("legacy command file should exist");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_codex_home = std::env::var("CODEX_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::remove_var("CODEX_HOME");
         std::env::set_current_dir(&nested).expect("set cwd");
 
@@ -7707,8 +7707,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         match original_codex_home {
             Some(value) => std::env::set_var("CODEX_HOME", value),
@@ -7756,7 +7756,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-store");
-        std::env::set_var("FCODE_AGENT_STORE", &dir);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &dir);
         let captured = Arc::new(Mutex::new(None::<AgentJob>));
         let captured_for_spawn = Arc::clone(&captured);
 
@@ -7777,7 +7777,7 @@ mod tests {
             },
         )
         .expect("Agent should succeed");
-        std::env::remove_var("FCODE_AGENT_STORE");
+        std::env::remove_var("FRONTAL_CODE_AGENT_STORE");
 
         assert_eq!(manifest.name, "ship-audit");
         assert_eq!(manifest.subagent_type.as_deref(), Some("Explore"));
@@ -7841,7 +7841,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-cancel");
-        std::env::set_var("FCODE_AGENT_STORE", &dir);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &dir);
 
         let manifest = execute_agent_with_spawn(
             AgentInput {
@@ -7877,7 +7877,7 @@ mod tests {
         assert!(output_contents.contains("sub-agent cancelled by control plane"));
 
         unregister_hosted_agent_control(&manifest.agent_id);
-        std::env::remove_var("FCODE_AGENT_STORE");
+        std::env::remove_var("FRONTAL_CODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -7887,7 +7887,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-status");
-        std::env::set_var("FCODE_AGENT_STORE", &dir);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &dir);
 
         let manifest = execute_agent_with_spawn(
             AgentInput {
@@ -7922,7 +7922,7 @@ mod tests {
 
         let wrong_store = temp_path("agent-status-wrong-store");
         std::fs::create_dir_all(&wrong_store).expect("wrong store dir should exist");
-        std::env::set_var("FCODE_AGENT_STORE", &wrong_store);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &wrong_store);
         let restored_from_locator = hosted_agent_status_with_locator(&HostedAgentLocator {
             agent_id: Some(manifest.agent_id.clone()),
             manifest_file: Some(manifest.manifest_file.clone()),
@@ -7946,7 +7946,7 @@ mod tests {
             Some("hosted agent manifest restored from locator path")
         );
 
-        std::env::remove_var("FCODE_AGENT_STORE");
+        std::env::remove_var("FRONTAL_CODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(wrong_store);
     }
@@ -7958,7 +7958,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-status-terminal");
         std::fs::create_dir_all(&dir).expect("agent store dir should exist");
-        std::env::set_var("FCODE_AGENT_STORE", &dir);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &dir);
 
         let manifest = AgentOutput {
             agent_id: "agent-status-terminal".to_string(),
@@ -7996,7 +7996,7 @@ mod tests {
         assert!(!restored.orphaned);
         assert_eq!(restored.status.as_deref(), Some("completed"));
 
-        std::env::remove_var("FCODE_AGENT_STORE");
+        std::env::remove_var("FRONTAL_CODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -8007,7 +8007,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-cancel-fallback");
         std::fs::create_dir_all(&dir).expect("agent store dir should exist");
-        std::env::set_var("FCODE_AGENT_STORE", &dir);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &dir);
 
         let manifest = AgentOutput {
             agent_id: "agent-cancel-fallback".to_string(),
@@ -8036,7 +8036,7 @@ mod tests {
 
         let wrong_store = temp_path("agent-cancel-fallback-wrong-store");
         std::fs::create_dir_all(&wrong_store).expect("wrong store dir should exist");
-        std::env::set_var("FCODE_AGENT_STORE", &wrong_store);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &wrong_store);
 
         let cancellation = cancel_hosted_agent_with_locator(&HostedAgentLocator {
             agent_id: Some(manifest.agent_id.clone()),
@@ -8061,7 +8061,7 @@ mod tests {
         assert_eq!(manifest_json["derivedState"], "cancelled");
         assert!(output_contents.contains("sub-agent cancelled by control plane after restart"));
 
-        std::env::remove_var("FCODE_AGENT_STORE");
+        std::env::remove_var("FRONTAL_CODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(wrong_store);
     }
@@ -8073,7 +8073,10 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-cancel-missing-locator");
         std::fs::create_dir_all(&dir).expect("missing locator dir should exist");
-        std::env::set_var("FCODE_AGENT_STORE", temp_path("agent-cancel-missing-store"));
+        std::env::set_var(
+            "FRONTAL_CODE_AGENT_STORE",
+            temp_path("agent-cancel-missing-store"),
+        );
 
         let cancellation = cancel_hosted_agent_with_locator(&HostedAgentLocator {
             agent_id: Some("missing-agent".to_string()),
@@ -8088,7 +8091,7 @@ mod tests {
             .detail
             .contains("no hosted agent control or manifest found"));
 
-        std::env::remove_var("FCODE_AGENT_STORE");
+        std::env::remove_var("FRONTAL_CODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -8099,7 +8102,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = temp_path("agent-runner");
-        std::env::set_var("FCODE_AGENT_STORE", &dir);
+        std::env::set_var("FRONTAL_CODE_AGENT_STORE", &dir);
 
         let completed = execute_agent_with_spawn(
             AgentInput {
@@ -8234,7 +8237,7 @@ mod tests {
         );
         assert_eq!(spawn_error_manifest_json["derivedState"], "truly_idle");
 
-        std::env::remove_var("FCODE_AGENT_STORE");
+        std::env::remove_var("FRONTAL_CODE_AGENT_STORE");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -8243,7 +8246,10 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
+        std::env::set_var(
+            "FRONTAL_CODE_SERVER_URL",
+            "http://hosted.frontal-code.test/",
+        );
         let manifest = AgentOutput {
             agent_id: "agent-success".to_string(),
             name: "hosted-report-success".to_string(),
@@ -8277,7 +8283,7 @@ mod tests {
         assert_eq!(request_json["finish_reason"], "stop");
         assert_eq!(request_json["result"], "Hosted completion reported");
         assert!(request_json.get("error").is_none());
-        std::env::remove_var("FCODE_SERVER_URL");
+        std::env::remove_var("FRONTAL_CODE_SERVER_URL");
     }
 
     #[test]
@@ -8285,7 +8291,10 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
+        std::env::set_var(
+            "FRONTAL_CODE_SERVER_URL",
+            "http://hosted.frontal-code.test/",
+        );
         let manifest = AgentOutput {
             agent_id: "agent-failure".to_string(),
             name: "hosted-report-failure".to_string(),
@@ -8322,7 +8331,7 @@ mod tests {
             "tool failed: simulated hosted failure"
         );
         assert!(request_json.get("result").is_none());
-        std::env::remove_var("FCODE_SERVER_URL");
+        std::env::remove_var("FRONTAL_CODE_SERVER_URL");
     }
 
     #[test]
@@ -8365,7 +8374,10 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::env::set_var("FCODE_SERVER_URL", "http://hosted.frontal-code.test/");
+        std::env::set_var(
+            "FRONTAL_CODE_SERVER_URL",
+            "http://hosted.frontal-code.test/",
+        );
         let manifest = AgentOutput {
             agent_id: "agent-cancelled".to_string(),
             name: "hosted-report-cancelled".to_string(),
@@ -8393,7 +8405,7 @@ mod tests {
         );
         assert!(request.is_none());
 
-        std::env::remove_var("FCODE_SERVER_URL");
+        std::env::remove_var("FRONTAL_CODE_SERVER_URL");
     }
 
     #[test]
@@ -9145,10 +9157,10 @@ mod tests {
         .expect("write global settings");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::set_current_dir(&cwd).expect("set cwd");
 
         let get = execute_tool("Config", &json!({"setting": "verbose"})).expect("get config");
@@ -9182,8 +9194,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         let _ = std::fs::remove_dir_all(root);
     }
@@ -9211,10 +9223,10 @@ mod tests {
         .expect("write local settings");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::set_current_dir(&cwd).expect("set cwd");
 
         let enter = execute_tool("EnterPlanMode", &json!({})).expect("enter plan mode");
@@ -9260,8 +9272,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         let _ = std::fs::remove_dir_all(root);
     }
@@ -9284,10 +9296,10 @@ mod tests {
         std::fs::create_dir_all(cwd.join(".frontal-code")).expect("cwd dir");
 
         let original_home = std::env::var("HOME").ok();
-        let original_config_home = std::env::var("FCODE_CONFIG_HOME").ok();
+        let original_config_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_var("HOME", &home);
-        std::env::remove_var("FCODE_CONFIG_HOME");
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::env::set_current_dir(&cwd).expect("set cwd");
 
         let enter = execute_tool("EnterPlanMode", &json!({})).expect("enter plan mode");
@@ -9322,8 +9334,8 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
         match original_config_home {
-            Some(value) => std::env::set_var("FCODE_CONFIG_HOME", value),
-            None => std::env::remove_var("FCODE_CONFIG_HOME"),
+            Some(value) => std::env::set_var("FRONTAL_CODE_CONFIG_HOME", value),
+            None => std::env::remove_var("FRONTAL_CODE_CONFIG_HOME"),
         }
         let _ = std::fs::remove_dir_all(root);
     }
@@ -10157,14 +10169,14 @@ printf 'pwsh:%s' "$1"
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _env = EnvRestoreGuard::capture(&[
-            "FCODE_MEMORY_METADATA_PATH",
-            "FCODE_MEMORY_PINECONE_URL",
-            "FCODE_MEMORY_PINECONE_NAMESPACE",
-            "FCODE_MEMORY_PINECONE_API_KEY",
-            "FCODE_MEMORY_NEO4J_URL",
-            "FCODE_MEMORY_NEO4J_DATABASE",
-            "FCODE_MEMORY_NEO4J_USERNAME",
-            "FCODE_MEMORY_NEO4J_PASSWORD",
+            "FRONTAL_CODE_MEMORY_METADATA_PATH",
+            "FRONTAL_CODE_MEMORY_PINECONE_URL",
+            "FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE",
+            "FRONTAL_CODE_MEMORY_PINECONE_API_KEY",
+            "FRONTAL_CODE_MEMORY_NEO4J_URL",
+            "FRONTAL_CODE_MEMORY_NEO4J_DATABASE",
+            "FRONTAL_CODE_MEMORY_NEO4J_USERNAME",
+            "FRONTAL_CODE_MEMORY_NEO4J_PASSWORD",
         ]);
 
         let metadata_path = temp_path("memory-tool-backend.tsv");
@@ -10212,23 +10224,23 @@ printf 'pwsh:%s' "$1"
             }))
         };
 
-        std::env::set_var("FCODE_MEMORY_METADATA_PATH", &metadata_path);
+        std::env::set_var("FRONTAL_CODE_MEMORY_METADATA_PATH", &metadata_path);
         std::env::set_var(
-            "FCODE_MEMORY_PINECONE_URL",
+            "FRONTAL_CODE_MEMORY_PINECONE_URL",
             format!("http://{}", pinecone_server.addr()),
         );
-        std::env::set_var("FCODE_MEMORY_PINECONE_NAMESPACE", "memories");
-        if std::env::var("FCODE_MEMORY_PINECONE_API_KEY").is_err() {
-            std::env::set_var("FCODE_MEMORY_PINECONE_API_KEY", "pinecone-secret");
+        std::env::set_var("FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE", "memories");
+        if std::env::var("FRONTAL_CODE_MEMORY_PINECONE_API_KEY").is_err() {
+            std::env::set_var("FRONTAL_CODE_MEMORY_PINECONE_API_KEY", "pinecone-secret");
         }
         std::env::set_var(
-            "FCODE_MEMORY_NEO4J_URL",
+            "FRONTAL_CODE_MEMORY_NEO4J_URL",
             format!("http://{}", neo4j_server.addr()),
         );
-        std::env::set_var("FCODE_MEMORY_NEO4J_DATABASE", "neo4j");
-        std::env::set_var("FCODE_MEMORY_NEO4J_USERNAME", "neo4j");
-        if std::env::var("FCODE_MEMORY_NEO4J_PASSWORD").is_err() {
-            std::env::set_var("FCODE_MEMORY_NEO4J_PASSWORD", "neo4j-secret");
+        std::env::set_var("FRONTAL_CODE_MEMORY_NEO4J_DATABASE", "neo4j");
+        std::env::set_var("FRONTAL_CODE_MEMORY_NEO4J_USERNAME", "neo4j");
+        if std::env::var("FRONTAL_CODE_MEMORY_NEO4J_PASSWORD").is_err() {
+            std::env::set_var("FRONTAL_CODE_MEMORY_NEO4J_PASSWORD", "neo4j-secret");
         }
 
         let registry = GlobalToolRegistry::builtin();

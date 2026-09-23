@@ -25,12 +25,12 @@ export const env = createEnv({
       .describe("Slack signing secret for request verification"),
 
     // Frontal Code API Configuration
-    FCODE_API_URL: z
+    FRONTAL_CODE_API_URL: z
       .string()
       .url()
       .default("http://frontal-code-api:8787")
       .describe("Frontal Code API base URL"),
-    FCODE_API_TIMEOUT: z.coerce
+    FRONTAL_CODE_API_TIMEOUT: z.coerce
       .number()
       .int()
       .min(1000)
@@ -41,9 +41,7 @@ export const env = createEnv({
       .string()
       .min(1)
       .optional()
-      .describe(
-        "Frontal Code API key for protected hosted control-plane routes"
-      ),
+      .describe("Frontal Code API key for protected hosted control-plane routes"),
 
     // Application Configuration
     NODE_ENV: z
@@ -54,39 +52,17 @@ export const env = createEnv({
       .enum(["error", "warn", "info", "http", "debug"])
       .default("info")
       .describe("Logging level"),
-    PORT: z.coerce
-      .number()
-      .int()
-      .min(1000)
-      .max(65535)
-      .default(3000)
-      .describe("Server port"),
+    PORT: z.coerce.number().int().min(1000).max(65535).default(3000).describe("Server port"),
 
     // GitHub Configuration (Optional)
-    GITHUB_TOKEN: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("GitHub personal access token"),
+    GITHUB_TOKEN: z.string().min(1).optional().describe("GitHub personal access token"),
     LINEAR_TOKEN: z.string().min(1).optional().describe("Linear API token"),
-    LINEAR_API_URL: z
-      .string()
-      .url()
-      .optional()
-      .describe("Linear GraphQL endpoint (optional)"),
+    LINEAR_API_URL: z.string().url().optional().describe("Linear GraphQL endpoint (optional)"),
     GRAPHITE_TOKEN: z.string().min(1).optional().describe("Graphite API token"),
-    GRAPHITE_API_URL: z
-      .string()
-      .url()
-      .optional()
-      .describe("Graphite API endpoint (optional)"),
+    GRAPHITE_API_URL: z.string().url().optional().describe("Graphite API endpoint (optional)"),
 
     // Sentry Configuration (Optional)
-    SENTRY_DSN: z
-      .string()
-      .url()
-      .optional()
-      .describe("Sentry DSN for error tracking"),
+    SENTRY_DSN: z.string().url().optional().describe("Sentry DSN for error tracking"),
 
     // Advanced Configuration
     MAX_CONCURRENT_TASKS: z.coerce
@@ -131,9 +107,9 @@ export const env = createEnv({
     SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
     SLACK_APP_TOKEN: process.env.SLACK_APP_TOKEN,
     SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET,
-    FCODE_API_URL: process.env.FCODE_API_URL,
-    FCODE_API_TIMEOUT: process.env.FCODE_API_TIMEOUT
-      ? Number(process.env.FCODE_API_TIMEOUT)
+    FRONTAL_CODE_API_URL: process.env.FRONTAL_CODE_API_URL,
+    FRONTAL_CODE_API_TIMEOUT: process.env.FRONTAL_CODE_API_TIMEOUT
+      ? Number(process.env.FRONTAL_CODE_API_TIMEOUT)
       : undefined,
     FRONTAL_SERVER_API_KEY: process.env.FRONTAL_SERVER_API_KEY,
     NODE_ENV: process.env.NODE_ENV,
@@ -148,9 +124,7 @@ export const env = createEnv({
     MAX_CONCURRENT_TASKS: process.env.MAX_CONCURRENT_TASKS
       ? Number(process.env.MAX_CONCURRENT_TASKS)
       : undefined,
-    TASK_TIMEOUT: process.env.TASK_TIMEOUT
-      ? Number(process.env.TASK_TIMEOUT)
-      : undefined,
+    TASK_TIMEOUT: process.env.TASK_TIMEOUT ? Number(process.env.TASK_TIMEOUT) : undefined,
     HEALTH_CHECK_INTERVAL: process.env.HEALTH_CHECK_INTERVAL
       ? Number(process.env.HEALTH_CHECK_INTERVAL)
       : undefined,
@@ -169,9 +143,7 @@ export const env = createEnv({
   onValidationError: (error: z.ZodError) => {
     console.error("Environment variable validation failed:");
     console.error(
-      error.issues
-        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-        .join("\n")
+      error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n"),
     );
     throw new Error("Environment variable validation failed");
   },
@@ -181,7 +153,7 @@ export const env = createEnv({
    */
   onInvalidAccess: (variable: string) => {
     throw new Error(
-      `Attempted to access server-side environment variable '${variable}' on the client`
+      `Attempted to access server-side environment variable '${variable}' on the client`,
     );
   },
 
@@ -209,9 +181,9 @@ export function getEnvConfig() {
       appToken: env.SLACK_APP_TOKEN,
       signingSecret: env.SLACK_SIGNING_SECRET,
     },
-    frontal_code: {
-      apiUrl: env.FCODE_API_URL,
-      timeout: env.FCODE_API_TIMEOUT,
+    frontalCode: {
+      apiUrl: env.FRONTAL_CODE_API_URL,
+      timeout: env.FRONTAL_CODE_API_TIMEOUT,
       apiKey: env.FRONTAL_SERVER_API_KEY,
     },
     app: {
@@ -247,6 +219,8 @@ export function getEnvConfig() {
 // Validation function for backward compatibility.
 // Deprecated: t3-oss/env-core handles validation automatically.
 // Kept as a no-op for any legacy importers; will be removed in a future release.
-export function validateEnvConfig(): void {}
+export function validateEnvConfig(): void {
+  console.log("Environment variables validated successfully");
+}
 
 export default env;

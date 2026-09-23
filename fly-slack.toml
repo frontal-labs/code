@@ -8,7 +8,7 @@ primary_region = "iad"
   NODE_ENV = "production"
   LOG_LEVEL = "info"
   PORT = "3000"
-  FCODE_API_URL = "https://frontal-code.fly.dev"
+  FRONTAL_CODE_API_URL = "https://frontal-code.fly.dev"
 
 [http_service]
   internal_port = 3000

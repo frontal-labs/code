@@ -33,9 +33,9 @@ impl TestServer {
         // take it in between.
         let mut command = Command::new(api_bin);
         command
-            .env("FCODE_CLI_BIN", &cli_bin)
-            .env("FCODE_API_HOST", "127.0.0.1")
-            .env("FCODE_API_PORT", "0")
+            .env("FRONTAL_CODE_CLI_BIN", &cli_bin)
+            .env("FRONTAL_CODE_API_HOST", "127.0.0.1")
+            .env("FRONTAL_CODE_API_PORT", "0")
             .stdout(Stdio::piped());
         for (key, value) in extra_env {
             command.env(key, value);
@@ -250,7 +250,8 @@ async fn prompt_rejects_danger_full_access_permission_mode_by_default() {
 #[tokio::test]
 async fn cli_run_respects_allowed_commands() {
     let server =
-        TestServer::start_with_env(&[("FCODE_API_ALLOWED_COMMANDS", "status,version")]).await;
+        TestServer::start_with_env(&[("FRONTAL_CODE_API_ALLOWED_COMMANDS", "status,version")])
+            .await;
 
     let client = reqwest::Client::new();
     let forbidden = client

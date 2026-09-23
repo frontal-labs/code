@@ -120,8 +120,8 @@
             "read:org",
             "workflow"
           ],
-          "client_id_env": "FCODE_GITHUB_CLIENT_ID",
-          "client_secret_env": "FCODE_GITHUB_CLIENT_SECRET"
+          "client_id_env": "FRONTAL_CODE_GITHUB_CLIENT_ID",
+          "client_secret_env": "FRONTAL_CODE_GITHUB_CLIENT_SECRET"
         }
       },
       "linear": {
@@ -138,8 +138,8 @@
             "issues:create",
             "comments:create"
           ],
-          "client_id_env": "FCODE_LINEAR_CLIENT_ID",
-          "client_secret_env": "FCODE_LINEAR_CLIENT_SECRET"
+          "client_id_env": "FRONTAL_CODE_LINEAR_CLIENT_ID",
+          "client_secret_env": "FRONTAL_CODE_LINEAR_CLIENT_SECRET"
         }
       },
       "graphite": {
@@ -154,8 +154,8 @@
             "stacks:write",
             "comments:write"
           ],
-          "client_id_env": "FCODE_GRAPHITE_CLIENT_ID",
-          "client_secret_env": "FCODE_GRAPHITE_CLIENT_SECRET"
+          "client_id_env": "FRONTAL_CODE_GRAPHITE_CLIENT_ID",
+          "client_secret_env": "FRONTAL_CODE_GRAPHITE_CLIENT_SECRET"
         }
       },
       "slack": {
@@ -170,8 +170,8 @@
             "chat:write",
             "channels:read"
           ],
-          "client_id_env": "FCODE_SLACK_CLIENT_ID",
-          "client_secret_env": "FCODE_SLACK_CLIENT_SECRET"
+          "client_id_env": "FRONTAL_CODE_SLACK_CLIENT_ID",
+          "client_secret_env": "FRONTAL_CODE_SLACK_CLIENT_SECRET"
         }
       }
     }
@@ -179,7 +179,7 @@
   "plugins": {
     "auto_load": [],
     "enabled": true,
-    "plugins_dir": "${FCODE_CONFIG_DIR:-${HOME}/.frontal-code}/plugins",
+    "plugins_dir": "${FRONTAL_CODE_CONFIG_DIR:-${HOME}/.frontal-code}/plugins",
     "registry_url": "https://plugins.frontal-code.ai",
     "trusted_sources": [
       "https://github.com",

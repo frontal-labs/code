@@ -57,12 +57,12 @@ The control plane can apply timed policy to orphaned hosted lanes when a persist
 
 Global policy environment variables:
 
-- `FCODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS`
-- `FCODE_SERVER_ORPHAN_AUTO_RETRY_SECS`
-- `FCODE_SERVER_ORPHAN_AUTO_CANCEL_SECS`
-- `FCODE_SERVER_ORPHAN_POLICY_RULES`
+- `FRONTAL_CODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS`
+- `FRONTAL_CODE_SERVER_ORPHAN_AUTO_RETRY_SECS`
+- `FRONTAL_CODE_SERVER_ORPHAN_AUTO_CANCEL_SECS`
+- `FRONTAL_CODE_SERVER_ORPHAN_POLICY_RULES`
 
-`FCODE_SERVER_ORPHAN_POLICY_RULES` is a JSON array of ordered match rules. The first matching rule wins.
+`FRONTAL_CODE_SERVER_ORPHAN_POLICY_RULES` is a JSON array of ordered match rules. The first matching rule wins.
 
 Example:
 
@@ -95,14 +95,14 @@ curl "http://127.0.0.1:8788/v1/policies/orphans?repository=repo-prod&priority=hi
 
 The server can run hosted lanes in sibling Docker containers by setting:
 
-- `FCODE_SERVER_LANE_TRANSPORT=local-docker`
-- `FCODE_SERVER_WORKSPACE_ROOT=/path/to/server/workspaces`
-- `FCODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
-- `FCODE_SERVER_CALLBACK_URL=http://host.docker.internal:8788`
+- `FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`
+- `FRONTAL_CODE_SERVER_WORKSPACE_ROOT=/path/to/server/workspaces`
+- `FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
+- `FRONTAL_CODE_SERVER_CALLBACK_URL=http://host.docker.internal:8788`
 
 In that mode, the control plane:
 
-1. prepares an isolated repo checkout under `FCODE_SERVER_WORKSPACE_ROOT`
+1. prepares an isolated repo checkout under `FRONTAL_CODE_SERVER_WORKSPACE_ROOT`
 2. writes `.frontal-code-hosted/task.json` into the checkout
 3. launches `frontal-code hosted task run TASK_ID` inside the worker image
 4. expects the worker container to call `POST /v1/tasks/:task_id/complete` back to the server

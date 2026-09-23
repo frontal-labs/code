@@ -28,6 +28,9 @@ if [[ -n "${TEST_SRCDIR:-}" && -z "${BUILD_WORKSPACE_DIRECTORY:-}" ]]; then
       cp -L "$REPO_ROOT/$config_file" "$WORK_DIR/$config_file"
     fi
   done
+  if [[ -f "$REPO_ROOT/$EXTENSION/package.json" ]]; then
+    cp -L "$REPO_ROOT/$EXTENSION/package.json" "$WORK_DIR/package.json"
+  fi
   EXT_DIR="$WORK_DIR"
 fi
 cd "$EXT_DIR"

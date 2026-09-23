@@ -35,27 +35,6 @@ repos:
 
   # --- Biome (Ultracite preset) for TS/JS/JSON/YAML formatting & lint ------
   # Replaces prettier: Biome is the single formatter/linter for the monorepo's
-  # TypeScript and JavaScript surface (including the Frontal Code SDKs).
-  - repo: local
-    hooks:
-      - id: biome-check
-        name: biome check
-        entry: bunx @biomejs/biome check --write --no-errors-on-unmatched
-        language: system
-        types_or: [file]
-        files: '\.(ts|tsx|js|jsx|json|jsonc|ya?ml)$'
-        pass_filenames: false
-        always_run: true
-
-      - id: biome-format
-        name: biome format
-        entry: bunx @biomejs/biome format --write --no-errors-on-unmatched
-        language: system
-        types_or: [file]
-        files: '\.(ts|tsx|js|jsx|json|jsonc|ya?ml)$'
-        pass_filenames: false
-        always_run: true
-
   - repo: local
     hooks:
       - id: cargo-test

@@ -50,8 +50,8 @@ fi
 ACTION="${1:-test}"
 
 case "$ACTION" in
-  test) cargo test --offline -p frontal-code-sdk ;;
+  test) cargo test -p frontal-code-sdk ;;
   fmt-check) cargo fmt -p frontal-code-sdk -- --check ;;
-  clippy) cargo clippy --offline -p frontal-code-sdk --all-targets -- -D warnings ;;
+  clippy) cargo clippy -p frontal-code-sdk --all-targets -- -D warnings ;;
   *) echo "unknown action: $ACTION" >&2; exit 2 ;;
 esac

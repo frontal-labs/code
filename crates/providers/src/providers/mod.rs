@@ -86,6 +86,15 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
         },
     ),
     (
+        "fable",
+        ProviderMetadata {
+            provider: ProviderKind::Anthropic,
+            auth_env: "FRONTAL_API_KEY",
+            base_url_env: "FRONTAL_BASE_URL",
+            default_base_url: anthropic::DEFAULT_BASE_URL,
+        },
+    ),
+    (
         "frontal",
         ProviderMetadata {
             provider: ProviderKind::Frontal,
@@ -122,7 +131,7 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
         },
     ),
     (
-        "grok-3",
+        "grok-code",
         ProviderMetadata {
             provider: ProviderKind::Xai,
             auth_env: "XAI_API_KEY",
@@ -140,7 +149,7 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
         },
     ),
     (
-        "grok-3-mini",
+        "grok-build",
         ProviderMetadata {
             provider: ProviderKind::Xai,
             auth_env: "XAI_API_KEY",
@@ -149,7 +158,43 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
         },
     ),
     (
-        "grok-2",
+        "grok-4.7",
+        ProviderMetadata {
+            provider: ProviderKind::Xai,
+            auth_env: "XAI_API_KEY",
+            base_url_env: "XAI_BASE_URL",
+            default_base_url: xai::DEFAULT_BASE_URL,
+        },
+    ),
+    (
+        "grok-4.6",
+        ProviderMetadata {
+            provider: ProviderKind::Xai,
+            auth_env: "XAI_API_KEY",
+            base_url_env: "XAI_BASE_URL",
+            default_base_url: xai::DEFAULT_BASE_URL,
+        },
+    ),
+    (
+        "grok-4.5",
+        ProviderMetadata {
+            provider: ProviderKind::Xai,
+            auth_env: "XAI_API_KEY",
+            base_url_env: "XAI_BASE_URL",
+            default_base_url: xai::DEFAULT_BASE_URL,
+        },
+    ),
+    (
+        "grok-4.3",
+        ProviderMetadata {
+            provider: ProviderKind::Xai,
+            auth_env: "XAI_API_KEY",
+            base_url_env: "XAI_BASE_URL",
+            default_base_url: xai::DEFAULT_BASE_URL,
+        },
+    ),
+    (
+        "grok-build-0.1",
         ProviderMetadata {
             provider: ProviderKind::Xai,
             auth_env: "XAI_API_KEY",
@@ -168,15 +213,18 @@ pub fn resolve_model_alias(model: &str) -> String {
         .find_map(|(alias, metadata)| {
             (*alias == lower).then_some(match metadata.provider {
                 ProviderKind::Anthropic => match *alias {
-                    "opus" => "claude-opus-5",
-                    "sonnet" => "claude-sonnet-5",
-                    "haiku" => "claude-haiku-4-5",
+                    "opus" => "claude-opus-5-5",
+                    "sonnet" => "claude-sonnet-5-5",
+                    "haiku" => "claude-haiku-5-5",
+                    "fable" => "claude-fable-5-1",
                     _ => trimmed,
                 },
                 ProviderKind::Xai => match *alias {
-                    "grok" | "grok-3" => "grok-3",
-                    "grok-mini" | "grok-3-mini" => "grok-3-mini",
-                    "grok-2" => "grok-2",
+                    "grok" | "grok-4.7" => "grok-4.7",
+                    "grok-4.6" => "grok-4.6",
+                    "grok-4.5" => "grok-4.5",
+                    "grok-mini" | "grok-4.3" => "grok-4.3",
+                    "grok-code" | "grok-build" | "grok-build-0.1" => "grok-build-0.1",
                     _ => trimmed,
                 },
                 ProviderKind::Frontal
@@ -206,6 +254,18 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
             auth_env: "XAI_API_KEY",
             base_url_env: "XAI_BASE_URL",
             default_base_url: xai::DEFAULT_BASE_URL,
+        });
+    }
+    if canonical.starts_with("gpt")
+        || canonical.starts_with("o1")
+        || canonical.starts_with("o3")
+        || canonical.starts_with("o4")
+    {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "OPENAI_API_KEY",
+            base_url_env: "OPENAI_BASE_URL",
+            default_base_url: openai::DEFAULT_BASE_URL,
         });
     }
     if canonical.starts_with("frontal/") || canonical.starts_with("frontal:") {
@@ -304,8 +364,22 @@ pub fn max_tokens_for_model(model: &str) -> u32 {
     model_token_limit(model).map_or_else(
         || {
             let canonical = resolve_model_alias(model);
-            if canonical.contains("opus") {
-                32_000
+            if canonical.contains("gpt-4.1") {
+                32_768
+            } else if canonical.contains("o1")
+                || canonical.contains("o3")
+                || canonical.contains("o4")
+            {
+                100_000
+            } else if canonical.contains("opus")
+                || canonical.contains("sonnet")
+                || canonical.contains("haiku")
+                || canonical.contains("fable")
+                || canonical.contains("mythos")
+                || canonical.contains("gpt")
+                || canonical.contains("grok")
+            {
+                128_000
             } else {
                 64_000
             }
@@ -318,17 +392,57 @@ pub fn max_tokens_for_model(model: &str) -> u32 {
 pub fn model_token_limit(model: &str) -> Option<ModelTokenLimit> {
     let canonical = resolve_model_alias(model);
     match canonical.as_str() {
-        // The Claude 5 family and the 4.6/4.7/4.8 Opus and Sonnet tiers all ship
-        // a 1M-token context window and a 128K output ceiling.
-        "claude-opus-5" | "claude-opus-4-8" | "claude-opus-4-7" | "claude-opus-4-6"
-        | "claude-sonnet-5" | "claude-sonnet-4-6" => Some(ModelTokenLimit {
-            max_output_tokens: 128_000,
-            context_window_tokens: 1_000_000,
-        }),
+        // Current Anthropic lineup (Oct 2026): 1M-token context window and a
+        // 128K output ceiling on the synchronous Messages API.
+        "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5" | "claude-fable-5-1"
+        // Previous generation, still served.
+        | "claude-opus-5" | "claude-opus-4-8" | "claude-opus-4-7" | "claude-opus-4-6"
+        | "claude-opus-4-5" | "claude-sonnet-5" | "claude-sonnet-4-6" | "claude-sonnet-4-5" => {
+            Some(ModelTokenLimit {
+                max_output_tokens: 128_000,
+                context_window_tokens: 1_000_000,
+            })
+        }
         "claude-haiku-4-5" => Some(ModelTokenLimit {
             max_output_tokens: 64_000,
             context_window_tokens: 200_000,
         }),
+        // Current OpenAI lineup (Oct 2026): GPT-6 / GPT-5.6 / GPT-5.5 ship a
+        // ~1.05M context window with 128K max output.
+        "gpt-6-astra" | "gpt-6.1-sol" | "gpt-6-luna" | "gpt-5.6-sol" | "gpt-5.6-terra"
+        | "gpt-5.6-luna" | "gpt-5.5" | "gpt-5.4" => Some(ModelTokenLimit {
+            max_output_tokens: 128_000,
+            context_window_tokens: 1_050_000,
+        }),
+        // GPT-5 / 5.1 / 5.3-codex generation: 400K context, 128K max output.
+        "gpt-5.3-codex" | "gpt-5.1" | "gpt-5" | "gpt-5-mini" | "gpt-5-nano"
+        | "gpt-5.4-mini" | "gpt-5.4-nano" => Some(ModelTokenLimit {
+            max_output_tokens: 128_000,
+            context_window_tokens: 400_000,
+        }),
+        "gpt-4.1" | "gpt-4.1-mini" | "gpt-4.1-nano" => Some(ModelTokenLimit {
+            max_output_tokens: 32_768,
+            context_window_tokens: 1_047_576,
+        }),
+        "o1" | "o3" | "o3-mini" | "o4-mini" => Some(ModelTokenLimit {
+            max_output_tokens: 100_000,
+            context_window_tokens: 200_000,
+        }),
+        // Current xAI lineup (Oct 2026). Max output defaults to 128K when
+        // `max_completion_tokens` is unset.
+        "grok-4.7" | "grok-4.6" | "grok-4.5" => Some(ModelTokenLimit {
+            max_output_tokens: 128_000,
+            context_window_tokens: 500_000,
+        }),
+        "grok-4.3" => Some(ModelTokenLimit {
+            max_output_tokens: 128_000,
+            context_window_tokens: 1_000_000,
+        }),
+        "grok-build-0.1" => Some(ModelTokenLimit {
+            max_output_tokens: 128_000,
+            context_window_tokens: 256_000,
+        }),
+        // Retired xAI generation, kept for existing configs.
         "grok-3" | "grok-3-mini" => Some(ModelTokenLimit {
             max_output_tokens: 64_000,
             context_window_tokens: 131_072,
@@ -387,9 +501,18 @@ mod tests {
 
     #[test]
     fn resolves_grok_aliases() {
-        assert_eq!(resolve_model_alias("grok"), "grok-3");
-        assert_eq!(resolve_model_alias("grok-mini"), "grok-3-mini");
-        assert_eq!(resolve_model_alias("grok-2"), "grok-2");
+        assert_eq!(resolve_model_alias("grok"), "grok-4.7");
+        assert_eq!(resolve_model_alias("grok-4.7"), "grok-4.7");
+        assert_eq!(resolve_model_alias("grok-4.6"), "grok-4.6");
+        assert_eq!(resolve_model_alias("grok-4.5"), "grok-4.5");
+        assert_eq!(resolve_model_alias("grok-mini"), "grok-4.3");
+        assert_eq!(resolve_model_alias("grok-4.3"), "grok-4.3");
+        assert_eq!(resolve_model_alias("grok-code"), "grok-build-0.1");
+        assert_eq!(resolve_model_alias("grok-build"), "grok-build-0.1");
+        assert_eq!(resolve_model_alias("opus"), "claude-opus-5-5");
+        assert_eq!(resolve_model_alias("sonnet"), "claude-sonnet-5-5");
+        assert_eq!(resolve_model_alias("haiku"), "claude-haiku-5-5");
+        assert_eq!(resolve_model_alias("fable"), "claude-fable-5-1");
         assert_eq!(resolve_model_alias("frontal"), "frontal");
         assert_eq!(resolve_model_alias("bedrock"), "bedrock");
         assert_eq!(resolve_model_alias("azure"), "azure");
@@ -398,6 +521,10 @@ mod tests {
     #[test]
     fn detects_provider_from_model_name_first() {
         assert_eq!(detect_provider_kind("grok"), ProviderKind::Xai);
+        assert_eq!(detect_provider_kind("grok-4.7"), ProviderKind::Xai);
+        assert_eq!(detect_provider_kind("grok-build-0.1"), ProviderKind::Xai);
+        assert_eq!(detect_provider_kind("gpt-6.1-sol"), ProviderKind::OpenAi);
+        assert_eq!(detect_provider_kind("gpt-5.3-codex"), ProviderKind::OpenAi);
         assert_eq!(
             detect_provider_kind("frontal/gpt-4.1"),
             ProviderKind::Frontal
@@ -408,7 +535,7 @@ mod tests {
         );
         assert_eq!(detect_provider_kind("azure/gpt-4.1"), ProviderKind::Azure);
         assert_eq!(
-            detect_provider_kind("claude-sonnet-4-6"),
+            detect_provider_kind("claude-sonnet-5-5"),
             ProviderKind::Anthropic
         );
     }
@@ -416,14 +543,23 @@ mod tests {
     #[test]
     fn keeps_existing_max_token_heuristic() {
         assert_eq!(max_tokens_for_model("opus"), 128_000);
-        assert_eq!(max_tokens_for_model("grok-3"), 64_000);
+        assert_eq!(max_tokens_for_model("sonnet"), 128_000);
+        assert_eq!(max_tokens_for_model("grok-4.7"), 128_000);
+        assert_eq!(max_tokens_for_model("gpt-6.1-sol"), 128_000);
+        assert_eq!(max_tokens_for_model("gpt-4.1"), 32_768);
     }
 
     #[test]
     fn returns_context_window_metadata_for_supported_models() {
         assert_eq!(
-            model_token_limit("claude-sonnet-4-6")
-                .expect("claude-sonnet-4-6 should be registered")
+            model_token_limit("claude-sonnet-5-5")
+                .expect("claude-sonnet-5-5 should be registered")
+                .context_window_tokens,
+            1_000_000
+        );
+        assert_eq!(
+            model_token_limit("opus")
+                .expect("opus should resolve to a registered model")
                 .context_window_tokens,
             1_000_000
         );
@@ -431,20 +567,50 @@ mod tests {
             model_token_limit("haiku")
                 .expect("haiku should resolve to a registered model")
                 .context_window_tokens,
+            1_000_000
+        );
+        assert_eq!(
+            model_token_limit("claude-haiku-4-5")
+                .expect("legacy haiku should stay registered")
+                .context_window_tokens,
             200_000
+        );
+        assert_eq!(
+            model_token_limit("fable")
+                .expect("fable should resolve to a registered model")
+                .context_window_tokens,
+            1_000_000
         );
         assert_eq!(
             model_token_limit("grok-mini")
                 .expect("grok-mini should resolve to a registered model")
                 .context_window_tokens,
-            131_072
+            1_000_000
+        );
+        assert_eq!(
+            model_token_limit("grok-code")
+                .expect("grok-code should resolve to the code model")
+                .context_window_tokens,
+            256_000
+        );
+        assert_eq!(
+            model_token_limit("gpt-6.1-sol")
+                .expect("gpt-6.1-sol should be registered")
+                .context_window_tokens,
+            1_050_000
+        );
+        assert_eq!(
+            model_token_limit("gpt-5.3-codex")
+                .expect("gpt-5.3-codex should be registered")
+                .context_window_tokens,
+            400_000
         );
     }
 
     #[test]
     fn preflight_blocks_requests_that_exceed_the_model_context_window() {
         let request = MessageRequest {
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5-5".to_string(),
             max_tokens: 64_000,
             messages: vec![InputMessage {
                 role: "user".to_string(),
@@ -476,7 +642,7 @@ mod tests {
                 estimated_total_tokens,
                 context_window_tokens,
             } => {
-                assert_eq!(model, "claude-sonnet-4-6");
+                assert_eq!(model, "claude-sonnet-5-5");
                 assert!(estimated_input_tokens > 1_000_000);
                 assert_eq!(requested_output_tokens, 64_000);
                 assert!(estimated_total_tokens > context_window_tokens);

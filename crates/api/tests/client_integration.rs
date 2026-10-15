@@ -56,7 +56,10 @@ async fn send_message_posts_json_and_parses_response() {
     );
     let server = spawn_server(
         state.clone(),
-        vec![http_response("200 OK", "application/json", body)],
+        vec![
+            token_count_response(),
+            http_response("200 OK", "application/json", body),
+        ],
     )
     .await;
 
@@ -81,7 +84,10 @@ async fn send_message_posts_json_and_parses_response() {
     );
 
     let captured = state.lock().await;
-    let request = captured.first().expect("server should capture request");
+    let request = captured
+        .iter()
+        .find(|request| request.path == "/v1/messages")
+        .expect("server should capture message request");
     assert_eq!(request.method, "POST");
     assert_eq!(request.path, "/v1/messages");
     assert_eq!(
@@ -166,6 +172,7 @@ async fn send_message_blocks_oversized_requests_before_the_http_call() {
 }
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn send_message_applies_request_profile_and_records_telemetry() {
     if !loopback_bind_available() {
         return;
@@ -174,23 +181,26 @@ async fn send_message_applies_request_profile_and_records_telemetry() {
     let state = Arc::new(Mutex::new(Vec::<CapturedRequest>::new()));
     let server = spawn_server(
         state.clone(),
-        vec![http_response_with_headers(
-            "200 OK",
-            "application/json",
-            concat!(
-                "{",
-                "\"id\":\"msg_profile\",",
-                "\"type\":\"message\",",
-                "\"role\":\"assistant\",",
-                "\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],",
-                "\"model\":\"claude-sonnet-4-5\",",
-                "\"stop_reason\":\"end_turn\",",
-                "\"stop_sequence\":null,",
-                "\"usage\":{\"input_tokens\":1,\"cache_creation_input_tokens\":2,\"cache_read_input_tokens\":3,\"output_tokens\":1}",
-                "}"
+        vec![
+            token_count_response(),
+            http_response_with_headers(
+                "200 OK",
+                "application/json",
+                concat!(
+                    "{",
+                    "\"id\":\"msg_profile\",",
+                    "\"type\":\"message\",",
+                    "\"role\":\"assistant\",",
+                    "\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],",
+                    "\"model\":\"claude-sonnet-4-5\",",
+                    "\"stop_reason\":\"end_turn\",",
+                    "\"stop_sequence\":null,",
+                    "\"usage\":{\"input_tokens\":1,\"cache_creation_input_tokens\":2,\"cache_read_input_tokens\":3,\"output_tokens\":1}",
+                    "}"
+                ),
+                &[("request-id", "req_profile_123")],
             ),
-            &[("request-id", "req_profile_123")],
-        )],
+        ],
     )
     .await;
     let sink = Arc::new(MemoryTelemetrySink::default());
@@ -210,7 +220,10 @@ async fn send_message_applies_request_profile_and_records_telemetry() {
     assert_eq!(response.request_id.as_deref(), Some("req_profile_123"));
 
     let captured = state.lock().await;
-    let request = captured.first().expect("server should capture request");
+    let request = captured
+        .iter()
+        .find(|request| request.path == "/v1/messages")
+        .expect("server should capture message request");
     assert_eq!(
         request.headers.get("anthropic-beta").map(String::as_str),
         Some("claude-code-20250219,prompt-caching-scope-2026-01-05,tools-2026-04-01")
@@ -295,7 +308,10 @@ async fn send_message_parses_prompt_cache_token_usage_from_response() {
     );
     let server = spawn_server(
         state,
-        vec![http_response("200 OK", "application/json", body)],
+        vec![
+            token_count_response(),
+            http_response("200 OK", "application/json", body),
+        ],
     )
     .await;
 
@@ -346,12 +362,15 @@ async fn stream_message_parses_sse_events_with_tool_use() {
     );
     let server = spawn_server(
         state.clone(),
-        vec![http_response_with_headers(
-            "200 OK",
-            "text/event-stream",
-            sse,
-            &[("request-id", "req_stream_456")],
-        )],
+        vec![
+            token_count_response(),
+            http_response_with_headers(
+                "200 OK",
+                "text/event-stream",
+                sse,
+                &[("request-id", "req_stream_456")],
+            ),
+        ],
     )
     .await;
 
@@ -419,7 +438,10 @@ async fn assert_stream_cache_and_request(
     temp_root: &std::path::Path,
 ) {
     let captured = state.lock().await;
-    let request = captured.first().expect("server should capture request");
+    let request = captured
+        .iter()
+        .find(|request| request.path == "/v1/messages")
+        .expect("server should capture message request");
     assert!(request.body.contains("\"stream\":true"));
 
     let cache_stats = client
@@ -447,6 +469,7 @@ async fn retries_retryable_failures_before_succeeding() {
     let server = spawn_server(
         state.clone(),
         vec![
+            token_count_response(),
             http_response(
                 "429 Too Many Requests",
                 "application/json",
@@ -471,7 +494,7 @@ async fn retries_retryable_failures_before_succeeding() {
         .expect("retry should eventually succeed");
 
     assert_eq!(response.total_tokens(), 5);
-    assert_eq!(state.lock().await.len(), 2);
+    assert_eq!(state.lock().await.len(), 3);
 }
 
 #[tokio::test]
@@ -483,11 +506,14 @@ async fn provider_client_dispatches_anthropic_requests() {
     let state = Arc::new(Mutex::new(Vec::<CapturedRequest>::new()));
     let server = spawn_server(
         state.clone(),
-        vec![http_response(
-            "200 OK",
-            "application/json",
-            "{\"id\":\"msg_provider\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Dispatched\"}],\"model\":\"claude-sonnet-4-5\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"output_tokens\":2}}",
-        )],
+        vec![
+            token_count_response(),
+            http_response(
+                "200 OK",
+                "application/json",
+                "{\"id\":\"msg_provider\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Dispatched\"}],\"model\":\"claude-sonnet-4-5\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"output_tokens\":2}}",
+            ),
+        ],
     )
     .await;
 
@@ -511,7 +537,10 @@ async fn provider_client_dispatches_anthropic_requests() {
     assert_eq!(response.total_tokens(), 5);
 
     let captured = state.lock().await;
-    let request = captured.first().expect("server should capture request");
+    let request = captured
+        .iter()
+        .find(|request| request.path == "/v1/messages")
+        .expect("server should capture message request");
     assert_eq!(request.path, "/v1/messages");
     assert_eq!(
         request.headers.get("x-api-key").map(String::as_str),
@@ -529,6 +558,7 @@ async fn surfaces_retry_exhaustion_for_persistent_retryable_errors() {
     let server = spawn_server(
         state.clone(),
         vec![
+            token_count_response(),
             http_response(
                 "503 Service Unavailable",
                 "application/json",
@@ -592,11 +622,14 @@ async fn send_message_reuses_recent_completion_cache_entries() {
     let state = Arc::new(Mutex::new(Vec::<CapturedRequest>::new()));
     let server = spawn_server(
         state.clone(),
-        vec![http_response(
-            "200 OK",
-            "application/json",
-            "{\"id\":\"msg_cached\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Cached once\"}],\"model\":\"claude-sonnet-4-5\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":5,\"cache_read_input_tokens\":4000,\"output_tokens\":2}}",
-        )],
+        vec![
+            token_count_response(),
+            http_response(
+                "200 OK",
+                "application/json",
+                "{\"id\":\"msg_cached\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Cached once\"}],\"model\":\"claude-sonnet-4-5\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":5,\"cache_read_input_tokens\":4000,\"output_tokens\":2}}",
+            ),
+        ],
     )
     .await;
 
@@ -614,7 +647,7 @@ async fn send_message_reuses_recent_completion_cache_entries() {
         .expect("second request should reuse cache");
 
     assert_eq!(first.content, second.content);
-    assert_eq!(state.lock().await.len(), 1);
+    assert_eq!(state.lock().await.len(), 2);
 
     let cache_stats = client
         .prompt_cache_stats()
@@ -649,11 +682,13 @@ async fn send_message_tracks_unexpected_prompt_cache_breaks() {
     let server = spawn_server(
         state,
         vec![
+            token_count_response(),
             http_response(
                 "200 OK",
                 "application/json",
                 "{\"id\":\"msg_one\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"One\"}],\"model\":\"claude-sonnet-4-5\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":5,\"cache_read_input_tokens\":6000,\"output_tokens\":2}}",
             ),
+            token_count_response(),
             http_response(
                 "200 OK",
                 "application/json",
@@ -847,6 +882,10 @@ fn find_header_end(bytes: &[u8]) -> Option<usize> {
 
 fn http_response(status: &str, content_type: &str, body: &str) -> String {
     http_response_with_headers(status, content_type, body, &[])
+}
+
+fn token_count_response() -> String {
+    http_response("200 OK", "application/json", r#"{"input_tokens":12}"#)
 }
 
 fn http_response_with_headers(

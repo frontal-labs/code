@@ -27,9 +27,9 @@ case "$ACTION" in
     ;;
   lint)
     if command -v bunx >/dev/null 2>&1; then
-      bunx @biomejs/biome check .
+      bunx @biomejs/biome@2.5.14 ci .
     elif command -v npx >/dev/null 2>&1; then
-      npx -y @biomejs/biome check .
+      npx -y @biomejs/biome@2.5.14 ci .
     else
       echo "ERROR: neither bunx nor npx found on PATH" >&2
       exit 1

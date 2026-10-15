@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -135,10 +135,11 @@ describe("Thread.run", () => {
   it("runs in the configured working directory", async () => {
     const wd = mkdtempSync(join(tmpdir(), "frontal-code-wd-"));
     mkdirSync(wd, { recursive: true });
+    const expectedWd = realpathSync(wd);
     const mock = new MockFrontalCode({ response: SINGLE_TURN });
     const frontal_code = new FrontalCode({ command: mock.binPath, env: mock.env() });
     await frontal_code.startThread({ workingDirectory: wd }).run("x");
-    expect(mock.capturedCwd()).toBe(wd);
+    expect(mock.capturedCwd()).toBe(expectedWd);
   });
 
   it("passes skipGitRepoCheck as a config override", async () => {

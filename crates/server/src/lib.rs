@@ -3561,12 +3561,7 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
         if let Some(api_key) = &self.server_api_key {
             container_env.insert("FRONTAL_CODE_SERVER_API_KEY".to_string(), api_key.clone());
         }
-        for key in [
-            "GITHUB_TOKEN",
-            "FRONTAL_CODE_GITHUB_API_BASE",
-            "FRONTAL_CODE_GIT_AUTHOR_NAME",
-            "FRONTAL_CODE_GIT_AUTHOR_EMAIL",
-        ] {
+        for key in ["GITHUB_TOKEN", "FRONTAL_CODE_GITHUB_API_BASE"] {
             if let Ok(value) = env::var(key) {
                 if !value.trim().is_empty() {
                     container_env.insert(key.to_string(), value);

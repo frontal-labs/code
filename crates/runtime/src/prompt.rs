@@ -191,13 +191,31 @@ impl SystemPromptBuilder {
     }
 }
 
-/// Hardcoded commit attribution trailer appended to all git commit messages.
-const COMMIT_ATTRIBUTION_TRAILER: &str =
-    "Co-Authored-By: Frontal Code <code@frontal.dev> (https://frontal.dev)";
+/// GitHub App identity for Frontal Code commit attribution.
+///
+/// App: <https://github.com/apps/frontal-code> (owner: `frontal-labs`, ID: 3325380).
+/// The noreply email form below is what links commits and `Co-Authored-By`
+/// trailers to the App avatar on GitHub. Do not change these to plain
+/// addresses (`code@frontal.dev`, `frontal-code@localhost`, ...): those do
+/// NOT link. These are constants by design, not env vars.
+pub const GITHUB_APP_ID: u64 = 3_325_380;
+pub const GITHUB_APP_SLUG: &str = "frontal-code";
+pub const GIT_AUTHOR_NAME: &str = "frontal-code[bot]";
+pub const GIT_AUTHOR_EMAIL: &str = "3325380+frontal-code[bot]@users.noreply.github.com";
+
+/// `Co-Authored-By` trailer appended to all git commit messages.
+pub const COMMIT_ATTRIBUTION_TRAILER: &str =
+    "Co-Authored-By: frontal-code[bot] <3325380+frontal-code[bot]@users.noreply.github.com>";
+
+/// Returns the canonical attribution trailer (constant).
+#[must_use]
+pub fn commit_attribution_trailer() -> &'static str {
+    COMMIT_ATTRIBUTION_TRAILER
+}
 
 fn get_attribution_section() -> String {
     format!(
-        "# Attribution\n\nWhen creating git commits, always append this trailer to the end of the commit message:\n{COMMIT_ATTRIBUTION_TRAILER}\n\nThe timestamp comes from git's automatic commit timestamp. The trailer makes commit history attributable to Frontal Code on GitHub."
+        "# Attribution\n\nWhen creating git commits, always append this trailer to the end of the commit message:\n{COMMIT_ATTRIBUTION_TRAILER}\n\nThe timestamp comes from git's automatic commit timestamp. The trailer is a fixed constant that links the commit to the Frontal Code GitHub App."
     )
 }
 

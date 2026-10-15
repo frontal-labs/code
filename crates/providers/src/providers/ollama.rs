@@ -72,7 +72,8 @@ impl OllamaClient {
     pub fn from_env() -> Self {
         let base_url = std::env::var("OLLAMA_BASE_URL")
             .unwrap_or_else(|_| "http://localhost:11434".to_string());
-        let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
+        let model =
+            std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "qwen2.5-coder:7b".to_string());
         Self::new(base_url, model)
     }
 }

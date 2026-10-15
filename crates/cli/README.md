@@ -55,7 +55,7 @@ The main binary is named `frontal-code` and can be used in multiple ways:
 frontal-code
 
 # Start with specific model
-frontal-code --model claude-opus-5
+frontal-code --model claude-opus-5-5
 
 # Start with specific permissions
 frontal-code --permission-mode workspace-write

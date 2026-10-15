@@ -221,9 +221,13 @@ mod tests {
 
     #[test]
     fn resolves_existing_and_grok_aliases() {
-        assert_eq!(resolve_model_alias("opus"), "claude-opus-5");
-        assert_eq!(resolve_model_alias("grok"), "grok-3");
-        assert_eq!(resolve_model_alias("grok-mini"), "grok-3-mini");
+        assert_eq!(resolve_model_alias("opus"), "claude-opus-5-5");
+        assert_eq!(resolve_model_alias("sonnet"), "claude-sonnet-5-5");
+        assert_eq!(resolve_model_alias("haiku"), "claude-haiku-5-5");
+        assert_eq!(resolve_model_alias("fable"), "claude-fable-5-1");
+        assert_eq!(resolve_model_alias("grok"), "grok-4.7");
+        assert_eq!(resolve_model_alias("grok-mini"), "grok-4.3");
+        assert_eq!(resolve_model_alias("grok-code"), "grok-build-0.1");
         assert_eq!(resolve_model_alias("frontal"), "frontal");
         assert_eq!(resolve_model_alias("bedrock"), "bedrock");
         assert_eq!(resolve_model_alias("azure"), "azure");
@@ -231,7 +235,8 @@ mod tests {
 
     #[test]
     fn provider_detection_prefers_model_family() {
-        assert_eq!(detect_provider_kind("grok-3"), ProviderKind::Xai);
+        assert_eq!(detect_provider_kind("grok-4.7"), ProviderKind::Xai);
+        assert_eq!(detect_provider_kind("gpt-6.1-sol"), ProviderKind::OpenAi);
         assert_eq!(
             detect_provider_kind("frontal/gpt-4o-mini"),
             ProviderKind::Frontal
@@ -242,7 +247,7 @@ mod tests {
         );
         assert_eq!(detect_provider_kind("azure/gpt-4o"), ProviderKind::Azure);
         assert_eq!(
-            detect_provider_kind("claude-sonnet-4-6"),
+            detect_provider_kind("claude-sonnet-5-5"),
             ProviderKind::Anthropic
         );
     }

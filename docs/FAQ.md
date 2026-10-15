@@ -82,15 +82,16 @@ The main configuration file is located at:
 
 ```bash
 # Via command line
-frontal-code --model claude-sonnet-4-6
+frontal-code --model claude-sonnet-5-5
 
 # Via config
-frontal-code config set runtime.default_model "claude-sonnet-4-6"
+frontal-code config set runtime.default_model "claude-sonnet-5-5"
 
 # Use model aliases
-frontal-code --model opus  # claude-opus-5
-frontal-code --model sonnet # claude-sonnet-4-6
-frontal-code --model haiku  # claude-haiku-4-5
+frontal-code --model opus  # claude-opus-5-5
+frontal-code --model sonnet # claude-sonnet-5-5
+frontal-code --model haiku  # claude-haiku-5-5
+frontal-code --model fable  # claude-fable-5-1
 ```
 
 ### Can I use different AI providers?
@@ -102,10 +103,10 @@ Yes! Frontal Code supports multiple providers:
 frontal-code --provider anthropic
 
 # OpenAI
-frontal-code --provider openai --model gpt-4
+frontal-code --provider openai --model gpt-6.1-sol
 
 # xAI
-frontal-code --provider xai --model grok-3
+frontal-code --provider xai --model grok-4.7
 
 # Frontal (API gateway)
 frontal-code --provider frontal

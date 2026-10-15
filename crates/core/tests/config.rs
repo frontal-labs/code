@@ -34,16 +34,19 @@ fn default_model_per_provider() {
     let config = ProjectConfig::default();
     assert_eq!(
         config.get_default_model("anthropic"),
-        Some("claude-opus-5".to_string())
+        Some("claude-opus-5-5".to_string())
     );
     assert_eq!(
         config.get_default_model("openai"),
-        Some("gpt-5".to_string())
+        Some("gpt-6.1-sol".to_string())
     );
-    assert_eq!(config.get_default_model("xai"), Some("grok-3".to_string()));
+    assert_eq!(
+        config.get_default_model("xai"),
+        Some("grok-4.7".to_string())
+    );
     assert_eq!(
         config.get_default_model("frontal"),
-        Some("claude-opus-5".to_string())
+        Some("claude-opus-5-5".to_string())
     );
     assert_eq!(config.get_default_model("unknown"), None);
 }
@@ -294,7 +297,7 @@ fn get_provider_config_returns_correct_details() {
     let config = ProjectConfig::default();
     let anthropic = config.get_provider_config("anthropic").unwrap();
     assert!(anthropic.enabled);
-    assert_eq!(anthropic.default_model, "claude-opus-5");
+    assert_eq!(anthropic.default_model, "claude-opus-5-5");
 }
 
 /// The runtime only accepts these three permission-mode labels. A value outside

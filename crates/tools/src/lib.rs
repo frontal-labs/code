@@ -9439,11 +9439,8 @@ printf 'pwsh:%s' "$1"
         let original_path = std::env::var("PATH").unwrap_or_default();
         std::env::set_var("PATH", format!("{}:{}", dir.display(), original_path));
 
-        let result = execute_tool(
-            "PowerShell",
-            &json!({"command": "Write-Output hello", "timeout": 1000}),
-        )
-        .expect("PowerShell should succeed");
+        let result = execute_tool("PowerShell", &json!({"command": "Write-Output hello"}))
+            .expect("PowerShell should succeed");
 
         let background = execute_tool(
             "PowerShell",

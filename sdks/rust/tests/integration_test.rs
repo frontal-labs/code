@@ -251,6 +251,10 @@ async fn output_schema_passed_as_config() {
 async fn runs_in_configured_working_directory() {
   let dir = tempfile::tempdir().expect("tempdir");
   let wd = dir.path().to_string_lossy().into_owned();
+  let expected_wd = std::fs::canonicalize(&wd)
+    .expect("canonical working directory")
+    .to_string_lossy()
+    .into_owned();
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
   let frontal_code = frontal_code_for(&mock);
   frontal_code
@@ -261,7 +265,7 @@ async fn runs_in_configured_working_directory() {
     .run(&ThreadInput::Text("x".into()), &ThreadRunOptions::default())
     .await
     .expect("run");
-  assert_eq!(mock.captured_cwd(), wd);
+  assert_eq!(mock.captured_cwd(), expected_wd);
 }
 
 #[tokio::test]

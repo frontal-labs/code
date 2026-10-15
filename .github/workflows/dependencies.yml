@@ -26,10 +26,8 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup show
         
-      - name: Update dependencies
-        run: |
-          cargo update
-          cargo upgrade --workspace
+      - name: Update compatible dependencies
+        run: cargo update
           
       - name: Check if changes were made
         id: changes

@@ -57,7 +57,7 @@ jobs:
         run: bun install
 
       - name: Biome check
-        run: bunx @biomejs/biome check .
+        run: bunx @biomejs/biome@2.5.14 ci .
 
       - name: Build SDK
         run: bun run --filter @frontal-labs/frontal-code-sdk build

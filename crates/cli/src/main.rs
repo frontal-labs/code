@@ -74,12 +74,20 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use tokio_tungstenite::{connect_async, tungstenite::Message as WebSocketMessage};
 
-const DEFAULT_MODEL: &str = "claude-opus-5";
+const DEFAULT_MODEL: &str = "claude-opus-5-5";
 const DEFAULT_HOSTED_SERVER_URL: &str = "http://127.0.0.1:8788";
 const HOSTED_SERVER_TIMEOUT_SECS: u64 = 30;
 fn max_tokens_for_model(model: &str) -> u32 {
-    if model.contains("opus") {
-        32_000
+    if model.contains("gpt-4.1") {
+        32_768
+    } else if model.contains("opus")
+        || model.contains("sonnet")
+        || model.contains("haiku")
+        || model.contains("fable")
+        || model.contains("gpt")
+        || model.contains("grok")
+    {
+        128_000
     } else {
         64_000
     }
@@ -1771,9 +1779,10 @@ fn levenshtein_distance(left: &str, right: &str) -> usize {
 
 fn resolve_model_alias(model: &str) -> &str {
     match model {
-        "opus" => "claude-opus-5",
-        "sonnet" => "claude-sonnet-4-6",
-        "haiku" => "claude-haiku-4-5",
+        "opus" => "claude-opus-5-5",
+        "sonnet" => "claude-sonnet-5-5",
+        "haiku" => "claude-haiku-5-5",
+        "fable" => "claude-fable-5-1",
         _ => model,
     }
 }
@@ -3280,19 +3289,11 @@ fn update_hosted_task_github(
 }
 
 fn hosted_git_author_name() -> String {
-    env::var("FRONTAL_CODE_GIT_AUTHOR_NAME")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "Frontal Code".to_string())
+    frontal_code_runtime::GIT_AUTHOR_NAME.to_string()
 }
 
 fn hosted_git_author_email() -> String {
-    env::var("FRONTAL_CODE_GIT_AUTHOR_EMAIL")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "frontal-code@localhost".to_string())
+    frontal_code_runtime::GIT_AUTHOR_EMAIL.to_string()
 }
 
 #[derive(Debug, Clone)]
@@ -11367,7 +11368,7 @@ mod tests {
             parse_args(&args).expect("args should parse"),
             CliAction::Prompt {
                 prompt: "explain this".to_string(),
-                model: "claude-opus-5".to_string(),
+                model: "claude-opus-5-5".to_string(),
                 provider: None,
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
@@ -11378,9 +11379,10 @@ mod tests {
 
     #[test]
     fn resolves_known_model_aliases() {
-        assert_eq!(resolve_model_alias("opus"), "claude-opus-5");
-        assert_eq!(resolve_model_alias("sonnet"), "claude-sonnet-4-6");
-        assert_eq!(resolve_model_alias("haiku"), "claude-haiku-4-5");
+        assert_eq!(resolve_model_alias("opus"), "claude-opus-5-5");
+        assert_eq!(resolve_model_alias("sonnet"), "claude-sonnet-5-5");
+        assert_eq!(resolve_model_alias("haiku"), "claude-haiku-5-5");
+        assert_eq!(resolve_model_alias("fable"), "claude-fable-5-1");
         assert_eq!(resolve_model_alias("claude-opus"), "claude-opus");
     }
 
@@ -11415,7 +11417,7 @@ mod tests {
             parse_args(&args).expect("args should parse"),
             CliAction::Prompt {
                 prompt: "hello world".to_string(),
-                model: "claude-opus-5".to_string(),
+                model: "claude-opus-5-5".to_string(),
                 provider: Some("anthropic".to_string()),
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
@@ -12596,7 +12598,7 @@ mod tests {
             vec!["session-old".to_string()],
         );
 
-        assert!(completions.contains(&"/model claude-sonnet-4-6".to_string()));
+        assert!(completions.contains(&"/model claude-sonnet-5-5".to_string()));
         assert!(completions.contains(&"/permissions workspace-write".to_string()));
         assert!(completions.contains(&"/session list".to_string()));
         assert!(completions.contains(&"/session switch session-current".to_string()));

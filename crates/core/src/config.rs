@@ -125,19 +125,19 @@ impl Default for ProjectConfig {
                 providers: ProviderConfig {
                     anthropic: ProviderDetails {
                         enabled: true,
-                        default_model: "claude-opus-5".to_string(),
+                        default_model: "claude-opus-5-5".to_string(),
                     },
                     openai: ProviderDetails {
                         enabled: true,
-                        default_model: "gpt-5".to_string(),
+                        default_model: "gpt-6.1-sol".to_string(),
                     },
                     xai: ProviderDetails {
                         enabled: true,
-                        default_model: "grok-3".to_string(),
+                        default_model: "grok-4.7".to_string(),
                     },
                     frontal: ProviderDetails {
                         enabled: true,
-                        default_model: "claude-opus-5".to_string(),
+                        default_model: "claude-opus-5-5".to_string(),
                     },
                 },
                 permission_mode: "workspace-write".to_string(),
@@ -353,12 +353,12 @@ mod tests {
         assert!(config.is_provider_enabled("anthropic"));
         assert_eq!(
             config.get_default_model("anthropic"),
-            Some("claude-opus-5".to_string())
+            Some("claude-opus-5-5".to_string())
         );
         assert!(config.is_provider_enabled("frontal"));
         assert_eq!(
             config.get_default_model("frontal"),
-            Some("claude-opus-5".to_string())
+            Some("claude-opus-5-5".to_string())
         );
         assert!(!config.is_provider_enabled("unknown"));
     }

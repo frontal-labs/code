@@ -44,7 +44,7 @@ export FRONTAL_CODE_DATA_DIR="$HOME/.frontal-code/data"
 
 # Provider selection
 export FRONTAL_CODE_DEFAULT_PROVIDER="anthropic"  # anthropic, openai, xai
-export FRONTAL_CODE_DEFAULT_MODEL="claude-opus-5"
+export FRONTAL_CODE_DEFAULT_MODEL="claude-opus-5-5"
 
 # Permission settings
 export FRONTAL_CODE_PERMISSION_MODE="danger-full-access"  # danger-full-access, safe-mode, ask-permissions
@@ -71,22 +71,22 @@ The `.frontal-code/settings.json` config file uses JSON format with the followin
     "anthropic": {
        "api_key": "${FRONTAL_API_KEY}",
       "base_url": "https://api.anthropic.com",
-      "default_model": "claude-opus-5"
+      "default_model": "claude-opus-5-5"
     },
     "openai": {
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "https://api.openai.com/v1",
-      "default_model": "gpt-5"
+      "default_model": "gpt-6.1-sol"
     },
     "xai": {
       "api_key": "${XAI_API_KEY}",
       "base_url": "https://api.x.ai/v1",
-      "default_model": "grok-3"
+      "default_model": "grok-4.7"
     }
   },
   "runtime": {
     "default_provider": "frontal",
-    "default_model": "claude-opus-5",
+    "default_model": "claude-opus-5-5",
     "permission_mode": "danger-full-access",
     "allowed_tools": ["bash", "read", "write", "edit", "grep", "glob", "web_search", "web_fetch"],
     "max_tokens": 4096,
@@ -149,21 +149,21 @@ Options:
 
 ```bash
 # Full model names
-frontal-code --model claude-opus-5
-frontal-code --model claude-sonnet-4-6
-frontal-code --model claude-haiku-4-5
+frontal-code --model claude-opus-5-5
+frontal-code --model claude-sonnet-5-5
+frontal-code --model claude-haiku-5-5
 
 # Model aliases
-frontal-code --model opus      # claude-opus-5
-frontal-code --model sonnet     # claude-sonnet-4-6
-frontal-code --model haiku      # claude-haiku-4-5
+frontal-code --model opus      # claude-opus-5-5
+frontal-code --model sonnet     # claude-sonnet-5-5
+frontal-code --model haiku      # claude-haiku-5-5
 
 # OpenAI models
-frontal-code --provider openai --model gpt-4
-frontal-code --provider openai --model gpt-4-turbo
+frontal-code --provider openai --model gpt-6.1-sol
+frontal-code --provider openai --model gpt-5.3-codex
 
 # xAI models
-frontal-code --provider xai --model grok-3
+frontal-code --provider xai --model grok-4.7
 ```
 
 ## Permission Modes
@@ -491,3 +491,4 @@ When upgrading Frontal Code versions:
 2. Run config validation: `frontal-code config validate`
 3. Update deprecated settings as needed
 4. Test with `--dry-run` flag before applying changes
+    

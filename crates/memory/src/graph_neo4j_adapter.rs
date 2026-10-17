@@ -772,8 +772,10 @@ mod tests {
         }));
 
         let transport = ReqwestNeo4jTransport::new(
-            Neo4jHttpTransportConfig::new(format!("{}/", server.base_url()))
-                .with_basic_auth("neo4j", "secret"),
+            Neo4jHttpTransportConfig::new(format!("{}/", server.base_url())).with_basic_auth(
+                "neo4j",
+                std::env::var("NEO4J_TEST_PASSWORD").unwrap_or_default(),
+            ),
         );
         let store = Neo4jGraphStoreAdapter::new(Neo4jConfig::new("neo4j"), transport);
         let scope = MemoryScope::new("session-a");

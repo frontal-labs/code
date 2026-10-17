@@ -12,6 +12,7 @@
   },
   "workspaces": [
     "sdks/typescript",
-    "cli"
+    "cli",
+    "npm/code-cli"
   ]
 }

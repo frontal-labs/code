@@ -2,7 +2,7 @@ services:
   frontal-code-server:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/frontal-code-server.Dockerfile
+      dockerfile: docker/frontal-code-server.Dockerfile
     image: frontal-code-server:local
     restart: unless-stopped
     environment:
@@ -58,7 +58,7 @@ services:
   frontal-code-worker-image:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/frontal-code-worker.Dockerfile
+      dockerfile: docker/frontal-code-worker.Dockerfile
     image: frontal-code-worker:local
     command: ["frontal-code", "--version"]
     restart: "no"
@@ -67,7 +67,7 @@ services:
   frontal-code-slack:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/frontal-code-slack.Dockerfile
+      dockerfile: docker/frontal-code-slack.Dockerfile
     image: frontal-code-slack:local
     restart: unless-stopped
     environment:

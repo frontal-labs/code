@@ -5,7 +5,7 @@ PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PKG_ROOT"
 
 echo "==> Syntax-checking JS/mjs sources"
-node --check bin/index.js
+node --check ../npm/code-cli/bin/index.js
 bash -n scripts/postinstall.sh
 for f in lib/*.mjs; do
   node --check "$f"
@@ -27,7 +27,7 @@ process.stdin.on("end", () => {
     console.error("ERROR: unexpected files in package:", bad);
     process.exit(1);
   }
-  for (const need of ["bin/index.js","lib/platform.mjs","lib/resolve-binary.mjs","lib/download.mjs","scripts/postinstall.sh"]) {
+  for (const need of ["lib/platform.mjs","lib/resolve-binary.mjs","lib/download.mjs","scripts/postinstall.sh"]) {
     if (!files.includes(need)) { console.error("ERROR: missing required file:", need); process.exit(1); }
   }
   console.log("OK: package file list is correct");

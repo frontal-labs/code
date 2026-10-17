@@ -12,15 +12,11 @@
   "bugs": {
     "url": "https://github.com/frontal-labs/frontal-code/issues"
   },
-  "bin": {
-    "frontal-code": "bin/index.js"
-  },
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "files": [
-    "bin/index.js",
     "lib/**/*.mjs",
     "scripts/postinstall.sh",
     "README.md"

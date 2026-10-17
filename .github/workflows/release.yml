@@ -178,7 +178,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: infrastructure/docker/frontal-code-fly.Dockerfile
+          file: docker/frontal-code-fly.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

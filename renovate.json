@@ -68,6 +68,6 @@
   },
   "dockerfile": {
     "enabled": true,
-    "managerFilePatterns": ["/infrastructure/docker/.*\\.Dockerfile$/", "/\\.devcontainer/Dockerfile$/"]
+    "managerFilePatterns": ["/docker/.*\\.Dockerfile$/", "/\\.devcontainer/Dockerfile$/"]
   }
 }

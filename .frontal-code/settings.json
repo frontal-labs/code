@@ -102,6 +102,18 @@
         },
         "timeout": 60,
         "auto_start": false
+      },
+      "context7": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@context7/mcp-server"
+        ],
+        "env": {
+          "CONTEXT7_PROJECT_CONFIG": "./context7.json"
+        },
+        "timeout": 30,
+        "auto_start": false
       }
     },
     "integrations": {

@@ -10,8 +10,8 @@ node --test tests/*.test.mjs
 # Smoke test: only if a binary can be resolved (vendored or local cargo build).
 if node -e 'import("./lib/resolve-binary.mjs").then(m=>process.exit(m.resolveBinary()?0:1))'; then
   echo "==> Smoke test: frontal-code --version"
-  node ./bin/index.js --version
-  node ./bin/index.js --version | grep -qi "Frontal Code" && echo "OK: version output contains 'Frontal Code'"
+  node ../npm/code-cli/bin/index.js --version
+  node ../npm/code-cli/bin/index.js --version | grep -qi "Frontal Code" && echo "OK: version output contains 'Frontal Code'"
 else
   echo "WARN: no native binary resolved; skipping smoke test."
 fi

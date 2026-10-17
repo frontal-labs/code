@@ -1,0 +1,29 @@
+{
+  "name": "code-cli",
+  "version": "0.0.0-dev",
+  "description": "Frontal Code CLI launcher — thin Node entry that execs the native `frontal-code` binary.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/frontal-labs/frontal-code#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frontal-labs/frontal-code.git",
+    "directory": "code-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/frontal-labs/frontal-code/issues"
+  },
+  "bin": {
+    "code-cli": "bin/index.js"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/index.js"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+}

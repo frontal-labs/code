@@ -5,13 +5,13 @@
 // and execs it, forwarding argv, stdio, and signals. Dependency-free.
 
 import { spawn } from "node:child_process";
-import { resolveBinary } from "../lib/resolve-binary.mjs";
+import { resolveBinary } from "../../../cli/lib/resolve-binary.mjs";
 
 function fail(message) {
   process.stderr.write(`frontal-code: ${message}\n`);
   process.stderr.write(
     `\nIf this is unexpected, try:\n` +
-      `  npm rebuild @frontal-labs/frontal-code\n` +
+      `  npm rebuild code-cli\n` +
       `  # or, inside the repo:\n` +
       `  (cd cli && ./scripts/download.sh)\n`,
   );

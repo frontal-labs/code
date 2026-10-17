@@ -38,7 +38,7 @@ The Frontal Code server is available as a Docker container:
 
 ```bash
 # Build the server image
-docker build -f infrastructure/docker/frontal-code-server.Dockerfile -t frontal-code-server .
+docker build -f docker/frontal-code-server.Dockerfile -t frontal-code-server .
 
 # Run the server
 docker run -p 8080:8080 frontal-code-server

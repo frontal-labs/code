@@ -13,7 +13,7 @@ resource "terraform_data" "build_frontal-code_server_image" {
       echo "Building frontal-code-server image: ${var.frontal-code_server_image}"
       
       # Build the image
-      docker build -f infrastructure/docker/frontal-code-server.Dockerfile -t ${var.frontal-code_server_image} .
+      docker build -f docker/frontal-code-server.Dockerfile -t ${var.frontal-code_server_image} .
       
       # Tag for ECR if needed
       if [[ "${var.frontal-code_server_image}" == *"amazonaws.com"* ]]; then
@@ -49,7 +49,7 @@ resource "terraform_data" "build_frontal-code_slack_image" {
       echo "Building frontal-code-slack image: ${var.frontal-code_slack_image}"
       
       # Build the image
-      docker build -f infrastructure/docker/frontal-code-slack-app.Dockerfile -t ${var.frontal-code_slack_image} .
+      docker build -f docker/frontal-code-slack-app.Dockerfile -t ${var.frontal-code_slack_image} .
       
       # Tag for ECR if needed
       if [[ "${var.frontal-code_slack_image}" == *"amazonaws.com"* ]]; then

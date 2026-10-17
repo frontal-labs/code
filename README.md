@@ -2,6 +2,8 @@
 
 ![Frontal Banner](./banner.jpg)
 
+**Internal coding harness & CLI**
+
 A high-performance Rust rewrite of the Frontal Code CLI agent harness. Built for speed, safety, and native tool execution.
 
 For a task-oriented guide with copy/paste examples, see [`./USAGE.md`](./USAGE.md).

@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/npm-cli.yml'
       - 'cli/**'
+      - 'npm/code-cli/**'
       - 'scripts/cli.sh'
   workflow_dispatch:
 
@@ -45,4 +46,4 @@ jobs:
           (command -v cargo >/dev/null 2>&1 && \
             cargo build --release -p cli && \
             ./scripts/build.sh && \
-            node ./bin/index.js --version) || echo "cargo unavailable; skipping binary smoke test"
+            node ../npm/code-cli/bin/index.js --version) || echo "cargo unavailable; skipping binary smoke test"

@@ -28,7 +28,7 @@ filegroup(
         "//:.cargo/config.toml",
         "//:rust-toolchain.toml",
         "//crates:all_crates",
-        "//crates/plugins:bundled_plugins",
+        "//crates/code-plugins:bundled_plugins",
         "//examples:srcs",
         "//sdks/rust:rust_sdk_srcs",
         "//tests:all_test_crates",
@@ -40,9 +40,9 @@ filegroup(
 filegroup(
     name = "build",
     srcs = [
-        "//crates/api:frontal-code-api",
-        "//crates/cli:frontal-code",
-        "//crates/server:frontal-code-server",
+        "//crates/code-api:code-api",
+        "//cli:code",
+        "//crates/code-server:code-server",
         "//tests/mock-gateway:mock-gateway",
         "//tools/benchmark:benchmark",
         "//tools/cache:cache",

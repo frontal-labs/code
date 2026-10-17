@@ -7,7 +7,7 @@ The TypeScript SDK wraps the `frontal-code` CLI from `@frontal-labs/frontal-code
 ## Installation
 
 ```bash
-npm install @frontal-labs/frontal-code-sdk
+npm install @frontal-labs/code-sdk
 ```
 
 Requires Node.js 18+.
@@ -15,7 +15,7 @@ Requires Node.js 18+.
 ## Quickstart
 
 ```typescript
-import { Frontal Code } from "@frontal-labs/frontal-code-sdk";
+import { Frontal Code } from "@frontal-labs/code-sdk";
 
 const frontal-code = new Frontal Code();
 const thread = frontal-code.startThread();

@@ -13,13 +13,9 @@
 #![allow(clippy::type_complexity)]
 
 mod config;
-mod frontal_code;
-mod protocol;
-mod spawn;
-mod thread;
+mod code;
 
-pub use config::{config_to_args, flatten_config, merge_config, to_toml_literal};
-pub use frontal_code::FrontalCode;
+pub use code::FrontalCode;
 pub use protocol::{
   FrontalCodeEvent, FrontalCodeOptions, InputEntry, ThreadInput, ThreadItem, ThreadOptions,
   ThreadRunOptions, TurnResult, Usage,

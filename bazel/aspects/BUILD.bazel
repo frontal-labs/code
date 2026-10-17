@@ -1,0 +1,8 @@
+# Package marker for the lint and coverage aspects.
+#
+# Makes //bazel/aspects a loadable package so the aspects can be applied on
+# demand, e.g. bazel build //some:target --aspects=//bazel/aspects:lint_aspect.
+#
+# The aspects themselves are declared in lint_aspect.bzl and coverage_aspect.bzl.
+
+package(default_visibility = ["//visibility:public"])

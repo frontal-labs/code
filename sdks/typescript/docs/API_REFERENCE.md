@@ -1,6 +1,6 @@
 # TypeScript SDK API Reference
 
-## Module: `@frontal-labs/frontal-code-sdk`
+## Module: `@frontal-labs/code-sdk`
 
 ### `Frontal Code`
 
@@ -166,7 +166,7 @@ type FrontalCodeErrorCode =
 ### Basic Usage
 
 ```typescript
-import { Frontal Code } from '@frontal-labs/frontal-code-sdk';
+import { Frontal Code } from '@frontal-labs/code-sdk';
 
 const frontal-code = new Frontal Code();
 const thread = frontal-code.startThread();
@@ -268,7 +268,7 @@ const frontal-code = new Frontal Code({
 ### Error Handling
 
 ```typescript
-import { FrontalCodeError, FrontalCodeErrorCode } from '@frontal-labs/frontal-code-sdk';
+import { FrontalCodeError, FrontalCodeErrorCode } from '@frontal-labs/code-sdk';
 
 try {
   await thread.run('test');
@@ -315,7 +315,7 @@ const result = schema.parse(JSON.parse(turn.finalResponse));
 
 ```typescript
 // Main entry
-import { Frontal Code, Thread } from '@frontal-labs/frontal-code-sdk';
+import { Frontal Code, Thread } from '@frontal-labs/code-sdk';
 
 // Types
 import type {
@@ -329,10 +329,10 @@ import type {
   Usage,
   FrontalCodeError,
   FrontalCodeErrorCode
-} from '@frontal-labs/frontal-code-sdk';
+} from '@frontal-labs/code-sdk';
 
 // Errors
-import { FrontalCodeError } from '@frontal-labs/frontal-code-sdk/errors';
+import { FrontalCodeError } from '@frontal-labs/code-sdk/errors';
 ```
 
 ---

@@ -253,7 +253,7 @@ The workspace includes a deterministic Anthropic-compatible mock service and par
 Manual mock service startup:
 
 ```bash
-cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 ## Verification
@@ -270,9 +270,9 @@ Current Rust crates:
 - `providers`
 - `commands`
 - `compat-harness`
-- `frontal-code-mock-gateway`
+- `code-mock-gateway`
 - `plugins`
 - `runtime`
-- `cli` (package in `crates/cli/`)
+- `cli` (package in `npm/frontal-code/`)
 - `telemetry`
 - `tools`

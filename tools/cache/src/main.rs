@@ -15,7 +15,7 @@ use std::process::Command;
 
 #[derive(Parser)]
 #[command(
-    name = "frontal-code-cache",
+    name = "code-cache",
     about = "Inspect and prune Bazel/Cargo caches"
 )]
 struct Cli {

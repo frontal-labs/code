@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser)]
 #[command(
-    name = "frontal-code-telemetry",
+    name = "code-telemetry",
     about = "Wrap a command and emit a telemetry event"
 )]
 struct Cli {

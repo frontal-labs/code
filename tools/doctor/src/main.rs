@@ -12,7 +12,7 @@ use std::process::Command;
 
 #[derive(Parser)]
 #[command(
-    name = "frontal-code-doctor",
+    name = "code-doctor",
     about = "Check the frontal-code dev environment"
 )]
 struct Cli {
@@ -109,9 +109,9 @@ fn collect_checks(root: &std::path::Path, check_network: bool) -> Vec<Check> {
         run_version("pre-commit", &["--version"]),
     ));
 
-    let frontal_code_json = root.join(".frontal-code/settings.json");
-    let frontal_code_ok = if frontal_code_json.exists() {
-        match std::fs::read_to_string(&frontal_code_json) {
+    let code_json = root.join(".frontal-code/settings.json");
+    let code_ok = if code_json.exists() {
+        match std::fs::read_to_string(&code_json) {
             Ok(s) => match serde_json::from_str::<serde_json::Value>(&s) {
                 Ok(_) => {
                     checks.push(Check {
@@ -147,7 +147,7 @@ fn collect_checks(root: &std::path::Path, check_network: bool) -> Vec<Check> {
         });
         false
     };
-    let _ = frontal_code_ok;
+    let _ = code_ok;
 
     let lock = root.join("Cargo.lock");
     checks.push(Check {

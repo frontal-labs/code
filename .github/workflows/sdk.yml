@@ -60,10 +60,10 @@ jobs:
         run: bunx @biomejs/biome@2.5.14 ci .
 
       - name: Build SDK
-        run: bun run --filter @frontal-labs/frontal-code-sdk build
+        run: bun run --filter @frontal-labs/code-sdk build
 
       - name: Test SDK
-        run: bun run --filter @frontal-labs/frontal-code-sdk test
+        run: bun run --filter @frontal-labs/code-sdk test
 
   # ── Rust SDK: rustfmt + clippy + cargo test ─────────────────────────────
   rust:
@@ -113,7 +113,7 @@ jobs:
       - name: Install and build TypeScript SDK
         run: |
           bun install
-          bun run --filter @frontal-labs/frontal-code-sdk build
+          bun run --filter @frontal-labs/code-sdk build
 
       - name: Publish TypeScript SDK to npm
         working-directory: sdks/typescript
@@ -144,7 +144,7 @@ jobs:
           file: sdks/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/frontal-code-sdk:latest
-            ghcr.io/${{ github.repository }}/frontal-code-sdk:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/code-sdk:latest
+            ghcr.io/${{ github.repository }}/code-sdk:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

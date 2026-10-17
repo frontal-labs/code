@@ -21,7 +21,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "frontal-code-tools"
+      Project     = "code-tools"
       Environment = var.environment
       ManagedBy   = "terraform"
     }

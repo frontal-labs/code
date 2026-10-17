@@ -1,5 +1,5 @@
 # Syntax:
-#   docker build -f sdks/Dockerfile -t ghcr.io/frontal-labs/frontal-code-sdk:latest .
+#   docker build -f sdks/Dockerfile -t ghcr.io/frontal-labs/code-sdk:latest .
 #
 # Publishes the Frontal Code TypeScript SDK as a distributable container image on
 # the GitHub Container Registry (ghcr.io). The built package is installed globally
@@ -15,14 +15,14 @@ RUN npm run build \
 
 FROM node:22-slim
 LABEL org.opencontainers.image.source="https://github.com/frontal-labs/frontal-code"
-LABEL org.opencontainers.image.description="Frontal Code TypeScript SDK (frontal-code-sdk)"
+LABEL org.opencontainers.image.description="Frontal Code TypeScript SDK (code-sdk)"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # The frontal-code CLI is expected to be supplied at runtime (mounted or installed).
 ENV PATH="/usr/local/bin:${PATH}"
 
-COPY --from=build /usr/local/lib/node_modules/@frontal-labs/frontal-code-sdk /usr/local/lib/node_modules/@frontal-labs/frontal-code-sdk
-RUN ln -s /usr/local/lib/node_modules/@frontal-labs/frontal-code-sdk /usr/local/lib/node_modules/frontal-code-sdk
+COPY --from=build /usr/local/lib/node_modules/@frontal-labs/code-sdk /usr/local/lib/node_modules/@frontal-labs/code-sdk
+RUN ln -s /usr/local/lib/node_modules/@frontal-labs/code-sdk /usr/local/lib/node_modules/code-sdk
 
 WORKDIR /work
-ENTRYPOINT ["node", "-e", "import('@frontal-labs/frontal-code-sdk').then(m => console.log(Object.keys(m)))"]
+ENTRYPOINT ["node", "-e", "import('@frontal-labs/code-sdk').then(m => console.log(Object.keys(m)))"]

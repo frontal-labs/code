@@ -51,7 +51,7 @@ repos:
         pass_filenames: false
         always_run: true
 
-      - id: frontal-code-doctor
+      - id: code-doctor
         name: frontal-code doctor
         entry: cargo run --bin frontal-code -- doctor
         language: system
@@ -92,7 +92,7 @@ repos:
         entry: bash scripts/changeset_check.sh
         language: system
         # Only enforce for PRs that change source/config; docs-only changes are exempt.
-        files: '^(crates/|sdks/typescript/|cli/|extensions/)'
+        files: '^(crates/|sdks/typescript/|npm/frontal-code/|extensions/)'
         pass_filenames: false
 
       - id: third-party-check

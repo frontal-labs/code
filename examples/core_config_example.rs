@@ -1,10 +1,10 @@
 //! Example demonstrating how to use the core configuration system
 //!
-//! This example shows how to load and use the `ProjectConfig` from the frontal-code-core crate
-//! and the `ConfigurationManager` from the frontal-code-runtime crate.
+//! This example shows how to load and use the `ProjectConfig` from the code-core crate
+//! and the `ConfigurationManager` from the code-runtime crate.
 
-use frontal_code_core::config::ProjectConfig;
-use frontal_code_runtime::ConfigurationManager;
+use code_core::config::ProjectConfig;
+use code_runtime::ConfigurationManager;
 
 fn main() {
     println!("=== FrontalCode Core Configuration Example ===\n");

@@ -88,7 +88,7 @@ docker pull public.ecr.aws/frontal-code/cli:v0.1.0
 frontal-code/cli:v0.1.0
 ├── rust:1.75-alpine          # Base runtime
 ├── ca-certificates             # SSL certificates
-├── frontal-code-cli-binary           # Compiled Frontal Code binary
+├── cli-binary           # Compiled Frontal Code binary
 ├── configuration-templates     # Default config files
 ├── plugins                   # Built-in plugins
 └── entrypoint-scripts        # Startup and health scripts
@@ -193,7 +193,7 @@ services:
   frontal-code:
     build:
       context: .
-      dockerfile: infrastructure/docker/frontal-code-dev.Dockerfile
+      dockerfile: docker/dev.Dockerfile
     ports:
       - "8080:8080"
     volumes:

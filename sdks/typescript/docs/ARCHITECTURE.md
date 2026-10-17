@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Frontal Code TypeScript SDK (`@frontal-labs/frontal-code-sdk`) is a thin async wrapper
+The Frontal Code TypeScript SDK (`@frontal-labs/code-sdk`) is a thin async wrapper
 around the `frontal-code` CLI (`@frontal-labs/frontal-code`). It spawns the CLI as a child
 process per turn and communicates via JSONL over stdin/stdout using
 `--output-format json --stream`.
@@ -204,8 +204,8 @@ class FrontalCodeError extends Error {
 ```typescript
 // Main entry
 import { Frontal Code, Thread, TurnResult, StreamEvent, Item, FrontalCodeConfig, 
-         ThreadOptions, ThreadRunOptions, ThreadInput } from '@frontal-labs/frontal-code-sdk';
+         ThreadOptions, ThreadRunOptions, ThreadInput } from '@frontal-labs/code-sdk';
 
 // FrontalCodeError
-import { FrontalCodeError } from '@frontal-labs/frontal-code-sdk/errors';
+import { FrontalCodeError } from '@frontal-labs/code-sdk/errors';
 ```

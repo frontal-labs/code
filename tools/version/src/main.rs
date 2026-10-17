@@ -12,7 +12,7 @@ use semver::Version;
 use std::path::Path;
 
 #[derive(Parser)]
-#[command(name = "frontal-code-version", about = "Bump the monorepo version")]
+#[command(name = "code-version", about = "Bump the monorepo version")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -160,7 +160,7 @@ fn main() -> Result<()> {
         let body = read(changelog)?;
         if !body.contains(&format!("## [{next}]")) {
             let stamped = format!(
-                "## [{next}] - unreleased\n\n- Version bump via frontal-code-version.\n\n{body}"
+                "## [{next}] - unreleased\n\n- Version bump via code-version.\n\n{body}"
             );
             write(changelog, &stamped, cli.dry_run)?;
         }

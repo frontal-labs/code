@@ -13,7 +13,7 @@ use std::path::Path;
 
 #[derive(Parser)]
 #[command(
-    name = "frontal-code-generators",
+    name = "code-generators",
     about = "Scaffold crates from templates"
 )]
 struct Cli {

@@ -1,4 +1,4 @@
-# Deploy frontal-code-server if enabled
+# Deploy code-server if enabled
 resource "kubernetes_namespace" "frontal-code" {
   count = var.deploy_frontal-code_server || var.deploy_frontal-code_slack ? 1 : 0
   metadata {
@@ -10,14 +10,14 @@ resource "kubernetes_namespace" "frontal-code" {
   }
 }
 
-# Persistent Volume Claims for frontal-code-server
+# Persistent Volume Claims for code-server
 resource "kubernetes_persistent_volume_claim" "frontal-code_workspace" {
   count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "frontal-code-workspace"
+    name      = "code-workspace"
     namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "frontal-code-server"
+      app         = "code-server"
       environment = var.environment
     }
   }
@@ -38,10 +38,10 @@ resource "kubernetes_persistent_volume_claim" "frontal-code_workspace" {
 resource "kubernetes_persistent_volume_claim" "frontal-code_server_state" {
   count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "frontal-code-server-state"
+    name      = "code-server-state"
     namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "frontal-code-server"
+      app         = "code-server"
       environment = var.environment
     }
   }
@@ -65,7 +65,7 @@ resource "kubernetes_persistent_volume_claim" "frontal-code_agent_store" {
     name      = "frontal-code-agent-store"
     namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "frontal-code-server"
+      app         = "code-server"
       environment = var.environment
     }
   }
@@ -83,14 +83,14 @@ resource "kubernetes_persistent_volume_claim" "frontal-code_agent_store" {
   depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# ConfigMap for frontal-code-server configuration
+# ConfigMap for code-server configuration
 resource "kubernetes_config_map" "frontal-code_server_config" {
   count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "frontal-code-server-config"
+    name      = "code-server-config"
     namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "frontal-code-server"
+      app         = "code-server"
       environment = var.environment
     }
   }
@@ -112,14 +112,14 @@ resource "kubernetes_config_map" "frontal-code_server_config" {
   depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# Secrets for frontal-code-server
+# Secrets for code-server
 resource "kubernetes_secret" "frontal-code_server_secrets" {
   count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "frontal-code-server-secrets"
+    name      = "code-server-secrets"
     namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "frontal-code-server"
+      app         = "code-server"
       environment = var.environment
     }
   }
@@ -145,14 +145,14 @@ resource "kubernetes_secret" "frontal-code_server_secrets" {
   depends_on = [kubernetes_namespace.frontal-code]
 }
 
-# Deployment for frontal-code-server
+# Deployment for code-server
 resource "kubernetes_deployment" "frontal-code_server" {
   count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "frontal-code-server"
+    name      = "code-server"
     namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "frontal-code-server"
+      app         = "code-server"
       environment = var.environment
     }
   }
@@ -162,14 +162,14 @@ resource "kubernetes_deployment" "frontal-code_server" {
 
     selector {
       match_labels = {
-        app = "frontal-code-server"
+        app = "code-server"
       }
     }
 
     template {
       metadata {
         labels = {
-          app         = "frontal-code-server"
+          app         = "code-server"
           environment = var.environment
         }
       }
@@ -185,7 +185,7 @@ resource "kubernetes_deployment" "frontal-code_server" {
         }
 
         container {
-          name              = "frontal-code-server"
+          name              = "code-server"
           image             = var.frontal-code_server_image
           image_pull_policy = "IfNotPresent"
 
@@ -203,13 +203,13 @@ resource "kubernetes_deployment" "frontal-code_server" {
 
           env_from {
             config_map_ref {
-              name = "frontal-code-server-config"
+              name = "code-server-config"
             }
           }
 
           env_from {
             secret_ref {
-              name = "frontal-code-server-secrets"
+              name = "code-server-secrets"
             }
           }
 
@@ -247,12 +247,12 @@ resource "kubernetes_deployment" "frontal-code_server" {
           }
 
           volume_mount {
-            name       = "frontal-code-workspace"
+            name       = "code-workspace"
             mount_path = "/workspace"
           }
 
           volume_mount {
-            name       = "frontal-code-server-state"
+            name       = "code-server-state"
             mount_path = "/var/lib/frontal-code/server"
           }
 
@@ -263,16 +263,16 @@ resource "kubernetes_deployment" "frontal-code_server" {
         }
 
         volume {
-          name = "frontal-code-workspace"
+          name = "code-workspace"
           persistent_volume_claim {
-            claim_name = "frontal-code-workspace"
+            claim_name = "code-workspace"
           }
         }
 
         volume {
-          name = "frontal-code-server-state"
+          name = "code-server-state"
           persistent_volume_claim {
-            claim_name = "frontal-code-server-state"
+            claim_name = "code-server-state"
           }
         }
 
@@ -290,7 +290,7 @@ resource "kubernetes_deployment" "frontal-code_server" {
               pod_affinity_term {
                 label_selector {
                   match_labels = {
-                    app = "frontal-code-server"
+                    app = "code-server"
                   }
                 }
                 topology_key = "kubernetes.io/hostname"
@@ -312,21 +312,21 @@ resource "kubernetes_deployment" "frontal-code_server" {
   ]
 }
 
-# Service for frontal-code-server
+# Service for code-server
 resource "kubernetes_service" "frontal-code_server" {
   count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "frontal-code-server"
+    name      = "code-server"
     namespace = var.frontal-code_service_namespace
     labels = {
-      app         = "frontal-code-server"
+      app         = "code-server"
       environment = var.environment
     }
   }
 
   spec {
     selector = {
-      app = "frontal-code-server"
+      app = "code-server"
     }
 
     port {

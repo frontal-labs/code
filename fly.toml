@@ -2,7 +2,7 @@ app = "frontal-code"
 primary_region = "iad"
 
 [build]
-  dockerfile = "infrastructure/docker/frontal-code-fly.Dockerfile"
+  dockerfile = "docker/fly.Dockerfile"
 
 [env]
   FRONTAL_CODE_SERVER_HOST = "0.0.0.0"

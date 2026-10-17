@@ -12,6 +12,6 @@
   },
   "workspaces": [
     "sdks/typescript",
-    "cli"
+    "npm/frontal-code"
   ]
 }

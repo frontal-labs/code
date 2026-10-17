@@ -1,6 +1,6 @@
 # Rust SDK API Reference
 
-## Module: `frontal-code_sdk`
+## Module: `frontal_code_sdk`
 
 ### `Frontal Code`
 

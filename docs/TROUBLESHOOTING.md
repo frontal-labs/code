@@ -45,8 +45,8 @@ frontal-code diagnose performance
 
 **Symptoms:**
 ```
-error: failed to compile `frontal-code-cli v0.1.0`
-error: could not compile `frontal-code-cli`
+error: failed to compile `cli v0.1.0`
+error: could not compile `cli`
 ```
 
 **Solutions:**

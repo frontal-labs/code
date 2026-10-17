@@ -7,7 +7,7 @@
 # Specific file/directory owners
 
 # Core CLI and API
-crates/cli/ @frontal-labs @gabrielvfonseca
+npm/frontal-code/ @frontal-labs @gabrielvfonseca
 crates/api/ @frontal-labs
 
 # Documentation
@@ -20,7 +20,7 @@ docs/ @frontal-labs
 # Build and release configurations
 Cargo.toml @frontal-labs
 Cargo.lock @frontal-labs
-infrastructure/docker/** @frontal-labs
+docker/** @frontal-labs
 infrastructure/compose/docker-compose*.yml @frontal-labs
 
 # Scripts and automation

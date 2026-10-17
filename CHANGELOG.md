@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolved vulnerable transitive `vite` and `esbuild` versions in `extensions/frontal-code-slack/package-lock.json`.
 
 ### Added
-- **Core Configuration System**: New type-safe configuration system with `frontal-code-core` crate
+- **Core Configuration System**: New type-safe configuration system with `code-core` crate
 - **Project Configuration**: Centralized `config/project.json` for feature flags and internal settings
 - **Configuration Manager**: Bridge between core and runtime configuration systems
 - **Type-safe Configuration**: Rust structs for all configuration values with validation

@@ -1,5 +1,5 @@
 {
-  "name": "@frontal-labs/frontal-code-sdk",
+  "name": "@frontal-labs/code-sdk",
   "version": "0.1.0",
   "description": "Embed the Frontal Code agent in your workflows and apps.",
   "license": "Apache-2.0",

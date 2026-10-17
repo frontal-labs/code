@@ -6,26 +6,26 @@ use serde_json::Value;
 use tokio::sync::Mutex;
 
 use crate::config::{config_to_args, merge_config};
-use crate::frontal_code::FrontalCode;
+use crate::code::FrontalCode;
 use crate::protocol::{ThreadInput, ThreadOptions, ThreadRunOptions, TurnResult};
 use crate::spawn::{run_turn_buffered, run_turn_streamed, StreamedTurn};
 
 /// A single conversation with the `FrontalCode` agent.
 #[derive(Clone)]
 pub struct Thread {
-  frontal_code: Arc<FrontalCode>,
+  code: Arc<FrontalCode>,
   options: ThreadOptions,
   session_id: Arc<Mutex<Option<String>>>,
 }
 
 impl Thread {
   pub(crate) fn new(
-    frontal_code: Arc<FrontalCode>,
+    code: Arc<FrontalCode>,
     options: ThreadOptions,
     session_id: Option<String>,
   ) -> Self {
     Self {
-      frontal_code,
+      code,
       options,
       session_id: Arc::new(Mutex::new(session_id)),
     }
@@ -45,9 +45,9 @@ impl Thread {
   ) -> Result<TurnResult, crate::spawn::FrontalCodeError> {
     let sid = self.session_id.lock().await.clone();
     let args = self.build_args(input, run_options, sid.as_deref());
-    let env = self.frontal_code.build_env();
+    let env = self.code.build_env();
     let turn = run_turn_buffered(
-      &self.frontal_code.command,
+      &self.code.command,
       &args,
       env,
       self.options.working_directory.as_ref(),
@@ -69,9 +69,9 @@ impl Thread {
   ) -> Result<StreamedTurn, crate::spawn::FrontalCodeError> {
     let sid = self.session_id.lock().await.clone();
     let args = self.build_args(input, run_options, sid.as_deref());
-    let env = self.frontal_code.build_env();
+    let env = self.code.build_env();
     run_turn_streamed(
-      &self.frontal_code.command,
+      &self.code.command,
       &args,
       env,
       self.options.working_directory.as_ref(),
@@ -120,13 +120,13 @@ impl Thread {
 
   fn merge_config(&self, run_options: &ThreadRunOptions) -> Value {
     let mut config = self
-      .frontal_code
+      .code
       .options
       .config
       .clone()
       .unwrap_or(Value::Object(Default::default()));
 
-    if let Some(base_url) = &self.frontal_code.options.base_url {
+    if let Some(base_url) = &self.code.options.base_url {
       config = merge_config(
         &config,
         &serde_json::json!({ "frontal_base_url": base_url }),

@@ -16,7 +16,7 @@ const SINGLE_TURN: &str = concat!(
     "{\"type\":\"turn.completed\",\"finalResponse\":\"done\",\"usage\":{\"input_tokens\":3,\"output_tokens\":5,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":1},\"sessionId\":\"sess-1\"}",
 );
 
-fn frontal_code_for(mock: &MockFrontalCode) -> FrontalCode {
+fn code_for(mock: &MockFrontalCode) -> FrontalCode {
   FrontalCode::new(FrontalCodeOptions {
     command: Some(mock.bin_path.to_string_lossy().into_owned()),
     env: Some(mock.env()),
@@ -27,7 +27,7 @@ fn frontal_code_for(mock: &MockFrontalCode) -> FrontalCode {
 #[tokio::test]
 async fn run_returns_buffered_turn() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let turn = frontal_code
     .start_thread(ThreadOptions::default())
     .run(
@@ -64,7 +64,7 @@ async fn run_returns_buffered_turn() {
 #[tokio::test]
 async fn run_stores_session_id() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let thread = frontal_code.start_thread(ThreadOptions::default());
   thread
     .run(
@@ -79,7 +79,7 @@ async fn run_stores_session_id() {
 #[tokio::test]
 async fn run_requests_json_streaming_output() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   frontal_code
     .start_thread(ThreadOptions::default())
     .run(
@@ -100,7 +100,7 @@ async fn run_requests_json_streaming_output() {
 #[tokio::test]
 async fn first_turn_has_no_resume() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   frontal_code
     .start_thread(ThreadOptions::default())
     .run(
@@ -115,7 +115,7 @@ async fn first_turn_has_no_resume() {
 #[tokio::test]
 async fn subsequent_turns_pass_resume() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let thread = frontal_code.start_thread(ThreadOptions::default());
   thread
     .run(
@@ -142,7 +142,7 @@ async fn subsequent_turns_pass_resume() {
 #[tokio::test]
 async fn images_emit_image_flags() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let entries = vec![
     InputEntry::Text {
       text: "describe these".into(),
@@ -175,7 +175,7 @@ async fn images_emit_image_flags() {
 #[tokio::test]
 async fn multiple_text_entries_concatenated() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let entries = vec![
     InputEntry::Text {
       text: "line one".into(),
@@ -196,7 +196,7 @@ async fn multiple_text_entries_concatenated() {
 #[tokio::test]
 async fn provider_model_permission_mode_passed() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   frontal_code
     .start_thread(ThreadOptions {
       provider: Some("frontal".into()),
@@ -225,7 +225,7 @@ async fn provider_model_permission_mode_passed() {
 #[tokio::test]
 async fn output_schema_passed_as_config() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let schema = serde_json::json!({
       "type": "object",
       "properties": { "summary": { "type": "string" } },
@@ -256,7 +256,7 @@ async fn runs_in_configured_working_directory() {
     .to_string_lossy()
     .into_owned();
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   frontal_code
     .start_thread(ThreadOptions {
       working_directory: Some(PathBuf::from(&wd)),
@@ -271,7 +271,7 @@ async fn runs_in_configured_working_directory() {
 #[tokio::test]
 async fn skip_git_repo_check_passed_as_config() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   frontal_code
     .start_thread(ThreadOptions {
       skip_git_repo_check: true,
@@ -313,7 +313,7 @@ async fn global_config_and_base_url_flattened() {
 #[tokio::test]
 async fn non_zero_exit_is_an_error() {
   let mock = MockFrontalCode::new("", 2);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let result = frontal_code
     .start_thread(ThreadOptions::default())
     .run(
@@ -331,7 +331,7 @@ async fn non_zero_exit_is_an_error() {
 async fn unparseable_lines_ignored() {
   let response = format!("{}\n{}", "not json", SINGLE_TURN.lines().last().unwrap());
   let mock = MockFrontalCode::new(&response, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let turn = frontal_code
     .start_thread(ThreadOptions::default())
     .run(&ThreadInput::Text("x".into()), &ThreadRunOptions::default())
@@ -343,7 +343,7 @@ async fn unparseable_lines_ignored() {
 #[tokio::test]
 async fn run_streamed_yields_ordered_events() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
-  let frontal_code = frontal_code_for(&mock);
+  let frontal_code = code_for(&mock);
   let thread = frontal_code.start_thread(ThreadOptions::default());
   let mut streamed = thread
     .run_streamed(

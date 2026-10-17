@@ -129,7 +129,7 @@ verify_deployment() {
     # Check Kubernetes resources
     log_info "Checking Kubernetes resources..."
     
-    if kubectl get ingress -n frontal-code frontal-code-tools-ingress &> /dev/null; then
+    if kubectl get ingress -n frontal-code code-tools-ingress &> /dev/null; then
         log_success "Ingress created successfully"
     else
         log_error "Ingress not found"
@@ -174,7 +174,7 @@ show_results() {
     echo "  Frontal Code Slack: $FRONTAL_CODE_SLACK_DEPLOYMENT"
     echo
     
-    # Show storage info if frontal-code-server is deployed
+    # Show storage info if code-server is deployed
     if terraform output -raw frontal-code_server_deployment | grep -q "Deployed"; then
         STORAGE_INFO=$(terraform output -json storage_info)
         echo "Storage Configuration:"

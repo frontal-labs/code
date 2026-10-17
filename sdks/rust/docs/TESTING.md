@@ -104,7 +104,7 @@ let frontal-code = TestFrontalCodeBuilder::new()
 ### Event Assertions
 
 ```rust
-use frontal-code_sdk::test_utils::{assert_event_seq, assert_final_response};
+use frontal_code_sdk::test_utils::{assert_event_seq, assert_final_response};
 
 let mut stream = thread.run_streamed(&input, &options).unwrap();
 assert_event_seq!(&mut stream, ItemCompleted, TurnCompleted);

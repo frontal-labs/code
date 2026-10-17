@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: frontal-code-server
+  name: code-server
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
@@ -11,7 +11,7 @@ spec:
   tls:
     - hosts:
         - frontal-code.example.com
-      secretName: frontal-code-server-tls
+      secretName: code-server-tls
   rules:
     - host: frontal-code.example.com
       http:
@@ -20,6 +20,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: frontal-code-server
+                name: code-server
                 port:
                   number: 8788

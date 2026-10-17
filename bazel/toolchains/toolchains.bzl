@@ -4,19 +4,27 @@
 # toolchains are registered in MODULE.bazel; this file only provides select()
 # scaffolding so packages can opt into a toolchain type.
 
-def toolchain_for(toolchain_type, fallback = None):
-    """Return a select() that resolves a toolchain by type.
+def toolchain_for(conditions, fallback = None, no_match_error = None):
+    """Return a select() that resolves a toolchain label by constraint.
 
     Args:
-        toolchain_type: The toolchain_type label.
-        fallback: An optional default label used when no constraint matches.
+        conditions: A dict mapping constraint_value label -> toolchain label.
+            Bazel picks the toolchain whose constraint matches the target
+            platform. Example:
+                {
+                    "//bazel/constraints:arch_arm64": "//toolchains/rust:arm64",
+                    "//bazel/constraints:arch_x86_64": "//toolchains/rust:x86_64",
+                }
+        fallback: An optional default toolchain label used when no constraint
+            matches. Mutually exclusive with no_match_error.
+        no_match_error: An error message surfaced when no constraint matches.
+            Mutually exclusive with fallback. Defaults to a generic message.
 
     Returns:
-        A select() expression keyed on the toolchain type, or the fallback.
+        A select() expression keyed on constraint values.
     """
-    conditions = {
-        toolchain_type: toolchain_type,
-    }
-    if fallback != None:
-        return select(conditions, no_match_error = "no toolchain for " + str(toolchain_type))
-    return select(conditions, default = fallback)
+    if fallback is not None and no_match_error is not None:
+        fail("toolchain_for: specify either fallback or no_match_error, not both")
+    if fallback is not None:
+        return select(conditions, default = fallback)
+    return select(conditions, no_match_error = no_match_error or "no matching toolchain for the target platform")

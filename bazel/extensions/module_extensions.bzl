@@ -5,7 +5,7 @@
 # generated repos) without touching MODULE.bazel structure later.
 
 def _module_ext_impl(_ctx):
-    return ctx.extension_meta(repos = [])
+    return _ctx.extension_meta(repos = [])
 
 module_ext = module_extension(
     implementation = _module_ext_impl,

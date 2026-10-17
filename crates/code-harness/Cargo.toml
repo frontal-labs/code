@@ -1,0 +1,10 @@
+[package]
+name = "code-harness"
+
+[dependencies]
+code-commands = { path = "../code-commands" }
+code-tools = { path = "../code-tools" }
+code-runtime = { path = "../code-runtime" }
+
+[lints]
+workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "code-commands"
+
+[lints]
+workspace = true
+
+[dependencies]
+code-plugins = { path = "../code-plugins" }
+code-runtime = { path = "../code-runtime" }
+serde_json.workspace = true

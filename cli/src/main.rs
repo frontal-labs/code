@@ -64,9 +64,7 @@ use code_runtime::{
     ProjectContext, PromptCacheEvent, ResolvedPermissionMode, RuntimeError, Session, TokenUsage,
     ToolError, ToolExecutor, UsageTracker,
 };
-use code_tools::{
-    GlobalToolRegistry, RuntimeToolDefinition, ToolExecutionScope, ToolSearchOutput,
-};
+use code_tools::{GlobalToolRegistry, RuntimeToolDefinition, ToolExecutionScope, ToolSearchOutput};
 use init::initialize_repo;
 use render::{MarkdownStreamState, Spinner, TerminalRenderer};
 use reqwest::blocking::Client as HttpClient;
@@ -5470,10 +5468,7 @@ impl BuiltRuntime {
         }
     }
 
-    fn with_hook_abort_signal(
-        mut self,
-        hook_abort_signal: code_runtime::HookAbortSignal,
-    ) -> Self {
+    fn with_hook_abort_signal(mut self, hook_abort_signal: code_runtime::HookAbortSignal) -> Self {
         let runtime = self
             .runtime
             .take()
@@ -5557,10 +5552,8 @@ struct ReadMcpResourceRequest {
 impl RuntimeMcpState {
     fn new(
         runtime_config: &code_runtime::RuntimeConfig,
-    ) -> Result<
-        Option<(Self, code_runtime::McpToolDiscoveryReport)>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Option<(Self, code_runtime::McpToolDiscoveryReport)>, Box<dyn std::error::Error>>
+    {
         let integration_servers = map_runtime_mcp_servers(runtime_config.mcp().servers());
         let mut manager = McpServerManager::from_servers(&integration_servers);
         if manager.server_names().is_empty() && manager.unsupported_servers().is_empty() {
@@ -5756,8 +5749,7 @@ fn map_runtime_mcp_servers(
                 name.clone(),
                 integrations_mcp_config::ScopedMcpServerConfig {
                     scope: match scoped.scope {
-                        code_runtime::ConfigSource::User
-                        | code_runtime::ConfigSource::Project => {
+                        code_runtime::ConfigSource::User | code_runtime::ConfigSource::Project => {
                             integrations_mcp_config::ConfigSource::Remote
                         }
                         code_runtime::ConfigSource::Local => {
@@ -5819,22 +5811,18 @@ fn map_runtime_mcp_server_config(
                 },
             )
         }
-        code_runtime::McpServerConfig::Ws(ws) => {
-            integrations_mcp_config::McpServerConfig::Ws(
-                integrations_mcp_config::McpWebSocketServerConfig {
-                    url: ws.url.clone(),
-                    headers: ws.headers.clone(),
-                    headers_helper: ws.headers_helper.clone(),
-                },
-            )
-        }
-        code_runtime::McpServerConfig::Sdk(sdk) => {
-            integrations_mcp_config::McpServerConfig::Sdk(
-                integrations_mcp_config::McpSdkServerConfig {
-                    name: sdk.name.clone(),
-                },
-            )
-        }
+        code_runtime::McpServerConfig::Ws(ws) => integrations_mcp_config::McpServerConfig::Ws(
+            integrations_mcp_config::McpWebSocketServerConfig {
+                url: ws.url.clone(),
+                headers: ws.headers.clone(),
+                headers_helper: ws.headers_helper.clone(),
+            },
+        ),
+        code_runtime::McpServerConfig::Sdk(sdk) => integrations_mcp_config::McpServerConfig::Sdk(
+            integrations_mcp_config::McpSdkServerConfig {
+                name: sdk.name.clone(),
+            },
+        ),
         code_runtime::McpServerConfig::ManagedProxy(proxy) => {
             integrations_mcp_config::McpServerConfig::ManagedProxy(
                 integrations_mcp_config::McpManagedProxyServerConfig {
@@ -5865,9 +5853,7 @@ fn build_runtime_mcp_state(
     Ok((Some(Arc::new(Mutex::new(mcp_state))), runtime_tools))
 }
 
-fn mcp_runtime_tool_definition(
-    tool: &code_runtime::ManagedMcpTool,
-) -> RuntimeToolDefinition {
+fn mcp_runtime_tool_definition(tool: &code_runtime::ManagedMcpTool) -> RuntimeToolDefinition {
     RuntimeToolDefinition {
         name: tool.qualified_name.clone(),
         description: Some(
@@ -7709,9 +7695,7 @@ fn telemetry_env_override_display() -> String {
     telemetry_env_override_value().unwrap_or_else(|| "<unset>".to_string())
 }
 
-fn telemetry_config_enabled_display(
-    runtime_config: &code_runtime::RuntimeConfig,
-) -> String {
+fn telemetry_config_enabled_display(runtime_config: &code_runtime::RuntimeConfig) -> String {
     runtime_config
         .telemetry()
         .enabled()
@@ -8638,9 +8622,7 @@ fn resolve_plugin_path(cwd: &Path, config_home: &Path, value: &str) -> PathBuf {
     }
 }
 
-fn runtime_hook_config_from_plugin_hooks(
-    hooks: PluginHooks,
-) -> code_runtime::RuntimeHookConfig {
+fn runtime_hook_config_from_plugin_hooks(hooks: PluginHooks) -> code_runtime::RuntimeHookConfig {
     code_runtime::RuntimeHookConfig::new(
         hooks.pre_tool_use,
         hooks.post_tool_use,
@@ -9701,10 +9683,7 @@ fn format_user_visible_api_error(session_id: &str, error: &code_api::ApiError) -
     }
 }
 
-fn format_context_window_blocked_error(
-    session_id: &str,
-    error: &code_api::ApiError,
-) -> String {
+fn format_context_window_blocked_error(session_id: &str, error: &code_api::ApiError) -> String {
     let mut lines = vec![
         "Context window blocked".to_string(),
         "  Failure class    context_window_blocked".to_string(),
@@ -9746,9 +9725,7 @@ fn format_context_window_blocked_error(
         }
         code_api::ApiError::RetriesExhausted { last_error, .. } => {
             let detail = match last_error.as_ref() {
-                code_api::ApiError::Api { message, body, .. } => {
-                    message.as_deref().unwrap_or(body)
-                }
+                code_api::ApiError::Api { message, body, .. } => message.as_deref().unwrap_or(body),
                 other => return format_context_window_blocked_error(session_id, other),
             }
             .trim();
@@ -9834,9 +9811,7 @@ fn collect_tool_results(summary: &code_runtime::TurnSummary) -> Vec<serde_json::
         .collect()
 }
 
-fn collect_prompt_cache_events(
-    summary: &code_runtime::TurnSummary,
-) -> Vec<serde_json::Value> {
+fn collect_prompt_cache_events(summary: &code_runtime::TurnSummary) -> Vec<serde_json::Value> {
     summary
         .prompt_cache_events
         .iter()

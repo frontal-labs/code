@@ -45,30 +45,6 @@ pub mod worker_boot;
 pub use bash::{execute_bash, BashCommandInput, BashCommandOutput};
 pub use bootstrap::{BootstrapPhase, BootstrapPlan};
 pub use branch_lock::{detect_branch_lock_collisions, BranchLockCollision, BranchLockIntent};
-pub use compact::{
-    compact_session, estimate_session_tokens, format_compact_summary,
-    get_compact_continuation_message, should_compact, CompactionConfig, CompactionResult,
-};
-pub use config::{
-    ConfigEntry, ConfigError, ConfigLoader, ConfigSource, McpConfigCollection,
-    McpManagedProxyServerConfig, McpOAuthConfig, McpRemoteServerConfig, McpSdkServerConfig,
-    McpServerConfig, McpStdioServerConfig, McpTransport, McpWebSocketServerConfig, OAuthConfig,
-    ResolvedPermissionMode, RuntimeConfig, RuntimeFeatureConfig, RuntimeHookConfig,
-    RuntimePermissionRuleConfig, RuntimePluginConfig, RuntimeTelemetryConfig,
-    ScopedMcpServerConfig, FRONTAL_CODE_SETTINGS_SCHEMA_NAME,
-};
-pub use conversation::{
-    auto_compaction_threshold_from_env, ApiClient, ApiRequest, AssistantEvent, AutoCompactionEvent,
-    ConversationRuntime, PromptCacheEvent, RuntimeError, StaticToolExecutor, ToolError,
-    ToolExecutor, TurnSummary,
-};
-pub use core_config::ConfigurationManager;
-pub use file_ops::{
-    edit_file, edit_file_in_workspace, glob_search, grep_search, is_symlink_escape, read_file,
-    read_file_in_workspace, write_file, write_file_in_workspace, EditFileOutput, GlobSearchOutput,
-    GrepSearchInput, GrepSearchOutput, ReadFileOutput, StructuredPatchHunk, TextFilePayload,
-    WriteFileOutput,
-};
 pub use code_integrations::mcp::client::{
     McpClientAuth, McpClientBootstrap, McpClientTransport, McpManagedProxyTransport,
     McpRemoteTransport, McpSdkTransport, McpStdioTransport,
@@ -96,6 +72,30 @@ pub use code_integrations::mcp::utils::{
     mcp_server_signature, scoped_mcp_config_hash, unwrap_ccr_proxy_url,
 };
 pub use code_integrations::mcp::{mcp_tool_name, mcp_tool_prefix, normalize_name_for_mcp};
+pub use compact::{
+    compact_session, estimate_session_tokens, format_compact_summary,
+    get_compact_continuation_message, should_compact, CompactionConfig, CompactionResult,
+};
+pub use config::{
+    ConfigEntry, ConfigError, ConfigLoader, ConfigSource, McpConfigCollection,
+    McpManagedProxyServerConfig, McpOAuthConfig, McpRemoteServerConfig, McpSdkServerConfig,
+    McpServerConfig, McpStdioServerConfig, McpTransport, McpWebSocketServerConfig, OAuthConfig,
+    ResolvedPermissionMode, RuntimeConfig, RuntimeFeatureConfig, RuntimeHookConfig,
+    RuntimePermissionRuleConfig, RuntimePluginConfig, RuntimeTelemetryConfig,
+    ScopedMcpServerConfig, FRONTAL_CODE_SETTINGS_SCHEMA_NAME,
+};
+pub use conversation::{
+    auto_compaction_threshold_from_env, ApiClient, ApiRequest, AssistantEvent, AutoCompactionEvent,
+    ConversationRuntime, PromptCacheEvent, RuntimeError, StaticToolExecutor, ToolError,
+    ToolExecutor, TurnSummary,
+};
+pub use core_config::ConfigurationManager;
+pub use file_ops::{
+    edit_file, edit_file_in_workspace, glob_search, grep_search, is_symlink_escape, read_file,
+    read_file_in_workspace, write_file, write_file_in_workspace, EditFileOutput, GlobSearchOutput,
+    GrepSearchInput, GrepSearchOutput, ReadFileOutput, StructuredPatchHunk, TextFilePayload,
+    WriteFileOutput,
+};
 pub use hooks::{
     HookAbortSignal, HookEvent, HookProgressEvent, HookProgressReporter, HookRunResult, HookRunner,
 };

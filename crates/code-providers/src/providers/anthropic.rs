@@ -7,9 +7,7 @@ use code_runtime::{
     load_oauth_credentials, save_oauth_credentials, OAuthConfig, OAuthRefreshRequest,
     OAuthTokenExchangeRequest,
 };
-use code_telemetry::{
-    AnalyticsEvent, AnthropicRequestProfile, SessionTracer,
-};
+use code_telemetry::{AnalyticsEvent, AnthropicRequestProfile, SessionTracer};
 use code_types::ClientIdentity;
 use serde::Deserialize;
 use serde_json::{Map, Value};

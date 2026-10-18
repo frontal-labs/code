@@ -1066,9 +1066,7 @@ mod tests {
         MemoryBackendConfig, MemoryMetadata, MemoryMetadataStore, MemoryRerankPolicy, MemoryScope,
         MemorySearchRequest, MemoryService, MemoryVectorStore, SemanticMemoryEngine,
     };
-    use code_embeddings::{
-        EmbeddingModelConfig, EmbeddingProvider, LocalMlEmbeddingProvider,
-    };
+    use code_embeddings::{EmbeddingModelConfig, EmbeddingProvider, LocalMlEmbeddingProvider};
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -69,7 +69,11 @@ impl TokenUsage {
     }
 
     #[must_use]
-    pub fn summary_lines_for_model(self, label: &str, pricing: Option<&ModelPricing>) -> Vec<String> {
+    pub fn summary_lines_for_model(
+        self,
+        label: &str,
+        pricing: Option<&ModelPricing>,
+    ) -> Vec<String> {
         let cost = pricing.map_or_else(
             || self.estimate_cost_usd(),
             |pricing| self.estimate_cost_usd_with_pricing(*pricing),

@@ -239,10 +239,7 @@ async fn prompt_rejects_danger_full_access_permission_mode_by_default() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body: Value = response.json().await.expect("body should be JSON");
-    assert_eq!(
-        body["error"],
-        "danger-full-access is disabled for code-api"
-    );
+    assert_eq!(body["error"], "danger-full-access is disabled for code-api");
 
     server.shutdown().await;
 }

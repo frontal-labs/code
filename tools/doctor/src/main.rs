@@ -11,10 +11,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Parser)]
-#[command(
-    name = "code-doctor",
-    about = "Check the frontal-code dev environment"
-)]
+#[command(name = "code-doctor", about = "Check the frontal-code dev environment")]
 struct Cli {
     /// Output format.
     #[arg(long, value_enum, default_value_t = Format::Text)]

@@ -1360,10 +1360,7 @@ mod tests {
             .expect("config should load");
 
         assert_eq!(loaded.telemetry().enabled(), Some(true));
-        assert_eq!(
-            loaded.telemetry().path(),
-            Some("/tmp/code-telemetry.jsonl")
-        );
+        assert_eq!(loaded.telemetry().path(), Some("/tmp/code-telemetry.jsonl"));
 
         fs::remove_dir_all(root).expect("cleanup temp dir");
     }

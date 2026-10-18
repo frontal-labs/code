@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use code_plugins::{
-    builtin_plugins, Plugin, PluginKind, PluginManager, PluginManagerConfig,
-};
+use code_plugins::{builtin_plugins, Plugin, PluginKind, PluginManager, PluginManagerConfig};
 
 #[test]
 fn config_new_sets_config_home() {

@@ -20,9 +20,7 @@ fn temp_file_path(label: &str) -> PathBuf {
         .as_nanos();
     let pid = std::process::id();
     let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "code-memory-{label}-{pid}-{stamp}-{serial}.tsv"
-    ))
+    std::env::temp_dir().join(format!("code-memory-{label}-{pid}-{stamp}-{serial}.tsv"))
 }
 
 #[test]

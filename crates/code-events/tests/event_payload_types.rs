@@ -66,8 +66,7 @@ fn connector_event_request_roundtrip() {
     assert_eq!(json["user_id"], "U456");
     assert_eq!(json["data"]["text"], "hello world");
 
-    let deserialized: code_events::ConnectorEventRequest =
-        serde_json::from_value(json).unwrap();
+    let deserialized: code_events::ConnectorEventRequest = serde_json::from_value(json).unwrap();
     assert_eq!(request, deserialized);
 }
 

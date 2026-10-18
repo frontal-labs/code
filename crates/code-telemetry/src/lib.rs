@@ -9,7 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub use code_types::{ClientIdentity, DEFAULT_APP_NAME, DEFAULT_FRONTAL_CODE_VERSION, DEFAULT_RUNTIME};
+pub use code_types::{
+    ClientIdentity, DEFAULT_APP_NAME, DEFAULT_FRONTAL_CODE_VERSION, DEFAULT_RUNTIME,
+};
 
 pub const DEFAULT_AGENTIC_BETA: &str = "claude-code-20250219";
 pub const DEFAULT_PROMPT_CACHING_SCOPE_BETA: &str = "prompt-caching-scope-2026-01-05";

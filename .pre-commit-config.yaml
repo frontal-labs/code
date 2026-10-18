@@ -52,8 +52,8 @@ repos:
         always_run: true
 
       - id: code-doctor
-        name: frontal-code doctor
-        entry: cargo run --bin frontal-code -- doctor
+        name: code doctor
+        entry: cargo run -q -p cli --bin code -- doctor
         language: system
         pass_filenames: false
         always_run: true

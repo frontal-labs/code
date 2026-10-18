@@ -1658,10 +1658,7 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
     }
     let app = app(state);
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
-    println!(
-        "code-server listening on http://{}",
-        config.bind_addr
-    );
+    println!("code-server listening on http://{}", config.bind_addr);
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -4555,11 +4552,7 @@ mod tests {
         run_git(&path, ["config", "user.name", "FrontalCode Server Tests"]);
         run_git(
             &path,
-            [
-                "config",
-                "user.email",
-                "code-server-tests@example.com",
-            ],
+            ["config", "user.email", "code-server-tests@example.com"],
         );
         path
     }

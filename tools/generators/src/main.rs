@@ -12,10 +12,7 @@ use serde_json::json;
 use std::path::Path;
 
 #[derive(Parser)]
-#[command(
-    name = "code-generators",
-    about = "Scaffold crates from templates"
-)]
+#[command(name = "code-generators", about = "Scaffold crates from templates")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

@@ -159,9 +159,8 @@ fn main() -> Result<()> {
     if !cli.dry_run && Path::new(changelog).exists() {
         let body = read(changelog)?;
         if !body.contains(&format!("## [{next}]")) {
-            let stamped = format!(
-                "## [{next}] - unreleased\n\n- Version bump via code-version.\n\n{body}"
-            );
+            let stamped =
+                format!("## [{next}] - unreleased\n\n- Version bump via code-version.\n\n{body}");
             write(changelog, &stamped, cli.dry_run)?;
         }
     }

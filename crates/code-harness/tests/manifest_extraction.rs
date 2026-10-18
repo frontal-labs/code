@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use code_harness::{
-    extract_bootstrap_plan, extract_commands, extract_tools, UpstreamPaths,
-};
+use code_harness::{extract_bootstrap_plan, extract_commands, extract_tools, UpstreamPaths};
 
 #[test]
 fn extract_commands_parses_imports() {
@@ -35,10 +33,7 @@ export const INTERNAL_ONLY_COMMANDS = [
     let entries = registry.entries();
     assert_eq!(entries.len(), 2);
     for entry in entries {
-        assert_eq!(
-            entry.source,
-            code_commands::CommandSource::InternalOnly
-        );
+        assert_eq!(entry.source, code_commands::CommandSource::InternalOnly);
     }
 }
 
@@ -49,10 +44,7 @@ fn extract_commands_detects_feature_gated() {
     assert!(!registry.entries().is_empty());
     let entry = &registry.entries()[0];
     assert_eq!(entry.name, "BetaFeature");
-    assert_eq!(
-        entry.source,
-        code_commands::CommandSource::FeatureGated
-    );
+    assert_eq!(entry.source, code_commands::CommandSource::FeatureGated);
 }
 
 #[test]

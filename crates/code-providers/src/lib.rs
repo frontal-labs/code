@@ -30,7 +30,9 @@ pub use types::{
 };
 
 pub use code_telemetry::{
-    AnalyticsEvent, AnthropicRequestProfile, JsonlTelemetrySink,
-    MemoryTelemetrySink, SessionTraceRecord, SessionTracer, TelemetryEvent, TelemetrySink,
+    AnalyticsEvent, AnthropicRequestProfile, JsonlTelemetrySink, MemoryTelemetrySink,
+    SessionTraceRecord, SessionTracer, TelemetryEvent, TelemetrySink,
 };
-pub use code_types::{ClientIdentity, DEFAULT_APP_NAME, DEFAULT_FRONTAL_CODE_VERSION, DEFAULT_RUNTIME};
+pub use code_types::{
+    ClientIdentity, DEFAULT_APP_NAME, DEFAULT_FRONTAL_CODE_VERSION, DEFAULT_RUNTIME,
+};

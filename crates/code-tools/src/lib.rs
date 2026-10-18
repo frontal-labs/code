@@ -3805,10 +3805,7 @@ fn skill_lookup_roots() -> Vec<SkillLookupRoot> {
     }
 
     if let Ok(code_config_home) = std::env::var("FRONTAL_CODE_CONFIG_HOME") {
-        push_prefixed_skill_lookup_roots(
-            &mut roots,
-            std::path::Path::new(&code_config_home),
-        );
+        push_prefixed_skill_lookup_roots(&mut roots, std::path::Path::new(&code_config_home));
     }
     if let Ok(codex_home) = std::env::var("CODEX_HOME") {
         push_prefixed_skill_lookup_roots(&mut roots, std::path::Path::new(&codex_home));
@@ -6246,9 +6243,7 @@ fn iso8601_timestamp() -> String {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn execute_powershell(
-    input: PowerShellInput,
-) -> std::io::Result<code_runtime::BashCommandOutput> {
+fn execute_powershell(input: PowerShellInput) -> std::io::Result<code_runtime::BashCommandOutput> {
     let _ = &input.description;
     if let Some(output) = workspace_test_branch_preflight(&input.command) {
         return Ok(output);

@@ -214,8 +214,7 @@ fn validate_permission_flags(
                     return Err((
                         StatusCode::FORBIDDEN,
                         Json(ErrorResponse {
-                            error: "danger-full-access is disabled for code-api"
-                                .to_string(),
+                            error: "danger-full-access is disabled for code-api".to_string(),
                         }),
                     ));
                 }
@@ -228,8 +227,7 @@ fn validate_permission_flags(
                         return Err((
                             StatusCode::FORBIDDEN,
                             Json(ErrorResponse {
-                                error: "danger-full-access is disabled for code-api"
-                                    .to_string(),
+                                error: "danger-full-access is disabled for code-api".to_string(),
                             }),
                         ));
                     }
@@ -704,9 +702,6 @@ mod tests {
 
         let (status, Json(body)) = result.expect_err("danger mode should be rejected");
         assert_eq!(status, StatusCode::FORBIDDEN);
-        assert_eq!(
-            body.error,
-            "danger-full-access is disabled for code-api"
-        );
+        assert_eq!(body.error, "danger-full-access is disabled for code-api");
     }
 }

@@ -203,7 +203,7 @@ mod tests {
                     McpClientAuth::OAuth(oauth) => {
                         assert_eq!(oauth.client_id.as_deref(), Some("client-id"));
                     }
-                    other @ McpClientAuth::None => panic!("expected oauth auth, got {other:?}"),
+                    McpClientAuth::None => panic!("expected oauth auth, got no auth"),
                 }
             }
             other => panic!("expected http transport, got {other:?}"),

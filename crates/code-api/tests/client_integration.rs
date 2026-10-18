@@ -526,7 +526,7 @@ async fn provider_client_dispatches_anthropic_requests() {
         ProviderClient::Anthropic(client) => {
             ProviderClient::Anthropic(client.with_base_url(server.base_url()))
         }
-        other => panic!("expected anthropic provider, got {other:?}"),
+        _ => panic!("expected anthropic provider, got a different provider client"),
     };
 
     let response = client

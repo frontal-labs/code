@@ -14076,7 +14076,8 @@ UU conflicted.rs",
         assert_eq!(pre_hooks.len(), 1);
         assert!(
             pre_hooks[0].ends_with("hooks/pre.sh"),
-            "expected installed plugin hook path, got {pre_hooks:?}"
+            "expected installed plugin hook path, got {} hook(s)",
+            pre_hooks.len()
         );
 
         let _ = fs::remove_dir_all(config_home);

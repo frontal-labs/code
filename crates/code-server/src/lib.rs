@@ -1755,6 +1755,7 @@ async fn generic_oauth_callback(
         ("redirect_uri", pending.redirect_uri.as_str()),
     ];
 
+    code_types::require_secure_transport(&oauth.token_url).map_err(AppError::internal)?;
     let http = reqwest::Client::new();
     let response = http
         .post(&oauth.token_url)

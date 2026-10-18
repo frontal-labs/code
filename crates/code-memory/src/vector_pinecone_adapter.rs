@@ -217,6 +217,7 @@ impl<T: PineconeTransport> PineconeVectorStoreAdapter<T> {
 
 impl PineconeTransport for ReqwestPineconeTransport {
     fn post(&self, path: &str, body: &str) -> Result<String, String> {
+        code_types::require_secure_transport(&self.base_url)?;
         let mut headers = HeaderMap::new();
         if let Some(api_key) = &self.api_key {
             let value = HeaderValue::from_str(api_key).map_err(|error| error.to_string())?;

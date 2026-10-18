@@ -15,6 +15,7 @@ code-events = { path = "../code-events" }
 code-integrations = { path = "../code-integrations" }
 code-orchestrator = { path = "../code-orchestrator" }
 code-repo = { path = "../code-repo" }
+code-types = { path = "../code-types" }
 code-runtime = { path = "../code-runtime" }
 code-tools = { path = "../code-tools" }
 serde = { version = "1", features = ["derive"] }

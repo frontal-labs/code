@@ -5,19 +5,14 @@ set -euo pipefail
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PKG_ROOT"
 
-# Repo root is two levels up (cli is a top-level package dir here, but the
-# cargo workspace lives at the repo root one level up if nested; resolve both).
-REPO_ROOT_CANDIDATE="$(cd "$PKG_ROOT/.." && pwd)"
-if [[ -f "$REPO_ROOT_CANDIDATE/Cargo.toml" && -d "$REPO_ROOT_CANDIDATE/crates/cli" ]]; then
-  REPO_ROOT="$REPO_ROOT_CANDIDATE"
-else
-  REPO_ROOT="$PKG_ROOT"
-fi
-
 if ! command -v cargo >/dev/null 2>&1; then
   echo "ERROR: cargo not found on PATH. Install Rust to build the native binary." >&2
   exit 1
 fi
+
+# Resolve the cargo workspace root from the package directory so the binary
+# lands in the same target/ that cargo writes to.
+REPO_ROOT="$(dirname "$(cargo locate-project --workspace --message-format plain)")"
 
 echo "==> Building cli with cargo (release)"
 ( cd "$REPO_ROOT" && cargo build --release -p cli )

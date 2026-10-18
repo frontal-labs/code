@@ -1,8 +1,8 @@
-class Frontal Code < Formula
+class FrontalCode < Formula
   desc "High-performance Rust AI agent harness"
   homepage "https://github.com/frontal-labs/frontal-code"
-  license "MIT"
   version "0.1.1"
+  license "Apache-2.0"
 
   if OS.mac?
     if Hardware::CPU.arm?
@@ -20,7 +20,7 @@ class Frontal Code < Formula
 
   def install
     if build.head?
-      system "cargo", "install", *std_cargo_args(path: "crates/cli")
+      system "cargo", "install", *std_cargo_args(path: "cli")
     else
       # Release asset is a raw binary named code-cli-<target>; install it as frontal-code.
       bin.install Dir["code-cli-*"].first => "frontal-code"

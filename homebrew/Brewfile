@@ -1,0 +1,294 @@
+tap "anomalyco/tap"
+tap "aspect-build/aspect"
+tap "bufbuild/buf"
+tap "buildkite/buildkite"
+tap "cloudflare/cloudflare"
+tap "coder/coder"
+tap "dotenvx/brew"
+tap "frontal-labs/orbit"
+tap "frontal-labs/vibe-test"
+tap "go-task/tap"
+tap "hashicorp/tap"
+tap "homebrew/core"
+tap "kilo-org/tap", "https://github.com/Kilo-Org/homebrew-tap"
+tap "libsql/sqld"
+tap "minio/stable", trusted: { formulae: ["minio"] }
+tap "oven-sh/bun"
+tap "pulumi/tap"
+tap "stainless-api/tap"
+tap "stripe/stripe-cli"
+tap "tursodatabase/tap"
+tap "withgraphite/tap"
+
+# Static analysis and lint tool, for (ba)sh scripts
+brew "shellcheck"
+# Static checker for GitHub Actions workflow files
+brew "actionlint"
+# GitOps Continuous Delivery for Kubernetes
+brew "argocd"
+# Nuke a whole AWS account and delete all its resources
+brew "aws-nuke"
+# Interpreted, interactive, object-oriented programming language
+brew "python@3.13"
+# CLI tool to build, test, debug, and deploy Serverless applications using AWS SAM
+brew "aws-sam-cli"
+# Vector graphics library with cross-device output support
+brew "cairo"
+# Library and utilities for processing GIFs
+brew "giflib"
+# Development kit for the Java programming language
+brew "openjdk@21"
+# Google's own build tool
+brew "bazel", link: false
+# User-friendly launcher for Bazel
+brew "bazelisk"
+# New way of working with Protocol Buffers
+brew "buf"
+# Framework for layout and rendering of i18n text
+brew "pango"
+# Library to render SVG files using Cairo
+brew "librsvg"
+# Versatile and fast Unicode/ASCII/ANSI graphics renderer
+brew "chafa"
+# Formatting tools for C, C++, Obj-C, Java, JavaScript, TypeScript
+brew "clang-format"
+# Cross-platform make
+brew "cmake"
+# Dependency manager for Cocoa projects
+brew "cocoapods"
+# Tool for provisioning self-hosted development environments with Terraform
+brew "coder"
+# Test your configuration files using Open Policy Agent
+brew "conftest"
+# GNU File, Shell, and Text utilities
+brew "coreutils"
+# Container Signing
+brew "cosign"
+# Tool for interacting with remote images and registries
+brew "crane"
+# Build your Docker images in the cloud
+brew "depot"
+# Pack, ship and run any application as a lightweight container
+brew "docker"
+# Isolated development environments using Docker
+brew "docker-compose"
+# Simple command-line tool for creating clusters on Amazon EKS
+brew "eksctl"
+# Play, record, convert, and stream select audio and video codecs
+brew "ffmpeg"
+# Command-line tools for fly.io services
+brew "flyctl"
+# Open-source, cross-platform JavaScript runtime environment
+brew "node"
+# Interact with Google Gemini AI models from the command-line
+brew "gemini-cli"
+# GitHub command-line tool
+brew "gh"
+# Distributed revision control system
+brew "git"
+# Quickly rewrite git repository history
+brew "git-filter-repo"
+# Audit git repos for secrets
+brew "gitleaks"
+# GNU Privacy Guard (OpenPGP)
+brew "gnupg"
+# Open source programming language to build simple/reliable/efficient software
+brew "go"
+# Fast linters runner for Go
+brew "golangci-lint"
+# Deliver Go binaries as fast and easily as possible
+brew "goreleaser"
+# Development kit for the Java programming language
+brew "openjdk"
+# Open-source build automation tool based on the Groovy and Kotlin DSL
+brew "gradle"
+# Like cURL, but for gRPC
+brew "grpcurl"
+# Kubernetes package manager
+brew "helm"
+# Interpreted, interactive, object-oriented programming language
+brew "python@3.14"
+# Client library for huggingface.co hub
+brew "hf"
+# Improved top (interactive process viewer)
+brew "htop"
+# Image manipulation library
+brew "jpeg"
+# Lightweight and flexible command-line JSON processor
+brew "jq"
+# Modern load testing tool, using Go and JavaScript
+brew "k6"
+# Run local Kubernetes cluster in Docker
+brew "kind"
+# Kubernetes command-line interface
+brew "kubernetes-cli"
+# Template-free customization of Kubernetes YAML manifests
+brew "kustomize"
+# LLVM's OpenMP runtime library
+brew "libomp"
+# Postgres C API library
+brew "libpq", link: true
+# Next-gen compiler infrastructure
+brew "llvm@17"
+# Java-based project management
+brew "maven"
+# Run a Kubernetes cluster locally
+brew "minikube"
+# Polyglot runtime manager (asdf rust clone)
+brew "mise"
+# Deep clean and optimize your Mac
+brew "mole"
+# Neon CLI tool
+brew "neonctl"
+# Small build system for use with gyp or CMake
+brew "ninja"
+# Smart, Fast and Extensible Build System
+brew "nx", link: false
+# Open source, general-purpose policy engine
+brew "opa"
+# Optimized BLAS library
+brew "openblas"
+# Development kit for the Java programming language
+brew "openjdk@17"
+# SSL/TLS VPN implementing OSI layer 2 or 3 secure network extension
+brew "openvpn"
+# Swiss-army knife of markup format conversion
+brew "pandoc"
+# Open-source vector similarity search for Postgres
+brew "pgvector"
+# Execute binaries from Python packages in isolated environments
+brew "pipx"
+# Package compiler and linker metadata toolkit
+brew "pkgconf"
+# Draw UML diagrams
+brew "plantuml"
+# Fast, disk space efficient package manager
+brew "pnpm"
+# PDF rendering library (based on the xpdf-3.0 code base)
+brew "poppler"
+# Object-relational database system
+brew "postgresql@15", restart_service: :changed
+# Object-relational database system
+brew "postgresql@16"
+# Object-relational database system
+brew "postgresql@18"
+# Framework for managing multi-language pre-commit hooks
+brew "pre-commit", link: false
+# Protocol buffers (Google's data interchange format)
+brew "protobuf"
+# Protocol buffers (Google's data interchange format)
+brew "protobuf@29"
+# Simple powerful testing with Python
+brew "pytest"
+# Interpreted, interactive, object-oriented programming language
+brew "python@3.11"
+# Python interface to gdbm
+brew "python-gdbm@3.11"
+# Python interface to Tcl/Tk
+brew "python-tk@3.11"
+# Python interface to Tcl/Tk
+brew "python-tk@3.14"
+# Interpreted, interactive, object-oriented programming language
+brew "python@3.12"
+# Persistent key-value database, with built-in net interface
+brew "redis"
+# Safe, concurrent, practical language
+brew "rust"
+# Rust toolchain installer
+brew "rustup"
+# Build tool for Scala projects
+brew "sbt"
+# Easily detect and prevent bugs and anti-patterns in your codebase
+brew "semgrep"
+# Autoformat shell script source code
+brew "shfmt"
+# Monitors sleep, wakeup, and idleness of a Mac
+brew "sleepwatcher"
+# Formatting tool for reformatting Swift code
+brew "swiftformat"
+# Tool to enforce Swift style and conventions
+brew "swiftlint"
+# Generate scripting interfaces to C/C++ code
+brew "swig"
+# TOML toolkit written in Rust
+brew "taplo"
+# Command-line interface for running and interacting with Temporal Server and UI
+brew "temporal"
+# Tool to generate documentation from Terraform modules
+brew "terraform-docs"
+# Thin wrapper for Terraform e.g. for locking state
+brew "terragrunt"
+# OCR (Optical Character Recognition) engine
+brew "tesseract"
+# Display directories as trees (with optional color/HTML output)
+brew "tree"
+# Vulnerability scanner for container images, file systems, and Git repos
+brew "trivy"
+# Source code spell checker
+brew "typos-cli"
+# Validating, recursive, caching DNS resolver
+brew "unbound"
+# Verilog simulator
+brew "verilator"
+# Web Assembly Binary Toolkit
+brew "wabt"
+# Standalone JIT-style runtime for WebAssembly, using Cranelift
+brew "wasmtime"
+# Watch files and take action when they change
+brew "watchman"
+# Tools for the WireGuard secure network tunnel
+brew "wireguard-tools"
+# Generate your Xcode project from a spec file and folder structure
+brew "xcodegen"
+# Linter for YAML files
+brew "yamllint"
+# Framework for Verilog RTL synthesis
+brew "yosys"
+# The AI coding agent built for the terminal.
+brew "anomalyco/tap/opencode", trusted: true
+# Incredibly fast JavaScript runtime, bundler, test runner, and package manager
+brew "bun"
+# CLI for generating Vibe applications (local test)
+brew "frontal-labs/vibe-test/vibe-local"
+# Command-line tools for building and debugging Android apps
+cask "android-commandlinetools"
+# Install and configure AutoPkg
+cask "autopkgr"
+# Terminal-based AI coding assistant
+cask "claude-code@latest"
+# Native desktop client for Coder
+cask "coder/coder/coder-desktop", trusted: true
+# OpenAI's coding agent that runs in your terminal
+cask "codex"
+# Zero-configuration polyglot dependency analysis tool
+cask "fossa"
+# Set of tools to manage resources and applications hosted on Google Cloud
+cask "gcloud-cli"
+# IC design layout viewer and editor
+cask "klayout"
+# Free cross-platform office suite, fresh version
+cask "libreoffice"
+# Minimal installer for conda
+cask "miniconda"
+# Reverse proxy, secure introspectable tunnels to localhost
+cask "ngrok"
+# Programmable solid 3D CAD modeller
+cask "openscad"
+# Plugin for AWS CLI to start and end sessions that connect to managed instances
+cask "session-manager-plugin"
+cask "stl"
+# Developer experience toolkit used to check, test, merge, and monitor code
+cask "trunk-io"
+cargo "cargo-audit"
+cargo "cargo-deny"
+cargo "cargo-edit"
+cargo "protoc-gen-prost"
+cargo "protoc-gen-prost-serde"
+cargo "protoc-gen-tonic"
+npm "@google/gemini-cli"
+npm "attio-mcp"
+npm "ctx7"
+npm "nx"
+npm "pnpm"
+npm "snyk"
+npm "vercel"

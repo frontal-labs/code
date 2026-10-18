@@ -1,0 +1,5 @@
+InfluxDB analytics are enabled.
+Google Analytics were destroyed.
+
+Developer mode is enabled because a developer command or `brew developer on` was run.
+`brew update` will update to the latest commit on the `main` branch.

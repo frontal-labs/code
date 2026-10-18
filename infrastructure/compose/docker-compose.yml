@@ -1,9 +1,9 @@
 services:
-  frontal-code-server:
+  code-server:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/frontal-code-server.Dockerfile
-    image: frontal-code-server:local
+      dockerfile: docker/server.Dockerfile
+    image: code-server:local
     restart: unless-stopped
     environment:
       FRONTAL_CODE_SERVER_HOST: ${FRONTAL_CODE_SERVER_HOST:-0.0.0.0}
@@ -58,7 +58,7 @@ services:
   frontal-code-worker-image:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/frontal-code-worker.Dockerfile
+      dockerfile: docker/worker.Dockerfile
     image: frontal-code-worker:local
     command: ["frontal-code", "--version"]
     restart: "no"
@@ -67,11 +67,11 @@ services:
   frontal-code-slack:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/frontal-code-slack.Dockerfile
+      dockerfile: docker/slack.Dockerfile
     image: frontal-code-slack:local
     restart: unless-stopped
     environment:
-      FRONTAL_CODE_API_URL: ${FRONTAL_CODE_API_URL:-http://frontal-code-server:8788}
+      FRONTAL_CODE_API_URL: ${FRONTAL_CODE_API_URL:-http://code-server:8788}
       FRONTAL_CODE_API_TIMEOUT: ${FRONTAL_CODE_API_TIMEOUT:-30000}
       FRONTAL_SERVER_API_KEY: ${FRONTAL_SERVER_API_KEY:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
@@ -86,7 +86,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
-      frontal-code-server:
+      code-server:
         condition: service_healthy
     read_only: true
     tmpfs:

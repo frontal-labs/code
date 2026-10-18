@@ -1,0 +1,7 @@
+use code_server::ServerConfig;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = ServerConfig::from_env()?;
+    code_server::serve(config).await
+}

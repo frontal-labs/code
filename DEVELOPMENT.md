@@ -8,7 +8,7 @@
 docker compose -f infrastructure/compose/docker-compose.yml up -d
 
 # View logs
-docker compose -f infrastructure/compose/docker-compose.yml logs -f frontal-code-server
+docker compose -f infrastructure/compose/docker-compose.yml logs -f code-server
 
 # Stop services
 docker compose -f infrastructure/compose/docker-compose.yml down
@@ -190,7 +190,7 @@ export FRONTAL_CODE_MEMORY_PINECONE_API_KEY=your_pinecone_api_key_here
 export FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE=dev
 
 # Run the focused tool integration test against a configured backend
-cargo test -p frontal-code-tools env_backed_memory_tools_route_requests_to_pinecone_and_neo4j -- --nocapture
+cargo test -p code-tools env_backed_memory_tools_route_requests_to_pinecone_and_neo4j -- --nocapture
 ```
 
 ## Testing

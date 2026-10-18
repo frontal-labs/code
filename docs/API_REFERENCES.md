@@ -48,7 +48,7 @@ curl -H "Authorization: Bearer your-api-key-here" \
      https://api.frontal-code.ai/v1/completions
 ```
 
-For self-hosted `frontal-code-server` deployments, set `FRONTAL_SERVER_API_KEY` on the server and
+For self-hosted `code-server` deployments, set `FRONTAL_SERVER_API_KEY` on the server and
 have connectors or other clients present that same shared secret as `FRONTAL_API_KEY` or
 the `x-api-key` header when calling hosted control-plane routes.
 
@@ -368,7 +368,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-frontal-code-api = "0.1.0"
+code-api = "0.1.0"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 ```
@@ -597,7 +597,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Installation
 
 ```bash
-pip install frontal-code-api
+pip install code-api
 ```
 
 ### Basic Usage

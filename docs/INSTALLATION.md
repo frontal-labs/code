@@ -38,10 +38,10 @@ The Frontal Code server is available as a Docker container:
 
 ```bash
 # Build the server image
-docker build -f infrastructure/docker/frontal-code-server.Dockerfile -t frontal-code-server .
+docker build -f docker/server.Dockerfile -t code-server .
 
 # Run the server
-docker run -p 8080:8080 frontal-code-server
+docker run -p 8080:8080 code-server
 ```
 
 ### Docker Compose
@@ -61,10 +61,10 @@ Build and run the server directly:
 
 ```bash
 # Build the server
-cargo build -p frontal-code-server
+cargo build -p code-server
 
 # Run the server
-cargo run -p frontal-code-server
+cargo run -p code-server
 ```
 
 ## Bazel Build Foundation (Advanced)
@@ -197,6 +197,6 @@ If the server won't start:
 
 1. Check port availability: `lsof -i :8080`
 2. Verify Docker is running: `docker version`
-3. Check logs: `docker logs frontal-code-server`
+3. Check logs: `docker logs code-server`
 
 For more detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

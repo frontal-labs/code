@@ -1,191 +1,195 @@
-# @frontal-labs/frontal-code
+# Frontal Code CLI
 
-Frontal Code CLI is a coding agent from Frontal that runs locally on your computer.
-This npm package is a **thin launcher** that downloads and runs the native
-Rust `frontal-code` binary; the real agent logic lives in the
-[`crates/cli`](https://github.com/frontal-labs/frontal-code/tree/main/crates/cli)
-Rust crate.
+Main command-line interface for the Frontal Code ecosystem, providing comprehensive AI-powered development workflows.
 
-## Install
+## Overview
 
+The Frontal Code CLI is the primary user interface for interacting with the Frontal Code AI assistant system. It provides interactive REPL mode, one-shot command execution, comprehensive tool integration, and multi-provider support for AI-powered development workflows.
+
+## Features
+
+- **Interactive REPL**: Full-featured REPL with readline support, tab completion, and command history
+- **One-shot Commands**: Direct command execution for automation and scripting
+- **Multi-Provider Support**: Anthropic, OpenAI, xAI, Frontal, Bedrock, Azure, and Ollama
+- **Rich Output Rendering**: Markdown rendering, syntax highlighting, and ANSI formatting
+- **Plugin System**: Extensible architecture with plugin management and installation
+- **Permission Management**: Configurable permission modes for security and safety
+- **Session Persistence**: Save and resume conversations across sessions
+- **Slash Commands**: 50+ built-in commands for system management and automation
+- **Tool Integration**: Comprehensive tool system for file operations, web access, and more
+- **Compatibility Testing**: Built-in testing and validation tools
+- **JSON Output**: Machine-readable output for automation and integration
+
+## Key Components
+
+- **Interactive Mode**: Full-featured REPL with command history, completion, and slash commands
+- **Command Processing**: Unified command parsing, argument handling, and execution
+- **Output Rendering**: Rich formatting for AI responses, code, and structured data
+- **Provider Management**: Multi-provider routing, authentication, and streaming
+- **Plugin Integration**: Extensible architecture with install/enable/disable workflows
+- **Session Management**: Persistence, resumption, and state management
+- **Permission System**: Configurable access controls and safety policies
+- **Tool Execution**: Built-in tools for file operations, web access, and system integration
+
+## Dependencies
+
+- `code-api` for AI provider integration and HTTP services
+- `code-commands` for slash command system and registry
+- `frontal-code-compat-harness` for testing and compatibility validation
+- `code-runtime` for core functionality and session management
+- `code-plugins` for extensibility and plugin management
+- `code-tools` for tool integration and execution
+- `code-providers` for multi-provider AI client support
+- `crossterm` for terminal handling and cross-platform support
+- `rustyline` for readline functionality and completion
+- `pulldown-cmark` for markdown parsing and rendering
+- `syntect` for syntax highlighting and code formatting
+
+## Usage
+
+The main binary is named `frontal-code` and can be used in multiple ways:
+
+### Interactive Mode
 ```bash
-npm install -g @frontal-labs/frontal-code
-# or: pnpm add -g @frontal-labs/frontal-code
-# or: bunx @frontal-labs/frontal-code
-# or one-off: npx @frontal-labs/frontal-code
-```
-
-On install, a `postinstall` script downloads the prebuilt native binary for
-your platform from the
-[GitHub releases](https://github.com/frontal-labs/frontal-code/releases) into the
-package's `vendor/` directory. (`vendor/` is git- and npm-ignored; it is
-populated at install time, not committed.)
-
-## What it does
-
-```
-npm install  ──▶  postinstall  ──▶  detect platform
-                                            │
-                                            ▼
-                              download frontal-code-<platform>.tar.gz (+ sha256 verify)
-                                            │
-                                            ▼
-                              extract  ──▶  vendor/<target>/bin/frontal-code
-```
-
-At run time, the `frontal-code` command resolves the binary in this order:
-
-1. **Vendored** download: `vendor/<target>/bin/frontal-code`
-2. **Local cargo build** (dev/monorepo): walk up from the package to find
-   `target/release/frontal-code`
-3. If neither exists, an actionable error is printed (see Troubleshooting).
-
-## Quick start
-
-```bash
-# Interactive REPL
+# Start interactive REPL
 frontal-code
 
-# Print version / build info
-frontal-code --version
+# Start with specific model
+frontal-code --model claude-opus-5-5
 
-# One-shot prompt
-frontal-code prompt "explain this codebase"
-
-# With a specific provider
-frontal-code --provider anthropic prompt "your question"
-frontal-code --provider openai   prompt "your question"
-
-# Machine-readable output for automation
-frontal-code --output-format json prompt "summarize crates/cli/src/main.rs"
+# Start with specific permissions
+frontal-code --permission-mode workspace-write
 ```
 
-For the full CLI reference (slash commands, permission modes, flags), see
-[`crates/cli/README.md`](https://github.com/frontal-labs/frontal-code/tree/main/crates/cli).
+### One-shot Commands
+```bash
+# Simple prompt
+frontal-code prompt "explain this codebase"
+
+# With specific provider
+frontal-code --provider anthropic prompt "your question"
+frontal-code --provider openai prompt "your question"
+frontal-code --provider xai prompt "your question"
+
+# With JSON output for automation
+frontal-code --output-format json prompt "summarize cli/src/main.rs"
+
+# With specific permissions
+frontal-code --permission-mode read-only prompt "analyze this file"
+```
+
+### Direct Subcommands
+```bash
+# Check system status
+frontal-code status
+
+# List available agents
+frontal-code agents
+
+# Check MCP servers
+frontal-code mcp
+
+# Run system diagnostics
+frontal-code doctor
+
+# Show sandbox information
+frontal-code sandbox
+```
+
+### Provider Selection
+```bash
+# Force specific provider
+frontal-code --provider anthropic prompt "your question"
+frontal-code --provider openai prompt "your question"
+frontal-code --provider xai prompt "your question"
+
+# With model aliases
+frontal-code --provider anthropic --model opus prompt "complex task"
+frontal-code --provider openai --model gpt-4 prompt "your question"
+```
+
+### Session Management
+```bash
+# Resume latest session
+frontal-code --resume latest
+
+# Resume specific session
+frontal-code --resume session-123
+
+# Resume and run command
+frontal-code --resume latest /status
+```
 
 ## Configuration
 
-Environment variables used by the native binary:
+The CLI supports multiple configuration methods:
 
+### Environment Variables
 ```bash
-export FRONTAL_API_KEY="sk-ant-..."     # Anthropic
+export FRONTAL_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
-export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
-export FRONTAL_AUTH_TOKEN="sk-..."      # bearer token w/ custom base URL
-export FRONTAL_BASE_URL="https://api.deepseek.com/anthropic"
 ```
 
-Configuration files (read by the native binary):
+### Configuration Files
+- `~/.frontal-code/settings.json` - Global user configuration
+- `~/.config/frontal-code/settings.json` - System configuration
+- `.frontal-code/settings.json` - Workspace configuration
+- `.frontal-code/settings.json` - Workspace settings
+- `.frontal-code/settings.local.json` - Local workspace overrides
 
-- `~/.frontal-code/settings.json` — global user configuration
-- `~/.config/frontal-code/settings.json` — system configuration
-- `.frontal-code/settings.json` — workspace configuration
-- `.frontal-code/settings.local.json` — local workspace overrides
+## Slash Commands
 
-## Launcher environment flags
+The REPL provides 50+ slash commands organized by category:
 
-These control the **npm launcher only** (not the agent):
+### Session Management
+- `/help`, `/status`, `/sandbox`, `/cost`, `/resume`, `/session`, `/version`, `/usage`, `/stats`
 
-| Variable | Effect |
-| --- | --- |
-| `FRONTAL_CODE_SKIP_DOWNLOAD=1` | Skip the postinstall binary download entirely. |
-| `FRONTAL_CODE_FORCE_DOWNLOAD=1` | Force (re)download even when a binary already exists or CI skips are set (used by `npm run download`). |
-| `npm_config_offline=true` | Offline install → download is skipped automatically. |
+### Workspace & Git
+- `/compact`, `/clear`, `/config`, `/memory`, `/init`, `/diff`, `/commit`, `/pr`, `/issue`, `/export`, `/hooks`, `/files`, `/branch`, `/release-notes`, `/add-dir`
 
-## Supported platforms
+### Discovery & Debugging
+- `/mcp`, `/agents`, `/skills`, `/doctor`, `/tasks`, `/context`, `/desktop`, `/ide`
 
-The downloader targets one of:
+### Automation & Analysis
+- `/review`, `/advisor`, `/insights`, `/security-review`, `/subagent`, `/team`, `/telemetry`, `/providers`, `/cron`
 
-| Platform | Asset |
-| --- | --- |
-| macOS arm64 | `frontal-code-macos-arm64.tar.gz` |
-| macOS x64 | `frontal-code-macos-x64.tar.gz` |
-| Linux x64 | `frontal-code-linux-x64.tar.gz` |
-| Windows x64 | `frontal-code-windows-x64.exe` |
+### Plugin Management
+- `/plugin`, `/plugins`, `/marketplace` - Install, enable, disable, update plugins
 
-These asset names are produced by
-[`.github/workflows/release.yml`](https://github.com/frontal-labs/frontal-code/blob/main/.github/workflows/release.yml)
-and consumed by the Homebrew formula.
+## Permission Modes
 
-## Troubleshooting
+- `read-only` - Safe mode with read access only
+- `workspace-write` - Write access within workspace bounds
+- `danger-full-access` - Full system access (use with caution)
 
-**Offline / CI install** — the postinstall is resilient: if it cannot download
-(offline, no network, or a dev version like `0.0.0-dev`), it prints a warning
-and still exits `0` so `npm install` never breaks. The `frontal-code` command will
-report a missing binary only at run time.
+## Model Aliases
 
-**"native `frontal-code` binary not found"** — either:
-
-- Re-run the download: `cd cli && npm run download` (or
-  `npm rebuild @frontal-labs/frontal-code`).
-- Build locally: `cargo build --release -p frontal-code-cli`, then the launcher will
-  find `target/release/frontal-code` automatically.
-
-**Corporate proxy** — set the standard `HTTPS_PROXY`/`HTTP_PROXY` env vars;
-Node's `fetch` respects them.
-
-**SHA-256 mismatch** — the download is aborted and the partial file removed.
-Re-run `npm run download` or `npm rebuild`.
+- `opus` - `claude-opus-5`
+- `sonnet` - `claude-sonnet-4-6`
+- `haiku` - `claude-haiku-4-5`
 
 ## Development
 
-This package is dependency-free (Node stdlib only) so a globally installed CLI
-has no dependency tree.
+For development from source:
 
 ```bash
-cd cli
+# Build the workspace
+cargo build --workspace
 
-# Build the native binary and place it in vendor/ (needs Rust/cargo)
-npm run build
+# Run the CLI
+cargo run -p cli -- [args]
 
-# Force (re)download the prebuilt binary for this platform
-npm run download
-
-# Run the JS test suite (no network required)
-npm test
-
-# Dry-run `npm pack` and inspect the published file list
-npm run pack:dry
-
-# Pre-publish guard: version check + tests
-npm run prepublishOnly
-
-# Full CI/presubmit checks
-./scripts/verify.sh
+# Run tests
+cargo test -p cli
 ```
 
-### Repository layout
+## Integration
 
-```
-cli/
- ├── bin/index.js             # the `frontal-code` launcher (entry point)
-├── lib/
-│   ├── platform.mjs        # platform → release-asset mapping
-│   ├── resolve-binary.mjs  # find vendored / local cargo binary
-│   └── download.mjs        # GitHub release download + sha256 verify + extract
-├── scripts/
-│   ├── postinstall.sh     # install-time binary downloader
-│   ├── build.sh            # cargo build → vendor/
-│   ├── download.sh         # force download
-│   ├── test.sh             # node --test + smoke test
-│   ├── pack.sh             # npm pack dry-run
-│   ├── clean.sh            # remove vendor/ + *.tgz
-│   ├── prepublish.sh       # publish guard
-│   └── verify.sh           # CI entrypoint
-└── tests/                   # node:test suite (no network)
-```
-
-### Wiring into the monorepo
-
-- Registered as a workspace package in the root `package.json` `packages`.
-- Launcher tests: `bazel test //cli:test` (also reached by `bazel run //:cli`
-  through [`scripts/cli.sh`](https://github.com/frontal-labs/frontal-code/blob/main/scripts/cli.sh)).
-- Launcher lint and native vendoring build: `bazel test //cli:lint` and
-  `bazel run //cli:build`. These wrappers invoke Node/Biome and Cargo respectively.
-- CI: `.github/workflows/npm-cli.yml` runs on changes under `cli/**`.
-
-## License
-
-Apache-2.0
+The CLI integrates with:
+- `code-runtime` for session management and core functionality
+- `code-providers` for multi-provider AI client support
+- `code-tools` for comprehensive tool integration
+- `code-plugins` for extensibility and customization
+- `code-memory` for semantic memory and context management

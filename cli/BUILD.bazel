@@ -3,52 +3,64 @@ package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "srcs",
     srcs = glob(
-        [
-            "bin/**",
-            "lib/**",
-            "scripts/**",
-        ],
-        exclude = [
-            "node_modules/**",
-            "vendor/**",
-            "BUILD.bazel",
-        ],
-    ) + ["package.json"],
+        ["**/*.rs"],
+        exclude = ["**/target/**"],
+    ) + ["Cargo.toml"],
+)
+
+filegroup(
+    name = "test_srcs",
+    srcs = glob(["tests/**/*.rs"]),
+)
+
+sh_binary(
+    name = "code",
+    srcs = ["//tools:crate.sh"],
+    args = [
+        "cli",
+        "run",
+    ],
 )
 
 sh_test(
     name = "test",
-    local = True,
-    srcs = ["//tools:cli.sh"],
-    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
-    args = ["test"],
-    tags = [
+    srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
+    args = [
+        "cli",
         "test",
-        "typescript",
+    ],
+    tags = [
+        "rust",
+        "test",
+    ],
+)
+
+sh_test(
+    name = "fmt",
+    size = "small",
+    srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
+    args = [
+        "cli",
+        "fmt-check",
+    ],
+    tags = [
+        "fmt",
+        "rust",
     ],
 )
 
 sh_test(
     name = "lint",
-    size = "small",
-    srcs = ["//tools:cli.sh"],
-    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
-    args = ["lint"],
+    srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
+    args = [
+        "cli",
+        "clippy",
+    ],
     tags = [
         "lint",
-        "typescript",
-    ],
-)
-
-sh_test(
-    name = "build",
-    local = True,
-    timeout = "long",
-    srcs = ["//tools:cli.sh"],
-    data = [":srcs", "//:cargo_workspace", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
-    args = ["build"],
-    tags = [
-        "build",
-        "typescript",
+        "rust",
     ],
 )

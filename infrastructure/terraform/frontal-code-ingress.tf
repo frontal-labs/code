@@ -1,7 +1,7 @@
 # Create Ingress for tools.frontal.dev/frontal-code
 resource "kubernetes_ingress_v1" "frontal-code_tools" {
   metadata {
-    name      = "frontal-code-tools-ingress"
+    name      = "code-tools-ingress"
     namespace = var.frontal-code_service_namespace
     annotations = {
       "kubernetes.io/ingress.class"                       = "nginx"
@@ -33,7 +33,7 @@ resource "kubernetes_ingress_v1" "frontal-code_tools" {
           pathType = "Prefix"
           backend {
             service {
-              name = "frontal-code-server"
+              name = "code-server"
               port {
                 number = 8788
               }

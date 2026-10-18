@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/npm-cli.yml'
-      - 'cli/**'
+      - 'npm/frontal-code/**'
       - 'scripts/cli.sh'
   workflow_dispatch:
 
@@ -28,13 +28,13 @@ jobs:
           node-version: "20"
 
       - name: Install (skip postinstall download)
-        working-directory: cli
+        working-directory: npm/frontal-code
         # --ignore-scripts avoids the postinstall network download in CI;
         # verify.sh runs the test suite and pack dry-run checks instead.
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
       - name: Verify package (syntax, tests, pack)
-        working-directory: cli
+        working-directory: npm/frontal-code
         run: ./scripts/verify.sh
 
       - name: Build native binary locally (smoke test)

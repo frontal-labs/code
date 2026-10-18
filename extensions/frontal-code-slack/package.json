@@ -6,10 +6,10 @@
   "type": "module",
   "scripts": {
     "clean": "rm -rf dist",
-    "prebuild": "bun scripts/check-frontal-code-events.mjs || true",
+    "prebuild": "bun scripts/check-code-events.mjs || true",
     "build": "bun build --target bun --minify src/index.ts --outdir dist",
     "build:dev": "bun build --target bun --sourcemap src/index.ts --outdir dist",
-    "sync:frontal-code-events": "cargo run -p frontal-code-events --bin export-typescript -- src/generated/frontal-code-events.ts",
+    "sync:code-events": "cargo run -p code-events --bin export-typescript -- src/generated/code-events.ts",
     "start": "node dist/index.js",
     "start:bun": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",

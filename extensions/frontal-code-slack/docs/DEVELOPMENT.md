@@ -87,15 +87,15 @@ src/
   index.ts              # Application entry point
   slack.ts              # Slack client and command handling
   api-client.ts         # Frontal Code API client
-  frontal-code-events.ts       # WebSocket event client
+  code-events.ts       # WebSocket event client
   config.ts             # Configuration management
   env.ts                # Environment validation
   log.ts                # Logging configuration
   types.ts              # Type definitions
   generated/
-    frontal-code-events.ts      # Generated Frontal Code event types
+    code-events.ts      # Generated Frontal Code event types
 scripts/
-  check-frontal-code-events.mjs # Frontal Code events sync check
+  check-code-events.mjs # Frontal Code events sync check
 tests/
   unit/                 # Unit tests
   integration/          # Integration tests
@@ -145,7 +145,7 @@ export class FrontalCodeAPIClient {
 }
 ```
 
-#### Event Client (`src/frontal-code-events.ts`)
+#### Event Client (`src/code-events.ts`)
 
 Handles real-time WebSocket events:
 - Connection management
@@ -365,7 +365,7 @@ describe('FrontalCodeAPIClient', () => {
 // tests/integration/slack-integration.test.ts
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { SlackClient } from '../../src/slack';
-import { MockFrontalCodeServer } from '../fixtures/mock-frontal-code-server';
+import { MockFrontalCodeServer } from '../fixtures/mock-code-server';
 
 describe('Slack Integration', () => {
   let slackClient: SlackClient;
@@ -410,7 +410,7 @@ describe('Slack Integration', () => {
 #### Test Fixtures
 
 ```typescript
-// tests/fixtures/mock-frontal-code-server.ts
+// tests/fixtures/mock-code-server.ts
 export class MockFrontalCodeServer {
   private server: any;
   public tasks: Task[] = [];

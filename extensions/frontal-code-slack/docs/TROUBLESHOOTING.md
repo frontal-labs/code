@@ -148,7 +148,7 @@ telnet api.slack.com 443
 **API Connection Issues:**
 ```bash
 # Update API URL in .env
-FRONTAL_CODE_API_URL=https://frontal-code-api.your-domain.com
+FRONTAL_CODE_API_URL=https://code-api.your-domain.com
 
 # Increase timeout
 FRONTAL_CODE_API_TIMEOUT=60000
@@ -579,11 +579,11 @@ Test network connectivity:
 ```bash
 # Test DNS resolution
 nslookup api.slack.com
-nslookup frontal-code-api.your-domain.com
+nslookup code-api.your-domain.com
 
 # Test TCP connectivity
 telnet api.slack.com 443
-telnet frontal-code-api.your-domain.com 8788
+telnet code-api.your-domain.com 8788
 
 # Test HTTP connectivity
 curl -v https://api.slack.com/api/auth.test

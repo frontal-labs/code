@@ -2,19 +2,19 @@
 
 This folder contains deployable infrastructure configuration for the current hosted Frontal Code architecture:
 
-- `frontal-code-server` as the hosted control plane
+- `code-server` as the hosted control plane
 - `frontal-code-slack` as the Slack Socket Mode connector
 - persistent storage for server state, hosted-agent artifacts, and an optional shared workspace
 
 The configuration is split into:
 
-- `docker/`: image build definitions
+- `../docker/`: image build definitions
 - `compose/`: single-node Docker Compose stack for local and small hosted deployments
 - `kubernetes/base/`: Kubernetes manifests for a durable cluster deployment
 
 ## Assumptions
 
-- The current production surface is `frontal-code-server` on port `8788`.
+- The current production surface is `code-server` on port `8788`.
 - The Slack connector talks to the server via `FRONTAL_CODE_API_URL`.
 - Slack runs in Socket Mode, so it does not require public inbound traffic from Slack.
 - Hosted-agent state should survive restarts.
@@ -25,14 +25,14 @@ The configuration is split into:
 - `compose/docker-compose.yml`: opinionated hosted stack
 - `compose/docker-compose.docker-worker.yml`: opt-in override for `local-docker` lanes and the Docker socket
 - `compose/.env.example`: environment template for Compose deployments
-- `docker/frontal-code-server.Dockerfile`: builds the `frontal-code-server` image
-- `docker/frontal-code-worker.Dockerfile`: builds the worker image used by server-side `local-docker` lanes
-- `docker/frontal-code-slack.Dockerfile`: builds the Slack connector image
-- `docker/frontal-code-cli.Dockerfile`: builds the combined `frontal-code` + `frontal-code-server` CLI image (published as `frontal-code`/`frontal-code-dev` to GHCR)
-- `docker/frontal-code-dev.Dockerfile`: development image with hot reload (`cargo watch`)
-- `docker/frontal-code-fly.Dockerfile`: Fly.io deployment image for `frontal-code-server`
-- `docker/frontal-code-slack-app.Dockerfile`: Fly.io deployment image for the Slack connector
-- `docker/.dockerignore`: shared Docker ignore rules for all images
+- `../docker/server.Dockerfile`: builds the `code-server` image
+- `../docker/worker.Dockerfile`: builds the worker image used by server-side `local-docker` lanes
+- `../docker/slack.Dockerfile`: builds the Slack connector image
+- `../docker/cli.Dockerfile`: builds the combined `frontal-code` + `code-server` CLI image (published as `frontal-code`/`frontal-code-dev` to GHCR)
+- `../docker/dev.Dockerfile`: development image with hot reload (`cargo watch`)
+- `../docker/fly.Dockerfile`: Fly.io deployment image for `code-server`
+- `../docker/slack-app.Dockerfile`: Fly.io deployment image for the Slack connector
+- `../docker/.dockerignore`: shared Docker ignore rules for all images
 - `kubernetes/base/`: namespace, config, secrets template, PVCs, Deployments, Services, and Ingress
 
 ## Docker Compose
@@ -75,7 +75,7 @@ docker compose --env-file infrastructure/compose/.env \
 
 In this mode:
 
-- `frontal-code-server` uses `/var/run/docker.sock` to launch worker containers
+- `code-server` uses `/var/run/docker.sock` to launch worker containers
 - workers default to `FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
 - workers call back to the server through `FRONTAL_CODE_SERVER_CALLBACK_URL`
 - per-task repo checkouts live under `FRONTAL_CODE_SERVER_WORKSPACE_ROOT`
@@ -84,7 +84,7 @@ In this mode:
 
 The base manifests intentionally keep image names simple:
 
-- `frontal-code-server:v0.1.0`
+- `code-server:v0.1.0`
 - `frontal-code-slack:v0.1.0`
 
 Build and push versioned images to your registry, then update the image references to your registry path

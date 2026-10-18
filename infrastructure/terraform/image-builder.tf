@@ -10,10 +10,10 @@ resource "terraform_data" "build_frontal-code_server_image" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Building frontal-code-server image: ${var.frontal-code_server_image}"
+      echo "Building code-server image: ${var.frontal-code_server_image}"
       
       # Build the image
-      docker build -f infrastructure/docker/frontal-code-server.Dockerfile -t ${var.frontal-code_server_image} .
+      docker build -f ../../docker/server.Dockerfile -t ${var.frontal-code_server_image} .
       
       # Tag for ECR if needed
       if [[ "${var.frontal-code_server_image}" == *"amazonaws.com"* ]]; then
@@ -49,7 +49,7 @@ resource "terraform_data" "build_frontal-code_slack_image" {
       echo "Building frontal-code-slack image: ${var.frontal-code_slack_image}"
       
       # Build the image
-      docker build -f infrastructure/docker/frontal-code-slack-app.Dockerfile -t ${var.frontal-code_slack_image} .
+      docker build -f ../../docker/slack-app.Dockerfile -t ${var.frontal-code_slack_image} .
       
       # Tag for ECR if needed
       if [[ "${var.frontal-code_slack_image}" == *"amazonaws.com"* ]]; then
@@ -76,7 +76,7 @@ resource "terraform_data" "build_frontal-code_slack_image" {
 # ECR Repository resources (optional - for managed repositories)
 resource "aws_ecr_repository" "frontal-code_server" {
   count                = var.deploy_frontal-code_server && length(regexall("amazonaws\\.com", var.frontal-code_server_image)) > 0 ? 1 : 0
-  name                 = "frontal-code-server"
+  name                 = "code-server"
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
@@ -85,7 +85,7 @@ resource "aws_ecr_repository" "frontal-code_server" {
 
   tags = {
     Environment = var.environment
-    Project     = "frontal-code-tools"
+    Project     = "code-tools"
   }
 }
 
@@ -100,7 +100,7 @@ resource "aws_ecr_repository" "frontal-code_slack" {
 
   tags = {
     Environment = var.environment
-    Project     = "frontal-code-tools"
+    Project     = "code-tools"
   }
 }
 

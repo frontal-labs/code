@@ -1,0 +1,20 @@
+[package]
+name = "code-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+code-runtime = { path = "../code-runtime" }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "core_config_example"
+path = "../../examples/core_config_example.rs"

@@ -28,7 +28,7 @@ export const env = createEnv({
     FRONTAL_CODE_API_URL: z
       .string()
       .url()
-      .default("http://frontal-code-api:8787")
+      .default("http://code-api:8787")
       .describe("Frontal Code API base URL"),
     FRONTAL_CODE_API_TIMEOUT: z.coerce
       .number()

@@ -1,5 +1,5 @@
 services:
-  frontal-code-server:
+  code-server:
     environment:
       FRONTAL_CODE_SERVER_LANE_TRANSPORT: ${FRONTAL_CODE_SERVER_LANE_TRANSPORT:-local-docker}
     volumes:

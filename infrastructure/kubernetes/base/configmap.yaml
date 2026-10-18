@@ -14,7 +14,7 @@ data:
   FRONTAL_CODE_SERVER_STATE_FILE: "/var/lib/frontal-code/server/state.json"
   FRONTAL_CODE_AGENT_STORE: "/var/lib/frontal-code/agents"
   RUST_LOG: "info"
-  FRONTAL_CODE_API_URL: "http://frontal-code-server:8788"
+  FRONTAL_CODE_API_URL: "http://code-server:8788"
   FRONTAL_CODE_API_TIMEOUT: "30000"
   NODE_ENV: "production"
   LOG_LEVEL: "info"

@@ -509,6 +509,7 @@ dependencies = [
  "code-repo",
  "code-runtime",
  "code-tools",
+ "code-types",
  "futures-util",
  "hex",
  "hmac",
@@ -560,6 +561,7 @@ name = "code-types"
 version = "0.1.1"
 dependencies = [
  "serde",
+ "url",
 ]
 
 [[package]]

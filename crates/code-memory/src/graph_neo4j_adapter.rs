@@ -300,6 +300,7 @@ impl<T: Neo4jTransport> Neo4jGraphStoreAdapter<T> {
 
 impl Neo4jTransport for ReqwestNeo4jTransport {
     fn post(&self, path: &str, body: &str) -> Result<String, String> {
+        code_types::require_secure_transport(&self.base_url)?;
         let mut request = self
             .client
             .post(self.build_url(path))
@@ -773,7 +774,7 @@ mod tests {
 
         let transport = ReqwestNeo4jTransport::new(
             Neo4jHttpTransportConfig::new(format!("{}/", server.base_url()))
-                .with_basic_auth("neo4j", "secret"),
+                .with_basic_auth("neo4j", format!("test-{}", std::process::id())),
         );
         let store = Neo4jGraphStoreAdapter::new(Neo4jConfig::new("neo4j"), transport);
         let scope = MemoryScope::new("session-a");

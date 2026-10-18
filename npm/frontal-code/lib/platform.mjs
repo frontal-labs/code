@@ -9,7 +9,8 @@ export class UnsupportedPlatformError extends Error {
   constructor(platform, arch) {
     super(
       `Unsupported platform "${platform}/${arch}". ` +
-        `Frontal Code supports: macos-arm64, macos-x64, linux-x64, linux-arm64, windows-x64.`,
+        `Frontal Code supports: aarch64-apple-darwin, x86_64-apple-darwin, ` +
+        `x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-pc-windows-msvc.`,
     );
     this.name = "UnsupportedPlatformError";
     this.platform = platform;
@@ -17,15 +18,14 @@ export class UnsupportedPlatformError extends Error {
   }
 }
 
-// Map of "<platform>/<arch>" -> release asset descriptor.
-// `assetName` is the suffix used in the GitHub release asset
-// `frontal-code-<assetName>.tar.gz` (or `.exe` on Windows).
+// Map of "<platform>/<arch>" -> Rust target triple. Release assets are raw
+// binaries named `code-cli-<triple>` (plus `.exe` on Windows).
 const TARGETS = {
-  "darwin/arm64": { target: "macos-arm64", ext: "tar.gz" },
-  "darwin/x64": { target: "macos-x64", ext: "tar.gz" },
-  "linux/x64": { target: "linux-x64", ext: "tar.gz" },
-  "linux/arm64": { target: "linux-arm64", ext: "tar.gz" },
-  "win32/x64": { target: "windows-x64", ext: "exe" },
+  "darwin/arm64": { target: "aarch64-apple-darwin", ext: "" },
+  "darwin/x64": { target: "x86_64-apple-darwin", ext: "" },
+  "linux/x64": { target: "x86_64-unknown-linux-gnu", ext: "" },
+  "linux/arm64": { target: "aarch64-unknown-linux-gnu", ext: "" },
+  "win32/x64": { target: "x86_64-pc-windows-msvc", ext: ".exe" },
 };
 
 // Pure helper: resolve a descriptor from explicit platform/arch.
@@ -37,8 +37,8 @@ export function targetFor(platform, arch) {
   return {
     target: entry.target,
     ext: entry.ext,
-    assetName: `frontal-code-${entry.target}.${entry.ext}`,
-    // Binary name inside vendor/ (and expected name of the native binary).
+    assetName: `code-cli-${entry.target}${entry.ext}`,
+    // Binary name inside vendor/<target>/bin/ (the command the launcher execs).
     binName: platform === "win32" ? "frontal-code.exe" : "frontal-code",
   };
 }

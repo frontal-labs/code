@@ -1,2 +1,0 @@
-package()
-filegroup(name="g", srcs=["sample.bzl"])

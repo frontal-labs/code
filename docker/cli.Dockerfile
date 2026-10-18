@@ -20,6 +20,7 @@ WORKDIR /workspace
 
 # Copy Cargo files
 COPY Cargo.toml Cargo.lock ./
+COPY cli/ ./cli/
 COPY crates/ ./crates/
 COPY sdks/ ./sdks/
 COPY tools/ ./tools/

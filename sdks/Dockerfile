@@ -1,5 +1,5 @@
 # Syntax:
-#   docker build -f sdks/Dockerfile -t ghcr.io/frontal-labs/code-sdk:latest .
+#   docker build -f sdks/Dockerfile -t ghcr.io/frontal-labs/code/code-sdk-ts:latest .
 #
 # Publishes the Frontal Code TypeScript SDK as a distributable container image on
 # the GitHub Container Registry (ghcr.io). The built package is installed globally

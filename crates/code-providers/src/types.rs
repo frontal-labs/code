@@ -1,5 +1,5 @@
 use code_runtime::pricing_for_model;
-use code_types::{ModelPricing, TokenUsage, UsageCostEstimate};
+use code_types::{TokenUsage, UsageCostEstimate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

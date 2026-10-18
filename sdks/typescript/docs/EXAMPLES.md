@@ -192,7 +192,7 @@ try {
   if (error instanceof FrontalCodeError) {
     switch (error.code) {
       case 'CLI_NOT_FOUND':
-        console.error('Frontal Code CLI not installed. Run: npm i -g @frontal-labs/frontal-code');
+        console.error('Frontal Code CLI not installed. Run: npm i -g @frontal-labs/code-cli');
         break;
       case 'PROCESS_EXITED':
         console.error('CLI crashed:', error.message);

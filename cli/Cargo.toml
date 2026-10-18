@@ -1,35 +1,39 @@
 [package]
 name = "cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
 
 [[bin]]
 name = "code"
 path = "src/main.rs"
 
 [dependencies]
-code-api = { path = "../code-api" }
-code-commands = { path = "../code-commands" }
-code-harness = { path = "../code-harness" }
-code-core = { path = "../code-core" }
+code-api = { path = "../crates/code-api" }
+code-commands = { path = "../crates/code-commands" }
+code-harness = { path = "../crates/code-harness" }
+code-core = { path = "../crates/code-core" }
 crossterm = "0.28"
 futures-util = "0.3"
-code-events = { path = "../code-events" }
-code-repo = { path = "../code-repo" }
+code-events = { path = "../crates/code-events" }
+code-repo = { path = "../crates/code-repo" }
 pulldown-cmark = "0.13"
 rustyline = "15"
-code-runtime = { path = "../code-runtime" }
-code-integrations = { path = "../code-integrations" }
-code-plugins = { path = "../code-plugins" }
+code-runtime = { path = "../crates/code-runtime" }
+code-integrations = { path = "../crates/code-integrations" }
+code-plugins = { path = "../crates/code-plugins" }
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "signal", "time"] }
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
-code-tools = { path = "../code-tools" }
+code-tools = { path = "../crates/code-tools" }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-code-mock-gateway = { path = "../../tests/mock-gateway" }
+code-mock-gateway = { path = "../tests/mock-gateway" }
 serde_json.workspace = true
 tokio = { version = "1", features = ["rt-multi-thread"] }

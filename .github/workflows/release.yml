@@ -79,19 +79,11 @@ jobs:
       - name: Package CLI artifact
         shell: bash
         run: |
-          mkdir -p dist/package/bin
-          bin="frontal-code${{ matrix.ext }}"
-          cp "target/${{ matrix.target }}/release/${bin}" "dist/package/bin/${bin}"
-
-          if [[ -n "${{ matrix.ext }}" ]]; then
-            cp "dist/package/bin/${bin}" "dist/frontal-code-${{ matrix.name }}${{ matrix.ext }}"
-            shasum -a 256 "dist/frontal-code-${{ matrix.name }}${{ matrix.ext }}" \
-              > "dist/frontal-code-${{ matrix.name }}${{ matrix.ext }}.sha256"
-          else
-            chmod +x "dist/package/bin/${bin}"
-            tar -C dist/package -czf "dist/frontal-code-${{ matrix.name }}.tar.gz" .
-            shasum -a 256 "dist/frontal-code-${{ matrix.name }}.tar.gz" > "dist/frontal-code-${{ matrix.name }}.tar.gz.sha256"
-          fi
+          # Raw per-target binary, named by Rust target triple: code-cli-<target>[.exe]
+          src="target/${{ matrix.target }}/release/code${{ matrix.ext }}"
+          asset="code-cli-${{ matrix.target }}${{ matrix.ext }}"
+          cp "${src}" "dist/${asset}"
+          shasum -a 256 "dist/${asset}" > "dist/${asset}.sha256"
 
       - name: Package server artifact (linux only)
         if: ${{ matrix.name == 'linux-x64' }}
@@ -107,13 +99,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: dist/frontal-code-*
+          path: dist/code-cli-*
 
       - name: Upload release assets
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/frontal-code-*
+          files: dist/code-cli-*
           fail_on_unmatched_files: true
           generate_release_notes: true
 
@@ -205,8 +197,8 @@ jobs:
       - name: Update sha256 placeholders in formula
         shell: bash
         run: |
-          arm64_sha=$(cat frontal-code-macos-arm64.tar.gz.sha256 | awk '{print $1}')
-          x64_sha=$(cat frontal-code-macos-x64.tar.gz.sha256 | awk '{print $1}')
+          arm64_sha=$(cat code-cli-aarch64-apple-darwin.sha256 | awk '{print $1}')
+          x64_sha=$(cat code-cli-x86_64-apple-darwin.sha256 | awk '{print $1}')
 
           sed -i "s/<INSERT_ARM64_SHA256>/${arm64_sha}/" homebrew/frontal-code.rb
           sed -i "s/<INSERT_X64_SHA256>/${x64_sha}/" homebrew/frontal-code.rb

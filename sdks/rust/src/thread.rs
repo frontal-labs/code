@@ -5,8 +5,8 @@ use std::sync::Arc;
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-use crate::config::{config_to_args, merge_config};
 use crate::code::FrontalCode;
+use crate::config::{config_to_args, merge_config};
 use crate::protocol::{ThreadInput, ThreadOptions, ThreadRunOptions, TurnResult};
 use crate::spawn::{run_turn_buffered, run_turn_streamed, StreamedTurn};
 

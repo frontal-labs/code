@@ -1,15 +1,14 @@
 // Downloads the native `frontal-code` binary from a GitHub release into vendor/.
 //
-// Dependency-free: Node stdlib only, shelling out to `tar`/`shasum` on
-// macOS/Linux. Windows ships a raw `.exe` (no tarball, no sha), handled as a
-// special case.
+// Release assets are raw binaries named `code-cli-<target>[.exe]` with a
+// `.sha256` sidecar. Dependency-free: Node stdlib only.
 //
 // No top-level side effects — everything is exported as functions so the
 // module is safe to import in tests.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { detectTarget, UnsupportedPlatformError } from "./platform.mjs";
 
@@ -52,24 +51,15 @@ export async function fetchSha256(version, assetName) {
   }
 }
 
-// Extract a `.tar.gz` containing `bin/frontal-code` into `destDir/vendor/<target>/`.
-// We shell out to `tar` because a from-scratch tar parser is unnecessary for
-// this single-archive use case and would add risk.
-function extractTarball(tarballPath, target, destDir) {
-  const outDir = join(destDir, "vendor", target);
-  mkdirSync(outDir, { recursive: true });
-  execFileSync("tar", ["-xzf", tarballPath, "-C", outDir], { stdio: "inherit" });
-}
-
 async function downloadTo({ version, destDir, log = () => undefined }) {
-  const { target, assetName, ext, binName } = detectTarget();
+  const { target, assetName, binName } = detectTarget();
   const url = releaseAssetUrl(version, assetName);
   log(`Downloading ${assetName} (${target}) from ${url}`);
   const buf = await fetchUrl(url);
 
-  // Every published asset — including the raw Windows .exe — ships a .sha256
-  // sidecar. A missing one means the release is incomplete or the download was
-  // tampered with, so refuse rather than installing an unverified binary.
+  // Every published asset ships a .sha256 sidecar. A missing one means the
+  // release is incomplete or the download was tampered with, so refuse rather
+  // than installing an unverified binary.
   const expected = await fetchSha256(version, assetName);
   if (!expected) {
     throw new Error(
@@ -84,25 +74,10 @@ async function downloadTo({ version, destDir, log = () => undefined }) {
   }
   log(`Verified SHA-256 for ${assetName}`);
 
-  if (ext === "exe") {
-    const binDir = join(destDir, "vendor", target, "bin");
-    mkdirSync(binDir, { recursive: true });
-    const binPath = join(binDir, binName);
-    writeFileSync(binPath, buf);
-    return binPath;
-  }
-
-  const tmpTarball = join(destDir, ".frontal-code-download.tar.gz");
-  writeFileSync(tmpTarball, buf);
-  try {
-    extractTarball(tmpTarball, target, destDir);
-  } finally {
-    rmSync(tmpTarball, { force: true });
-  }
-  const binPath = join(destDir, "vendor", target, "bin", binName);
-  if (!existsSync(binPath)) {
-    throw new Error(`Expected binary not found after extraction: ${binPath}`);
-  }
+  const binDir = join(destDir, "vendor", target, "bin");
+  mkdirSync(binDir, { recursive: true });
+  const binPath = join(binDir, binName);
+  writeFileSync(binPath, buf);
   return binPath;
 }
 

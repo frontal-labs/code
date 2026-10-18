@@ -3,7 +3,7 @@
 ## Overview
 
 The Frontal Code TypeScript SDK (`@frontal-labs/code-sdk`) is a thin async wrapper
-around the `frontal-code` CLI (`@frontal-labs/frontal-code`). It spawns the CLI as a child
+around the `frontal-code` CLI (`@frontal-labs/code-cli`). It spawns the CLI as a child
 process per turn and communicates via JSONL over stdin/stdout using
 `--output-format json --stream`.
 

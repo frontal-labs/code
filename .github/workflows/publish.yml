@@ -110,7 +110,7 @@ jobs:
         run: ./scripts/verify.sh
 
   # ── Publish all packages ──────────────────────────────────────
-  # npm packages (@frontal-labs/code-sdk, @frontal-labs/frontal-code) are
+  # npm packages (@frontal-labs/code-sdk, @frontal-labs/code-cli) are
   # published to npmjs.org by `changeset publish` below, so there is one
   # publish path per package.
   publish:
@@ -148,17 +148,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push SDK image
+      - name: Build and push TypeScript SDK image (code-sdk-ts)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: sdks/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/code-sdk:latest
-            ghcr.io/${{ github.repository }}/code-sdk:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ghcr.io/${{ github.repository }}/code-sdk-ts:latest
+            ghcr.io/${{ github.repository }}/code-sdk-ts:${{ github.sha }}
+          cache-from: type=gha,scope=code-sdk-ts
+          cache-to: type=gha,mode=max,scope=code-sdk-ts
+
+      - name: Build and push Rust SDK image (code-sdk-rs)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: sdks/rust/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/code-sdk-rs:latest
+            ghcr.io/${{ github.repository }}/code-sdk-rs:${{ github.sha }}
+          cache-from: type=gha,scope=code-sdk-rs
+          cache-to: type=gha,mode=max,scope=code-sdk-rs
 
       - name: Run changeset publish
         run: npx changeset publish

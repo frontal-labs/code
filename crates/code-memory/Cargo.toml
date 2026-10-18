@@ -1,5 +1,9 @@
 [package]
 name = "code-memory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
 
 [dependencies]
 code-embeddings = { path = "../code-embeddings" }

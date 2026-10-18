@@ -2828,7 +2828,7 @@ fn looks_like_slash_command_token(token: &str) -> bool {
 }
 
 fn dump_manifests(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::Error>> {
-    let workspace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let workspace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let paths = UpstreamPaths::from_workspace_dir(&workspace_dir);
     match extract_manifest(&paths) {
         Ok(manifest) => {
@@ -13711,7 +13711,7 @@ UU conflicted.rs",
         let _guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
         let rendered = crate::init::render_init_agents_md(&workspace_root);
         assert!(rendered.contains("# AGENTS.md"));
         assert!(rendered.contains("cargo clippy --workspace --all-targets -- -D warnings"));

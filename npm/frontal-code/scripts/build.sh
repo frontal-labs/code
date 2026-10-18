@@ -22,21 +22,17 @@ fi
 echo "==> Building cli with cargo (release)"
 ( cd "$REPO_ROOT" && cargo build --release -p cli )
 
-# Determine target triple dir name (mirror lib/platform.mjs: darwin/arm64 -> macos-arm64).
+# Determine Rust target triple dir name (mirror lib/platform.mjs TARGETS).
 OS="$(uname -s)"; ARCH="$(uname -m)"
-case "$OS" in
-  Darwin) PLAT="macos" ;;
-  Linux)  PLAT="linux" ;;
-  *) echo "ERROR: unsupported build OS: $OS" >&2; exit 1 ;;
+case "$OS/$ARCH" in
+  Darwin/arm64|Darwin/aarch64)  TARGET_DIR="aarch64-apple-darwin" ;;
+  Darwin/x86_64)                TARGET_DIR="x86_64-apple-darwin" ;;
+  Linux/x86_64|Linux/amd64)     TARGET_DIR="x86_64-unknown-linux-gnu" ;;
+  Linux/aarch64|Linux/arm64)    TARGET_DIR="aarch64-unknown-linux-gnu" ;;
+  *) echo "ERROR: unsupported build platform: $OS/$ARCH" >&2; exit 1 ;;
 esac
-case "$ARCH" in
-  arm64|aarch64) A="arm64" ;;
-  x86_64|amd64)  A="x64" ;;
-  *) echo "ERROR: unsupported build arch: $ARCH" >&2; exit 1 ;;
-esac
-TARGET_DIR="$PLAT-$A"
 
-SRC="$REPO_ROOT/target/release/frontal-code"
+SRC="$REPO_ROOT/target/release/code"
 DEST="$PKG_ROOT/vendor/$TARGET_DIR/bin/frontal-code"
 mkdir -p "$(dirname "$DEST")"
 cp "$SRC" "$DEST"

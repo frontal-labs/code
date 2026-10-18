@@ -12,10 +12,17 @@ RUN apt-get update \
 
 WORKDIR /src
 
-COPY Cargo.toml Cargo.lock ./
+# The Cargo workspace lists every member, so all member directories must be
+# present for manifest resolution even though only code-server is built.
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY .cargo ./.cargo
+COPY cli ./cli
 COPY crates ./crates
+COPY sdks ./sdks
+COPY tests ./tests
+COPY tools ./tools
 
-RUN cargo build --release -p code-server
+RUN cargo build --release --locked -p code-server
 
 FROM debian:bookworm-slim
 

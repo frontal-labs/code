@@ -1,5 +1,5 @@
 {
-  "name": "@frontal-labs/frontal-code",
+  "name": "@frontal-labs/code-cli",
   "version": "0.0.0-dev",
   "description": "Frontal Code CLI is a coding agent from Frontal that runs locally on your computer.",
   "license": "Apache-2.0",
@@ -16,6 +16,10 @@
     "frontal-code": "bin/index.js"
   },
   "type": "module",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },

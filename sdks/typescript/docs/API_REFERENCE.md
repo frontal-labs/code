@@ -276,7 +276,7 @@ try {
   if (error instanceof FrontalCodeError) {
     switch (error.code) {
       case 'CLI_NOT_FOUND':
-        console.error('Install @frontal-labs/frontal-code');
+        console.error('Install @frontal-labs/code-cli');
         break;
       case 'PROCESS_EXITED':
         console.error('CLI crashed');
@@ -340,7 +340,7 @@ import { FrontalCodeError } from '@frontal-labs/code-sdk/errors';
 ## Requirements
 
 - Node.js 18+
-- `@frontal-labs/frontal-code` CLI installed and on PATH (or custom `command`)
+- `@frontal-labs/code-cli` CLI installed and on PATH (or custom `command`)
 
 ## Version Compatibility
 

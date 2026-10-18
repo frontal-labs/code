@@ -1,4 +1,4 @@
-# @frontal-labs/frontal-code
+# @frontal-labs/code-cli
 
 Frontal Code CLI is a coding agent from Frontal that runs locally on your computer.
 This npm package is a **thin launcher** that downloads and runs the native
@@ -9,10 +9,10 @@ Rust crate.
 ## Install
 
 ```bash
-npm install -g @frontal-labs/frontal-code
-# or: pnpm add -g @frontal-labs/frontal-code
-# or: bunx @frontal-labs/frontal-code
-# or one-off: npx @frontal-labs/frontal-code
+npm install -g @frontal-labs/code-cli
+# or: pnpm add -g @frontal-labs/code-cli
+# or: bunx @frontal-labs/code-cli
+# or one-off: npx @frontal-labs/code-cli
 ```
 
 On install, a `postinstall` script downloads the prebuilt native binary for
@@ -27,7 +27,7 @@ populated at install time, not committed.)
 npm install  ──▶  postinstall  ──▶  detect platform
                                             │
                                             ▼
-                              download frontal-code-<platform>.tar.gz (+ sha256 verify)
+                              download code-cli-<target-triple>[.exe] (+ sha256 verify)
                                             │
                                             ▼
                               extract  ──▶  vendor/<target>/bin/frontal-code
@@ -100,10 +100,10 @@ The downloader targets one of:
 
 | Platform | Asset |
 | --- | --- |
-| macOS arm64 | `frontal-code-macos-arm64.tar.gz` |
-| macOS x64 | `frontal-code-macos-x64.tar.gz` |
-| Linux x64 | `frontal-code-linux-x64.tar.gz` |
-| Windows x64 | `frontal-code-windows-x64.exe` |
+| macOS arm64 | `code-cli-aarch64-apple-darwin` |
+| macOS x64 | `code-cli-x86_64-apple-darwin` |
+| Linux x64 | `code-cli-x86_64-unknown-linux-gnu` |
+| Windows x64 | `code-cli-x86_64-pc-windows-msvc.exe` |
 
 These asset names are produced by
 [`.github/workflows/release.yml`](https://github.com/frontal-labs/frontal-code/blob/main/.github/workflows/release.yml)
@@ -119,7 +119,7 @@ report a missing binary only at run time.
 **"native `frontal-code` binary not found"** — either:
 
 - Re-run the download: `cd cli && npm run download` (or
-  `npm rebuild @frontal-labs/frontal-code`).
+  `npm rebuild @frontal-labs/code-cli`).
 - Build locally: `cargo build --release -p cli`, then the launcher will
   find `target/release/frontal-code` automatically.
 

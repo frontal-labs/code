@@ -2,7 +2,7 @@
 
 Embed the Frontal Code agent in your workflows and apps.
 
-The TypeScript SDK wraps the `frontal-code` CLI from `@frontal-labs/frontal-code`. It spawns the CLI and exchanges JSONL events over stdin/stdout.
+The TypeScript SDK wraps the `frontal-code` CLI from `@frontal-labs/code-cli`. It spawns the CLI and exchanges JSONL events over stdin/stdout.
 
 ## Installation
 

@@ -13,7 +13,6 @@ use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use code_embeddings::{cosine_similarity, EmbeddingProvider, LocalMlEmbeddingProvider};
-use code_types::MemoryScope;
 pub use graph_neo4j_adapter::{
     Neo4jConfig, Neo4jGraphStoreAdapter, Neo4jHttpTransportConfig, Neo4jTransport,
     ReqwestNeo4jTransport,

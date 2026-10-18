@@ -1,7 +1,7 @@
 import { App } from "@slack/bolt";
 import { FrontalCodeApiClient } from "./api-client";
-import { config } from "./config";
 import { FrontalCodeEventsClient } from "./code-events";
+import { config } from "./config";
 import { logger } from "./log";
 import type {
   FrontalCodeAppliedOrphanPolicy,

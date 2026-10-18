@@ -1,5 +1,9 @@
 [package]
 name = "code-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
 
 [dependencies]
 code-core = { path = "../code-core" }

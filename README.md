@@ -253,7 +253,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p cli -- -
 |   crates/
 |   |   api/                # Public API facade re-exporting provider/model APIs
 |   |   agents/             # Agent management and coordination
-|   |   npm/frontal-code/    # Main CLI binary (`frontal-code`)
+|   |   npm/code-cli/    # Main CLI binary (`frontal-code`)
 |   |   commands/           # Shared slash-command registry + help rendering
 |   |   compat-harness/     # TS manifest extraction harness
 |   |   core/               # Shared core capabilities and foundational types

@@ -273,6 +273,6 @@ Current Rust crates:
 - `code-mock-gateway`
 - `plugins`
 - `runtime`
-- `cli` (package in `npm/frontal-code/`)
+- `cli` (package in `npm/code-cli/`)
 - `telemetry`
 - `tools`

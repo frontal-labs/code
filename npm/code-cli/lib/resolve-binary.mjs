@@ -14,7 +14,7 @@ import { detectTarget } from "./platform.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-// lib/ -> npm/frontal-code/
+// lib/ -> npm/code-cli/
 export const PKG_ROOT = resolve(__dirname, "..");
 
 // Allow tests to override the package root without touching the filesystem.

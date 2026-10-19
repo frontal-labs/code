@@ -10,9 +10,9 @@ if [[ -z "$REPO_ROOT" ]]; then
 fi
 cd "$REPO_ROOT"
 ACTION="${1:-test}"
-cd npm/frontal-code
+cd npm/code-cli
 if [[ ! -f package.json ]]; then
-  echo "ERROR: npm/frontal-code/package.json not found (checkout incomplete)" >&2
+  echo "ERROR: npm/code-cli/package.json not found (checkout incomplete)" >&2
   exit 1
 fi
 

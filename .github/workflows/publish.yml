@@ -106,7 +106,7 @@ jobs:
         run: bun run --filter @frontal-labs/code-sdk build
 
       - name: Verify CLI package
-        working-directory: npm/frontal-code
+        working-directory: npm/code-cli
         run: ./scripts/verify.sh
 
   # ── Publish all packages ──────────────────────────────────────

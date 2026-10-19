@@ -92,7 +92,7 @@ repos:
         entry: bash scripts/changeset_check.sh
         language: system
         # Only enforce for PRs that change source/config; docs-only changes are exempt.
-        files: '^(crates/|sdks/typescript/|npm/frontal-code/|extensions/)'
+        files: '^(crates/|sdks/typescript/|npm/code-cli/|extensions/)'
         pass_filenames: false
 
       - id: third-party-check

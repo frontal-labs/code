@@ -11,7 +11,7 @@ function fail(message) {
   process.stderr.write(`frontal-code: ${message}\n`);
   process.stderr.write(
     `\nIf this is unexpected, try:\n` +
-      `  npm rebuild @frontal-labs/frontal-code\n` +
+      `  npm rebuild @frontal-labs/code-cli\n` +
       `  # or, inside the repo:\n` +
       `  (cd cli && ./scripts/download.sh)\n`,
   );

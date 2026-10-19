@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { detectTarget, UnsupportedPlatformError } from "./platform.mjs";
 
-export const RELEASE_BASE = "https://github.com/frontal-labs/frontal-code/releases/download";
+export const RELEASE_BASE = "https://github.com/frontal-labs/code/releases/download";
 
 // Build the release asset URL for a given version + target descriptor.
 export function releaseAssetUrl(version, assetName) {

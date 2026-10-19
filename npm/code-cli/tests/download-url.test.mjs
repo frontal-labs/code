@@ -9,11 +9,11 @@ import { downloadRelease, releaseAssetUrl, verifySha256 } from "../lib/download.
 test("releaseAssetUrl builds the exact GitHub release asset URL", () => {
   assert.equal(
     releaseAssetUrl("0.1.1", "code-cli-aarch64-apple-darwin"),
-    "https://github.com/frontal-labs/frontal-code/releases/download/v0.1.1/code-cli-aarch64-apple-darwin",
+    "https://github.com/frontal-labs/code/releases/download/v0.1.1/code-cli-aarch64-apple-darwin",
   );
   assert.equal(
     releaseAssetUrl("1.2.3", "code-cli-x86_64-pc-windows-msvc.exe"),
-    "https://github.com/frontal-labs/frontal-code/releases/download/v1.2.3/code-cli-x86_64-pc-windows-msvc.exe",
+    "https://github.com/frontal-labs/code/releases/download/v1.2.3/code-cli-x86_64-pc-windows-msvc.exe",
   );
 });
 

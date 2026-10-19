@@ -29,7 +29,7 @@ test("postinstall skips on FRONTAL_CODE_SKIP_DOWNLOAD without touching network",
     // package.json with a dev version + a real vendored binary already present.
     writeFileSync(
       join(fakeRoot, "package.json"),
-      JSON.stringify({ name: "@frontal-labs/frontal-code", version: "0.0.0-dev" }),
+      JSON.stringify({ name: "@frontal-labs/code-cli", version: "0.0.0-dev" }),
     );
 
     const res = spawnSync("bash", [POSTINSTALL], {
@@ -49,7 +49,7 @@ test("postinstall skips download for dev version (no network)", { skip: SKIP }, 
   try {
     writeFileSync(
       join(fakeRoot, "package.json"),
-      JSON.stringify({ name: "@frontal-labs/frontal-code", version: "0.0.0-dev" }),
+      JSON.stringify({ name: "@frontal-labs/code-cli", version: "0.0.0-dev" }),
     );
     const res = spawnSync("bash", [POSTINSTALL], {
       cwd: fakeRoot,
@@ -69,7 +69,7 @@ test("postinstall fails gracefully (exit 0) when offline download fails", { skip
     // Real, non-dev version but no network: download will fail; must exit 0.
     writeFileSync(
       join(fakeRoot, "package.json"),
-      JSON.stringify({ name: "@frontal-labs/frontal-code", version: "9.9.9" }),
+      JSON.stringify({ name: "@frontal-labs/code-cli", version: "9.9.9" }),
     );
     const res = spawnSync("bash", [POSTINSTALL], {
       cwd: fakeRoot,

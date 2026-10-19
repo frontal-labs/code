@@ -17,7 +17,7 @@ npm install -g @frontal-labs/code-cli
 
 On install, a `postinstall` script downloads the prebuilt native binary for
 your platform from the
-[GitHub releases](https://github.com/frontal-labs/frontal-code/releases) into the
+[GitHub releases](https://github.com/frontal-labs/code/releases) into the
 package's `vendor/` directory. (`vendor/` is git- and npm-ignored; it is
 populated at install time, not committed.)
 
@@ -159,7 +159,7 @@ npm run prepublishOnly
 ### Repository layout
 
 ```
-npm/frontal-code/
+npm/code-cli/
 ├── bin/index.js             # the `frontal-code` launcher (entry point)
 ├── lib/
 │   ├── platform.mjs        # platform → release-asset mapping
@@ -180,11 +180,11 @@ npm/frontal-code/
 ### Wiring into the monorepo
 
 - Registered as a workspace package in the root `package.json` `packages`.
-- Launcher tests: `bazel test //npm/frontal-code:test` (also reached by `bazel run //:cli`
+- Launcher tests: `bazel test //npm/code-cli:test` (also reached by `bazel run //:cli`
   through [`scripts/cli.sh`](https://github.com/frontal-labs/frontal-code/blob/main/scripts/cli.sh)).
-- Launcher lint and native vendoring build: `bazel test //npm/frontal-code:lint` and
-  `bazel run //npm/frontal-code:build`. These wrappers invoke Node/Biome and Cargo respectively.
-- CI: `.github/workflows/npm-cli.yml` runs on changes under `npm/frontal-code/**`.
+- Launcher lint and native vendoring build: `bazel test //npm/code-cli:lint` and
+  `bazel run //npm/code-cli:build`. These wrappers invoke Node/Biome and Cargo respectively.
+- CI: `.github/workflows/npm-cli.yml` runs on changes under `npm/code-cli/**`.
 
 ## License
 

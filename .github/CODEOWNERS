@@ -7,7 +7,7 @@
 # Specific file/directory owners
 
 # Core CLI and API
-npm/frontal-code/ @frontal-labs @gabrielvfonseca
+npm/code-cli/ @frontal-labs @gabrielvfonseca
 crates/api/ @frontal-labs
 
 # Documentation

@@ -6,10 +6,10 @@ class FrontalCode < Formula
 
   if OS.mac?
     if Hardware::CPU.arm?
-      url "https://github.com/frontal-labs/frontal-code/releases/download/v#{version}/code-cli-aarch64-apple-darwin"
+      url "https://github.com/frontal-labs/code/releases/download/v#{version}/code-cli-aarch64-apple-darwin"
       sha256 "<INSERT_ARM64_SHA256>" # filled by release CI (macos-14 runner)
     else
-      url "https://github.com/frontal-labs/frontal-code/releases/download/v#{version}/code-cli-x86_64-apple-darwin"
+      url "https://github.com/frontal-labs/code/releases/download/v#{version}/code-cli-x86_64-apple-darwin"
       sha256 "<INSERT_X64_SHA256>" # filled by release CI (macos-13 runner)
     end
   end

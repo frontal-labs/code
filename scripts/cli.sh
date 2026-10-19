@@ -2,4 +2,4 @@
 # Delegate CLI package verification to Bazel.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec bazel test //npm/frontal-code:test "$@"
+exec bazel test //npm/code-cli:test "$@"

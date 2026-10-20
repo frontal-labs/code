@@ -7,7 +7,7 @@ This directory contains the Homebrew formula for installing the Frontal Code CLI
 Install Frontal Code using the local Homebrew formula:
 
 ```bash
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 ```
 
 This will:
@@ -17,7 +17,7 @@ This will:
 
 ## Formula Details
 
-The `frontal-code.rb` formula:
+The `Formula/code.rb` formula:
 
 - **Description**: High-performance Rust AI agent harness
 - **Homepage**: https://github.com/frontal-labs/frontal-code
@@ -31,7 +31,7 @@ The `frontal-code.rb` formula:
 When developing locally, you can reinstall the formula after making changes:
 
 ```bash
-brew reinstall --HEAD ./homebrew/frontal-code.rb
+brew reinstall --HEAD ./homebrew/Formula/code.rb
 ```
 
 Or build directly from source:

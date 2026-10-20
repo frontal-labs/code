@@ -7828,12 +7828,13 @@ fn config_json_value(
 }
 
 fn rendered_json_to_serde(rendered: &str) -> serde_json::Value {
-    serde_json::from_str(rendered)
-        .map(|mut value| {
+    serde_json::from_str(rendered).map_or_else(
+        |_| serde_json::Value::Null,
+        |mut value| {
             redact_config_value(&mut value);
             value
-        })
-        .unwrap_or(serde_json::Value::Null)
+        },
+    )
 }
 
 fn redact_config_value(value: &mut Value) {
@@ -7867,12 +7868,13 @@ fn redact_config_value(value: &mut Value) {
 }
 
 fn redact_rendered_config(rendered: &str) -> String {
-    serde_json::from_str::<Value>(rendered)
-        .map(|mut value| {
+    serde_json::from_str::<Value>(rendered).map_or_else(
+        |_| "[redacted]".to_string(),
+        |mut value| {
             redact_config_value(&mut value);
             serde_json::to_string(&value).unwrap_or_else(|_| "[redacted]".to_string())
-        })
-        .unwrap_or_else(|_| "[redacted]".to_string())
+        },
+    )
 }
 
 fn telemetry_settings_path(cwd: &Path, target: Option<&str>) -> PathBuf {
@@ -8101,9 +8103,10 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
                 ));
                 lines.push(format!(
                     "  {}",
-                    rendered_value
-                        .map(|value| redact_rendered_config(&value))
-                        .unwrap_or_else(|| "<unset>".to_string())
+                    rendered_value.map_or_else(
+                        || "<unset>".to_string(),
+                        |value| redact_rendered_config(&value)
+                    )
                 ));
             }
         }

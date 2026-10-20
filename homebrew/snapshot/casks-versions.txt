@@ -1,0 +1,16 @@
+# Cask versions snapshot — EXCLUDED
+
+This file is intentionally not generated.
+
+Reason: the `stainless-api/tap` is untrusted, so its cask `stl` fails to
+load during `brew bundle dump` / `brew list --cask --versions`. Until the tap
+is trusted, cask version snapshotting is skipped to avoid incomplete/inaccurate
+output.
+
+To trust the tap and re-enable cask snapshotting:
+
+    brew trust --tap stainless-api/tap
+
+After trusting, regenerate with:
+
+    homebrew/bin/brew-sync.sh dump

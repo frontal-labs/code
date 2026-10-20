@@ -1,6 +1,6 @@
 //! `FrontalCode` SDK — embed the `FrontalCode` agent in your Rust workflows and apps.
 //!
-//! The SDK wraps the `frontal-code` CLI. Construct an [`Frontal Code`] client, start a
+//! The SDK wraps the `frontal-code` CLI. Construct an [`FrontalCode`] client, start a
 //! [`Thread`], and call [`Thread::run`] (buffered) or [`Thread::run_streamed`]
 //! (event stream) to drive turns.
 
@@ -12,14 +12,14 @@
 #![allow(clippy::needless_pass_by_value)]
 #![allow(clippy::type_complexity)]
 
+mod code;
 mod config;
-mod frontal_code;
 mod protocol;
 mod spawn;
 mod thread;
 
+pub use code::FrontalCode;
 pub use config::{config_to_args, flatten_config, merge_config, to_toml_literal};
-pub use frontal_code::FrontalCode;
 pub use protocol::{
   FrontalCodeEvent, FrontalCodeOptions, InputEntry, ThreadInput, ThreadItem, ThreadOptions,
   ThreadRunOptions, TurnResult, Usage,

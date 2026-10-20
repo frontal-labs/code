@@ -2,12 +2,12 @@
 
 Embed the Frontal Code agent in your workflows and apps.
 
-The TypeScript SDK wraps the `frontal-code` CLI from `@frontal-labs/frontal-code`. It spawns the CLI and exchanges JSONL events over stdin/stdout.
+The TypeScript SDK wraps the `frontal-code` CLI from `@frontal-labs/code-cli`. It spawns the CLI and exchanges JSONL events over stdin/stdout.
 
 ## Installation
 
 ```bash
-npm install @frontal-labs/frontal-code-sdk
+npm install @frontal-labs/code-sdk
 ```
 
 Requires Node.js 18+.
@@ -15,7 +15,7 @@ Requires Node.js 18+.
 ## Quickstart
 
 ```typescript
-import { Frontal Code } from "@frontal-labs/frontal-code-sdk";
+import { Frontal Code } from "@frontal-labs/code-sdk";
 
 const frontal-code = new Frontal Code();
 const thread = frontal-code.startThread();

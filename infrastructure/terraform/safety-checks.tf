@@ -1,10 +1,10 @@
 # Safety checks to avoid conflicts with existing infrastructure
 
-# Check if the frontal-code-server service exists
+# Check if the code-server service exists
 data "kubernetes_service" "existing_frontal-code_server" {
   count = var.deploy_frontal-code_server ? 1 : 0
   metadata {
-    name      = "frontal-code-server"
+    name      = "code-server"
     namespace = var.frontal-code_service_namespace
   }
 }
@@ -18,12 +18,12 @@ data "kubernetes_service" "existing_frontal-code_slack" {
   }
 }
 
-# Check if there's already an ingress for frontal-code-server
+# Check if there's already an ingress for code-server
 data "kubernetes_ingress_v1" "existing_frontal-code_ingress" {
   count = var.deploy_frontal-code_server ? 1 : 0
 
   metadata {
-    name      = "frontal-code-server"
+    name      = "code-server"
     namespace = var.frontal-code_service_namespace
   }
 
@@ -68,7 +68,7 @@ locals {
 
   # Warnings for existing resources
   warnings = [
-    local.has_existing_frontal-code_server ? "Warning: frontal-code-server service already exists in namespace ${var.frontal-code_service_namespace}" : "",
+    local.has_existing_frontal-code_server ? "Warning: code-server service already exists in namespace ${var.frontal-code_service_namespace}" : "",
     local.has_existing_frontal-code_slack ? "Warning: frontal-code-slack service already exists in namespace ${var.frontal-code_service_namespace}" : "",
     local.has_existing_namespace ? "Warning: namespace ${var.frontal-code_service_namespace} already exists" : ""
   ]

@@ -21,7 +21,7 @@ deploy_frontal-code_server = true
 deploy_frontal-code_slack = true
 
 # Container Images
-frontal-code_server_image = "frontal-code-server:v0.1.0"
+frontal-code_server_image = "code-server:v0.1.0"
 frontal-code_slack_image = "frontal-code-slack:v0.1.0"
 frontal-code_server_api_key = "replace-with-a-long-random-api-key"
 

@@ -14,7 +14,7 @@ Requires the `frontal-code` CLI on `PATH` (or provide custom `command`).
 ### Simple Text Turn
 
 ```rust
-use frontal-code_sdk::{Frontal Code, ThreadInput, ThreadOptions, ThreadRunOptions};
+use frontal_code_sdk::{Frontal Code, ThreadInput, ThreadOptions, ThreadRunOptions};
 use std::error::Error;
 
 #[tokio::main]
@@ -234,7 +234,7 @@ let turn = resumed.run(
 ## Error Handling
 
 ```rust
-use frontal-code_sdk::FrontalCodeError;
+use frontal_code_sdk::FrontalCodeError;
 
 match thread.run(&input, &options).await {
     Ok(result) => println!("{}", result.final_response),
@@ -252,7 +252,7 @@ match thread.run(&input, &options).await {
 ```rust
 #[cfg(test)]
 mod tests {
-    use frontal-code_sdk::{Frontal Code, FrontalCodeConfig, ThreadInput, ThreadOptions, ThreadRunOptions};
+    use frontal_code_sdk::{Frontal Code, FrontalCodeConfig, ThreadInput, ThreadOptions, ThreadRunOptions};
 
     #[tokio::test]
     async fn test_basic_thread() {

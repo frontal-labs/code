@@ -1,0 +1,54 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(
+        [
+            "bin/**",
+            "lib/**",
+            "scripts/**",
+        ],
+        exclude = [
+            "node_modules/**",
+            "vendor/**",
+            "BUILD.bazel",
+        ],
+    ) + ["package.json"],
+)
+
+sh_test(
+    name = "test",
+    local = True,
+    srcs = ["//tools:cli.sh"],
+    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
+    args = ["test"],
+    tags = [
+        "test",
+        "typescript",
+    ],
+)
+
+sh_test(
+    name = "lint",
+    size = "small",
+    srcs = ["//tools:cli.sh"],
+    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
+    args = ["lint"],
+    tags = [
+        "lint",
+        "typescript",
+    ],
+)
+
+sh_test(
+    name = "build",
+    local = True,
+    timeout = "long",
+    srcs = ["//tools:cli.sh"],
+    data = [":srcs", "//:cargo_workspace", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
+    args = ["build"],
+    tags = [
+        "build",
+        "typescript",
+    ],
+)

@@ -19,7 +19,7 @@ tests/
 |-- bot/
 |   `-- slack-bot-service.test.ts # Main bot service tests
 |-- services/
-|   |-- frontal-code-api-client.test.ts   # Frontal Code API client tests
+|   |-- code-api-client.test.ts   # Frontal Code API client tests
 |   |-- database-service.test.ts   # Database service tests
 |   |-- redis-service.test.ts       # Redis service tests
 |   |-- task-manager.test.ts        # Task manager tests

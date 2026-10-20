@@ -2,7 +2,7 @@
 
 Embed the Frontal Code agent in your Rust workflows and apps.
 
-The SDK wraps the `frontal-code` CLI (`@frontal-labs/frontal-code`). It spawns the CLI per
+The SDK wraps the `frontal-code` CLI (`@frontal-labs/code-cli`). It spawns the CLI per
 turn and continues conversations via the CLI's `--resume <sessionId>` flag,
 parsing the `--output-format json --stream` JSONL event stream.
 
@@ -18,7 +18,7 @@ Requires the `frontal-code` CLI on `PATH` (or provide a custom `command`).
 ## Quickstart
 
 ```rust
-use frontal-code_sdk::{Frontal Code, ThreadInput, ThreadOptions, ThreadRunOptions};
+use frontal_code_sdk::{Frontal Code, ThreadInput, ThreadOptions, ThreadRunOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

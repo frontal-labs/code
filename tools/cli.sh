@@ -10,9 +10,9 @@ if [[ -z "$REPO_ROOT" ]]; then
 fi
 cd "$REPO_ROOT"
 ACTION="${1:-test}"
-cd cli
+cd npm/code-cli
 if [[ ! -f package.json ]]; then
-  echo "ERROR: cli/package.json not found (checkout incomplete)" >&2
+  echo "ERROR: npm/code-cli/package.json not found (checkout incomplete)" >&2
   exit 1
 fi
 
@@ -27,9 +27,9 @@ case "$ACTION" in
     ;;
   lint)
     if command -v bunx >/dev/null 2>&1; then
-      bunx @biomejs/biome check .
+      bunx @biomejs/biome@2.5.14 ci .
     elif command -v npx >/dev/null 2>&1; then
-      npx -y @biomejs/biome check .
+      npx -y @biomejs/biome@2.5.14 ci .
     else
       echo "ERROR: neither bunx nor npx found on PATH" >&2
       exit 1

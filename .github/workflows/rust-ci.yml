@@ -1,5 +1,8 @@
 name: Frontal Code CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:

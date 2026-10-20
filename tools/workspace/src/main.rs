@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
-    name = "frontal-code-workspace",
+    name = "code-workspace",
     about = "Maintain the Cargo workspace member list"
 )]
 struct Cli {

@@ -1,0 +1,136 @@
+# Frontal Code Core
+
+Shared core capabilities and foundational types for the Frontal Code ecosystem.
+
+## Overview
+
+The `code-core` crate provides essential shared types, traits, and utilities that form the foundation for all Frontal Code components. It serves as the central collection of common functionality used across the entire workspace, ensuring consistency and reducing code duplication.
+
+## Features
+
+- **Configuration Management**: JSON-based project configuration with type-safe access
+- **Shared Types**: Common data structures used across Frontal Code components
+- **Foundation Traits**: Core traits for component integration
+- **Utility Functions**: Essential helper functions and macros
+- **Error Types**: Base error handling and common error variants
+- **Constants**: Shared constants and configuration values
+- **Extensions**: Common extensions to standard library types
+
+## Key Components
+
+### Configuration Management
+- **ProjectConfig**: Main configuration structure with type-safe JSON parsing
+- **Provider Configuration**: AI provider settings and models
+- **Path Management**: Configurable directory paths
+- **Service Configuration**: Database, Redis, and memory service settings
+- **Feature Flags**: Toggleable features and thresholds
+
+### Shared Types
+- Common request/response structures
+- Configuration types and builders
+- Identifier types and validation
+- Serialization/deserialization helpers
+
+### Foundation Traits
+- Component lifecycle traits
+- Plugin interface definitions
+- Provider abstractions
+- Tool execution contracts
+
+### Utilities
+- String manipulation helpers
+- Path and file system utilities
+- Validation and parsing functions
+- Time and duration helpers
+
+## Current Status
+
+This crate is included in workspace build/test gates and provides a minimal baseline surface with room for additional shared primitives. As the Frontal Code ecosystem grows, this crate will expand to include more common functionality.
+
+## Usage
+
+### Configuration Management
+
+```rust
+use frontal-code_core::config::ProjectConfig;
+
+// Load configuration from default location (falls back to defaults if not found)
+let config = ProjectConfig::load_or_default();
+
+// Access project information
+println!("Project: {} v{}", config.project.name, config.project.version);
+
+// Check provider settings
+if config.is_provider_enabled("anthropic") {
+    let model = config.get_default_model("anthropic").unwrap();
+    println!("Using Anthropic with model: {}", model);
+}
+
+// Access service configuration
+let db_url = &config.services.database.url;
+let redis_url = &config.services.redis.url;
+
+// Check feature flags
+if config.features.enable_telemetry {
+    // Initialize telemetry
+}
+```
+
+### General Usage
+
+```rust
+use frontal-code_core::{SharedType, CoreTrait, core_utility};
+
+// Use shared types across components
+let data = SharedType::new();
+
+// Implement core traits for custom components
+struct MyComponent;
+impl CoreTrait for MyComponent {
+    // implementation
+}
+
+// Use utility functions
+let result = core_utility(&input)?;
+```
+
+## Design Principles
+
+The core crate follows these principles:
+- **Minimalism**: Only includes truly shared functionality
+- **Stability**: Provides stable APIs for other crates to depend on
+- **Performance**: Optimized for common use cases
+- **Extensibility**: Designed to grow with the ecosystem
+
+## Configuration File Locations
+
+The configuration system looks for `project.json` in the following locations (in order):
+
+1. `$FRONTAL_CODE_CONFIG_HOME/project.json` - Custom config directory
+2. `$FRONTAL_CODE_HOME/project.json` - Frontal Code home directory
+3. `~/.frontal-code/project.json` - User's home directory
+4. `config/project.json` - Project-local configuration
+
+If no configuration file is found, the system falls back to sensible defaults.
+
+## Dependencies
+
+The core crate has minimal external dependencies to keep it lightweight and fast to compile. It primarily depends on:
+- Standard library types
+- Common serialization libraries (serde, serde_json)
+- Essential utility crates
+
+## Testing
+
+Run core tests with:
+```bash
+cargo test -p code-core
+```
+
+## Future Expansion
+
+Planned additions include:
+- More shared data structures
+- Additional utility functions
+- Performance-optimized collections
+- Enhanced error handling types

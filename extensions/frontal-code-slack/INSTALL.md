@@ -68,8 +68,8 @@ SLACK_SIGNING_SECRET=your-signing-secret-here
 SLACK_APP_ID=A0123456789012
 
 # Frontal Code Server Configuration
-FRONTAL_API_URL=https://your-frontal-code-server.com
-FRONTAL_SERVER_API_KEY=your-frontal-code-api-key-here
+FRONTAL_API_URL=https://your-code-server.com
+FRONTAL_SERVER_API_KEY=your-code-api-key-here
 
 # Optional: GitHub Integration
 GITHUB_APP_ID=your-github-app-id
@@ -135,7 +135,7 @@ Use the `.github/app.yml` configuration to create a GitHub App with:
 
 Set the GitHub App webhook URL to:
 ```
-https://your-frontal-code-server.com/webhook/github
+https://your-code-server.com/webhook/github
 ```
 
 ### 3. Install GitHub App

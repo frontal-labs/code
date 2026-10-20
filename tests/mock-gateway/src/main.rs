@@ -1,6 +1,6 @@
 use std::env;
 
-use frontal_code_mock_gateway::MockGateway;
+use code_mock_gateway::MockGateway;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

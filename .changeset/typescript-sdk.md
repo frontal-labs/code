@@ -1,5 +1,5 @@
 ---
-'@frontal-labs/frontal-code-sdk': minor
+'@frontal-labs/code-sdk': minor
 ---
 
-TypeScript SDK is now published to GitHub Package Registry via publish.yml on release tags.
+TypeScript SDK is now published to npmjs.org via publish.yml on release tags.

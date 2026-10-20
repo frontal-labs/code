@@ -171,9 +171,10 @@ Supported permission modes:
 
 Model aliases currently supported by the CLI:
 
-- `opus` → `claude-opus-5`
-- `sonnet` → `claude-sonnet-4-6`
-- `haiku` → `claude-haiku-4-5`
+- `opus` → `claude-opus-5-5`
+- `sonnet` → `claude-sonnet-5-5`
+- `haiku` → `claude-haiku-5-5`
+- `fable` → `claude-fable-5-1`
 
 ## Provider Selection
 
@@ -191,7 +192,7 @@ frontal-code --provider xai prompt "your question"
 
 # Combine with model aliases
 frontal-code --provider anthropic --model opus prompt "complex task"
-frontal-code --provider openai --model gpt-4 prompt "your question"
+frontal-code --provider openai --model gpt-6.1-sol prompt "your question"
 ```
 
 Supported providers:
@@ -252,7 +253,7 @@ The workspace includes a deterministic Anthropic-compatible mock service and par
 Manual mock service startup:
 
 ```bash
-cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 ## Verification
@@ -269,9 +270,9 @@ Current Rust crates:
 - `providers`
 - `commands`
 - `compat-harness`
-- `frontal-code-mock-gateway`
+- `code-mock-gateway`
 - `plugins`
 - `runtime`
-- `cli` (package in `crates/cli/`)
+- `cli` (package in `npm/code-cli/`)
 - `telemetry`
 - `tools`

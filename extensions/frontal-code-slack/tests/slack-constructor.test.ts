@@ -134,7 +134,7 @@ vi.mock("../src/api-client", () => ({
   FrontalCodeApiClient: frontalCodeApiState.MockFrontalCodeApiClient,
 }));
 
-vi.mock("../src/frontal-code-events", () => ({
+vi.mock("../src/code-events", () => ({
   FrontalCodeEventsClient: frontalCodeEventsState.MockFrontalCodeEventsClient,
 }));
 

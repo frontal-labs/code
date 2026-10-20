@@ -31,15 +31,15 @@ The main configuration file is `config/project.json`:
     "providers": {
       "anthropic": {
         "enabled": true,
-        "default_model": "claude-opus-5"
+        "default_model": "claude-opus-5-5"
       },
       "openai": {
         "enabled": true,
-        "default_model": "gpt-5"
+        "default_model": "gpt-6.1-sol"
       },
       "xai": {
         "enabled": true,
-        "default_model": "grok-3"
+        "default_model": "grok-4.7"
       }
     },
     "permission_mode": "workspace-write",

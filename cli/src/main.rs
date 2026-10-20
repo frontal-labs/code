@@ -7810,10 +7810,11 @@ fn config_json_value(
                 payload["section_supported"] = json!(true);
                 payload["section_present"] = json!(section_present);
                 payload["section_status"] = json!(config_section_status(section_present));
-                payload["merged_section"] = rendered_value
-                    .map_or(serde_json::Value::Null, |value| {
-                        rendered_json_to_serde(&value)
-                    });
+                payload["merged_section"] = if section_present {
+                    json!({"redacted": true})
+                } else {
+                    serde_json::Value::Null
+                };
             }
         }
         if section == "telemetry" {
@@ -7821,60 +7822,10 @@ fn config_json_value(
             payload["effective"] = telemetry_json_value(&resolution, &runtime_config);
         }
     } else {
-        payload["merged_json"] = rendered_json_to_serde(&runtime_config.as_json().render());
+        payload["merged_json"] = json!({"redacted": true});
     }
 
     Ok(payload)
-}
-
-fn rendered_json_to_serde(rendered: &str) -> serde_json::Value {
-    serde_json::from_str(rendered).map_or_else(
-        |_| serde_json::Value::Null,
-        |mut value| {
-            redact_config_value(&mut value);
-            value
-        },
-    )
-}
-
-fn redact_config_value(value: &mut Value) {
-    match value {
-        Value::Object(object) => {
-            for (key, value) in object.iter_mut() {
-                let normalized = key.to_ascii_lowercase();
-                if normalized == "headers"
-                    || normalized == "env"
-                    || normalized.contains("apikey")
-                    || normalized.contains("authorization")
-                    || normalized.contains("password")
-                    || normalized.contains("secret")
-                    || normalized.contains("accesstoken")
-                    || normalized.contains("refreshtoken")
-                    || normalized == "token"
-                {
-                    *value = Value::String("[redacted]".to_string());
-                } else {
-                    redact_config_value(value);
-                }
-            }
-        }
-        Value::Array(values) => {
-            for value in values {
-                redact_config_value(value);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn redact_rendered_config(rendered: &str) -> String {
-    serde_json::from_str::<Value>(rendered).map_or_else(
-        |_| "[redacted]".to_string(),
-        |mut value| {
-            redact_config_value(&mut value);
-            serde_json::to_string(&value).unwrap_or_else(|_| "[redacted]".to_string())
-        },
-    )
 }
 
 fn telemetry_settings_path(cwd: &Path, target: Option<&str>) -> PathBuf {
@@ -8103,10 +8054,11 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
                 ));
                 lines.push(format!(
                     "  {}",
-                    rendered_value.map_or_else(
-                        || "<unset>".to_string(),
-                        |value| redact_rendered_config(&value)
-                    )
+                    if rendered_value.is_some() {
+                        "<redacted>"
+                    } else {
+                        "<unset>"
+                    }
                 ));
             }
         }
@@ -8122,10 +8074,7 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
     }
 
     lines.push("Merged JSON".to_string());
-    lines.push(format!(
-        "  {}",
-        redact_rendered_config(&runtime_config.as_json().render())
-    ));
+    lines.push("  <redacted>".to_string());
     Ok(lines.join(
         "
 ",
@@ -13098,7 +13047,7 @@ mod tests {
         });
         assert!(report.contains("Merged section: env"));
         assert!(report.contains(&report_row("Section status", "set")));
-        assert!(report.contains("\"API_BASE_URL\":\"https://example.test\""));
+        assert!(report.contains("  <redacted>"));
 
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
@@ -13146,7 +13095,7 @@ mod tests {
         assert_eq!(value["section_supported"], true);
         assert_eq!(value["section_present"], true);
         assert_eq!(value["section_status"], "set");
-        assert_eq!(value["merged_section"]["path"], "local/log.jsonl");
+        assert_eq!(value["merged_section"]["redacted"], true);
         assert_eq!(value["effective"]["path"], "local/log.jsonl");
         assert_eq!(value["effective"]["effective_source"], "config");
         assert!(value["effective"]["config_source_path"]

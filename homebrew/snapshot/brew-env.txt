@@ -1,0 +1,13 @@
+export CC=clang
+export CXX=clang++
+export OBJC=clang
+export OBJCXX=clang++
+export HOMEBREW_CC=clang
+export MAKEFLAGS=-j10
+export CMAKE_PREFIX_PATH=/opt/homebrew/Library/Homebrew/shims/mac/super:/opt/homebrew
+export PKG_CONFIG_LIBDIR=/usr/lib/pkgconfig:/opt/homebrew/Library/Homebrew/os/mac/pkgconfig/26
+export HOMEBREW_MAKE_JOBS=10
+export HOMEBREW_GIT=git
+export HOMEBREW_SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+export ACLOCAL_PATH=/opt/homebrew/share/aclocal
+export PATH=/opt/homebrew/Library/Homebrew/shims/mac/super/bin:/usr/bin:/bin:/usr/sbin:/sbin

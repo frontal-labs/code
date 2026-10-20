@@ -1,7 +1,7 @@
 class Frontal Code < Formula
   desc "High-performance Rust AI agent harness"
   homepage "https://github.com/frontal-labs/frontal-code"
-  license "MIT"
+  license "Apache-2.0"
   version "0.1.1"
 
   if OS.mac?
@@ -29,10 +29,10 @@ class Frontal Code < Formula
   def caveats
     <<~EOS
       To use a provider, set your API key:
-        export FRONTAL_API_KEY="sk-ant-..."
+        export FRONTAL_API_KEY="<your-api-key>"
 
       Or use a bearer token with a custom base URL:
-        export FRONTAL_AUTH_TOKEN="sk-..."
+        export FRONTAL_AUTH_TOKEN="<your-auth-token>"
         export FRONTAL_BASE_URL="https://api.deepseek.com/anthropic"
 
       Run `frontal-code --help` to see available commands.

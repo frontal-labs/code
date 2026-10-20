@@ -1,0 +1,9 @@
+Name          Status User           File
+openvpn       none                           
+postgresql@15 started         gabrielfonseca ~/Library/LaunchAgents/sh.brew.postgresql@15.plist
+postgresql@16 none                           
+postgresql@18 none            gabrielfonseca 
+redis         none                           
+sleepwatcher  none                           
+temporal      none                           
+unbound       none                           

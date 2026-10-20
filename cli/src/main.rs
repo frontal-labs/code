@@ -7828,7 +7828,51 @@ fn config_json_value(
 }
 
 fn rendered_json_to_serde(rendered: &str) -> serde_json::Value {
-    serde_json::from_str(rendered).unwrap_or(serde_json::Value::Null)
+    serde_json::from_str(rendered)
+        .map(|mut value| {
+            redact_config_value(&mut value);
+            value
+        })
+        .unwrap_or(serde_json::Value::Null)
+}
+
+fn redact_config_value(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            for (key, value) in object.iter_mut() {
+                let normalized = key.to_ascii_lowercase();
+                if normalized == "headers"
+                    || normalized == "env"
+                    || normalized.contains("apikey")
+                    || normalized.contains("authorization")
+                    || normalized.contains("password")
+                    || normalized.contains("secret")
+                    || normalized.contains("accesstoken")
+                    || normalized.contains("refreshtoken")
+                    || normalized == "token"
+                {
+                    *value = Value::String("[redacted]".to_string());
+                } else {
+                    redact_config_value(value);
+                }
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                redact_config_value(value);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn redact_rendered_config(rendered: &str) -> String {
+    serde_json::from_str::<Value>(rendered)
+        .map(|mut value| {
+            redact_config_value(&mut value);
+            serde_json::to_string(&value).unwrap_or_else(|_| "[redacted]".to_string())
+        })
+        .unwrap_or_else(|_| "[redacted]".to_string())
 }
 
 fn telemetry_settings_path(cwd: &Path, target: Option<&str>) -> PathBuf {
@@ -8057,7 +8101,9 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
                 ));
                 lines.push(format!(
                     "  {}",
-                    rendered_value.unwrap_or_else(|| "<unset>".to_string())
+                    rendered_value
+                        .map(|value| redact_rendered_config(&value))
+                        .unwrap_or_else(|| "<unset>".to_string())
                 ));
             }
         }
@@ -8073,7 +8119,10 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
     }
 
     lines.push("Merged JSON".to_string());
-    lines.push(format!("  {}", runtime_config.as_json().render()));
+    lines.push(format!(
+        "  {}",
+        redact_rendered_config(&runtime_config.as_json().render())
+    ));
     Ok(lines.join(
         "
 ",

@@ -68,7 +68,7 @@ fn config_telemetry_emits_structured_json_when_requested() {
     );
     assert_eq!(parsed["kind"], "config");
     assert_eq!(parsed["section"], "telemetry");
-    assert_eq!(parsed["merged_section"]["path"], "local/log.jsonl");
+    assert_eq!(parsed["merged_section"]["redacted"], true);
     assert_eq!(parsed["effective"]["kind"], "telemetry");
     assert_eq!(parsed["effective"]["effective_source"], "config");
     assert_eq!(parsed["effective"]["path"], "local/log.jsonl");
@@ -135,26 +135,17 @@ fn config_sections_emit_structured_json_when_requested() {
     let env = assert_json_command(&workspace, &["--output-format", "json", "config", "env"]);
     assert_eq!(env["kind"], "config");
     assert_eq!(env["section"], "env");
-    assert_eq!(
-        env["merged_section"]["API_BASE_URL"],
-        "https://example.test"
-    );
-    assert_eq!(env["merged_section"]["FEATURE_FLAG"], "on");
+    assert_eq!(env["merged_section"]["redacted"], true);
 
     let hooks = assert_json_command(&workspace, &["--output-format", "json", "config", "hooks"]);
     assert_eq!(hooks["kind"], "config");
     assert_eq!(hooks["section"], "hooks");
-    assert_eq!(hooks["merged_section"]["PreToolUse"][0], "scripts/pre.sh");
-    assert_eq!(hooks["merged_section"]["PostToolUse"][0], "scripts/post.sh");
-    assert_eq!(
-        hooks["merged_section"]["PostToolUseFailure"][0],
-        "scripts/fail.sh"
-    );
+    assert_eq!(hooks["merged_section"]["redacted"], true);
 
     let model = assert_json_command(&workspace, &["--output-format", "json", "config", "model"]);
     assert_eq!(model["kind"], "config");
     assert_eq!(model["section"], "model");
-    assert_eq!(model["merged_section"], "claude-sonnet-4-6");
+    assert_eq!(model["merged_section"]["redacted"], true);
 
     let plugins = assert_json_command(
         &workspace,
@@ -162,11 +153,7 @@ fn config_sections_emit_structured_json_when_requested() {
     );
     assert_eq!(plugins["kind"], "config");
     assert_eq!(plugins["section"], "plugins");
-    assert_eq!(plugins["merged_section"]["enabled"]["demo-plugin"], true);
-    assert_eq!(
-        plugins["merged_section"]["externalDirectories"][0],
-        "./plugins"
-    );
+    assert_eq!(plugins["merged_section"]["redacted"], true);
 }
 
 #[test]

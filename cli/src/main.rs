@@ -1604,8 +1604,8 @@ struct ConfigReportSnapshot {
 fn load_config_report_snapshot(
     cwd: &Path,
 ) -> Result<ConfigReportSnapshot, Box<dyn std::error::Error>> {
-    let loader = ConfigLoader::default_for(cwd);
-    let discovered = loader.discover();
+    let config_loader = ConfigLoader::default_for(cwd);
+    let discovered = config_loader.discover();
     let mut loaded = Vec::new();
     let mut merged_keys = std::collections::BTreeSet::new();
     let mut present_sections = std::collections::BTreeSet::new();
@@ -8002,10 +8002,7 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
 
     if let Some(section) = section {
         lines.push(format!("Merged section: {section}"));
-        if !SUPPORTED_CONFIG_SECTIONS.contains(&section) {
-            lines.push(report_row("Section status", "unsupported"));
-            lines.push(format!("  {}", unsupported_config_section_message(section)));
-        } else {
+        if SUPPORTED_CONFIG_SECTIONS.contains(&section) {
             let section_present = snapshot.present_sections.contains(section)
                 || (section == "plugins" && snapshot.present_sections.contains("plugins"));
             lines.push(report_row(
@@ -8020,6 +8017,9 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
                     "<unset>"
                 }
             ));
+        } else {
+            lines.push(report_row("Section status", "unsupported"));
+            lines.push(format!("  {}", unsupported_config_section_message(section)));
         }
         return Ok(lines.join(
             "

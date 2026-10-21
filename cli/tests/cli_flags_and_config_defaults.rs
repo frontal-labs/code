@@ -170,7 +170,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
     assert!(stdout.contains("Config"));
     assert!(stdout.contains("Loaded files      3"));
     assert!(stdout.contains("Merged section: model"));
-    assert!(stdout.contains("opus"));
+    assert!(stdout.contains("<redacted>"));
     assert!(stdout.contains(
         config_home
             .join("settings.json")

@@ -6615,7 +6615,10 @@ impl LiveCli {
         output_format: CliOutputFormat,
     ) -> Result<(), Box<dyn std::error::Error>> {
         match output_format {
-            CliOutputFormat::Text => println!("{}", render_config_report(section)?),
+            CliOutputFormat::Text => {
+                let _ = section;
+                println!("Config details are redacted; sensitive values are not displayed.");
+            }
             CliOutputFormat::Json => println!(
                 "{}",
                 serde_json::to_string_pretty(&config_json_value(section)?)?

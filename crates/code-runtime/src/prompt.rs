@@ -194,14 +194,15 @@ impl SystemPromptBuilder {
 /// GitHub App identity for Frontal Code commit attribution.
 ///
 /// App: <https://github.com/apps/frontal-code> (owner: `frontal-labs`, ID: 3325380).
-/// The noreply email form below is what links commits and `Co-Authored-By`
-/// trailers to the App avatar on GitHub. Do not change these to plain
-/// addresses (`code@frontal.dev`, `frontal-code@localhost`, ...): those do
-/// NOT link. These are constants by design, not env vars.
+/// The author email is `code@frontal.dev`, which GitHub links to the account
+/// that has it verified. The `Co-Authored-By` trailer keeps the noreply form
+/// below, which is what links the trailer to the App avatar on GitHub. Plain
+/// addresses in the trailer do NOT link. These are constants by design, not
+/// env vars.
 pub const GITHUB_APP_ID: u64 = 3_325_380;
 pub const GITHUB_APP_SLUG: &str = "frontal-code";
 pub const GIT_AUTHOR_NAME: &str = "frontal-code[bot]";
-pub const GIT_AUTHOR_EMAIL: &str = "3325380+frontal-code[bot]@users.noreply.github.com";
+pub const GIT_AUTHOR_EMAIL: &str = "code@frontal.dev";
 
 /// `Co-Authored-By` trailer appended to all git commit messages.
 pub const COMMIT_ATTRIBUTION_TRAILER: &str =

@@ -3,7 +3,7 @@
 # Commit attribution (constants, not env vars):
 # - App: https://github.com/apps/frontal-code (owner: frontal-labs, App ID: 3325380)
 # - Bot user: frontal-code[bot]
-# - Author: frontal-code[bot] <3325380+frontal-code[bot]@users.noreply.github.com>
+# - Author: frontal-code[bot] <code@frontal.dev>
 # - Trailer: Co-Authored-By: frontal-code[bot] <3325380+frontal-code[bot]@users.noreply.github.com>
 # - Source: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `COMMIT_ATTRIBUTION_TRAILER`
 #   in `crates/runtime/src/prompt.rs` (re-exported by `crates/runtime/src/lib.rs`).

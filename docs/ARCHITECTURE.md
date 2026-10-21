@@ -127,7 +127,7 @@ The CLI follows the **Command Pattern** with:
 - **Error Handling**: Structured error types with user-friendly messages
 - **Output Formatting**: Pluggable output formatters (text, JSON)
 
-### Runtime (`crates/runtime`)
+### Runtime (`crates/code-runtime`)
 
 The runtime is the core orchestrator managing sessions, configuration, and execution.
 

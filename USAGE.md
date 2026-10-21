@@ -145,7 +145,7 @@ frontal-code prompt "summarize this repository"
 ### Shorthand prompt mode
 
 ```bash
-frontal-code "explain crates/runtime/src/lib.rs"
+frontal-code "explain crates/code-runtime/src/lib.rs"
 ```
 
 ### JSON output for scripting

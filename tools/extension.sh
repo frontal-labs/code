@@ -56,9 +56,9 @@ ensure_dependencies() {
 case "$ACTION" in
   lint)
     if [[ -d src ]]; then
-      bunx @biomejs/biome check src/
+      bunx @biomejs/biome@2.5.14 check src/
     else
-      bunx @biomejs/biome check .
+      bunx @biomejs/biome@2.5.14 check .
     fi
     ;;
   format)

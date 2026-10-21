@@ -177,7 +177,7 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
             .expect("utf8 path")
     ));
     assert!(stdout.contains("Merged section: model"));
-    assert!(stdout.contains("opus"));
+    assert!(stdout.contains("<redacted>"));
 }
 
 #[test]

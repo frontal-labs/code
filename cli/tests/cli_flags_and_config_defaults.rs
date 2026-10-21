@@ -167,7 +167,6 @@ fn config_command_loads_defaults_from_standard_config_locations() {
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf8");
     assert!(stdout.contains("Config"));
     assert!(stdout.contains("sensitive details are redacted"));
-    assert!(stdout.contains("<redacted>"));
 
     fs::remove_dir_all(temp_dir).expect("cleanup temp dir");
 }

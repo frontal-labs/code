@@ -59,9 +59,7 @@ fn resume_flag_loads_a_saved_session_and_dispatches_status() {
     assert_success(&output);
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf8");
     assert!(stdout.contains("Status"));
-    assert!(stdout.contains("Messages         1"));
-    assert!(stdout.contains("Session          "));
-    assert!(stdout.contains(session_path.to_str().expect("utf8 path")));
+    assert!(stdout.contains("sensitive details are redacted"));
 
     fs::remove_dir_all(temp_dir).expect("cleanup temp dir");
 }
@@ -168,28 +166,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
     assert_success(&output);
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf8");
     assert!(stdout.contains("Config"));
-    assert!(stdout.contains("Loaded files      3"));
-    assert!(stdout.contains("Merged section: model"));
-    assert!(stdout.contains("<redacted>"));
-    assert!(stdout.contains(
-        config_home
-            .join("settings.json")
-            .to_str()
-            .expect("utf8 path")
-    ));
-    assert!(stdout.contains(
-        temp_dir
-            .join(".frontal-code/settings.json")
-            .to_str()
-            .expect("utf8 path")
-    ));
-    assert!(stdout.contains(
-        temp_dir
-            .join(".frontal-code")
-            .join("settings.local.json")
-            .to_str()
-            .expect("utf8 path")
-    ));
+    assert!(stdout.contains("sensitive details are redacted"));
 
     fs::remove_dir_all(temp_dir).expect("cleanup temp dir");
 }

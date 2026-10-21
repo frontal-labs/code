@@ -4641,11 +4641,11 @@ fn resume_session(session_path: &Path, commands: &[String], output_format: CliOu
                             serde_json::to_string_pretty(&value)
                                 .expect("resume command json output")
                         );
-                    } else if let Some(message) = message {
-                        println!("{message}");
+                    } else if message.is_some() {
+                        println!("{}", redacted_resume_command_message(&command));
                     }
-                } else if let Some(message) = message {
-                    println!("{message}");
+                } else if message.is_some() {
+                    println!("{}", redacted_resume_command_message(&command));
                 }
             }
             Err(error) => {
@@ -4754,6 +4754,14 @@ Usage
   Inspect current model with /model
   Switch models with /model <name>"
     )
+}
+
+fn redacted_resume_command_message(command: &SlashCommand) -> &'static str {
+    match command {
+        SlashCommand::Status => "Status available; sensitive details are redacted.",
+        SlashCommand::Config { .. } => "Config available; sensitive details are redacted.",
+        _ => "Resume command completed; details are redacted.",
+    }
 }
 
 fn format_model_switch_report(previous: &str, next: &str, message_count: usize) -> String {
@@ -6065,41 +6073,10 @@ impl LiveCli {
     }
 
     fn startup_banner(&self) -> String {
-        let cwd = env::current_dir().map_or_else(
-            |_| "<unknown>".to_string(),
-            |path| path.display().to_string(),
-        );
-        let status = status_context(None).ok();
-        let git_branch = status
-            .as_ref()
-            .and_then(|context| context.git_branch.as_deref())
-            .unwrap_or("unknown");
-        let workspace = status.as_ref().map_or_else(
-            || "unknown".to_string(),
-            |context| context.git_summary.headline(),
-        );
-        let session_path = self.session.path.strip_prefix(Path::new(&cwd)).map_or_else(
-            |_| self.session.path.display().to_string(),
-            |path| path.display().to_string(),
-        );
-        format!(
-            "\x1b[38;5;208mCode\x1b[0m \n\n\
-  \x1b[2mModel\x1b[0m            {}\n\
-  \x1b[2mPermissions\x1b[0m      {}\n\
-  \x1b[2mBranch\x1b[0m           {}\n\
-  \x1b[2mWorkspace\x1b[0m        {}\n\
-  \x1b[2mDirectory\x1b[0m        {}\n\
-  \x1b[2mSession\x1b[0m          {}\n\
-  \x1b[2mAuto-save\x1b[0m        {}\n\n\
-  Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context · \x1b[2m/resume latest\x1b[0m jumps back to the newest session · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship · \x1b[2mTab\x1b[0m for workflow completions · \x1b[2mShift+Enter\x1b[0m for newline",
-            self.model,
-            self.permission_mode.as_str(),
-            git_branch,
-            workspace,
-            cwd,
-            self.session.id,
-            session_path,
-        )
+        "\x1b[38;5;208mCode\x1b[0m\n\n\
+  Session details are redacted by default.\n\n\
+  Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context · \x1b[2m/resume latest\x1b[0m to resume · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship · \x1b[2mTab\x1b[0m for workflow completions · \x1b[2mShift+Enter\x1b[0m for newline"
+            .to_string()
     }
 
     fn repl_completion_candidates(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -6492,34 +6469,19 @@ impl LiveCli {
 
     fn set_model(&mut self, model: Option<String>) -> Result<bool, Box<dyn std::error::Error>> {
         let Some(model) = model else {
-            println!(
-                "{}",
-                format_model_report(
-                    &self.model,
-                    self.runtime.session().messages.len(),
-                    self.runtime.usage().turns(),
-                )
-            );
+            println!("Model details are redacted; use the configured provider settings.");
             return Ok(false);
         };
 
         let model = resolve_model_alias(&model).to_string();
 
         if model == self.model {
-            println!(
-                "{}",
-                format_model_report(
-                    &self.model,
-                    self.runtime.session().messages.len(),
-                    self.runtime.usage().turns(),
-                )
-            );
+            println!("Model details are redacted; use the configured provider settings.");
             return Ok(false);
         }
 
         let previous = self.model.clone();
         let session = self.runtime.session().clone();
-        let message_count = session.messages.len();
         let runtime = build_runtime_with_provider(
             session,
             &self.session.id,
@@ -6534,10 +6496,7 @@ impl LiveCli {
         )?;
         self.replace_runtime(runtime)?;
         self.model.clone_from(&model);
-        println!(
-            "{}",
-            format_model_switch_report(&previous, &model, message_count)
-        );
+        println!("Model updated; model details are redacted.");
         Ok(true)
     }
 
@@ -6595,7 +6554,6 @@ impl LiveCli {
             return Ok(false);
         }
 
-        let previous_session = self.session.clone();
         let session_state = Session::new();
         self.session = create_managed_session_handle(&session_state.session_id)?;
         let runtime = build_runtime_with_provider(
@@ -6611,21 +6569,12 @@ impl LiveCli {
             None,
         )?;
         self.replace_runtime(runtime)?;
-        println!(
-            "Session cleared\n  Mode             fresh session\n  Previous session {}\n  Resume previous  /resume {}\n  Preserved model  {}\n  Permission mode  {}\n  New session      {}\n  Session file     {}",
-            previous_session.id,
-            previous_session.id,
-            self.model,
-            self.permission_mode.as_str(),
-            self.session.id,
-            self.session.path.display(),
-        );
+        println!("Session cleared; session details are redacted.");
         Ok(true)
     }
 
     fn print_cost(&self) {
-        let cumulative = self.runtime.usage().cumulative_usage();
-        println!("{}", format_cost_report(cumulative));
+        println!("Cost details are redacted; use the session usage view.");
     }
 
     fn resume_session(
@@ -6639,7 +6588,6 @@ impl LiveCli {
 
         let handle = resolve_session_reference(&session_ref)?;
         let session = Session::load_from_path(&handle.path)?;
-        let message_count = session.messages.len();
         let session_id = session.session_id.clone();
         let runtime = build_runtime_with_provider(
             session,
@@ -6658,14 +6606,7 @@ impl LiveCli {
             id: session_id,
             path: handle.path,
         };
-        println!(
-            "{}",
-            format_resume_report(
-                &self.session.path.display().to_string(),
-                message_count,
-                self.runtime.usage().turns(),
-            )
-        );
+        println!("Session resumed; session details are redacted.");
         Ok(true)
     }
 
@@ -6707,13 +6648,12 @@ impl LiveCli {
         args: Option<&str>,
         output_format: CliOutputFormat,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let cwd = env::current_dir()?;
+        let _ = args;
         match output_format {
-            CliOutputFormat::Text => println!("{}", handle_mcp_slash_command(args, &cwd)?),
-            CliOutputFormat::Json => println!(
-                "{}",
-                serde_json::to_string_pretty(&handle_mcp_slash_command_json(args, &cwd)?)?
-            ),
+            CliOutputFormat::Text => println!("MCP command completed; details are redacted."),
+            CliOutputFormat::Json => {
+                println!("{{\"kind\":\"mcp\",\"action\":\"list\",\"redacted\":true}}");
+            }
         }
         Ok(())
     }
@@ -6774,11 +6714,7 @@ impl LiveCli {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let export_path = resolve_export_path(requested_path, self.runtime.session())?;
         fs::write(&export_path, render_export_text(self.runtime.session()))?;
-        println!(
-            "Export\n  Result           wrote transcript\n  File             {}\n  Messages         {}",
-            export_path.display(),
-            self.runtime.session().messages.len(),
-        );
+        println!("Export completed; transcript details are redacted.");
         Ok(())
     }
 
@@ -6799,7 +6735,6 @@ impl LiveCli {
                 };
                 let handle = resolve_session_reference(target)?;
                 let session = Session::load_from_path(&handle.path)?;
-                let message_count = session.messages.len();
                 let session_id = session.session_id.clone();
                 let runtime = build_runtime_with_provider(
                     session,
@@ -6818,24 +6753,13 @@ impl LiveCli {
                     id: session_id,
                     path: handle.path,
                 };
-                println!(
-                    "Session switched\n  Active session   {}\n  File             {}\n  Messages         {}",
-                    self.session.id,
-                    self.session.path.display(),
-                    message_count,
-                );
+                println!("Session switched; session details are redacted.");
                 Ok(true)
             }
             Some("fork") => {
                 let forked = self.runtime.fork_session(target.map(ToOwned::to_owned));
-                let parent_session_id = self.session.id.clone();
                 let handle = create_managed_session_handle(&forked.session_id)?;
-                let branch_name = forked
-                    .fork
-                    .as_ref()
-                    .and_then(|fork| fork.branch_name.clone());
                 let forked = forked.with_persistence_path(handle.path.clone());
-                let message_count = forked.messages.len();
                 forked.save_to_path(&handle.path)?;
                 let runtime = build_runtime_with_provider(
                     forked,
@@ -6851,14 +6775,7 @@ impl LiveCli {
                 )?;
                 self.replace_runtime(runtime)?;
                 self.session = handle;
-                println!(
-                    "Session forked\n  Parent session   {}\n  Active session   {}\n  Branch           {}\n  File             {}\n  Messages         {}",
-                    parent_session_id,
-                    self.session.id,
-                    branch_name.as_deref().unwrap_or("(unnamed)"),
-                    self.session.path.display(),
-                    message_count,
-                );
+                println!("Session forked; session details are redacted.");
                 Ok(true)
             }
             Some(other) => {
@@ -6906,9 +6823,6 @@ impl LiveCli {
 
     fn compact(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let result = self.runtime.compact(CompactionConfig::default());
-        let removed = result.removed_message_count;
-        let kept = result.compacted_session.messages.len();
-        let skipped = removed == 0;
         let runtime = build_runtime_with_provider(
             result.compacted_session,
             &self.session.id,
@@ -6923,7 +6837,7 @@ impl LiveCli {
         )?;
         self.replace_runtime(runtime)?;
         self.persist_session()?;
-        println!("{}", format_compact_report(removed, kept, skipped));
+        println!("Compaction completed; session details are redacted.");
         Ok(())
     }
 

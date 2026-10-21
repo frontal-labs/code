@@ -1506,7 +1506,7 @@ fn resolve_config_section(
 
 fn summarize_discovered_config_files(
     discovered: &[code_runtime::ConfigEntry],
-    runtime_config: &code_runtime::RuntimeConfig,
+    loaded_entries: &[code_runtime::ConfigEntry],
 ) -> Vec<DiscoveredConfigFileSummary> {
     discovered
         .iter()
@@ -1516,8 +1516,7 @@ fn summarize_discovered_config_files(
                 ConfigSource::Project => "project",
                 ConfigSource::Local => "local",
             };
-            let status = if runtime_config
-                .loaded_entries()
+            let status = if loaded_entries
                 .iter()
                 .any(|loaded_entry| loaded_entry.path == entry.path)
             {
@@ -1593,6 +1592,51 @@ fn parse_config_cli_action(
             "config accepts at most one section argument: {CONFIG_SECTION_ARGUMENT_HINT}"
         )),
     }
+}
+
+struct ConfigReportSnapshot {
+    discovered: Vec<code_runtime::ConfigEntry>,
+    loaded: Vec<code_runtime::ConfigEntry>,
+    merged_keys: usize,
+    present_sections: std::collections::BTreeSet<String>,
+}
+
+fn load_config_report_snapshot(
+    cwd: &Path,
+) -> Result<ConfigReportSnapshot, Box<dyn std::error::Error>> {
+    let loader = ConfigLoader::default_for(cwd);
+    let discovered = loader.discover();
+    let mut loaded = Vec::new();
+    let mut merged_keys = std::collections::BTreeSet::new();
+    let mut present_sections = std::collections::BTreeSet::new();
+
+    for entry in &discovered {
+        let Ok(content) = fs::read_to_string(&entry.path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) else {
+            continue;
+        };
+        let Some(object) = value.as_object() else {
+            continue;
+        };
+        loaded.push(entry.clone());
+        merged_keys.extend(object.keys().cloned());
+        for section in SUPPORTED_CONFIG_SECTIONS {
+            if object.contains_key(*section)
+                || (*section == "plugins" && object.contains_key("enabledPlugins"))
+            {
+                present_sections.insert((*section).to_string());
+            }
+        }
+    }
+
+    Ok(ConfigReportSnapshot {
+        discovered,
+        loaded,
+        merged_keys: merged_keys.len(),
+        present_sections,
+    })
 }
 
 fn parse_direct_slash_cli_action(
@@ -7688,7 +7732,8 @@ fn config_json_value(
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let (cwd, runtime_config) = load_runtime_config_for_current_dir()?;
     let discovered = ConfigLoader::default_for(&cwd).discover();
-    let discovered_files = summarize_discovered_config_files(&discovered, &runtime_config);
+    let discovered_files =
+        summarize_discovered_config_files(&discovered, runtime_config.loaded_entries());
 
     let discovered_files = discovered_files
         .into_iter()
@@ -7929,9 +7974,10 @@ fn print_help_topic(topic: LocalHelpTopic) {
 }
 
 fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
-    let (cwd, runtime_config) = load_runtime_config_for_current_dir()?;
-    let discovered = ConfigLoader::default_for(&cwd).discover();
-    let discovered_files = summarize_discovered_config_files(&discovered, &runtime_config);
+    let cwd = env::current_dir()?;
+    let snapshot = load_config_report_snapshot(&cwd)?;
+    let discovered_files =
+        summarize_discovered_config_files(&snapshot.discovered, &snapshot.loaded);
 
     let mut lines = vec![
         format!(
@@ -7940,8 +7986,8 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
   Loaded files      {}
   Merged keys       {}",
             cwd.display(),
-            runtime_config.loaded_entries().len(),
-            runtime_config.merged().len()
+            snapshot.loaded.len(),
+            snapshot.merged_keys
         ),
         "Discovered files".to_string(),
     ];
@@ -7956,30 +8002,24 @@ fn render_config_report(section: Option<&str>) -> Result<String, Box<dyn std::er
 
     if let Some(section) = section {
         lines.push(format!("Merged section: {section}"));
-        match resolve_config_section(&runtime_config, section) {
-            ConfigSectionResolution::Unsupported => {
-                lines.push(report_row("Section status", "unsupported"));
-                lines.push(format!("  {}", unsupported_config_section_message(section)));
-            }
-            ConfigSectionResolution::Supported { rendered_value } => {
-                lines.push(report_row(
-                    "Section status",
-                    config_section_status(rendered_value.is_some()),
-                ));
-                lines.push(format!(
-                    "  {}",
-                    if rendered_value.is_some() {
-                        "<redacted>"
-                    } else {
-                        "<unset>"
-                    }
-                ));
-            }
-        }
-        if section == "telemetry" {
-            let resolution = resolve_telemetry_config(Some(&runtime_config));
-            lines.push("Effective telemetry".to_string());
-            lines.extend(telemetry_text_detail_lines(&resolution, &runtime_config));
+        if !SUPPORTED_CONFIG_SECTIONS.contains(&section) {
+            lines.push(report_row("Section status", "unsupported"));
+            lines.push(format!("  {}", unsupported_config_section_message(section)));
+        } else {
+            let section_present = snapshot.present_sections.contains(section)
+                || (section == "plugins" && snapshot.present_sections.contains("plugins"));
+            lines.push(report_row(
+                "Section status",
+                config_section_status(section_present),
+            ));
+            lines.push(format!(
+                "  {}",
+                if section_present {
+                    "<redacted>"
+                } else {
+                    "<unset>"
+                }
+            ));
         }
         return Ok(lines.join(
             "
@@ -12764,7 +12804,9 @@ mod tests {
         let telemetry_report =
             render_config_report(Some("telemetry")).expect("telemetry config report should render");
         assert!(telemetry_report.contains("Merged section: telemetry"));
-        assert!(telemetry_report.contains("Effective telemetry"));
+        assert!(
+            telemetry_report.contains("  <unset>") || telemetry_report.contains("  <redacted>")
+        );
     }
 
     #[test]
@@ -12893,9 +12935,8 @@ mod tests {
             render_config_report(Some("telemetry")).expect("telemetry config report should render")
         });
         assert!(report.contains("Merged section: telemetry"));
-        assert!(report.contains("Effective telemetry"));
-        assert!(report.contains("Effective path   local/log.jsonl"));
-        assert!(report.contains(".frontal-code/settings.local.json"));
+        assert!(report.contains("  <redacted>"));
+        assert!(!report.contains("local/log.jsonl"));
 
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
@@ -12915,10 +12956,8 @@ mod tests {
         let report = with_current_dir(&cwd, || {
             render_config_report(Some("telemetry")).expect("telemetry config report should render")
         });
-        assert!(report.contains("Effective source env"));
-        assert!(report.contains("Shadowed config"));
-        assert!(report.contains(".frontal-code/settings.local.json"));
-        assert!(report.contains("Env override     /tmp/from-env.jsonl"));
+        assert!(report.contains("  <redacted>"));
+        assert!(!report.contains("/tmp/from-env.jsonl"));
 
         std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");

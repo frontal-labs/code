@@ -6469,20 +6469,14 @@ impl LiveCli {
 
     fn set_model(&mut self, model: Option<String>) -> Result<bool, Box<dyn std::error::Error>> {
         let Some(model) = model else {
-            println!(
-                "{}",
-                "Model details are redacted; use the configured provider settings."
-            );
+            println!("Model details are redacted; use the configured provider settings.");
             return Ok(false);
         };
 
         let model = resolve_model_alias(&model).to_string();
 
         if model == self.model {
-            println!(
-                "{}",
-                "Model details are redacted; use the configured provider settings."
-            );
+            println!("Model details are redacted; use the configured provider settings.");
             return Ok(false);
         }
 
@@ -6502,7 +6496,7 @@ impl LiveCli {
         )?;
         self.replace_runtime(runtime)?;
         self.model.clone_from(&model);
-        println!("{}", "Model updated; model details are redacted.");
+        println!("Model updated; model details are redacted.");
         Ok(true)
     }
 
@@ -6658,7 +6652,7 @@ impl LiveCli {
         match output_format {
             CliOutputFormat::Text => println!("MCP command completed; details are redacted."),
             CliOutputFormat::Json => {
-                println!("{{\"kind\":\"mcp\",\"action\":\"list\",\"redacted\":true}}")
+                println!("{{\"kind\":\"mcp\",\"action\":\"list\",\"redacted\":true}}");
             }
         }
         Ok(())

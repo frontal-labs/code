@@ -347,6 +347,7 @@ async fn run_prompt(
     args.push("prompt".to_string());
     args.push(request.prompt);
     validate_permission_flags(&state, &args)?;
+    authorize_command(&state, &args)?;
 
     let response = execute_cli(&state, with_json_output(args))
         .await
@@ -382,6 +383,7 @@ async fn execute_simple_command(
     state: Arc<AppState>,
     args: Vec<String>,
 ) -> Result<Json<CliRunResponse>, (StatusCode, Json<ErrorResponse>)> {
+    authorize_command(&state, &args)?;
     let response = execute_cli(&state, with_json_output(args))
         .await
         .map_err(internal_error)?;
@@ -651,6 +653,33 @@ mod tests {
         };
 
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn prompt_route_respects_the_command_allowlist() {
+        // The allowlist names only `status`, so `prompt` must be refused before the CLI
+        // binary is spawned. The binary path does not exist, so a bypass would fail with
+        // a different error.
+        let state = std::sync::Arc::new(AppState {
+            cli_bin: PathBuf::from("/nonexistent/code-binary"),
+            working_dir: None,
+            api_key: None,
+            allowed_commands: Some(std::collections::BTreeSet::from(["status".to_string()])),
+            command_timeout_ms: 1_000,
+            allow_dangerous_permissions: false,
+        });
+        let request: super::PromptRequest =
+            serde_json::from_str(r#"{"prompt":"hello"}"#).expect("prompt request");
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let result = runtime.block_on(super::run_prompt(
+            axum::extract::State(state),
+            axum::http::HeaderMap::new(),
+            Json(request),
+        ));
+
+        let (status, _) = result.expect_err("prompt should be refused by the allowlist");
+        assert_eq!(status, StatusCode::FORBIDDEN);
     }
 
     #[test]

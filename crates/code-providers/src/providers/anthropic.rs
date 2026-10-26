@@ -364,7 +364,7 @@ impl AnthropicClient {
         request: &OAuthTokenExchangeRequest,
     ) -> Result<OAuthTokenSet, ApiError> {
         super::validate_oauth_endpoint(&config.token_url)?;
-        let response = super::oauth_http_client()
+        let response = super::oauth_http_client()?
             .post(&config.token_url)
             .header("content-type", "application/x-www-form-urlencoded")
             .form(&request.form_params())
@@ -384,7 +384,7 @@ impl AnthropicClient {
         request: &OAuthRefreshRequest,
     ) -> Result<OAuthTokenSet, ApiError> {
         super::validate_oauth_endpoint(&config.token_url)?;
-        let response = super::oauth_http_client()
+        let response = super::oauth_http_client()?
             .post(&config.token_url)
             .header("content-type", "application/x-www-form-urlencoded")
             .form(&request.form_params())
@@ -875,9 +875,6 @@ struct AnthropicErrorBody {
 #[cfg(test)]
 mod tests {
     use super::{ALT_REQUEST_ID_HEADER, REQUEST_ID_HEADER};
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use code_runtime::{clear_oauth_credentials, save_oauth_credentials, OAuthConfig};
@@ -923,22 +920,7 @@ mod tests {
     }
 
     fn spawn_token_server(response_body: &'static str) -> Result<String, std::io::Error> {
-        let listener = TcpListener::bind("127.0.0.1:0")?;
-        let address = listener.local_addr().expect("local addr");
-        thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("accept connection");
-            let mut buffer = [0_u8; 4096];
-            let _ = stream.read(&mut buffer).expect("read request");
-            let response = format!(
-                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{}",
-                response_body.len(),
-                response_body
-            );
-            stream
-                .write_all(response.as_bytes())
-                .expect("write response");
-        });
-        Ok(format!("http://{address}/oauth/token"))
+        crate::providers::tls_test_support::spawn_https_token_server(response_body)
     }
 
     fn try_spawn_token_server(response_body: &'static str) -> Option<String> {

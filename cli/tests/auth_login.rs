@@ -13,6 +13,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 
 struct Fixture {
@@ -23,6 +24,8 @@ struct Fixture {
     callback_port: u16,
     token_listener: Option<TcpListener>,
     token_url: String,
+    token_tls: Arc<rustls::ServerConfig>,
+    token_ca: PathBuf,
 }
 
 impl Fixture {
@@ -41,6 +44,24 @@ impl Fixture {
         fs::write(&open, "#!/bin/sh\nexit 0\n").expect("write fake open");
         fs::set_permissions(&open, fs::Permissions::from_mode(0o755)).expect("chmod fake open");
 
+        // A self-signed certificate for the token endpoint. The binary trusts it through
+        // FRONTAL_CODE_OAUTH_CA_FILE, so the test exercises the real HTTPS path.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let certified = rcgen::generate_simple_self_signed(vec![
+            "localhost".to_string(),
+            "127.0.0.1".to_string(),
+        ])
+        .expect("generate token certificate");
+        let token_ca = root.join("token-ca.pem");
+        fs::write(&token_ca, certified.cert.pem()).expect("write token CA");
+        let key = rustls::pki_types::PrivatePkcs8KeyDer::from(certified.key_pair.serialize_der());
+        let token_tls = Arc::new(
+            rustls::ServerConfig::builder()
+                .with_no_client_auth()
+                .with_single_cert(vec![certified.cert.der().clone()], key.into())
+                .expect("token TLS config"),
+        );
+
         let token_listener = TcpListener::bind("127.0.0.1:0").expect("bind token endpoint");
         let token_port = token_listener.local_addr().expect("token addr").port();
         // Free port for the callback; the CLI binds it itself.
@@ -54,7 +75,7 @@ impl Fixture {
         fs::write(
             config_home.join("settings.json"),
             format!(
-                r#"{{"oauth":{{"openai":{{"clientId":"e2e-client","authorizeUrl":"https://auth.example.test/authorize","tokenUrl":"http://127.0.0.1:{token_port}/token","callbackPort":{callback_port},"scopes":["model.read"]}}}}}}"#
+                r#"{{"oauth":{{"openai":{{"clientId":"e2e-client","authorizeUrl":"https://auth.example.test/authorize","tokenUrl":"https://127.0.0.1:{token_port}/token","callbackPort":{callback_port},"scopes":["model.read"]}}}}}}"#
             ),
         )
         .expect("write user settings");
@@ -72,7 +93,9 @@ impl Fixture {
             bin_dir,
             callback_port,
             token_listener: Some(token_listener),
-            token_url: format!("http://127.0.0.1:{token_port}/token"),
+            token_url: format!("https://127.0.0.1:{token_port}/token"),
+            token_tls,
+            token_ca,
         }
     }
 
@@ -90,7 +113,8 @@ impl Fixture {
             .env("PATH", path)
             .env_remove("FRONTAL_API_KEY")
             .env_remove("FRONTAL_AUTH_TOKEN")
-            .env_remove("OPENAI_API_KEY");
+            .env_remove("OPENAI_API_KEY")
+            .env("FRONTAL_CODE_OAUTH_CA_FILE", &self.token_ca);
         command
     }
 
@@ -109,10 +133,15 @@ impl Drop for Fixture {
     }
 }
 
-/// Answers the first token request, returns the form body it received.
-fn serve_one_token_request(listener: TcpListener) -> thread::JoinHandle<String> {
+/// Answers the first token request over TLS, returns the form body it received.
+fn serve_one_token_request(
+    listener: TcpListener,
+    tls: Arc<rustls::ServerConfig>,
+) -> thread::JoinHandle<String> {
     thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("token request");
+        let (mut tcp, _) = listener.accept().expect("token request");
+        let connection = rustls::ServerConnection::new(tls).expect("token TLS connection");
+        let mut stream = rustls::StreamOwned::new(connection, &mut tcp);
         let body = read_http_body(&mut stream);
         let payload = r#"{"access_token":"e2e-access-token","refresh_token":"e2e-refresh-token","expires_at":4102444800,"scopes":["model.read"]}"#;
         write!(
@@ -125,7 +154,7 @@ fn serve_one_token_request(listener: TcpListener) -> thread::JoinHandle<String> 
     })
 }
 
-fn read_http_body(stream: &mut TcpStream) -> String {
+fn read_http_body(stream: &mut impl Read) -> String {
     let mut data = Vec::new();
     let mut buffer = [0_u8; 1024];
     loop {
@@ -214,6 +243,7 @@ fn login_exchanges_code_using_user_endpoint_and_saves_private_credentials() {
             .expect("listener")
             .try_clone()
             .expect("clone"),
+        Arc::clone(&fixture.token_tls),
     );
     let (mut child, _rx, collector, state) = start_login(&fixture, "openai");
 

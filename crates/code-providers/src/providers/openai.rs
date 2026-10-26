@@ -1338,16 +1338,16 @@ mod tests {
     }
 
     #[test]
-    fn oauth_endpoint_validation_requires_https_or_exact_loopback() {
+    fn oauth_endpoint_validation_requires_https() {
         use crate::providers::validate_oauth_endpoint;
 
         assert!(validate_oauth_endpoint("https://auth.example/token").is_ok());
-        assert!(validate_oauth_endpoint("http://127.0.0.1:8765/token").is_ok());
-        assert!(validate_oauth_endpoint("http://localhost/token").is_ok());
+        assert!(validate_oauth_endpoint("https://127.0.0.1:8765/token").is_ok());
 
+        // No plain HTTP, not even to loopback, in any build.
+        assert!(validate_oauth_endpoint("http://127.0.0.1:8765/token").is_err());
+        assert!(validate_oauth_endpoint("http://localhost/token").is_err());
         assert!(validate_oauth_endpoint("http://auth.example/token").is_err());
-        assert!(validate_oauth_endpoint("http://127.0.0.1.evil.example/token").is_err());
-        assert!(validate_oauth_endpoint("http://localhost.evil.example/token").is_err());
         assert!(validate_oauth_endpoint("ftp://auth.example/token").is_err());
     }
 

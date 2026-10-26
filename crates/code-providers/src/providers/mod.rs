@@ -353,33 +353,46 @@ pub(crate) fn stored_refresh_config(
     }))
 }
 
-/// Rejects token endpoints that would send credentials in clear text.
-///
-/// Plain HTTP is accepted only for the loopback host, and only in debug builds, which
-/// the end-to-end tests use for a local token server. Release builds accept https only.
-/// The host is compared exactly, so `http://127.0.0.1.example.com` is refused.
+/// Environment variable naming a PEM file with extra root certificates to trust for
+/// OAuth token requests, for example a private identity provider's CA.
+pub const OAUTH_CA_FILE_ENV: &str = "FRONTAL_CODE_OAUTH_CA_FILE";
+
+/// Rejects token endpoints that are not `https://`. Credentials are only ever sent over TLS.
 pub fn validate_oauth_endpoint(url: &str) -> Result<(), ApiError> {
     if url.starts_with("https://") {
-        return Ok(());
-    }
-    let loopback_host = url
-        .strip_prefix("http://")
-        .and_then(|rest| rest.split(['/', ':', '?']).next());
-    match loopback_host {
-        Some("127.0.0.1" | "localhost") if cfg!(debug_assertions) => Ok(()),
-        _ => Err(ApiError::Auth(format!(
-            "OAuth endpoint must use https (or loopback http for testing): {url}"
-        ))),
+        Ok(())
+    } else {
+        Err(ApiError::Auth(format!(
+            "OAuth endpoint must use https: {url}"
+        )))
     }
 }
 
-/// HTTP client for OAuth token requests. Redirects are not followed, so the refresh
-/// token and authorization code are never re-sent to a host the endpoint redirected to.
-pub(crate) fn oauth_http_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
+/// HTTP client for OAuth token requests.
+///
+/// It only sends over HTTPS, so credentials cannot go out in clear text even if a URL
+/// slips past validation. Redirects are not followed, so the refresh token and
+/// authorization code are never re-sent to a host the endpoint redirected to.
+pub(crate) fn oauth_http_client() -> Result<reqwest::Client, ApiError> {
+    let mut builder = reqwest::Client::builder()
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::none());
+    if let Some(path) = std::env::var_os(OAUTH_CA_FILE_ENV) {
+        let pem = std::fs::read(&path).map_err(|error| {
+            ApiError::Auth(format!("could not read {OAUTH_CA_FILE_ENV}: {error}"))
+        })?;
+        let certificates = reqwest::Certificate::from_pem_bundle(&pem).map_err(|error| {
+            ApiError::Auth(format!(
+                "invalid certificate in {OAUTH_CA_FILE_ENV}: {error}"
+            ))
+        })?;
+        for certificate in certificates {
+            builder = builder.add_root_certificate(certificate);
+        }
+    }
+    builder
         .build()
-        .expect("OAuth HTTP client with redirects disabled should build")
+        .map_err(|error| ApiError::Auth(format!("could not build OAuth HTTP client: {error}")))
 }
 
 /// Serializes every test that mutates process env vars or the credentials home,
@@ -580,7 +593,7 @@ async fn post_token_request(
     form: &std::collections::BTreeMap<&str, String>,
 ) -> Result<RefreshedTokens, ApiError> {
     validate_oauth_endpoint(&config.token_url)?;
-    let response = oauth_http_client()
+    let response = oauth_http_client()?
         .post(&config.token_url)
         .header("content-type", "application/x-www-form-urlencoded")
         .form(form)
@@ -998,5 +1011,69 @@ mod tests {
 
         preflight_message_request(&request)
             .expect("models without context metadata should skip the guarded preflight");
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tls_test_support {
+    use std::io::{self, Read, Write};
+    use std::net::TcpListener;
+    use std::sync::{Arc, Once};
+    use std::thread;
+
+    use super::OAUTH_CA_FILE_ENV;
+
+    fn install_crypto_provider() {
+        static INSTALL: Once = Once::new();
+        INSTALL.call_once(|| {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        });
+    }
+
+    /// Serves one HTTPS response with `response_body` on a loopback port and points the
+    /// OAuth client at its self-signed CA (through `OAUTH_CA_FILE_ENV`). Returns the token
+    /// URL. The caller must hold the env lock while it runs.
+    pub(crate) fn spawn_https_token_server(response_body: &'static str) -> io::Result<String> {
+        install_crypto_provider();
+        let certified = rcgen::generate_simple_self_signed(vec![
+            "localhost".to_string(),
+            "127.0.0.1".to_string(),
+        ])
+        .map_err(|error| io::Error::other(error.to_string()))?;
+
+        let ca_path = std::env::temp_dir().join(format!(
+            "oauth-test-ca-{}-{:?}.pem",
+            std::process::id(),
+            thread::current().id()
+        ));
+        std::fs::write(&ca_path, certified.cert.pem())?;
+        std::env::set_var(OAUTH_CA_FILE_ENV, &ca_path);
+
+        let key = rustls::pki_types::PrivatePkcs8KeyDer::from(certified.key_pair.serialize_der());
+        let config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![certified.cert.der().clone()], key.into())
+            .map_err(|error| io::Error::other(error.to_string()))?;
+        let config = Arc::new(config);
+
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        thread::spawn(move || {
+            let (mut tcp, _) = listener.accept().expect("accept connection");
+            let connection = rustls::ServerConnection::new(config).expect("server connection");
+            let mut stream = rustls::StreamOwned::new(connection, &mut tcp);
+            let mut buffer = [0_u8; 4096];
+            let _ = stream.read(&mut buffer);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+            stream.conn.send_close_notify();
+            let _ = stream.conn.write_tls(stream.sock);
+        });
+        Ok(format!("https://localhost:{}/oauth/token", address.port()))
     }
 }

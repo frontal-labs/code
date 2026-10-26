@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project and local settings can no longer widen access. Their `permissionMode` cannot raise the mode the user set (the lower value wins), and their `permissions.allow` rules are ignored with a warning. Allow rules belong in user settings. Repositories that relied on project-level `allow` rules need to move them to `~/.frontal-code/settings.json`.
 - `credentials.json` is written with mode `0600`.
 - Saved OAuth tokens are stored per provider. Refreshing one provider's token no longer touches the Anthropic entry.
-- Token refresh uses only the token endpoint recorded at login. It no longer reads `settings.oauth` from project config, which could have sent a refresh token to a host set by a repository. Token endpoints must be `https` (or loopback `http` for testing), and token requests do not follow redirects. Logins saved before this change need to be redone with `frontal-code login`.
+- Token refresh uses only the token endpoint recorded at login. It no longer reads `settings.oauth` from project config, which could have sent a refresh token to a host set by a repository. Token endpoints must be `https`, and token requests do not follow redirects. Logins saved before this change need to be redone with `frontal-code login`.
 - `code login` reads `settings.oauth` from user-level settings only. Project and local settings are ignored, so a repository cannot send an authorization code to a host it chooses. Move any login config from `.frontal-code/settings.json` to `~/.frontal-code/settings.json`.
 
 ## [0.1.1] - 2026-04-09

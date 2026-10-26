@@ -301,9 +301,11 @@ saved login (refreshed when expired), then an error that lists the options.
 
 A saved login refreshes only against the token endpoint and client ID recorded when
 you logged in. Project and user settings are not read at refresh time, so a
-repository cannot redirect a refresh token. Token endpoints must use `https`, or
-plain `http` to `127.0.0.1`/`localhost` for local testing. Logins saved before this
-was recorded have no endpoint and must be redone with `code login`.
+repository cannot redirect a refresh token. Token endpoints must use `https`; plain
+HTTP is refused in every build. To trust a private identity provider's certificate
+authority, point `FRONTAL_CODE_OAUTH_CA_FILE` at a PEM file with its root certificate.
+Logins saved before this was recorded have no endpoint and must be redone with
+`code login`.
 
 ## Project Policy
 

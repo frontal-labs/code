@@ -300,26 +300,24 @@ impl ResponsesStream {
             .and_then(Value::as_str)
             .unwrap_or_default()
         {
-            "response.created" => {
-                if !self.message_started {
-                    self.message_started = true;
-                    events.push(StreamEvent::MessageStart(MessageStartEvent {
-                        message: MessageResponse {
-                            id: event
-                                .get("response")
-                                .map(|response| str_field(response, "id"))
-                                .unwrap_or_default(),
-                            kind: "message".to_string(),
-                            role: "assistant".to_string(),
-                            content: Vec::new(),
-                            model: self.model.clone(),
-                            stop_reason: None,
-                            stop_sequence: None,
-                            usage: parse_usage(None),
-                            request_id: None,
-                        },
-                    }));
-                }
+            "response.created" if !self.message_started => {
+                self.message_started = true;
+                events.push(StreamEvent::MessageStart(MessageStartEvent {
+                    message: MessageResponse {
+                        id: event
+                            .get("response")
+                            .map(|response| str_field(response, "id"))
+                            .unwrap_or_default(),
+                        kind: "message".to_string(),
+                        role: "assistant".to_string(),
+                        content: Vec::new(),
+                        model: self.model.clone(),
+                        stop_reason: None,
+                        stop_sequence: None,
+                        usage: parse_usage(None),
+                        request_id: None,
+                    },
+                }));
             }
             "response.output_item.added" => {
                 let output_index = output_index(event);

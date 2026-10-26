@@ -530,7 +530,9 @@ mod tests {
                 let _ = tx.send(());
             }
             if let Some(handle) = self.handle.take() {
-                handle.join().expect("join test server");
+                // Ignore a panicked server thread here: panicking in `drop` while the
+                // test is already unwinding aborts the process and hides the real failure.
+                let _ = handle.join();
             }
         }
     }

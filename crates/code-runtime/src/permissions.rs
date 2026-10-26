@@ -396,8 +396,14 @@ impl PermissionRule {
                     // A grant covers the whole command, so every part has to match.
                     MatchScope::Grant => prefix_matches_on_token_boundary(prefix, &candidate),
                     // A restriction applies if any part of a chained command matches.
-                    MatchScope::Restrict => split_command_segments(&candidate)
-                        .any(|segment| prefix_matches_on_token_boundary(prefix, segment)),
+                    // Plain prefix matching is intentionally broad: over-matching a deny
+                    // rule fails closed. Checking the unsplit input keeps prefixes that
+                    // contain control characters effective.
+                    MatchScope::Restrict => {
+                        candidate.starts_with(prefix.as_str())
+                            || split_command_segments(&candidate)
+                                .any(|segment| segment.starts_with(prefix.as_str()))
+                    }
                 })
             }
         }
@@ -666,6 +672,23 @@ mod tests {
         // A deny rule applies to any chained part, so chaining cannot hide it.
         assert!(matches!(
             policy.authorize("bash", r#"{"command":"echo hi && rm -rf /tmp/x"}"#, None),
+            PermissionOutcome::Deny { reason } if reason.contains("denied by rule")
+        ));
+    }
+
+    #[test]
+    fn deny_rule_with_control_character_prefix_still_applies() {
+        let rules = RuntimePermissionRuleConfig::new(
+            Vec::new(),
+            vec!["bash(echo a|b:*)".to_string()],
+            Vec::new(),
+        );
+        let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess)
+            .with_tool_requirement("bash", PermissionMode::DangerFullAccess)
+            .with_permission_rules(&rules);
+
+        assert!(matches!(
+            policy.authorize("bash", r#"{"command":"echo a|b hi"}"#, None),
             PermissionOutcome::Deny { reason } if reason.contains("denied by rule")
         ));
     }

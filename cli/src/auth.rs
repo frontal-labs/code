@@ -24,7 +24,7 @@ use code_runtime::{
 pub const SUPPORTED_PROVIDERS: &[&str] = &["anthropic", "openai"];
 
 /// How long the local callback server waits for the browser redirect.
-const CALLBACK_TIMEOUT: Duration = Duration::from_secs(300);
+const CALLBACK_TIMEOUT: Duration = Duration::from_mins(5);
 
 pub fn validate_provider(provider: &str) -> Result<(), String> {
     if SUPPORTED_PROVIDERS.contains(&provider) {

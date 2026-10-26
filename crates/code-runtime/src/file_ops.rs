@@ -624,6 +624,13 @@ pub fn write_file_in_workspace(
     let parent = absolute_path.parent().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, "path has no parent directory")
     })?;
+    // Check the deepest ancestor that already exists before creating anything, so
+    // `create_dir_all` never builds directories outside the workspace through a symlink.
+    let deepest_existing = parent
+        .ancestors()
+        .find(|ancestor| ancestor.exists())
+        .unwrap_or(parent);
+    validate_workspace_boundary(&deepest_existing.canonicalize()?, &canonical_root)?;
     fs::create_dir_all(parent)?;
     let canonical_parent = parent.canonicalize()?;
     validate_workspace_boundary(&canonical_parent, &canonical_root)?;
@@ -829,6 +836,32 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&victim).expect("read victim"),
             "original"
+        );
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+        std::fs::remove_dir_all(&outside).expect("cleanup outside");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_write_does_not_create_directories_outside_through_symlink() {
+        let root = std::env::temp_dir().join(format!("file-ops-mkdir-{}", std::process::id()));
+        let outside =
+            std::env::temp_dir().join(format!("file-ops-mkdir-out-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&root).expect("workspace");
+        std::fs::create_dir_all(&outside).expect("outside");
+        std::os::unix::fs::symlink(&outside, root.join("link")).expect("symlink");
+
+        let result = super::write_file_in_workspace("link/newdir/file.txt", "x", &root);
+        assert!(
+            result.is_err(),
+            "write through a symlinked directory should be refused"
+        );
+        assert!(
+            !outside.join("newdir").exists(),
+            "no directory may be created outside"
         );
 
         std::fs::remove_dir_all(&root).expect("cleanup");

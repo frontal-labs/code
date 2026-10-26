@@ -353,9 +353,11 @@ pub(crate) fn stored_refresh_config(
     }))
 }
 
-/// Rejects token endpoints that would send credentials in clear text. Plain HTTP is
-/// allowed only for the loopback host, which local test servers use. The host is
-/// compared exactly, so `http://127.0.0.1.example.com` is refused.
+/// Rejects token endpoints that would send credentials in clear text.
+///
+/// Plain HTTP is accepted only for the loopback host, and only in debug builds, which
+/// the end-to-end tests use for a local token server. Release builds accept https only.
+/// The host is compared exactly, so `http://127.0.0.1.example.com` is refused.
 pub fn validate_oauth_endpoint(url: &str) -> Result<(), ApiError> {
     if url.starts_with("https://") {
         return Ok(());
@@ -364,7 +366,7 @@ pub fn validate_oauth_endpoint(url: &str) -> Result<(), ApiError> {
         .strip_prefix("http://")
         .and_then(|rest| rest.split(['/', ':', '?']).next());
     match loopback_host {
-        Some("127.0.0.1" | "localhost") => Ok(()),
+        Some("127.0.0.1" | "localhost") if cfg!(debug_assertions) => Ok(()),
         _ => Err(ApiError::Auth(format!(
             "OAuth endpoint must use https (or loopback http for testing): {url}"
         ))),

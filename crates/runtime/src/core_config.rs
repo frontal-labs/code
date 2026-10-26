@@ -179,7 +179,7 @@ mod tests {
                 let _runtime = config_manager.runtime();
 
                 // Test core config accessors
-                assert!(!config_manager.default_provider().is_empty());
+                assert_ne!(config_manager.default_provider().len(), 0);
                 assert!(config_manager.max_concurrent_requests() > 0);
                 assert!(config_manager.request_timeout_seconds() > 0);
 
@@ -222,6 +222,6 @@ mod tests {
 
         // Test experimental config
         assert!(!config.experimental.enable_new_features);
-        assert!(config.experimental.beta_features.is_empty());
+        assert_eq!(config.experimental.beta_features.len(), 0);
     }
 }

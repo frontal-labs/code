@@ -26,6 +26,19 @@ case "$ACTION" in
     node --test tests/*.test.mjs
     ;;
   lint)
+    if [[ -n "${TEST_SRCDIR:-}" && -z "${BUILD_WORKSPACE_DIRECTORY:-}" ]]; then
+      # Under Bazel the runfiles are symlinks into the source tree, which Biome cannot
+      # walk. Lint a writable copy with the root configs, as tools/extension.sh does.
+      LINT_DIR="$(mktemp -d "${TEST_TMPDIR:-/tmp}/cli-lint.XXXXXX")"
+      export TMPDIR="${TEST_TMPDIR:-/tmp}"
+      cp -RL "$PWD"/. "$LINT_DIR"/
+      for config_file in biome.json ultracite.json .gitignore; do
+        if [[ -f "$REPO_ROOT/$config_file" ]]; then
+          cp -L "$REPO_ROOT/$config_file" "$LINT_DIR/$config_file"
+        fi
+      done
+      cd "$LINT_DIR"
+    fi
     if command -v bunx >/dev/null 2>&1; then
       bunx @biomejs/biome check .
     elif command -v npx >/dev/null 2>&1; then

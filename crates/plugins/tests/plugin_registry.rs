@@ -3,8 +3,11 @@ use frontal_code_plugins::{builtin_plugins, Plugin, PluginKind, PluginRegistry, 
 #[test]
 fn empty_registry() {
     let registry = PluginRegistry::new(vec![]);
-    assert!(registry.plugins().is_empty());
-    assert!(registry.summaries().is_empty());
+    assert_eq!(registry.plugins(), []);
+    assert_eq!(
+        registry.summaries(),
+        [] as [frontal_code_plugins::PluginSummary; 0]
+    );
     assert!(registry.get("anything").is_none());
     assert!(!registry.contains("anything"));
 }
@@ -56,7 +59,10 @@ fn aggregated_hooks_and_tools_for_builtin() {
     let registry = PluginRegistry::new(registered);
     // Builtin plugin has no hooks or tools
     assert!(registry.aggregated_hooks().unwrap().is_empty());
-    assert!(registry.aggregated_tools().unwrap().is_empty());
+    assert_eq!(
+        registry.aggregated_tools().unwrap(),
+        [] as [frontal_code_plugins::PluginTool; 0]
+    );
 }
 
 #[test]
@@ -79,7 +85,7 @@ fn registered_plugin_accessors() {
     assert_eq!(plugin.metadata().kind, PluginKind::Builtin);
     assert!(plugin.is_enabled());
     assert!(plugin.hooks().is_empty());
-    assert!(plugin.tools().is_empty());
+    assert_eq!(plugin.tools(), []);
     assert!(plugin.validate().is_ok());
     assert!(plugin.initialize().is_ok());
     assert!(plugin.shutdown().is_ok());

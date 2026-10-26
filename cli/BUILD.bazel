@@ -34,8 +34,10 @@ sh_test(
     srcs = ["//tools:cli.sh"],
     data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
     args = ["lint"],
+    # bunx downloads Biome into a temp directory, which the test sandbox blocks.
     tags = [
         "lint",
+        "no-sandbox",
         "typescript",
     ],
 )

@@ -9,7 +9,7 @@ fn config_new_sets_config_home() {
     let config = PluginManagerConfig::new("/tmp/frontal-code");
     assert_eq!(config.config_home, PathBuf::from("/tmp/frontal-code"));
     assert!(config.enabled_plugins.is_empty());
-    assert!(config.external_dirs.is_empty());
+    assert_eq!(config.external_dirs, [] as [std::path::PathBuf; 0]);
     assert!(config.install_root.is_none());
     assert!(config.registry_path.is_none());
     assert!(config.bundled_root.is_none());

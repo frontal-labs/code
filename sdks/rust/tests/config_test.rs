@@ -70,7 +70,7 @@ fn config_to_args_repeated_flags() {
 
 #[test]
 fn config_to_args_empty_for_null() {
-  assert!(config_to_args(&json!(null)).is_empty());
+  assert_eq!(config_to_args(&json!(null)), [] as [std::string::String; 0]);
 }
 
 #[test]

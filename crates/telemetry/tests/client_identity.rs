@@ -24,7 +24,7 @@ fn user_agent_format() {
 fn default_uses_crate_version() {
     let id = ClientIdentity::default();
     assert_eq!(id.app_name, "claude-code");
-    assert!(!id.app_version.is_empty());
+    assert_ne!(id.app_version, "");
     assert_eq!(id.runtime, "rust");
 }
 
@@ -41,7 +41,7 @@ fn clone_and_debug() {
     let cloned = id.clone();
     assert_eq!(id, cloned);
     let debug = format!("{id:?}");
-    assert!(!debug.is_empty());
+    assert_ne!(debug, "");
 }
 
 #[test]

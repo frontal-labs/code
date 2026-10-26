@@ -529,8 +529,8 @@ mod tests {
         let result = compact_session(&session, CompactionConfig::default());
         assert_eq!(result.removed_message_count, 0);
         assert_eq!(result.compacted_session, session);
-        assert!(result.summary.is_empty());
-        assert!(result.formatted_summary.is_empty());
+        assert_eq!(result.summary.len(), 0);
+        assert_eq!(result.formatted_summary.len(), 0);
     }
 
     #[test]

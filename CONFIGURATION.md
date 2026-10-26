@@ -218,7 +218,7 @@ export FRONTAL_CODE_LOGS_DIR="/custom/logs"
 
 ### API Provider Variables
 ```bash
-# Anthropic
+# Anthropic (select with --provider anthropic)
 export FRONTAL_API_KEY="sk-ant-..."
 export FRONTAL_BASE_URL="https://api.anthropic.com"
 
@@ -230,10 +230,13 @@ export OPENAI_BASE_URL="https://api.openai.com/v1"
 export XAI_API_KEY="xai-..."
 export XAI_BASE_URL="https://api.x.ai/v1"
 
-# Frontal
+# Frontal gateway (the default provider; OpenAI-compatible, bearer token)
 export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 ```
+
+`FRONTAL_API_KEY` is sent as a bearer token to the Frontal gateway by default. To use
+it with Anthropic or an Anthropic-compatible proxy, pass `--provider anthropic`.
 
 ### Service Variables
 ```bash
@@ -256,6 +259,92 @@ The legacy runtime configuration system is still supported for backward compatib
 1. **Immediate**: Use `ConfigurationManager` to access both systems
 2. **Gradual**: Replace runtime config access with core config methods
 3. **Complete**: Migrate entirely to core configuration system
+
+### OAuth Login
+
+`frontal-code login` signs in with OAuth (authorization code + PKCE) instead of an
+API key. Frontal Code ships no provider client IDs, so you supply your own in your
+user-level settings (`~/.frontal-code/settings.json`). Each provider is configured
+under `oauth`. Project and local settings are ignored for login, so a repository
+cannot send your authorization code to a host of its choosing:
+
+```json
+{
+  "oauth": {
+    "anthropic": {
+      "clientId": "your-client-id",
+      "authorizeUrl": "https://provider.example/oauth/authorize",
+      "tokenUrl": "https://provider.example/oauth/token",
+      "callbackPort": 54545,
+      "scopes": ["model.read"]
+    },
+    "openai": {
+      "clientId": "your-client-id",
+      "authorizeUrl": "https://provider.example/oauth/authorize",
+      "tokenUrl": "https://provider.example/oauth/token",
+      "manualRedirectUrl": "https://provider.example/oauth/callback",
+      "scopes": ["model.read"]
+    }
+  }
+}
+```
+
+- `callbackPort` makes login listen on `127.0.0.1:<port>` for the redirect. The
+  redirect URI registered with the provider must be `http://localhost:<port>/callback`.
+- `manualRedirectUrl` is for providers that only redirect to their own page. After
+  signing in, paste the URL you land on back into the terminal.
+- The legacy form, a single object with `clientId` at the top level, is read as
+  the `anthropic` entry.
+
+Credentials resolve in this order: environment API key, environment bearer token,
+saved login (refreshed when expired), then an error that lists the options.
+
+A saved login refreshes only against the token endpoint and client ID recorded when
+you logged in. Project and user settings are not read at refresh time, so a
+repository cannot redirect a refresh token. Token endpoints must use `https`, or
+plain `http` to `127.0.0.1`/`localhost` for local testing. Logins saved before this
+was recorded have no endpoint and must be redone with `frontal-code login`.
+
+## Project Policy
+
+A `policy` object in `.frontal-code/settings.json` (or `settings.local.json`, or your
+user settings) restricts what a workspace may use. Policy can only restrict. Each
+settings source adds limits, and the effective policy is their intersection, so a
+repository cannot grant itself access the user did not allow.
+
+```json
+{
+  "policy": {
+    "allowedProviders": ["anthropic"],
+    "allowedModels": ["claude-sonnet-*", "claude-haiku-*"],
+    "authMethods": { "anthropic": ["oauth"] },
+    "permissionCeiling": "workspace-write",
+    "deny": ["WebFetch"]
+  }
+}
+```
+
+| Key | Meaning |
+|-----|---------|
+| `allowedProviders` | Provider names that may be used. Others fail before any request. |
+| `allowedModels` | Model IDs after alias resolution (`opus` is checked as `claude-opus-5`). `*` matches any run of characters. |
+| `authMethods` | Per provider: `"apiKey"` (a key or an env bearer token) and/or `"oauth"` (a saved login). A provider with no entry is unrestricted. |
+| `permissionCeiling` | Highest mode allowed: `read-only`, `workspace-write`, or `danger-full-access`. Requests above it drop to the ceiling. |
+| `deny` | Tool names that may not run at all. |
+
+Notes:
+
+- **Settings a repository cannot widen.** Project and local files cannot raise the
+  permission mode you set, and their `permissions.allow` rules are ignored. The CLI
+  prints a warning for each ignored setting.
+- **Where it is enforced.** The CLI checks the policy when it builds a provider client,
+  and again when it applies the permission mode. Hosted tasks are checked by the server
+  before a worker container starts: provider, model, and permission mode. The worker
+  applies the full policy, including auth methods.
+- **Prompt mode.** Under a ceiling below `danger-full-access`, `prompt` becomes the
+  ceiling, so an approval cannot go past it.
+- **Limits.** Policy applies to Frontal Code. A different client talking to the same
+  provider directly is not covered.
 
 ## Configuration Validation
 

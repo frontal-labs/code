@@ -9,6 +9,7 @@
     clippy::needless_pass_by_value,
     clippy::too_many_arguments
 )]
+mod auth;
 mod init;
 mod input;
 mod render;
@@ -134,6 +135,7 @@ Run `frontal-code --help` for usage."
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().skip(1).collect();
+    print_ignored_settings_warnings();
     match parse_args(&args)? {
         CliAction::DumpManifests { output_format } => dump_manifests(output_format)?,
         CliAction::BootstrapPlan { output_format } => print_bootstrap_plan(output_format)?,
@@ -181,6 +183,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             target,
         } => print_telemetry_status(output_format, action.as_deref(), target.as_deref())?,
         CliAction::Sandbox { output_format } => print_sandbox_status_snapshot(output_format)?,
+        CliAction::Login { provider } => {
+            let cwd = env::current_dir()?;
+            println!("{}", auth::login(&provider, &cwd)?);
+        }
+        CliAction::Logout { provider } => println!("{}", auth::logout(&provider)?),
+        CliAction::AuthStatus => println!("{}", auth::status()?),
         CliAction::Prompt {
             prompt,
             model,
@@ -302,6 +310,13 @@ fn attach_session_tracer(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CliAction {
+    Login {
+        provider: String,
+    },
+    Logout {
+        provider: String,
+    },
+    AuthStatus,
     DumpManifests {
         output_format: CliOutputFormat,
     },
@@ -878,6 +893,24 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
 
     match rest[0].as_str() {
+        "login" => Ok(CliAction::Login {
+            provider: rest
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| "anthropic".to_string()),
+        }),
+        "logout" => Ok(CliAction::Logout {
+            provider: rest
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| "anthropic".to_string()),
+        }),
+        "auth" => match rest.get(1).map(String::as_str) {
+            None | Some("status") => Ok(CliAction::AuthStatus),
+            Some(other) => Err(format!(
+                "unknown auth command `{other}`; try `frontal-code auth status`"
+            )),
+        },
         "dump-manifests" => Ok(CliAction::DumpManifests { output_format }),
         "bootstrap-plan" => Ok(CliAction::BootstrapPlan { output_format }),
         "config" => parse_config_cli_action(&rest[1..], output_format),
@@ -2265,15 +2298,12 @@ fn check_auth_health() -> DiagnosticCheck {
         .map(|(name, key)| {
             (
                 (*name).to_string(),
-                env::var(key)
-                    .ok()
-                    .is_some_and(|value| !value.trim().is_empty()),
+                env::var(key).is_ok_and(|value| !value.trim().is_empty()),
             )
         })
         .collect::<Vec<_>>();
-    let ollama_base_url_present = env::var("OLLAMA_BASE_URL")
-        .ok()
-        .is_some_and(|value| !value.trim().is_empty());
+    let ollama_base_url_present =
+        env::var("OLLAMA_BASE_URL").is_ok_and(|value| !value.trim().is_empty());
     let any_cloud_key = provider_presence.iter().any(|(_, present)| *present);
 
     let mut details = provider_presence
@@ -6035,6 +6065,9 @@ impl LiveCli {
         let mut effective_model = model;
         let effective_provider = if let Some(provider_name) = provider.as_deref() {
             Some(provider_name.to_string())
+        } else if frontal_code_api::model_requires_responses(&effective_model) {
+            // Codex models are only served by OpenAI, whatever the configured default is.
+            Some("openai".to_string())
         } else {
             // No explicit provider: honor the configured default provider so that
             // `runtime.default_provider` is authoritative for the no-flag path.
@@ -9062,6 +9095,7 @@ fn build_runtime_with_plugin_state(
     };
     let policy = permission_policy(permission_mode, &feature_config, &tool_registry)
         .map_err(std::io::Error::other)?;
+    frontal_code_api::enforce_policy_for_model(&model)?;
     let client = if detect_provider_kind(&model) == ProviderKind::Anthropic {
         ProviderClient::Anthropic(
             AnthropicClient::from_auth(resolve_cli_auth_source()?)
@@ -9147,6 +9181,10 @@ fn build_runtime_with_plugin_state_and_provider(
         if provider_name.eq_ignore_ascii_case("ollama") && effective_model == DEFAULT_MODEL {
             effective_model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
         }
+        frontal_code_api::enforce_provider_policy(
+            &provider_name.to_ascii_lowercase(),
+            &effective_model,
+        )?;
         if provider_name.eq_ignore_ascii_case("anthropic") {
             ProviderClient::Anthropic(
                 AnthropicClient::from_auth(resolve_cli_auth_source()?)
@@ -9500,6 +9538,7 @@ impl AnthropicRuntimeClient {
         tool_registry: GlobalToolRegistry,
         progress_reporter: Option<InternalPromptProgressReporter>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        frontal_code_api::enforce_provider_policy("anthropic", &model)?;
         Ok(Self {
             runtime: tokio::runtime::Runtime::new()?,
             client: AnthropicClient::from_auth(resolve_cli_auth_source()?)
@@ -10626,12 +10665,54 @@ fn permission_policy(
     feature_config: &frontal_code_runtime::RuntimeFeatureConfig,
     tool_registry: &GlobalToolRegistry,
 ) -> Result<PermissionPolicy, String> {
+    let project_policy = feature_config.policy();
+    let mode = cap_permission_mode_for_policy(mode, project_policy);
+    let rules = feature_config
+        .permission_rules()
+        .with_extra_deny(&project_policy.deny_tools());
     Ok(tool_registry.permission_specs(None)?.into_iter().fold(
-        PermissionPolicy::new(mode).with_permission_rules(feature_config.permission_rules()),
+        PermissionPolicy::new(mode).with_permission_rules(&rules),
         |policy, (name, required_permission)| {
             policy.with_tool_requirement(name, required_permission)
         },
     ))
+}
+
+/// Applies the project policy's permission ceiling to a requested mode.
+///
+/// A mode at or below the ceiling is kept. A higher mode drops to the ceiling. `Allow`
+/// is always replaced by the ceiling. `Prompt` stays `Prompt` only when the ceiling is
+/// `DangerFullAccess`, because asking the user under a lower ceiling could approve
+/// actions the ceiling forbids.
+fn cap_permission_mode_for_policy(
+    mode: PermissionMode,
+    policy: &frontal_code_runtime::ProjectPolicy,
+) -> PermissionMode {
+    let Some(ceiling) = policy.permission_ceiling() else {
+        return mode;
+    };
+    let ceiling_mode = permission_mode_from_resolved(ceiling);
+    match mode {
+        PermissionMode::Prompt if ceiling_mode == PermissionMode::DangerFullAccess => mode,
+        PermissionMode::Prompt | PermissionMode::Allow => ceiling_mode,
+        _ if mode > ceiling_mode => ceiling_mode,
+        _ => mode,
+    }
+}
+
+/// Prints settings the runtime ignored because they would widen access, so the user
+/// can see why a repository's setting had no effect. Errors are skipped here; the
+/// command reports them when it loads config.
+fn print_ignored_settings_warnings() {
+    let Ok(cwd) = env::current_dir() else {
+        return;
+    };
+    let Ok(config) = ConfigLoader::default_for(&cwd).load() else {
+        return;
+    };
+    for note in config.ignored_settings() {
+        eprintln!("warning: {note}");
+    }
 }
 
 fn convert_messages(messages: &[ConversationMessage]) -> Vec<InputMessage> {
@@ -10915,14 +10996,14 @@ fn print_help(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::
 mod tests {
     use super::{
         augment_hosted_result_with_publication, build_runtime_plugin_state_with_loader,
-        build_runtime_with_plugin_state, config_json_value, create_managed_session_handle,
-        default_hosted_pr_draft, describe_tool_progress, filter_tool_specs,
-        format_bughunter_report, format_commit_preflight_report, format_commit_skipped_report,
-        format_compact_report, format_cost_report, format_internal_prompt_progress_line,
-        format_issue_report, format_model_report, format_model_switch_report,
-        format_permissions_report, format_permissions_switch_report, format_pr_report,
-        format_resume_report, format_status_report, format_tool_call_start, format_tool_result,
-        format_ultraplan_report, format_unknown_slash_command,
+        build_runtime_with_plugin_state, cap_permission_mode_for_policy, config_json_value,
+        create_managed_session_handle, default_hosted_pr_draft, describe_tool_progress,
+        filter_tool_specs, format_bughunter_report, format_commit_preflight_report,
+        format_commit_skipped_report, format_compact_report, format_cost_report,
+        format_internal_prompt_progress_line, format_issue_report, format_model_report,
+        format_model_switch_report, format_permissions_report, format_permissions_switch_report,
+        format_pr_report, format_resume_report, format_status_report, format_tool_call_start,
+        format_tool_result, format_ultraplan_report, format_unknown_slash_command,
         format_unknown_slash_command_message, format_user_visible_api_error, hosted_server_url,
         hosted_task_snapshot_from_event, load_hosted_task_worker_payload,
         normalize_permission_mode, parse_args, parse_git_status_branch,
@@ -12537,6 +12618,60 @@ mod tests {
     }
 
     #[test]
+    fn permission_ceiling_caps_requested_modes() {
+        use frontal_code_runtime::{ProjectPolicy, ResolvedPermissionMode};
+
+        let ceiling = |mode: ResolvedPermissionMode| {
+            ProjectPolicy::from_layers(vec![frontal_code_runtime::PolicyLayer {
+                source: frontal_code_runtime::ConfigSource::Project,
+                allowed_providers: None,
+                allowed_models: None,
+                auth_methods: std::collections::BTreeMap::new(),
+                permission_ceiling: Some(mode),
+                deny_tools: Vec::new(),
+            }])
+        };
+        let none = ProjectPolicy::default();
+
+        // No ceiling: the requested mode is unchanged.
+        assert_eq!(
+            cap_permission_mode_for_policy(PermissionMode::DangerFullAccess, &none),
+            PermissionMode::DangerFullAccess
+        );
+        // Ceiling read-only: anything more permissive drops to read-only.
+        let read_only = ceiling(ResolvedPermissionMode::ReadOnly);
+        assert_eq!(
+            cap_permission_mode_for_policy(PermissionMode::DangerFullAccess, &read_only),
+            PermissionMode::ReadOnly
+        );
+        assert_eq!(
+            cap_permission_mode_for_policy(PermissionMode::WorkspaceWrite, &read_only),
+            PermissionMode::ReadOnly
+        );
+        assert_eq!(
+            cap_permission_mode_for_policy(PermissionMode::Allow, &read_only),
+            PermissionMode::ReadOnly
+        );
+        // Prompt under a lower ceiling becomes the ceiling, so approvals cannot exceed it.
+        assert_eq!(
+            cap_permission_mode_for_policy(PermissionMode::Prompt, &read_only),
+            PermissionMode::ReadOnly
+        );
+        // A mode already within the ceiling is kept.
+        let workspace = ceiling(ResolvedPermissionMode::WorkspaceWrite);
+        assert_eq!(
+            cap_permission_mode_for_policy(PermissionMode::ReadOnly, &workspace),
+            PermissionMode::ReadOnly
+        );
+        // Under a danger-full-access ceiling, prompting stays a prompt.
+        let full = ceiling(ResolvedPermissionMode::DangerFullAccess);
+        assert_eq!(
+            cap_permission_mode_for_policy(PermissionMode::Prompt, &full),
+            PermissionMode::Prompt
+        );
+    }
+
+    #[test]
     fn permission_policy_uses_plugin_tool_permissions() {
         let feature_config = frontal_code_runtime::RuntimeFeatureConfig::default();
         let policy = permission_policy(
@@ -13959,7 +14094,7 @@ UU conflicted.rs",
         )
         .expect("tool block should accumulate");
 
-        assert!(events.is_empty());
+        assert_eq!(events, [] as [frontal_code_runtime::AssistantEvent; 0]);
         assert_eq!(
             pending_tool,
             Some(("tool-1".to_string(), "read_file".to_string(), String::new(),))

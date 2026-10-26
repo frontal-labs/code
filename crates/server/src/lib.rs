@@ -40,7 +40,10 @@ use frontal_code_runtime::task_registry::{Task, TaskRegistry, TaskRegistrySnapsh
 use frontal_code_runtime::worker_boot::{
     WorkerEventKind, WorkerEventPayload, WorkerRegistry, WorkerStatus,
 };
-use frontal_code_runtime::{generate_state, save_oauth_credentials_for, OAuthTokenSet};
+use frontal_code_runtime::{
+    generate_state, parse_permission_mode_label, save_oauth_credentials_for, ConfigLoader,
+    OAuthTokenSet, ResolvedPermissionMode,
+};
 use frontal_code_tools::{
     cancel_hosted_agent_with_locator, hosted_agent_status_with_locator, launch_hosted_agent,
     HostedAgentCancellationSource, HostedAgentLaunchRequest, HostedAgentLocator,
@@ -3239,6 +3242,54 @@ struct DockerLaunchResult {
     container_id: String,
 }
 
+/// Refuses a hosted task whose provider, model, or permission mode the workspace's
+/// project policy does not allow.
+///
+/// The checkout is the repository being worked on, so its `.frontal-code` settings
+/// are read here, together with this server's user settings. The worker container
+/// applies the full policy when it starts, including auth method rules.
+fn check_hosted_task_policy(
+    checkout_root: &FsPath,
+    request: &LaneExecutionRequest,
+) -> Result<(), String> {
+    let config = ConfigLoader::default_for(checkout_root)
+        .load()
+        .map_err(|error| format!("failed to load project policy: {error}"))?;
+    let policy = config.policy();
+    if let Some(provider) = request.provider.as_deref() {
+        policy
+            .check_provider(provider)
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(model) = request.model.as_deref() {
+        policy
+            .check_model(model)
+            .map_err(|error| error.to_string())?;
+    }
+    if let (Some(label), Some(ceiling)) = (
+        request.permission_mode.as_deref(),
+        policy.permission_ceiling(),
+    ) {
+        let requested = parse_permission_mode_label(label, "hosted task permission_mode")
+            .map_err(|error| error.to_string())?;
+        if requested > ceiling {
+            return Err(format!(
+                "permission mode `{label}` exceeds the project policy ceiling ({})",
+                ceiling_label(ceiling)
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn ceiling_label(mode: ResolvedPermissionMode) -> &'static str {
+    match mode {
+        ResolvedPermissionMode::ReadOnly => "read-only",
+        ResolvedPermissionMode::WorkspaceWrite => "workspace-write",
+        ResolvedPermissionMode::DangerFullAccess => "danger-full-access",
+    }
+}
+
 trait DockerRunner: Send + Sync + fmt::Debug {
     fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String>;
 
@@ -3545,6 +3596,7 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             branch: request.branch.clone(),
         })
         .map_err(|error| format!("failed to prepare repo checkout: {error}"))?;
+        check_hosted_task_policy(&prepared.checkout_root, request)?;
         let task_file = write_local_docker_task_payload(&prepared.checkout_root, request)
             .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
         let image = self.image.clone();
@@ -5992,6 +6044,89 @@ mod tests {
                 .and_then(|value| value.as_str()),
             Some("stop")
         );
+    }
+
+    fn policy_request(
+        provider: Option<&str>,
+        model: Option<&str>,
+        mode: Option<&str>,
+    ) -> LaneExecutionRequest {
+        LaneExecutionRequest {
+            task_id: "task-policy".to_string(),
+            prompt: "hi".to_string(),
+            repository: None,
+            repo_url: None,
+            base_ref: None,
+            branch: None,
+            lane_role: None,
+            model: model.map(str::to_string),
+            provider: provider.map(str::to_string),
+            permission_mode: mode.map(str::to_string),
+            allowed_tools: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn hosted_task_policy_refuses_provider_model_and_mode_outside_the_project_policy() {
+        let root = std::env::temp_dir().join(format!("hosted-policy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".frontal-code")).expect("settings dir");
+        std::fs::write(
+            root.join(".frontal-code/settings.json"),
+            r#"{"policy":{"allowedProviders":["anthropic"],"allowedModels":["claude-*"],"permissionCeiling":"read-only"}}"#,
+        )
+        .expect("write settings");
+
+        let provider_error = check_hosted_task_policy(
+            &root,
+            &policy_request(Some("openai"), Some("claude-sonnet-4-6"), None),
+        )
+        .expect_err("openai is not allowed");
+        assert!(
+            provider_error.contains("provider `openai` is not allowed"),
+            "{provider_error}"
+        );
+
+        let model_error = check_hosted_task_policy(
+            &root,
+            &policy_request(Some("anthropic"), Some("claude-opus-5-x-other"), None),
+        );
+        assert!(model_error.is_ok(), "claude-* matches");
+        let model_error = check_hosted_task_policy(
+            &root,
+            &policy_request(Some("anthropic"), Some("gpt-5-codex"), None),
+        )
+        .expect_err("model outside the allowlist");
+        assert!(
+            model_error.contains("model `gpt-5-codex` is not allowed"),
+            "{model_error}"
+        );
+
+        let ceiling_error = check_hosted_task_policy(
+            &root,
+            &policy_request(
+                Some("anthropic"),
+                Some("claude-sonnet-4-6"),
+                Some("workspace-write"),
+            ),
+        )
+        .expect_err("workspace-write exceeds the read-only ceiling");
+        assert!(
+            ceiling_error.contains("exceeds the project policy ceiling (read-only)"),
+            "{ceiling_error}"
+        );
+
+        check_hosted_task_policy(
+            &root,
+            &policy_request(
+                Some("anthropic"),
+                Some("claude-sonnet-4-6"),
+                Some("read-only"),
+            ),
+        )
+        .expect("allowed request passes");
+
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[tokio::test]

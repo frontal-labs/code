@@ -204,10 +204,42 @@ Supported providers:
 ### API key
 
 ```bash
-export FRONTAL_API_KEY="sk-ant-..."
-# or
+# Default provider (Frontal's OpenAI-compatible gateway)
 export FRONTAL_API_KEY="frontal-..."
+export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
+
+# Anthropic or an Anthropic-compatible proxy: pass --provider anthropic
+export FRONTAL_API_KEY="sk-ant-..."
+frontal-code --provider anthropic prompt "..."
 ```
+
+### OAuth login
+
+Sign in with your provider account instead of an API key. Login needs an OAuth
+client in your user settings (`~/.frontal-code/settings.json`). See
+[CONFIGURATION.md](./CONFIGURATION.md#oauth-login).
+
+```bash
+frontal-code login --provider openai    # or: frontal-code login anthropic
+frontal-code auth status                 # shows env keys and saved logins, never token values
+frontal-code logout openai
+```
+
+Environment API keys take precedence over a saved login. Saved logins refresh
+automatically and only against the token endpoint recorded at login.
+
+### Codex models
+
+Codex-family models (for example `gpt-5-codex` and `gpt-5.3-codex`) are served only
+by the OpenAI Responses API. A Codex model selects the OpenAI provider even when the
+default provider is `frontal`, and the request goes to `/responses`. Set `OPENAI_API_KEY`:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+frontal-code --model gpt-5-codex prompt "refactor this function"
+```
+
+Pass `--provider openai` to make the choice explicit.
 
 ## Common operational commands
 

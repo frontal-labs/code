@@ -22,7 +22,7 @@ fn k_of_zero_returns_empty() {
     let query = vec![1.0, 0.0];
     let candidates = vec![("a".to_string(), vec![1.0, 0.0])];
     let result = top_k_by_similarity(&query, candidates, 0);
-    assert!(result.is_empty());
+    assert_eq!(result, [] as [(std::string::String, f32); 0]);
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn empty_candidates() {
     let query = vec![1.0, 0.0];
     let candidates: Vec<(String, Vec<f32>)> = vec![];
     let result = top_k_by_similarity(&query, candidates, 5);
-    assert!(result.is_empty());
+    assert_eq!(result, [] as [(std::string::String, f32); 0]);
 }
 
 #[test]

@@ -31,7 +31,7 @@ fn resolve_request_with_false_overrides() {
     assert!(!request.namespace_restrictions);
     assert!(!request.network_isolation);
     assert_eq!(request.filesystem_mode, FilesystemIsolationMode::Off);
-    assert!(request.allowed_mounts.is_empty());
+    assert_eq!(request.allowed_mounts, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn resolve_request_with_no_overrides_uses_config_defaults() {
         request.filesystem_mode,
         FilesystemIsolationMode::WorkspaceOnly
     );
-    assert!(request.allowed_mounts.is_empty());
+    assert_eq!(request.allowed_mounts, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn default_config_resolves_to_sensible_defaults() {
     assert!(config.namespace_restrictions.is_none());
     assert!(config.network_isolation.is_none());
     assert!(config.filesystem_mode.is_none());
-    assert!(config.allowed_mounts.is_empty());
+    assert_eq!(config.allowed_mounts, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn sandbox_request_defaults() {
     assert!(!request.namespace_restrictions);
     assert!(!request.network_isolation);
     assert_eq!(request.filesystem_mode, FilesystemIsolationMode::default());
-    assert!(request.allowed_mounts.is_empty());
+    assert_eq!(request.allowed_mounts, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -161,12 +161,12 @@ fn request_default_and_equality() {
     assert!(!request.namespace_restrictions);
     assert!(request.network_isolation);
     assert_eq!(request.filesystem_mode, FilesystemIsolationMode::Off);
-    assert!(request.allowed_mounts.is_empty());
+    assert_eq!(request.allowed_mounts, [] as [std::string::String; 0]);
 }
 
 #[test]
 fn config_partial_defaults() {
     let config = SandboxConfig::default();
     assert!(config.enabled.is_none());
-    assert!(config.allowed_mounts.is_empty());
+    assert_eq!(config.allowed_mounts, [] as [std::string::String; 0]);
 }

@@ -364,8 +364,8 @@ impl AnthropicClient {
         config: &OAuthConfig,
         request: &OAuthTokenExchangeRequest,
     ) -> Result<OAuthTokenSet, ApiError> {
-        let response = self
-            .http
+        super::validate_oauth_endpoint(&config.token_url)?;
+        let response = super::oauth_http_client()
             .post(&config.token_url)
             .header("content-type", "application/x-www-form-urlencoded")
             .form(&request.form_params())
@@ -384,8 +384,8 @@ impl AnthropicClient {
         config: &OAuthConfig,
         request: &OAuthRefreshRequest,
     ) -> Result<OAuthTokenSet, ApiError> {
-        let response = self
-            .http
+        super::validate_oauth_endpoint(&config.token_url)?;
+        let response = super::oauth_http_client()
             .post(&config.token_url)
             .header("content-type", "application/x-www-form-urlencoded")
             .form(&request.form_params())
@@ -616,10 +616,9 @@ pub fn resolve_saved_oauth_token(config: &OAuthConfig) -> Result<Option<OAuthTok
     resolve_saved_oauth_token_set(config, token_set).map(Some)
 }
 
-pub fn resolve_startup_auth_source<F>(load_oauth_config: F) -> Result<AuthSource, ApiError>
-where
-    F: FnOnce() -> Result<Option<OAuthConfig>, ApiError>,
-{
+/// Startup auth: env API key, then env bearer token, then a saved login. The saved
+/// login is refreshed through the same locked path as the other providers.
+pub fn resolve_startup_auth_source() -> Result<AuthSource, ApiError> {
     if let Some(api_key) = read_env_non_empty("FRONTAL_API_KEY")? {
         return match read_env_non_empty("FRONTAL_AUTH_TOKEN")? {
             Some(bearer_token) => Ok(AuthSource::ApiKeyAndBearer {
@@ -633,27 +632,13 @@ where
         return Ok(AuthSource::BearerToken(bearer_token));
     }
 
-    let Some(token_set) = load_saved_oauth_token()? else {
+    let Some(bearer_token) = super::saved_oauth_bearer("anthropic")? else {
         return Err(ApiError::missing_credentials(
             "Anthropic",
             &["FRONTAL_AUTH_TOKEN", "FRONTAL_API_KEY"],
         ));
     };
-    if !oauth_token_is_expired(&token_set) {
-        return Ok(AuthSource::BearerToken(token_set.access_token));
-    }
-    if token_set.refresh_token.is_none() {
-        return Err(ApiError::ExpiredOAuthToken);
-    }
-
-    let Some(config) = load_oauth_config()? else {
-        return Err(ApiError::Auth(
-            "saved OAuth token is expired; runtime OAuth config is missing".to_string(),
-        ));
-    };
-    Ok(AuthSource::from(resolve_saved_oauth_token_set(
-        &config, token_set,
-    )?))
+    Ok(AuthSource::BearerToken(bearer_token))
 }
 
 fn resolve_saved_oauth_token_set(
@@ -695,7 +680,7 @@ fn resolve_saved_oauth_token_set(
     Ok(resolved)
 }
 
-fn client_runtime_block_on<F, T>(future: F) -> Result<T, ApiError>
+pub(crate) fn client_runtime_block_on<F, T>(future: F) -> Result<T, ApiError>
 where
     F: std::future::Future<Output = Result<T, ApiError>>,
 {
@@ -893,7 +878,6 @@ mod tests {
     use super::{ALT_REQUEST_ID_HEADER, REQUEST_ID_HEADER};
     use std::io::{Read, Write};
     use std::net::TcpListener;
-    use std::sync::{Mutex, OnceLock};
     use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -906,10 +890,7 @@ mod tests {
     use crate::types::{ContentBlockDelta, MessageRequest};
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        crate::providers::env_test_lock()
     }
 
     fn temp_config_home() -> std::path::PathBuf {
@@ -1131,8 +1112,7 @@ mod tests {
         })
         .expect("save oauth credentials");
 
-        let auth = resolve_startup_auth_source(|| panic!("config should not be loaded"))
-            .expect("startup auth");
+        let auth = resolve_startup_auth_source().expect("startup auth");
         assert_eq!(auth.bearer_token(), Some("saved-access-token"));
 
         clear_oauth_credentials().expect("clear credentials");
@@ -1155,10 +1135,10 @@ mod tests {
         })
         .expect("save expired oauth credentials");
 
-        let error =
-            resolve_startup_auth_source(|| Ok(None)).expect_err("missing config should error");
+        // Saved without a recorded endpoint, so refresh has nowhere to go.
+        let error = resolve_startup_auth_source().expect_err("missing endpoint should error");
         assert!(
-            matches!(error, crate::error::ApiError::Auth(message) if message.contains("runtime OAuth config is missing"))
+            matches!(error, crate::error::ApiError::Auth(message) if message.contains("no recorded token endpoint"))
         );
 
         let stored = frontal_code_runtime::load_oauth_credentials()

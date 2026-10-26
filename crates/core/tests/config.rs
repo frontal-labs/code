@@ -228,7 +228,10 @@ fn feature_config_defaults() {
 fn experimental_config_defaults() {
     let config = ProjectConfig::default();
     assert!(!config.experimental.enable_new_features);
-    assert!(config.experimental.beta_features.is_empty());
+    assert_eq!(
+        config.experimental.beta_features,
+        [] as [std::string::String; 0]
+    );
 }
 
 #[test]

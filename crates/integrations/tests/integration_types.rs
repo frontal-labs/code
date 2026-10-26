@@ -41,13 +41,13 @@ fn integration_config_construction() {
 #[test]
 fn integration_registry_new() {
     let registry = IntegrationRegistry::new();
-    assert!(registry.list_integrations().is_empty());
+    assert_eq!(registry.list_integrations(), [] as [std::string::String; 0]);
 }
 
 #[test]
 fn integration_registry_default_is_empty() {
     let registry = IntegrationRegistry::default();
-    assert!(registry.list_integrations().is_empty());
+    assert_eq!(registry.list_integrations(), [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -94,14 +94,14 @@ fn mcp_server_manager_from_empty_servers() {
     use std::collections::BTreeMap;
     let servers = BTreeMap::new();
     let manager = McpServerManager::from_servers(&servers);
-    assert!(manager.unsupported_servers().is_empty());
+    assert_eq!(manager.unsupported_servers(), []);
 }
 
 #[test]
 fn mcp_server_manager_empty_server_names() {
     use std::collections::BTreeMap;
     let manager = McpServerManager::from_servers(&BTreeMap::new());
-    assert!(manager.server_names().is_empty());
+    assert_eq!(manager.server_names(), [] as [std::string::String; 0]);
 }
 
 #[test]

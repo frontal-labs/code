@@ -3,7 +3,7 @@ use frontal_code_tools::{ToolManifestEntry, ToolRegistry, ToolSource};
 #[test]
 fn tool_registry_empty() {
     let registry = ToolRegistry::new(vec![]);
-    assert!(registry.entries().is_empty());
+    assert_eq!(registry.entries(), []);
 }
 
 #[test]

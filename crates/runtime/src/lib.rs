@@ -23,6 +23,7 @@ mod oauth;
 pub mod permission_enforcer;
 mod permissions;
 pub mod plugin_lifecycle;
+mod policy;
 mod policy_engine;
 mod prompt;
 pub mod recovery_recipes;
@@ -49,6 +50,7 @@ pub use compact::{
     compact_session, estimate_session_tokens, format_compact_summary,
     get_compact_continuation_message, should_compact, CompactionConfig, CompactionResult,
 };
+pub use config::parse_permission_mode_label;
 pub use config::{
     ConfigEntry, ConfigError, ConfigLoader, ConfigSource, McpConfigCollection,
     McpManagedProxyServerConfig, McpOAuthConfig, McpRemoteServerConfig, McpSdkServerConfig,
@@ -103,14 +105,16 @@ pub use lane_events::{
     dedupe_superseded_commit_events, LaneCommitProvenance, LaneEvent, LaneEventBlocker,
     LaneEventName, LaneEventStatus, LaneFailureClass,
 };
+pub use policy::{glob_matches, AuthMethod, PolicyLayer, PolicyViolation, ProjectPolicy};
 
 pub use oauth::{
-    clear_oauth_credentials, clear_oauth_credentials_for, code_challenge_s256, credentials_path,
-    generate_pkce_pair, generate_state, load_oauth_credentials, load_oauth_credentials_for,
+    clear_oauth_credentials, clear_oauth_credentials_for, code_challenge_s256,
+    credentials_key_for_provider, credentials_path, generate_pkce_pair, generate_state,
+    load_oauth_credentials, load_oauth_credentials_for, load_oauth_endpoint_for,
     loopback_redirect_uri, parse_oauth_callback_query, parse_oauth_callback_request_target,
-    save_oauth_credentials, save_oauth_credentials_for, OAuthAuthorizationRequest,
-    OAuthCallbackParams, OAuthRefreshRequest, OAuthTokenExchangeRequest, OAuthTokenSet,
-    PkceChallengeMethod, PkceCodePair,
+    save_oauth_credentials, save_oauth_credentials_for, save_oauth_login_for,
+    OAuthAuthorizationRequest, OAuthCallbackParams, OAuthEndpoint, OAuthRefreshRequest,
+    OAuthTokenExchangeRequest, OAuthTokenSet, PkceChallengeMethod, PkceCodePair,
 };
 pub use permissions::{
     PermissionContext, PermissionMode, PermissionOutcome, PermissionOverride, PermissionPolicy,

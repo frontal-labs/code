@@ -466,7 +466,7 @@ mod tests {
             } => {
                 assert_eq!(*s, scenario);
                 assert_eq!(recipe.scenario, scenario);
-                assert!(!recipe.steps.is_empty());
+                assert_ne!(recipe.steps.len(), 0);
                 assert!(matches!(result, RecoveryResult::Recovered { .. }));
             }
             _ => unreachable!(),

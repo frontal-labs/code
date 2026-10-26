@@ -4,14 +4,14 @@ use frontal_code_providers::SseParser;
 fn sse_parser_new_is_empty() {
     let mut parser = SseParser::new();
     let events = parser.finish().unwrap();
-    assert!(events.is_empty());
+    assert_eq!(events, [] as [frontal_code_providers::StreamEvent; 0]);
 }
 
 #[test]
 fn sse_parser_finish_empty_buffer_returns_empty() {
     let mut parser = SseParser::new();
     let events = parser.finish().unwrap();
-    assert!(events.is_empty());
+    assert_eq!(events, [] as [frontal_code_providers::StreamEvent; 0]);
 }
 
 #[test]
@@ -33,5 +33,5 @@ fn sse_parser_push_event() {
 fn sse_parser_default_impl() {
     let mut parser: SseParser = SseParser::default();
     let events = parser.finish().unwrap();
-    assert!(events.is_empty());
+    assert_eq!(events, [] as [frontal_code_providers::StreamEvent; 0]);
 }

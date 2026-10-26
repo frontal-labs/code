@@ -65,7 +65,10 @@ fn resumed_binary_accepts_slash_commands_with_arguments() {
     assert!(export.contains("ship the slash command harness"));
 
     let restored = Session::load_from_path(&session_path).expect("cleared session should load");
-    assert!(restored.messages.is_empty());
+    assert_eq!(
+        restored.messages,
+        [] as [frontal_code_runtime::ConversationMessage; 0]
+    );
 
     let backup_path = stdout
         .lines()

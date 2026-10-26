@@ -261,7 +261,13 @@ async fn runs_in_configured_working_directory() {
     .run(&ThreadInput::Text("x".into()), &ThreadRunOptions::default())
     .await
     .expect("run");
-  assert_eq!(mock.captured_cwd(), wd);
+  // The child reports the canonical path; on macOS the temp dir is a symlink
+  // (/var -> /private/var), so compare against the canonical form.
+  let expected = std::fs::canonicalize(&wd)
+    .expect("canonical tempdir")
+    .to_string_lossy()
+    .into_owned();
+  assert_eq!(mock.captured_cwd(), expected);
 }
 
 #[tokio::test]
@@ -281,7 +287,7 @@ async fn skip_git_repo_check_passed_as_config() {
     .iter()
     .filter(|a| a.starts_with("skip_git_repo_check"))
     .collect();
-  assert!(!overrides.is_empty());
+  assert_ne!(overrides, [] as [&std::string::String; 0]);
   assert!(overrides[0].contains("true"));
 }
 

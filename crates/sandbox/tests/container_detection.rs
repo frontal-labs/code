@@ -9,7 +9,7 @@ fn not_in_container_when_no_markers() {
         proc_1_cgroup: None,
     });
     assert!(!result.in_container);
-    assert!(result.markers.is_empty());
+    assert_eq!(result.markers, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn ignores_unrelated_env_vars() {
         proc_1_cgroup: None,
     });
     assert!(!result.in_container);
-    assert!(result.markers.is_empty());
+    assert_eq!(result.markers, [] as [std::string::String; 0]);
 }
 
 #[test]

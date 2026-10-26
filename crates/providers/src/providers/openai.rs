@@ -120,6 +120,22 @@ impl OpenAiCompatClient {
         Ok(Self::new(api_key, config))
     }
 
+    /// Uses the API key from the environment when set, otherwise a token saved by
+    /// `frontal-code login --provider <oauth_provider>` (refreshed if expired).
+    pub fn from_env_or_saved(
+        config: OpenAiCompatConfig,
+        oauth_provider: &str,
+    ) -> Result<Self, ApiError> {
+        if read_env_non_empty(config.api_key_env)?.is_some() {
+            return Self::from_env(config);
+        }
+        match super::saved_oauth_bearer(oauth_provider)? {
+            Some(token) => Ok(Self::new(token, config)),
+            // Nothing saved either: report the usual missing-credentials error.
+            None => Self::from_env(config),
+        }
+    }
+
     #[must_use]
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = base_url.into();
@@ -139,6 +155,13 @@ impl OpenAiCompatClient {
         self
     }
 
+    /// Codex-family models are served only by the Responses API, and only for the
+    /// `OpenAI` provider (other OpenAI-compatible hosts keep chat completions).
+    fn uses_responses_api(&self, model: &str) -> bool {
+        self.config.provider_name == "OpenAI"
+            && super::openai_responses::model_requires_responses(model)
+    }
+
     pub async fn send_message(
         &self,
         request: &MessageRequest,
@@ -148,6 +171,17 @@ impl OpenAiCompatClient {
             ..request.clone()
         };
         preflight_message_request(&request)?;
+        if self.uses_responses_api(&request.model) {
+            let response = self.send_with_retry(&request).await?;
+            let request_id = request_id_from_headers(response.headers());
+            let payload = response.json::<Value>().await?;
+            let mut normalized =
+                super::openai_responses::normalize_response(&request.model, &payload);
+            if normalized.request_id.is_none() {
+                normalized.request_id = request_id;
+            }
+            return Ok(normalized);
+        }
         let response = self.send_with_retry(&request).await?;
         let request_id = request_id_from_headers(response.headers());
         let payload = response.json::<ChatCompletionResponse>().await?;
@@ -166,6 +200,9 @@ impl OpenAiCompatClient {
         let response = self
             .send_with_retry(&request.clone().with_streaming())
             .await?;
+        let responses = self
+            .uses_responses_api(&request.model)
+            .then(|| super::openai_responses::ResponsesStream::new(request.model.clone()));
         Ok(MessageStream {
             request_id: request_id_from_headers(response.headers()),
             response,
@@ -173,6 +210,7 @@ impl OpenAiCompatClient {
             pending: VecDeque::new(),
             done: false,
             state: StreamState::new(request.model.clone()),
+            responses,
         })
     }
 
@@ -211,12 +249,22 @@ impl OpenAiCompatClient {
         &self,
         request: &MessageRequest,
     ) -> Result<reqwest::Response, ApiError> {
-        let request_url = chat_completions_endpoint(&self.base_url);
+        let (request_url, body) = if self.uses_responses_api(&request.model) {
+            (
+                super::openai_responses::responses_endpoint(&self.base_url),
+                super::openai_responses::build_request(request),
+            )
+        } else {
+            (
+                chat_completions_endpoint(&self.base_url),
+                build_chat_completion_request(request, self.config()),
+            )
+        };
         let request_builder = self
             .http
             .post(&request_url)
             .header("content-type", "application/json")
-            .json(&build_chat_completion_request(request, self.config()));
+            .json(&body);
         let request_builder = match self.config.auth_scheme {
             AuthScheme::Bearer => request_builder.bearer_auth(&self.api_key),
             AuthScheme::ApiKeyHeader => request_builder.header("api-key", &self.api_key),
@@ -264,6 +312,8 @@ pub struct MessageStream {
     pending: VecDeque<StreamEvent>,
     done: bool,
     state: StreamState,
+    /// Set for Responses API streams; those bypass the chat-completions parser.
+    responses: Option<super::openai_responses::ResponsesStream>,
 }
 
 impl MessageStream {
@@ -279,7 +329,11 @@ impl MessageStream {
             }
 
             if self.done {
-                self.pending.extend(self.state.finish()?);
+                let tail = match self.responses.as_mut() {
+                    Some(stream) => stream.finish()?,
+                    None => self.state.finish()?,
+                };
+                self.pending.extend(tail);
                 if let Some(event) = self.pending.pop_front() {
                     return Ok(Some(event));
                 }
@@ -288,8 +342,13 @@ impl MessageStream {
 
             match self.response.chunk().await? {
                 Some(chunk) => {
-                    for parsed in self.parser.push(&chunk)? {
-                        self.pending.extend(self.state.ingest_chunk(parsed)?);
+                    if let Some(stream) = self.responses.as_mut() {
+                        let events = stream.push(&chunk)?;
+                        self.pending.extend(events);
+                    } else {
+                        for parsed in self.parser.push(&chunk)? {
+                            self.pending.extend(self.state.ingest_chunk(parsed)?);
+                        }
                     }
                 }
                 None => {
@@ -838,7 +897,7 @@ fn parse_tool_arguments(arguments: &str) -> Value {
     serde_json::from_str(arguments).unwrap_or_else(|_| json!({ "raw": arguments }))
 }
 
-fn next_sse_frame(buffer: &mut Vec<u8>) -> Option<String> {
+pub(super) fn next_sse_frame(buffer: &mut Vec<u8>) -> Option<String> {
     let separator = buffer
         .windows(2)
         .position(|window| window == b"\n\n")
@@ -986,7 +1045,6 @@ mod tests {
         ToolResultContentBlock,
     };
     use serde_json::json;
-    use std::sync::{Mutex, OnceLock};
 
     #[test]
     fn request_translation_uses_openai_compatible_shape() {
@@ -1116,10 +1174,231 @@ mod tests {
     }
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("env lock")
+        crate::providers::env_test_lock()
+    }
+
+    /// Runs `body` with `FRONTAL_CODE_CONFIG_HOME` pointed at a fresh temp dir.
+    fn with_config_home<T>(name: &str, body: impl FnOnce() -> T) -> T {
+        let dir =
+            std::env::temp_dir().join(format!("openai-oauth-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &dir);
+        let result = body();
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+        result
+    }
+
+    fn save_token(provider: &str, expires_at: Option<u64>, refresh_token: Option<&str>) {
+        frontal_code_runtime::save_oauth_credentials_for(
+            &frontal_code_runtime::OAuthTokenSet {
+                access_token: format!("{provider}-saved-token"),
+                refresh_token: refresh_token.map(str::to_string),
+                expires_at,
+                scopes: vec!["scope:a".to_string()],
+            },
+            provider,
+        )
+        .expect("save oauth credentials");
+    }
+
+    fn far_future() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_secs()
+            + 3600
+    }
+
+    #[test]
+    fn openai_uses_saved_token_when_no_env_key_and_keeps_providers_separate() {
+        let _guard = env_lock();
+        with_config_home("saved-token", || {
+            std::env::remove_var("OPENAI_API_KEY");
+            save_token("openai", Some(far_future()), None);
+
+            let client = OpenAiCompatClient::from_env_or_saved(openai::config(), "openai")
+                .expect("saved openai token should be used");
+            assert_eq!(client.api_key, "openai-saved-token");
+
+            // Saving the OpenAI token must not write the Anthropic ("oauth") entry.
+            assert!(frontal_code_runtime::load_oauth_credentials()
+                .expect("load anthropic credentials")
+                .is_none());
+        });
+    }
+
+    #[test]
+    fn openai_env_key_wins_over_saved_token() {
+        let _guard = env_lock();
+        with_config_home("env-wins", || {
+            std::env::set_var("OPENAI_API_KEY", "env-key");
+            save_token("openai", Some(far_future()), None);
+
+            let client = OpenAiCompatClient::from_env_or_saved(openai::config(), "openai")
+                .expect("env key should be used");
+            assert_eq!(client.api_key, "env-key");
+            std::env::remove_var("OPENAI_API_KEY");
+        });
+    }
+
+    #[test]
+    fn expired_token_without_refresh_token_reports_expired() {
+        let _guard = env_lock();
+        with_config_home("expired-no-refresh", || {
+            std::env::remove_var("OPENAI_API_KEY");
+            save_token("openai", Some(1), None);
+
+            let error = OpenAiCompatClient::from_env_or_saved(openai::config(), "openai")
+                .expect_err("expired token with no refresh should fail");
+            assert!(matches!(error, ApiError::ExpiredOAuthToken));
+        });
+    }
+
+    #[test]
+    fn expired_token_without_recorded_endpoint_errors_without_clobbering_store() {
+        let _guard = env_lock();
+        with_config_home("expired-no-endpoint", || {
+            // Saved without an endpoint, as older entries are: refresh must not guess one.
+            save_token("openai", Some(1), Some("refresh-token"));
+
+            let error = crate::providers::saved_oauth_bearer("openai")
+                .expect_err("expired token without a recorded endpoint should fail");
+            assert!(matches!(
+                error,
+                ApiError::Auth(message) if message.contains("no recorded token endpoint")
+            ));
+
+            // The stored token is left intact for a later attempt.
+            let stored = frontal_code_runtime::load_oauth_credentials_for("openai")
+                .expect("load openai credentials")
+                .expect("stored token");
+            assert_eq!(stored.refresh_token.as_deref(), Some("refresh-token"));
+        });
+    }
+
+    #[test]
+    fn refresh_config_comes_only_from_the_recorded_login_endpoint() {
+        let _guard = env_lock();
+        with_config_home("recorded-endpoint", || {
+            frontal_code_runtime::save_oauth_login_for(
+                &frontal_code_runtime::OAuthTokenSet {
+                    access_token: "openai-saved-token".to_string(),
+                    refresh_token: Some("refresh-token".to_string()),
+                    expires_at: Some(far_future()),
+                    scopes: vec![],
+                },
+                "openai",
+                &frontal_code_runtime::OAuthEndpoint {
+                    client_id: "recorded-client".to_string(),
+                    token_url: "https://auth.trusted.example/token".to_string(),
+                },
+            )
+            .expect("save login with endpoint");
+
+            let config = crate::providers::stored_refresh_config("openai")
+                .expect("stored endpoint should be valid")
+                .expect("endpoint recorded at login");
+            assert_eq!(config.token_url, "https://auth.trusted.example/token");
+            assert_eq!(config.client_id, "recorded-client");
+
+            // A later token save (as after a refresh) keeps the recorded endpoint.
+            save_token("openai", Some(far_future()), Some("refresh-token"));
+            let kept = crate::providers::stored_refresh_config("openai")
+                .expect("endpoint still valid")
+                .expect("endpoint kept across token saves");
+            assert_eq!(kept.token_url, "https://auth.trusted.example/token");
+        });
+    }
+
+    #[test]
+    fn refresh_lock_blocks_other_holders_until_released() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let _guard = env_lock();
+        with_config_home("refresh-lock", || {
+            let held = crate::providers::lock_credentials_for_refresh().expect("first lock");
+            let (tx, rx) = mpsc::channel();
+            let waiter = std::thread::spawn(move || {
+                let _second =
+                    crate::providers::lock_credentials_for_refresh().expect("second lock");
+                tx.send(()).expect("signal acquired");
+            });
+
+            assert!(
+                rx.recv_timeout(Duration::from_millis(300)).is_err(),
+                "second holder should wait while the first holds the lock"
+            );
+            drop(held);
+            rx.recv_timeout(Duration::from_secs(5))
+                .expect("second holder should acquire after release");
+            waiter.join().expect("waiter thread");
+        });
+    }
+
+    #[test]
+    fn oauth_endpoint_validation_requires_https_or_exact_loopback() {
+        use crate::providers::validate_oauth_endpoint;
+
+        assert!(validate_oauth_endpoint("https://auth.example/token").is_ok());
+        assert!(validate_oauth_endpoint("http://127.0.0.1:8765/token").is_ok());
+        assert!(validate_oauth_endpoint("http://localhost/token").is_ok());
+
+        assert!(validate_oauth_endpoint("http://auth.example/token").is_err());
+        assert!(validate_oauth_endpoint("http://127.0.0.1.evil.example/token").is_err());
+        assert!(validate_oauth_endpoint("http://localhost.evil.example/token").is_err());
+        assert!(validate_oauth_endpoint("ftp://auth.example/token").is_err());
+    }
+
+    #[test]
+    fn anthropic_saved_login_is_read_from_its_storage_key() {
+        let _guard = env_lock();
+        with_config_home("anthropic-key", || {
+            std::env::remove_var("FRONTAL_API_KEY");
+            std::env::remove_var("FRONTAL_AUTH_TOKEN");
+            // `frontal-code login anthropic` stores under the mapped key, and the
+            // Anthropic startup path must find it there.
+            frontal_code_runtime::save_oauth_credentials_for(
+                &frontal_code_runtime::OAuthTokenSet {
+                    access_token: "anthropic-saved-token".to_string(),
+                    refresh_token: None,
+                    expires_at: Some(far_future()),
+                    scopes: vec![],
+                },
+                frontal_code_runtime::credentials_key_for_provider("anthropic"),
+            )
+            .expect("save anthropic credentials");
+
+            assert!(crate::providers::create_provider_client(
+                "anthropic",
+                "claude-sonnet-4-6".to_string()
+            )
+            .is_ok());
+        });
+    }
+
+    #[test]
+    fn saved_openai_token_selects_openai_provider() {
+        let _guard = env_lock();
+        with_config_home("detect", || {
+            for key in [
+                "OPENAI_API_KEY",
+                "FRONTAL_API_KEY",
+                "FRONTAL_AUTH_TOKEN",
+                "XAI_API_KEY",
+                "BEDROCK_API_KEY",
+                "AZURE_OPENAI_API_KEY",
+            ] {
+                std::env::remove_var(key);
+            }
+            save_token("openai", Some(far_future()), None);
+
+            assert_eq!(
+                crate::providers::detect_provider_kind("custom-model"),
+                crate::providers::ProviderKind::OpenAi
+            );
+        });
     }
 
     #[test]

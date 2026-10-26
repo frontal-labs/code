@@ -66,7 +66,7 @@ fn hosted_task_context_default() {
     assert!(context.priority.is_none());
     assert!(context.plan_id.is_none());
     assert!(context.model.is_none());
-    assert!(context.allowed_tools.is_empty());
+    assert_eq!(context.allowed_tools, [] as [std::string::String; 0]);
 }
 
 #[test]

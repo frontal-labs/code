@@ -160,7 +160,10 @@ fn style_dataset_builder() {
 #[test]
 fn style_dataset_builder_empty() {
     let builder = StyleDatasetBuilder::new();
-    assert!(builder.build().is_empty());
+    assert_eq!(
+        builder.build(),
+        [] as [frontal_code_training::StyleSample; 0]
+    );
 }
 
 #[test]

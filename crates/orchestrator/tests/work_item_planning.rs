@@ -12,7 +12,7 @@ fn creates_work_item_with_uuid() {
         WorkItemPriority::Medium,
         WorkItemContext::default(),
     );
-    assert!(!item.work_item_id.is_empty());
+    assert_ne!(item.work_item_id, "");
     assert_eq!(item.prompt, "Fix bug");
     assert_eq!(item.source, WorkItemSource::Slack);
     assert_eq!(item.priority, WorkItemPriority::Medium);

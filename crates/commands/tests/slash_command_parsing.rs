@@ -15,7 +15,7 @@ fn non_slash_input_returns_ok_none() {
 #[test]
 fn empty_slash_returns_error() {
     let err = parse("/").unwrap_err();
-    assert!(!err.to_string().is_empty());
+    assert_ne!(err.to_string(), "");
 }
 
 #[test]

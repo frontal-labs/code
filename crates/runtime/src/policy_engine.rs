@@ -571,7 +571,7 @@ mod tests {
         );
 
         let actions = engine.evaluate(&context);
-        assert!(actions.is_empty());
+        assert_eq!(actions.len(), 0);
     }
 
     #[test]

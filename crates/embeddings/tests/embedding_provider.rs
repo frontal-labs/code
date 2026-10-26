@@ -102,7 +102,7 @@ fn embed_batch_produces_correct_number_of_embeddings() {
 fn embed_batch_with_empty_input() {
     let provider = LocalMlEmbeddingProvider::default();
     let embeddings = provider.embed_batch(&[]);
-    assert!(embeddings.is_empty());
+    assert_eq!(embeddings, [] as [std::vec::Vec<f32>; 0]);
 }
 
 #[test]

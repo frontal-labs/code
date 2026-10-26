@@ -20,7 +20,8 @@
       "!**/bazel-*",
       "!**/src/generated",
       "!**/*.lock",
-      "!**/*.sum"
+      "!**/*.sum",
+      "!**/*.md"
     ]
   },
   "formatter": {

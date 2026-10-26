@@ -12,7 +12,8 @@ common --enable_bzlmod
 common --noenable_workspace
 
 # Make builds hermetic and reproducible.
-build --incompatible_strict_action_env
+# (strict_action_env is the default in Bazel 7+; the --incompatible_strict_action_env
+# flag is finalized/no-op and omitted intentionally.)
 build --announce_rc
 
 # Show test failures immediately.

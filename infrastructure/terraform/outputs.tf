@@ -9,8 +9,8 @@ output "frontal-code_tools_url" {
 }
 
 output "frontal-code_server_url" {
-  description = "Internal URL for frontal-code-server"
-  value       = var.deploy_frontal-code_server ? "http://frontal-code-server:8788" : null
+  description = "Internal URL for code-server"
+  value       = var.deploy_frontal-code_server ? "http://code-server:8788" : null
 }
 
 output "frontal-code_slack_url" {

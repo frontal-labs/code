@@ -24,7 +24,7 @@ The `Formula/code.rb` formula:
 - **License**: Apache 2.0
 - **Source**: Installs from the main git branch (`--HEAD`)
 - **Dependencies**: Rust toolchain for building
-- **Install Target**: Builds and installs from `crates/cli`
+- **Install Target**: Builds and installs from `cli`
 
 ## Development
 

@@ -1,5 +1,4 @@
-# Lint aspect — wired to a real linter (buildifier), with extension points for
-# clippy and eslint.
+# Lint aspect — wired to a real linter (buildifier).
 #
 # For every Starlark file (`.bzl`, `.bazel`, `BUILD`, `WORKSPACE`,
 # `MODULE.bazel`) in a target's sources, runs `buildifier --lint=warn
@@ -8,24 +7,31 @@
 #
 # Apply on demand, e.g.:
 #   bazel build //some:target --aspects=//bazel/aspects:lint_aspect.bzl%lint_aspect
-#
-# Extension points (documented, not yet implemented):
-#   - Rust clippy: invoke `@rules_rust//rust:defs.bzl` `rust_clippy` as an
-#     action when the target is a rust_* rule and `tags` contains "lint".
-#   - ESLint: invoke `@aspect_rules_js//js:defs.bzl` `eslint` as an action
-#     when the target is a js_* / ts_* rule and `tags` contains "lint".
 
 _STARLARK_EXTS = ["bzl", "bazel"]
 _STARLARK_NAMES = ["BUILD", "WORKSPACE", "MODULE.bazel", "BUILD.bazel"]
 
+def _source_file(node):
+    """Return the underlying File from a Target or File node."""
+    files = getattr(node, "files", None)
+    if files:
+        flist = files.to_list()
+        if flist:
+            return flist[0]
+    return node
+
+def _source_files(ctx):
+    """Resolve the File objects behind a target's `srcs` attribute."""
+    srcs = getattr(ctx.rule.attr, "srcs", [])
+    return [_source_file(src) for src in srcs]
+
 def _is_starlark(f):
     return f.extension in _STARLARK_EXTS or f.basename in _STARLARK_NAMES
 
-def _lint_aspect_impl(target, ctx):
+def _lint_aspect_impl(_unused_target, ctx):
     buildifier = ctx.executable._buildifier
     outputs = []
-    srcs = getattr(ctx.rule.files, "srcs", []) if hasattr(ctx.rule, "files") else []
-    for src in srcs:
+    for src in _source_files(ctx):
         if not _is_starlark(src):
             continue
         out = ctx.actions.declare_file(src.basename + ".linted")
@@ -39,16 +45,6 @@ def _lint_aspect_impl(target, ctx):
         )
         outputs.append(out)
 
-    # Extension point: clippy for Rust targets.
-    # if "rust" in ctx.rule.kind and "lint" in (ctx.rule.attr.tags or []):
-    #     clippy = ctx.executable._clippy
-    #     ...
-
-    # Extension point: eslint for JS/TS targets.
-    # if ctx.rule.kind in ("js_library", "js_binary", "js_test"):
-    #     eslint = ctx.executable._eslint
-    #     ...
-
     return [OutputGroupInfo(lint = depset(outputs))]
 
 lint_aspect = aspect(
@@ -59,8 +55,6 @@ lint_aspect = aspect(
             executable = True,
             cfg = "exec",
         ),
-        # "_clippy": attr.label(default = "@rules_rust//rust/clippy:clippy", executable = True, cfg = "exec"),
-        # "_eslint": attr.label(default = "@aspect_rules_js//js:eslint", executable = True, cfg = "exec"),
     },
-    doc = "Runs buildifier --lint=warn on Starlark sources of the target. Extension points for clippy and eslint are documented in the implementation.",
+    doc = "Runs buildifier --lint=warn on Starlark sources of the target.",
 )

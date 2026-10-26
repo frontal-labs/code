@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Project policy: a `policy` object in `.frontal-code/settings.json` (or the user or local settings) limits `allowedProviders`, `allowedModels` (with `*` globs), per-provider `authMethods`, a `permissionCeiling`, and `deny` tools. Each source only adds restrictions. Enforced by the CLI on client construction and permission setup, and by the hosted server before a worker starts. See CONFIGURATION.md#project-policy.
-- `frontal-code login [anthropic|openai]`, `logout`, and `auth status`: OAuth (authorization code + PKCE) sign-in as an alternative to API keys. Providers are configured per name under `settings.oauth`, and no vendor client ID is bundled.
+- `code login [anthropic|openai]`, `logout`, and `auth status`: OAuth (authorization code + PKCE) sign-in as an alternative to API keys. Providers are configured per name under `settings.oauth`, and no vendor client ID is bundled.
 - OpenAI accepts a saved OAuth login in place of `OPENAI_API_KEY`, and the Anthropic provider uses saved logins as well as env keys.
 - Codex-family models (for example `gpt-5-codex`) on the OpenAI provider now go through the Responses API (`/responses`), since they are not served by chat completions. Requests are sent with `store: false`. A Codex model selects the OpenAI provider without `--provider`, even when the default provider is `frontal`.
 - Biome lint now covers the JS and TS packages without errors. Markdown is excluded from the Biome check, because Biome's Markdown formatter rewrites code samples.
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `credentials.json` is written with mode `0600`.
 - Saved OAuth tokens are stored per provider. Refreshing one provider's token no longer touches the Anthropic entry.
 - Token refresh uses only the token endpoint recorded at login. It no longer reads `settings.oauth` from project config, which could have sent a refresh token to a host set by a repository. Token endpoints must be `https` (or loopback `http` for testing), and token requests do not follow redirects. Logins saved before this change need to be redone with `frontal-code login`.
-- `frontal-code login` reads `settings.oauth` from user-level settings only. Project and local settings are ignored, so a repository cannot send an authorization code to a host it chooses. Move any login config from `.frontal-code/settings.json` to `~/.frontal-code/settings.json`.
+- `code login` reads `settings.oauth` from user-level settings only. Project and local settings are ignored, so a repository cannot send an authorization code to a host it chooses. Move any login config from `.frontal-code/settings.json` to `~/.frontal-code/settings.json`.
 
 ## [0.1.1] - 2026-04-09
 
@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolved vulnerable transitive `vite` and `esbuild` versions in `extensions/frontal-code-slack/package-lock.json`.
 
 ### Added
-- **Core Configuration System**: New type-safe configuration system with `frontal-code-core` crate
+- **Core Configuration System**: New type-safe configuration system with `code-core` crate
 - **Project Configuration**: Centralized `config/project.json` for feature flags and internal settings
 - **Configuration Manager**: Bridge between core and runtime configuration systems
 - **Type-safe Configuration**: Rust structs for all configuration values with validation

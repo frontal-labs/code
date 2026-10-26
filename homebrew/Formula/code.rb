@@ -1,4 +1,4 @@
-class Frontal Code < Formula
+class FrontalCode < Formula
   desc "High-performance Rust AI agent harness"
   homepage "https://github.com/frontal-labs/frontal-code"
   license "Apache-2.0"
@@ -6,10 +6,10 @@ class Frontal Code < Formula
 
   if OS.mac?
     if Hardware::CPU.arm?
-      url "https://github.com/frontal-labs/frontal-code/releases/download/v#{version}/frontal-code-macos-arm64.tar.gz"
-      sha256 "e2513b12a1000b6c6fb5c96df030e9d1218a218032da54117c9ebee20c076688"
+      url "https://github.com/frontal-labs/code/releases/download/v#{version}/code-cli-aarch64-apple-darwin"
+      sha256 "<INSERT_ARM64_SHA256>" # filled by release CI (macos-14 runner)
     else
-      url "https://github.com/frontal-labs/frontal-code/releases/download/v#{version}/frontal-code-macos-x64.tar.gz"
+      url "https://github.com/frontal-labs/code/releases/download/v#{version}/code-cli-x86_64-apple-darwin"
       sha256 "<INSERT_X64_SHA256>" # filled by release CI (macos-13 runner)
     end
   end
@@ -20,9 +20,10 @@ class Frontal Code < Formula
 
   def install
     if build.head?
-      system "cargo", "install", *std_cargo_args(path: "crates/cli")
+      system "cargo", "install", *std_cargo_args(path: "cli")
     else
-      bin.install "bin/frontal-code"
+      # Release asset is a raw binary named code-cli-<target>; install it as frontal-code.
+      bin.install Dir["code-cli-*"].first => "frontal-code"
     end
   end
 

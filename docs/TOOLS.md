@@ -53,7 +53,7 @@ Exits non-zero if any required check fails, so it can gate CI.
   `docker`, `git`, `pre-commit`, `.frontal-code/settings.json` validity, `Cargo.lock` presence.
 - **Output:** text table with `[ok]`/`[FAIL]` per check, plus a trailing
   `N checks, M failing` line; JSON form emits `{"checks":[…],"failed":M}`.
-- **CI:** surfaced by the existing `frontal-code-doctor` pre-commit hook and runnable
+- **CI:** surfaced by the existing `code-doctor` pre-commit hook and runnable
   as a `bazel test` target.
 
 ---
@@ -129,7 +129,7 @@ Generate Rust boilerplate from names or JSON schemas.
   - `--out <file>` — write to a file instead of stdout
 - **Example:**
   ```bash
-  bazel run //tools/codegen:codegen -- command Deploy > crates/cli/src/commands/deploy.rs
+  bazel run //tools/codegen:codegen -- command Deploy > cli/src/commands/deploy.rs
   bazel run //tools/codegen:codegen -- struct Config --from config.sample.json
   ```
 - **Output:** Rust source on stdout or `--out`.

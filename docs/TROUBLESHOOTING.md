@@ -45,8 +45,8 @@ frontal-code diagnose performance
 
 **Symptoms:**
 ```
-error: failed to compile `frontal-code-cli v0.1.0`
-error: could not compile `frontal-code-cli`
+error: failed to compile `cli v0.1.0`
+error: could not compile `cli`
 ```
 
 **Solutions:**
@@ -167,7 +167,7 @@ sleep 60
 frontal-code prompt "test message"
 
 # Use different model
-frontal-code --model claude-haiku-4-5 prompt "test"
+frontal-code --model claude-haiku-5-5 prompt "test"
 
 # Configure rate limiting
 frontal-code config set rate_limiting.requests_per_minute 30

@@ -18,7 +18,7 @@ The Frontal Code Slack extension provides autonomous engineering capabilities di
 
 - **Slack Interface** (`src/slack.ts`): Socket-mode client, command handling, thread management
 - **Frontal Code API Client** (`src/api-client.ts`): HTTP client for tasks, approvals, and callbacks
-- **Event Stream Client** (`src/frontal-code-events.ts`): WebSocket client for real-time task events
+- **Event Stream Client** (`src/code-events.ts`): WebSocket client for real-time task events
 - **Configuration** (`src/config.ts`, `src/env.ts`): Environment validation and settings
 - **Type Definitions** (`src/types.ts`): Slack and Frontal Code API type definitions
 
@@ -133,7 +133,7 @@ bun run lint:fix
 bun run format
 
 # Sync Frontal Code event types
-bun run sync:frontal-code-events
+bun run sync:code-events
 ```
 
 ### Testing

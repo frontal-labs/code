@@ -54,7 +54,7 @@ vi.mock("ws", () => ({
   default: MockWebSocket,
 }));
 
-import { FrontalCodeEventsClient } from "../src/frontal-code-events";
+import { FrontalCodeEventsClient } from "../src/code-events";
 import { logger } from "../src/log";
 import type { FrontalCodeEventEnvelope, FrontalCodeTrackedTask } from "../src/types";
 

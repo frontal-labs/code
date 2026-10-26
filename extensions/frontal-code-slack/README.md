@@ -39,7 +39,7 @@ The current connector implementation lives in `src/`:
 - `src/index.ts`: process entrypoint
 - `src/slack.ts`: Slack socket-mode interface, command handling, thread updates, approval actions
 - `src/api-client.ts`: Frontal Code HTTP client for tasks, approvals, Slack connector callbacks, context updates, and orphan policy inspection
-- `src/frontal-code-events.ts`: Frontal Code WebSocket event stream client with tracked-task scoped subscriptions
+- `src/code-events.ts`: Frontal Code WebSocket event stream client with tracked-task scoped subscriptions
 - `src/config.ts` and `src/env.ts`: validated environment configuration
 - `src/log.ts`: connector logging
 - `src/types.ts`: Slack and Frontal Code API types
@@ -94,14 +94,14 @@ bun run dev
 Useful commands:
 
 ```bash
-bun run sync:frontal-code-events
+bun run sync:code-events
 bun run build
 bun test
 bun run lint
 bun run format
 ```
 
-`bun run build` now checks that `src/generated/frontal-code-events.ts` matches the Rust event contract generator. If the file is stale, run `bun run sync:frontal-code-events` and rebuild.
+`bun run build` now checks that `src/generated/code-events.ts` matches the Rust event contract generator. If the file is stale, run `bun run sync:code-events` and rebuild.
 
 ## Slack App Setup
 

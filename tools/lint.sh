@@ -35,9 +35,9 @@ if [[ -n "${TEST_SRCDIR:-}" && -z "${BUILD_WORKSPACE_DIRECTORY:-}" ]]; then
 fi
 
 if command -v bun >/dev/null 2>&1; then
-  bunx @biomejs/biome check "$TARGET"
+  bunx @biomejs/biome@2.5.14 ci "$TARGET"
 elif command -v npx >/dev/null 2>&1; then
-  npx -y @biomejs/biome check "$TARGET"
+  npx -y @biomejs/biome@2.5.14 ci "$TARGET"
 else
   echo "ERROR: neither bun nor npx found on PATH; cannot run Biome check" >&2
   exit 1

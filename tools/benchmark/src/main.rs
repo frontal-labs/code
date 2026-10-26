@@ -14,7 +14,7 @@ use std::process::Command;
 use std::time::Instant;
 
 #[derive(Parser)]
-#[command(name = "frontal-code-benchmark", about = "Build/CI timing harness")]
+#[command(name = "code-benchmark", about = "Build/CI timing harness")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

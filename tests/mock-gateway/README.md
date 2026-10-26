@@ -20,7 +20,7 @@ redesign:
 ## Usage
 
 ```bash
-cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 The server prints `MOCK_GATEWAY_BASE_URL=http://127.0.0.1:<port>`, which you
@@ -35,4 +35,4 @@ point at the gateway via `FRONTAL_BASE_URL` (or `OPENAI_BASE_URL`, etc.).
 - Non-streaming: `{ "id", "object": "chat.completion", "model", "choices", "usage" }`.
 
 Scenarios are selected by embedding a `PARITY_SCENARIO:<name>` token in the
-user prompt (see `crates/cli/tests/mock_parity_harness.rs`).
+user prompt (see `cli/tests/mock_parity_harness.rs`).

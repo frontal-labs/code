@@ -171,7 +171,7 @@ describe("Environment Variables", () => {
         HEALTH_CHECK_INTERVAL: "",
       });
 
-      expect(freshEnv.FRONTAL_CODE_API_URL).toBe("http://frontal-code-api:8787");
+      expect(freshEnv.FRONTAL_CODE_API_URL).toBe("http://code-api:8787");
       expect(freshEnv.FRONTAL_CODE_API_TIMEOUT).toBe(30000);
       expect(freshEnv.LOG_LEVEL).toBe("info");
       expect(freshEnv.PORT).toBe(3000);

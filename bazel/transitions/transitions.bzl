@@ -6,7 +6,7 @@
 
 def _platform_transition_impl(_settings, _attr):
     return {
-        "//command_line_option:platforms": ["//bazel/platforms:linux_x86_64"],
+        "//command_line_option:target_platforms": ["//bazel/platforms:linux_x86_64"],
     }
 
 platform_transition = transition(

@@ -10,9 +10,9 @@ if [[ -z "$REPO_ROOT" ]]; then
 fi
 cd "$REPO_ROOT"
 ACTION="${1:-test}"
-cd cli
+cd npm/code-cli
 if [[ ! -f package.json ]]; then
-  echo "ERROR: cli/package.json not found (checkout incomplete)" >&2
+  echo "ERROR: npm/code-cli/package.json not found (checkout incomplete)" >&2
   exit 1
 fi
 
@@ -26,23 +26,10 @@ case "$ACTION" in
     node --test tests/*.test.mjs
     ;;
   lint)
-    if [[ -n "${TEST_SRCDIR:-}" && -z "${BUILD_WORKSPACE_DIRECTORY:-}" ]]; then
-      # Under Bazel the runfiles are symlinks into the source tree, which Biome cannot
-      # walk. Lint a writable copy with the root configs, as tools/extension.sh does.
-      LINT_DIR="$(mktemp -d "${TEST_TMPDIR:-/tmp}/cli-lint.XXXXXX")"
-      export TMPDIR="${TEST_TMPDIR:-/tmp}"
-      cp -RL "$PWD"/. "$LINT_DIR"/
-      for config_file in biome.json ultracite.json .gitignore; do
-        if [[ -f "$REPO_ROOT/$config_file" ]]; then
-          cp -L "$REPO_ROOT/$config_file" "$LINT_DIR/$config_file"
-        fi
-      done
-      cd "$LINT_DIR"
-    fi
     if command -v bunx >/dev/null 2>&1; then
-      bunx @biomejs/biome check .
+      bunx @biomejs/biome@2.5.14 ci .
     elif command -v npx >/dev/null 2>&1; then
-      npx -y @biomejs/biome check .
+      npx -y @biomejs/biome@2.5.14 ci .
     else
       echo "ERROR: neither bunx nor npx found on PATH" >&2
       exit 1

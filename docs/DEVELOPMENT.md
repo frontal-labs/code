@@ -78,13 +78,13 @@ cargo run -p cli -- repl
 The project uses a Cargo workspace with multiple crates:
 
 - **`crates/cli`** - Main CLI binary and argument parsing
-- **`crates/runtime`** - Core runtime, session management, configuration
+- **`crates/code-runtime`** - Core runtime, session management, configuration
 - **`crates/providers`** - AI provider implementations (Anthropic, OpenAI, xAI)
 - **`crates/tools`** - Built-in tools and skill system
 - **`crates/commands`** - Slash command definitions and parsing
 - **`crates/plugins`** - Plugin system and management
 - **`crates/api`** - Public API facade
-- **`crates/frontal-code-mock-gateway`** - Testing mock service
+- **`crates/code-mock-gateway`** - Testing mock service
 
 ### Adding New Features
 
@@ -120,7 +120,7 @@ The project includes a comprehensive mock testing harness:
 ./scripts/run_mock_parity_harness.sh
 
 # Run mock service manually
-cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 ## Linting and Formatting

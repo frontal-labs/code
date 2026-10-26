@@ -109,7 +109,7 @@ spec:
               name: slack-secrets
               key: signing-secret
         - name: FRONTAL_CODE_API_URL
-          value: "http://frontal-code-api:8788"
+          value: "http://code-api:8788"
         resources:
           requests:
             memory: "256Mi"
@@ -217,7 +217,7 @@ SLACK_APP_TOKEN=xapp-production-app-token
 SLACK_SIGNING_SECRET=production-signing-secret
 
 # Frontal Code Server
-FRONTAL_CODE_API_URL=https://frontal-code-api.your-domain.com
+FRONTAL_CODE_API_URL=https://code-api.your-domain.com
 FRONTAL_CODE_API_TIMEOUT=30000
 
 # Application
@@ -419,7 +419,7 @@ Create a Grafana dashboard with these panels:
 sudo ufw allow 3000/tcp
 
 # Allow outbound traffic to Frontal Code API
-sudo ufw allow out to <frontal-code-api-ip> port 8788
+sudo ufw allow out to <code-api-ip> port 8788
 
 # Allow outbound traffic to Slack API
 sudo ufw allow out to api.slack.com port 443
@@ -575,7 +575,7 @@ setInterval(() => {
 - Check firewall rules
 - Verify Frontal Code API URL
 - Review WebSocket logs
-- Test connectivity: `telnet frontal-code-api 8788`
+- Test connectivity: `telnet code-api 8788`
 
 #### 2. High Memory Usage
 

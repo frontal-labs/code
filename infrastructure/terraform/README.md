@@ -8,20 +8,20 @@ This Terraform configuration sets up the complete AWS infrastructure for hosting
 - **NGINX Ingress Controller**: Path-based routing to different services
 - **Cert-Manager**: Automatic SSL certificate management with Let's Encrypt
 - **Route53**: DNS management for `tools.frontal.dev`
-- **Kubernetes**: Complete service deployment (frontal-code-server, frontal-code-slack, proxy)
+- **Kubernetes**: Complete service deployment (code-server, frontal-code-slack, proxy)
 - **ECR**: Optional container registry for custom images
 - **EBS**: Persistent storage for workspace, server state, and agent store
 
 ## Deployed Components
 
 ### Core Services
-- **frontal-code-server**: Rust-based control plane (2 replicas, 2Gi RAM each)
+- **code-server**: Rust-based control plane (2 replicas, 2Gi RAM each)
 - **frontal-code-slack**: Node.js Slack integration (2 replicas, 512Mi RAM each)
 - **tools-proxy**: NGINX reverse proxy with SSL termination
 
 ### Storage
 - **Workspace**: 100Gi for code repositories and workspace
-- **Server State**: 10Gi for frontal-code-server state
+- **Server State**: 10Gi for code-server state
 - **Agent Store**: 50Gi for hosted agent artifacts
 
 ### Networking
@@ -71,7 +71,7 @@ deploy_frontal-code_server = true
 deploy_frontal-code_slack = true
 
 # Container Images
-frontal-code_server_image = "frontal-code-server:v0.1.0"
+frontal-code_server_image = "code-server:v0.1.0"
 frontal-code_slack_image = "frontal-code-slack:v0.1.0"
 frontal-code_server_api_key = "replace-with-a-long-random-api-key"
 
@@ -138,7 +138,7 @@ kubectl get svc -n ingress-nginx
 kubectl get pvc -n frontal-code
 
 # Check logs
-kubectl logs -n frontal-code -l app=frontal-code-server
+kubectl logs -n frontal-code -l app=code-server
 kubectl logs -n frontal-code -l app=frontal-code-slack
 kubectl logs -n frontal-code -l app=tools-proxy
 ```
@@ -191,7 +191,7 @@ kubectl logs -n cert-manager deployment/cert-manager
 
 ```bash
 # Check ingress status
-kubectl describe ingress frontal-code-tools-ingress -n frontal-code
+kubectl describe ingress code-tools-ingress -n frontal-code
 
 # Check NGINX ingress logs
 kubectl logs -n ingress-nginx deployment/nginx-ingress-controller

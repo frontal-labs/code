@@ -3,7 +3,7 @@
 ## Overview
 
 The Frontal Code Rust SDK (`frontal-code-sdk`) is a thin async wrapper around the `frontal-code` CLI
-(`@frontal-labs/frontal-code`). It spawns the CLI as a child process per turn and
+(`@frontal-labs/code-cli`). It spawns the CLI as a child process per turn and
 communicates via JSONL over stdin/stdout using `--output-format json --stream`.
 
 ## High-Level Components

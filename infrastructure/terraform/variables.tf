@@ -36,13 +36,13 @@ variable "vpc_id" {
 }
 
 variable "frontal-code_service_namespace" {
-  description = "Kubernetes namespace where frontal-code-server is deployed"
+  description = "Kubernetes namespace where code-server is deployed"
   type        = string
   default     = "frontal-code"
 }
 
 variable "deploy_frontal-code_server" {
-  description = "Whether to deploy the frontal-code-server"
+  description = "Whether to deploy the code-server"
   type        = bool
   default     = true
 }
@@ -54,9 +54,9 @@ variable "deploy_frontal-code_slack" {
 }
 
 variable "frontal-code_server_image" {
-  description = "Docker image for frontal-code-server"
+  description = "Docker image for code-server"
   type        = string
-  default     = "frontal-code-server:v0.1.0"
+  default     = "code-server:v0.1.0"
 }
 
 variable "frontal-code_slack_image" {
@@ -66,7 +66,7 @@ variable "frontal-code_slack_image" {
 }
 
 variable "frontal-code_server_api_key" {
-  description = "Shared API key used by frontal-code-server control-plane routes and frontal-code-slack"
+  description = "Shared API key used by code-server control-plane routes and frontal-code-slack"
   type        = string
   sensitive   = true
 }

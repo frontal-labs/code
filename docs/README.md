@@ -55,7 +55,7 @@ frontal-code prompt "What files are in the current directory?"
 frontal-code prompt "Read the README.md file and summarize it"
 
 # Use specific model
-frontal-code --model claude-sonnet-4-6 prompt "Explain this codebase"
+frontal-code --model claude-sonnet-5-5 prompt "Explain this codebase"
 ```
 
 ### Configuration
@@ -65,7 +65,7 @@ frontal-code --model claude-sonnet-4-6 prompt "Explain this codebase"
 export FRONTAL_API_KEY="sk-ant-..."
 
 # Configure default model
-frontal-code config set runtime.default_model "claude-sonnet-4-6"
+frontal-code config set runtime.default_model "claude-sonnet-5-5"
 
 # Show configuration
 frontal-code config show

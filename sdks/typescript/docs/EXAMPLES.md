@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-npm install @frontal-labs/frontal-code-sdk
+npm install @frontal-labs/code-sdk
 # Requires Node.js 18+
 ```
 
@@ -12,7 +12,7 @@ npm install @frontal-labs/frontal-code-sdk
 ### Simple Text Turn
 
 ```typescript
-import { Frontal Code } from '@frontal-labs/frontal-code-sdk';
+import { Frontal Code } from '@frontal-labs/code-sdk';
 
 const frontal-code = new Frontal Code();
 const thread = frontal-code.startThread();
@@ -184,7 +184,7 @@ const turn = await resumedThread.run('Continue from where we left off');
 ## Error Handling
 
 ```typescript
-import { FrontalCodeError } from '@frontal-labs/frontal-code-sdk/errors';
+import { FrontalCodeError } from '@frontal-labs/code-sdk/errors';
 
 try {
   const turn = await thread.run('Analyze this code');
@@ -192,7 +192,7 @@ try {
   if (error instanceof FrontalCodeError) {
     switch (error.code) {
       case 'CLI_NOT_FOUND':
-        console.error('Frontal Code CLI not installed. Run: npm i -g @frontal-labs/frontal-code');
+        console.error('Frontal Code CLI not installed. Run: npm i -g @frontal-labs/code-cli');
         break;
       case 'PROCESS_EXITED':
         console.error('CLI crashed:', error.message);
@@ -261,7 +261,7 @@ async function processWithProgress(thread: Thread, input: string) {
 ## Testing with Mock CLI
 
 ```typescript
-import { createMockFrontal Code } from '@frontal-labs/frontal-code-sdk/test-utils';
+import { createMockFrontal Code } from '@frontal-labs/code-sdk/test-utils';
 
 test('handles streaming correctly', async () => {
   const frontal-code = createMockFrontal Code({ scenario: 'streaming_tool_calls' });

@@ -1,0 +1,24 @@
+app = "frontal-code-slack"
+primary_region = "iad"
+
+[build]
+  dockerfile = "../docker/slack-app.Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  LOG_LEVEL = "info"
+  PORT = "3000"
+  FRONTAL_CODE_API_URL = "https://frontal-code.fly.dev"
+
+[http_service]
+  internal_port = 3000
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"

@@ -22,7 +22,7 @@ frontal-code --model claude-opus-5
 frontal-code prompt "explain this codebase"
 
 # JSON output for automation
-frontal-code --output-format json prompt "summarize crates/cli/src/main.rs"
+frontal-code --output-format json prompt "summarize cli/src/main.rs"
 ```
 
 If you are developing from source instead of installing the CLI, use `cargo build --workspace` and run `cargo run -p cli -- ...`.
@@ -41,7 +41,7 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 # Anthropic, or an Anthropic-compatible proxy: select the provider explicitly.
 export FRONTAL_API_KEY="sk-ant-..."
 export FRONTAL_BASE_URL="https://your-proxy.example.com"
-frontal-code --provider anthropic prompt "..."
+code --provider anthropic prompt "..."
 ```
 
 Without `--provider anthropic`, a `sk-ant-` key is sent to the gateway as a bearer token.
@@ -50,8 +50,8 @@ Or sign in with OAuth instead of a key, after adding an OAuth client to your use
 settings (see [CONFIGURATION.md](./CONFIGURATION.md#oauth-login)):
 
 ```bash
-frontal-code login --provider openai
-frontal-code auth status
+code login --provider openai
+code auth status
 ```
 
 ### Core Configuration
@@ -124,7 +124,7 @@ The workspace now includes a deterministic Anthropic-compatible mock service and
 ./scripts/run_mock_parity_harness.sh
 
 # Or start the mock service manually for ad hoc CLI runs
-cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 Harness coverage:
@@ -143,7 +143,7 @@ Harness coverage:
 Primary artifacts:
 
 - `tests/mock-gateway/` — reusable mock Anthropic-compatible service
-- `crates/cli/tests/mock_parity_harness.rs` — clean-env CLI harness
+- `cli/tests/mock_parity_harness.rs` — clean-env CLI harness
 - `scripts/run_mock_parity_harness.sh` — reproducible wrapper
 - `scripts/run_mock_parity_diff.py` — scenario checklist + PARITY mapping runner
 - `mock_parity_scenarios.json` — scenario-to-PARITY manifest
@@ -265,7 +265,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p cli -- -
 |   crates/
 |   |   api/                # Public API facade re-exporting provider/model APIs
 |   |   agents/             # Agent management and coordination
-|   |   cli/                # Main CLI binary (`frontal-code`)
+|   |   npm/code-cli/    # Main CLI binary (`frontal-code`)
 |   |   commands/           # Shared slash-command registry + help rendering
 |   |   compat-harness/     # TS manifest extraction harness
 |   |   core/               # Shared core capabilities and foundational types
@@ -303,7 +303,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p cli -- -
 - **github** - GitHub API client for PRs, issues, check runs, and repository operations
 - **integrations** - MCP server management, IDE integration, and external service bridges
 - **memory** - semantic memory, knowledge graphs, and persistent storage abstractions
-- **frontal-code-mock-gateway** - deterministic `/v1/messages` mock for CLI parity tests and local harness runs
+- **code-mock-gateway** - deterministic `/v1/messages` mock for CLI parity tests and local harness runs
 - **observability** - error reporting, structured logging, and agent-level observability
 - **orchestrator** - work item routing, execution planning, lane assignment, and resource management
 - **plugins** - plugin metadata, install/enable/disable/update flows, plugin tool definitions, hook integration surfaces

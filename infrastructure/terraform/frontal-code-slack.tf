@@ -11,7 +11,7 @@ resource "kubernetes_config_map" "frontal-code_slack_config" {
   }
 
   data = {
-    "FRONTAL_CODE_API_URL"         = "http://frontal-code-server:8788"
+    "FRONTAL_CODE_API_URL"         = "http://code-server:8788"
     "FRONTAL_CODE_API_TIMEOUT"     = "30000"
     "NODE_ENV"              = var.environment
     "LOG_LEVEL"             = "info"

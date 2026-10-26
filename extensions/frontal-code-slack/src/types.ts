@@ -7,7 +7,7 @@ import type {
   FrontalCodeGeneratedEventStatus,
   FrontalCodeGeneratedEventTopic,
   FrontalCodeGeneratedHostedTaskEventSummary,
-} from "./generated/frontal-code-events";
+} from "./generated/code-events";
 
 // ============================================================================
 // SLACK TYPES

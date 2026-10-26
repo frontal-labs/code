@@ -31,15 +31,15 @@ The main configuration file is `config/project.json`:
     "providers": {
       "anthropic": {
         "enabled": true,
-        "default_model": "claude-opus-5"
+        "default_model": "claude-opus-5-5"
       },
       "openai": {
         "enabled": true,
-        "default_model": "gpt-5"
+        "default_model": "gpt-6.1-sol"
       },
       "xai": {
         "enabled": true,
-        "default_model": "grok-3"
+        "default_model": "grok-4.7"
       }
     },
     "permission_mode": "workspace-write",
@@ -262,7 +262,7 @@ The legacy runtime configuration system is still supported for backward compatib
 
 ### OAuth Login
 
-`frontal-code login` signs in with OAuth (authorization code + PKCE) instead of an
+`code login` signs in with OAuth (authorization code + PKCE) instead of an
 API key. Frontal Code ships no provider client IDs, so you supply your own in your
 user-level settings (`~/.frontal-code/settings.json`). Each provider is configured
 under `oauth`. Project and local settings are ignored for login, so a repository
@@ -303,7 +303,7 @@ A saved login refreshes only against the token endpoint and client ID recorded w
 you logged in. Project and user settings are not read at refresh time, so a
 repository cannot redirect a refresh token. Token endpoints must use `https`, or
 plain `http` to `127.0.0.1`/`localhost` for local testing. Logins saved before this
-was recorded have no endpoint and must be redone with `frontal-code login`.
+was recorded have no endpoint and must be redone with `code login`.
 
 ## Project Policy
 

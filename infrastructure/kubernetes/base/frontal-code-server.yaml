@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontal-code-server
+  name: code-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: frontal-code-server
+      app: code-server
   template:
     metadata:
       labels:
-        app: frontal-code-server
+        app: code-server
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -18,8 +18,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: frontal-code-server
-          image: frontal-code-server:v0.1.0
+        - name: code-server
+          image: code-server:v0.1.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -35,9 +35,9 @@ spec:
           workingDir: /workspace
           envFrom:
             - configMapRef:
-                name: frontal-code-server-config
+                name: code-server-config
             - secretRef:
-                name: frontal-code-server-secrets
+                name: code-server-secrets
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -67,10 +67,10 @@ spec:
       volumes:
         - name: workspace
           persistentVolumeClaim:
-            claimName: frontal-code-workspace
+            claimName: code-workspace
         - name: server-state
           persistentVolumeClaim:
-            claimName: frontal-code-server-state
+            claimName: code-server-state
         - name: agent-store
           persistentVolumeClaim:
             claimName: frontal-code-agent-store
@@ -78,10 +78,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: frontal-code-server
+  name: code-server
 spec:
   selector:
-    app: frontal-code-server
+    app: code-server
   ports:
     - name: http
       port: 8788

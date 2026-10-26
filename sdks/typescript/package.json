@@ -1,5 +1,5 @@
 {
-  "name": "@frontal-labs/frontal-code-sdk",
+  "name": "@frontal-labs/code-sdk",
   "version": "0.1.0",
   "description": "Embed the Frontal Code agent in your workflows and apps.",
   "license": "Apache-2.0",
@@ -60,7 +60,13 @@
   "devDependencies": {
     "@types/node": "^20.12.0",
     "typescript": "^5.4.0",
-    "vite": "^5.2.0",
-    "vitest": "^1.6.0"
+    "vite": "^6.4.4",
+    "vitest": "^3.2.6"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0",
+    "postcss": "^8.5.23",
+    "source-map-js": "^1.2.2",
+    "tinypool": "^2.1.2"
   }
 }

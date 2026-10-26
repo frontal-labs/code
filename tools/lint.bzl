@@ -5,7 +5,7 @@
 # and per-SDK `bazel test //sdk/...` exercise the same checks CI runs.
 
 def biome_lint(name, target = ".", data = [], tags = None, **kwargs):
-    """Run `biome check` over a path as a Bazel test target."""
+    """Run pinned Biome CI validation over a path as a Bazel test target."""
     native.sh_test(
         name = name,
         srcs = ["//tools:lint.sh"],

@@ -58,7 +58,7 @@
     },
     {
       "description": "Treat Renovate's own config as internal maintenance.",
-      "matchPaths": ["renovate.json", ".github/renovate.json"],
+      "matchFileNames": ["renovate.json", ".github/renovate.json"],
       "addLabels": ["renovate-config"]
     }
   ],
@@ -68,6 +68,6 @@
   },
   "dockerfile": {
     "enabled": true,
-    "fileMatch": ["infrastructure/docker/.*\\.Dockerfile$", "\\.devcontainer/Dockerfile$"]
+    "managerFilePatterns": ["/docker/.*\\.Dockerfile$/", "/\\.devcontainer/Dockerfile$/"]
   }
 }

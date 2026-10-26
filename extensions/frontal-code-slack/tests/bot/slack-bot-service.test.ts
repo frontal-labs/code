@@ -13,7 +13,7 @@ import {
 } from "../setup";
 
 // Mock the dependencies
-vi.mock("@/services/frontal-code-api-client", () => ({
+vi.mock("@/services/code-api-client", () => ({
   FrontalCodeApiClient: vi.fn(() => mockFrontalCodeApiClient),
 }));
 

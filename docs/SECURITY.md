@@ -14,7 +14,7 @@ Frontal Code is designed with security as a primary concern, implementing multip
 
 ## Server Authentication
 
-`frontal-code-server` exposes a control plane that creates, cancels and completes agent
+`code-server` exposes a control plane that creates, cancels and completes agent
 tasks. Both of its authentication boundaries are closed by default.
 
 ### Control plane
@@ -29,7 +29,7 @@ development, or a host reachable only from inside your own perimeter — opt in
 explicitly:
 
 ```bash
-FRONTAL_CODE_SERVER_ALLOW_ANONYMOUS=1 frontal-code-server
+FRONTAL_CODE_SERVER_ALLOW_ANONYMOUS=1 code-server
 ```
 
 That path logs a warning naming the bind address on every start.
@@ -194,7 +194,7 @@ For maximum isolation, use container-based sandboxing:
 frontal-code --sandbox container
 
 # Use a pinned container image
-frontal-code --sandbox container --image frontal-code-sandbox:v0.1.0
+frontal-code --sandbox container --image code-sandbox:v0.1.0
 ```
 
 ## Authentication and API Keys

@@ -18,7 +18,7 @@
     "slash_commands": [
       {
         "command": "/frontal-code",
-        "url": "https://your-frontal-code-server.com/slack/commands",
+        "url": "https://your-code-server.com/slack/commands",
         "description": "Autonomous engineering assistant",
         "usage_hint": "ask 'question' | task 'description' | status | help",
         "should_escape": false
@@ -27,7 +27,7 @@
     "unfurl_domains": ["github.com", "gitlab.com", "bitbucket.org"]
   },
   "oauth_config": {
-    "redirect_urls": ["https://your-frontal-code-server.com/slack/oauth/callback"],
+    "redirect_urls": ["https://your-code-server.com/slack/oauth/callback"],
     "scopes": {
       "user": [
         "channels:read",
@@ -126,7 +126,7 @@
   },
   "settings": {
     "event_subscriptions": {
-      "request_url": "https://your-frontal-code-server.com/slack/events",
+      "request_url": "https://your-code-server.com/slack/events",
       "bot_events": [
         "app_mention",
         "message.channels",
@@ -141,8 +141,8 @@
     },
     "interactivity": {
       "is_enabled": true,
-      "request_url": "https://your-frontal-code-server.com/slack/interactive",
-      "message_menu_options_url": "https://your-frontal-code-server.com/slack/menu"
+      "request_url": "https://your-code-server.com/slack/interactive",
+      "message_menu_options_url": "https://your-code-server.com/slack/menu"
     },
     "org_deploy_enabled": true,
     "socket_mode_enabled": true,

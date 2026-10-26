@@ -40,4 +40,4 @@ coverage/
 bazel-bin
 bazel-out
 bazel-testlogs
-bazel-frontal-code
+bazel-code

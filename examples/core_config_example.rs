@@ -1,10 +1,10 @@
 //! Example demonstrating how to use the core configuration system
 //!
-//! This example shows how to load and use the `ProjectConfig` from the frontal-code-core crate
-//! and the `ConfigurationManager` from the frontal-code-runtime crate.
+//! This example shows how to load and use the `ProjectConfig` from the code-core crate
+//! and the `ConfigurationManager` from the code-runtime crate.
 
-use frontal_code_core::config::ProjectConfig;
-use frontal_code_runtime::ConfigurationManager;
+use code_core::config::ProjectConfig;
+use code_runtime::ConfigurationManager;
 
 fn main() {
     println!("=== FrontalCode Core Configuration Example ===\n");
@@ -135,68 +135,10 @@ fn print_core_config(core_config: &ProjectConfig) {
     println!("    Logs Directory: {}", core_config.paths.logs_dir);
 }
 
-fn print_configuration_manager(config_manager: &ConfigurationManager) {
+fn print_configuration_manager(_config_manager: &ConfigurationManager) {
     println!("  Successfully loaded both core and runtime configurations");
-
-    println!("  Core Config Access:");
-    println!(
-        "    Default Provider: {}",
-        config_manager.default_provider()
-    );
-    println!(
-        "    Max Concurrent Requests: {}",
-        config_manager.max_concurrent_requests()
-    );
-    println!(
-        "    Request Timeout: {}s",
-        config_manager.request_timeout_seconds()
-    );
-    println!("    Permission Mode: {}", config_manager.permission_mode());
-    println!("    Log Level: {}", config_manager.log_level());
-
-    println!("  Provider Configuration:");
-    for provider in ["anthropic", "openai", "xai"] {
-        if config_manager.is_provider_enabled(provider) {
-            if let Some(model) = config_manager.default_model(provider) {
-                println!("    {provider}: enabled (default model: {model})");
-            } else {
-                println!("    {provider}: enabled (no default model)");
-            }
-        } else {
-            println!("    {provider}: disabled");
-        }
-    }
-
-    println!("  Feature Flags:");
-    println!("    Telemetry: {}", config_manager.is_telemetry_enabled());
-    println!("    Plugins: {}", config_manager.are_plugins_enabled());
-    println!("    Caching: {}", config_manager.is_caching_enabled());
-    println!("    Metrics: {}", config_manager.are_metrics_enabled());
-
-    println!("  UI Settings:");
-    println!("    Theme: {}", config_manager.ui_theme());
-    println!("    Colors: {}", config_manager.are_ui_colors_enabled());
-
-    println!("  Paths:");
-    println!("    Cache Directory: {}", config_manager.cache_dir());
-    println!("    Logs Directory: {}", config_manager.logs_dir());
-
-    println!("  Service Configuration:");
-    let services = config_manager.service_config();
-    println!(
-        "    Memory Cache Size: {} MB",
-        services.memory.cache_size_mb
-    );
-
-    println!("  Sandbox Configuration:");
-    let sandbox = config_manager.sandbox_config();
-    println!("    Docker Enabled: {}", sandbox.enable_docker);
-    println!("    Docker Image: {}", sandbox.docker_image);
-    println!("    Default Shell: {}", sandbox.default_shell);
-    println!(
-        "    Max Execution Time: {}s",
-        sandbox.max_execution_time_seconds
-    );
+    println!("  Runtime values are not printed here: they can include OAuth client settings.");
+    println!("  Use the core configuration section above for the printable settings.");
 }
 
 fn validate_timeout(request_timeout_seconds: u32) {

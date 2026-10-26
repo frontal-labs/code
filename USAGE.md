@@ -145,7 +145,7 @@ frontal-code prompt "summarize this repository"
 ### Shorthand prompt mode
 
 ```bash
-frontal-code "explain crates/runtime/src/lib.rs"
+frontal-code "explain crates/code-runtime/src/lib.rs"
 ```
 
 ### JSON output for scripting
@@ -171,9 +171,10 @@ Supported permission modes:
 
 Model aliases currently supported by the CLI:
 
-- `opus` → `claude-opus-5`
-- `sonnet` → `claude-sonnet-4-6`
-- `haiku` → `claude-haiku-4-5`
+- `opus` → `claude-opus-5-5`
+- `sonnet` → `claude-sonnet-5-5`
+- `haiku` → `claude-haiku-5-5`
+- `fable` → `claude-fable-5-1`
 
 ## Provider Selection
 
@@ -191,7 +192,7 @@ frontal-code --provider xai prompt "your question"
 
 # Combine with model aliases
 frontal-code --provider anthropic --model opus prompt "complex task"
-frontal-code --provider openai --model gpt-4 prompt "your question"
+frontal-code --provider openai --model gpt-6.1-sol prompt "your question"
 ```
 
 Supported providers:
@@ -210,7 +211,7 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 
 # Anthropic or an Anthropic-compatible proxy: pass --provider anthropic
 export FRONTAL_API_KEY="sk-ant-..."
-frontal-code --provider anthropic prompt "..."
+code --provider anthropic prompt "..."
 ```
 
 ### OAuth login
@@ -220,9 +221,9 @@ client in your user settings (`~/.frontal-code/settings.json`). See
 [CONFIGURATION.md](./CONFIGURATION.md#oauth-login).
 
 ```bash
-frontal-code login --provider openai    # or: frontal-code login anthropic
-frontal-code auth status                 # shows env keys and saved logins, never token values
-frontal-code logout openai
+code login --provider openai    # or: code login anthropic
+code auth status                 # shows env keys and saved logins, never token values
+code logout openai
 ```
 
 Environment API keys take precedence over a saved login. Saved logins refresh
@@ -236,7 +237,7 @@ default provider is `frontal`, and the request goes to `/responses`. Set `OPENAI
 
 ```bash
 export OPENAI_API_KEY="sk-..."
-frontal-code --model gpt-5-codex prompt "refactor this function"
+code --model gpt-5-codex prompt "refactor this function"
 ```
 
 Pass `--provider openai` to make the choice explicit.
@@ -284,7 +285,7 @@ The workspace includes a deterministic Anthropic-compatible mock service and par
 Manual mock service startup:
 
 ```bash
-cargo run -p frontal-code-mock-gateway -- --bind 127.0.0.1:0
+cargo run -p code-mock-gateway -- --bind 127.0.0.1:0
 ```
 
 ## Verification
@@ -301,9 +302,9 @@ Current Rust crates:
 - `providers`
 - `commands`
 - `compat-harness`
-- `frontal-code-mock-gateway`
+- `code-mock-gateway`
 - `plugins`
 - `runtime`
-- `cli` (package in `crates/cli/`)
+- `cli` (package in `npm/code-cli/`)
 - `telemetry`
 - `tools`

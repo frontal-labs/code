@@ -333,6 +333,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn workspace_write_allows_within_workspace() {
         let enforcer = make_enforcer(PermissionMode::WorkspaceWrite);
         let result = enforcer.check_file_write("/workspace/src/main.rs", "/workspace");
@@ -357,6 +358,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn workspace_boundary_check() {
         assert!(is_within_workspace("/workspace/src/main.rs", "/workspace"));
         assert!(is_within_workspace("/workspace", "/workspace"));
@@ -365,6 +367,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn workspace_rejects_parent_traversal() {
         assert!(!is_within_workspace(
             "/workspace/../etc/passwd",
@@ -378,6 +381,28 @@ mod tests {
         assert!(is_within_workspace(
             "/workspace/src/../lib.rs",
             "/workspace"
+        ));
+    }
+
+    #[test]
+    fn workspace_boundary_is_platform_aware() {
+        // Built from the current directory, which is absolute on every platform, so the
+        // boundary logic is exercised on Windows as well as Unix.
+        let root = std::env::current_dir().expect("cwd");
+        let root_str = root.to_string_lossy().into_owned();
+        let inside = root.join("src").join("main.rs");
+        let parent_escape = root.join("..").join("outside.txt");
+        let nested_escape = root.join("src").join("..").join("..").join("outside.txt");
+
+        assert!(is_within_workspace(&inside.to_string_lossy(), &root_str));
+        assert!(is_within_workspace(&root_str, &root_str));
+        assert!(!is_within_workspace(
+            &parent_escape.to_string_lossy(),
+            &root_str
+        ));
+        assert!(!is_within_workspace(
+            &nested_escape.to_string_lossy(),
+            &root_str
         ));
     }
 
@@ -489,6 +514,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn workspace_write_relative_path_resolved() {
         // given
         let enforcer = make_enforcer(PermissionMode::WorkspaceWrite);
@@ -501,6 +527,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn workspace_root_with_trailing_slash() {
         // given
         let enforcer = make_enforcer(PermissionMode::WorkspaceWrite);
@@ -513,6 +540,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn workspace_root_equality() {
         // given
         let root = "/workspace/";

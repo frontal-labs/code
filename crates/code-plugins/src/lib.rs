@@ -2274,6 +2274,9 @@ fn ensure_object<'a>(root: &'a mut Map<String, Value>, key: &str) -> &'a mut Map
 }
 
 #[cfg(test)]
+// Several helpers here drive shell-script hooks and are compiled only on Unix. On
+// Windows the remaining tests still compile, so allow the resulting unused items.
+#[cfg_attr(not(unix), allow(dead_code, unused_imports))]
 mod tests {
     use super::*;
 
@@ -2394,6 +2397,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     fn write_lifecycle_plugin(root: &Path, name: &str, version: &str) -> PathBuf {
         let log_path = root.join("lifecycle.log");
         write_file(
@@ -2414,10 +2418,12 @@ mod tests {
         log_path
     }
 
+    #[cfg(unix)]
     fn write_tool_plugin(root: &Path, name: &str, version: &str) {
         write_tool_plugin_with_name(root, name, version, "plugin_echo");
     }
 
+    #[cfg(unix)]
     fn write_tool_plugin_with_name(root: &Path, name: &str, version: &str, tool_name: &str) {
         let script_path = root.join("tools").join("echo-json.sh");
         write_file(
@@ -3349,6 +3355,7 @@ mod tests {
         let _ = fs::remove_dir_all(source_root);
     }
 
+    #[cfg(unix)]
     #[test]
     fn plugin_registry_runs_initialize_and_shutdown_for_enabled_plugins() {
         let config_home = temp_dir("lifecycle-home");
@@ -3372,6 +3379,7 @@ mod tests {
         let _ = fs::remove_dir_all(source_root);
     }
 
+    #[cfg(unix)]
     #[test]
     fn aggregates_and_executes_plugin_tools() {
         let config_home = temp_dir("tool-home");

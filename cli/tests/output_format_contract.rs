@@ -72,10 +72,12 @@ fn config_telemetry_emits_structured_json_when_requested() {
     assert_eq!(parsed["effective"]["kind"], "telemetry");
     assert_eq!(parsed["effective"]["effective_source"], "config");
     assert_eq!(parsed["effective"]["path"], "local/log.jsonl");
-    assert!(parsed["effective"]["config_source_path"]
-        .as_str()
-        .expect("config source path")
-        .ends_with(".frontal-code/settings.local.json"));
+    assert!(std::path::Path::new(
+        parsed["effective"]["config_source_path"]
+            .as_str()
+            .expect("config source path")
+    )
+    .ends_with(std::path::Path::new(".frontal-code").join("settings.local.json")));
 }
 
 #[test]

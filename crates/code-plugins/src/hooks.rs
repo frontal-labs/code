@@ -460,6 +460,7 @@ mod tests {
         let _ = fs::remove_dir_all(second_source_root);
     }
 
+    #[cfg(unix)]
     #[test]
     fn pre_tool_use_denies_when_plugin_hook_exits_two() {
         // given
@@ -477,6 +478,7 @@ mod tests {
         assert_eq!(result.messages(), &["blocked by plugin".to_string()]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn propagates_plugin_hook_failures() {
         // given

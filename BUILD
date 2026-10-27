@@ -84,7 +84,7 @@ test_suite(
         "//examples:core_config_example",
         "//sdks/rust:test",
         "//sdks/typescript:test",
-        "//extensions/frontal-code-slack:test",
+        "//extensions/code-slack:test",
         "//tests/mock-gateway:test",
     ],
 )
@@ -114,8 +114,8 @@ test_suite(
         "//crates/code-webhooks:lint",
         "//sdks/rust:lint",
         "//sdks/typescript:lint",
-        "//extensions/frontal-code-ide:lint",
-        "//extensions/frontal-code-slack:lint",
+        "//extensions/code-ide:lint",
+        "//extensions/code-slack:lint",
         "//tests/mock-gateway:lint",
     ],
 )

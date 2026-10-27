@@ -12,7 +12,7 @@ use zip::ZipWriter;
 
 const FRONTAL_CODE_CONFIG_DIR: &str = ".frontal-code";
 const IDE_CONFIG_FILE: &str = "ide.json";
-const FRONTAL_CODE_EXTENSION_DIR: &str = "extensions/frontal-code-ide";
+const FRONTAL_CODE_EXTENSION_DIR: &str = "extensions/code-ide";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -572,7 +572,7 @@ mod tests {
     #[test]
     fn package_extension_builds_vsix_from_local_extension_source() {
         let root = temp_path("package-vsix");
-        let extension_root = root.join("extensions").join("frontal-code-ide");
+        let extension_root = root.join("extensions").join("code-ide");
         fs::create_dir_all(&extension_root).expect("extension root should create");
         fs::write(
             extension_root.join("package.json"),

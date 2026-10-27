@@ -521,7 +521,11 @@ export class SlackInterface {
         `Follow-up resolved for task ${taskId}.`,
         this.buildApprovalResolvedBlocks(taskId, actionName),
       );
-      this.trackTask(result);
+      const trackedTask = this.toTrackedTask(result);
+      if (trackedTask) {
+        this.upsertTrackedTask(trackedTask);
+        this.frontalCodeEvents.trackTask(trackedTask);
+      }
     } catch (error) {
       this.approvalInFlight.delete(taskId);
       await this.updateApprovalMessage(

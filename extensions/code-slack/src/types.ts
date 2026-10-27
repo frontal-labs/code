@@ -100,6 +100,7 @@ export interface SlackAttachment {
 export interface SlackBody {
   user: {
     id: string;
+    name?: string;
   };
   channel: {
     id: string;
@@ -380,9 +381,9 @@ export interface FrontalCodeSandboxResponse {
   active_sessions: number;
 }
 
-export type FrontalCodeApprovalKind = "orphaned_hosted_agent";
+export type FrontalCodeApprovalKind = "orphaned_hosted_agent" | "github_review_followup";
 
-export type FrontalCodeApprovalAction = "cancel" | "retry";
+export type FrontalCodeApprovalAction = "cancel" | "retry" | "ack";
 
 export interface FrontalCodeResolveApprovalRequest {
   taskId: string;

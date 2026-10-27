@@ -29,18 +29,15 @@ The Frontal Code Slack bot provides autonomous engineering capabilities directly
 
 ### 2. Configure OAuth & Permissions
 
-Add these **Bot Token Scopes**:
-- `channels:read` - Read channel messages
-- `channels:write` - Post messages to channels
-- `chat:write` - Send direct messages
-- `commands` - Handle slash commands
-- `users:read` - Read user information
-- `files:write` - Upload files to messages
+Add these **Bot Token Scopes** (no user scopes are needed):
+- `app_mentions:read` - Receive `@code` mentions
+- `channels:history`, `groups:history`, `im:history`, `mpim:history` - Receive messages in threads the bot is part of
+- `chat:write` - Post and update replies
+- `commands` - Handle the `/code` slash command
 
 Add these **Event Subscriptions**:
-- `message.channels` - Channel messages
-- `app_mention` - Bot mentions
-- `message.groups` - Private channel messages
+- `app_mention`
+- `message.channels`, `message.groups`, `message.im`, `message.mpim`
 
 ### 3. Configure Interactive Components
 

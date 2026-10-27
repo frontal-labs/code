@@ -107,14 +107,8 @@ bun run format
 
 1. Create a Slack app and enable Socket Mode.
 2. Configure a slash command for `/code`.
-3. Add bot token scopes:
-   - `commands`
-- `chat:write`
-- `chat:write.public`
-- `users:read`
-- `channels:read`
-- If you use Linear/Graphite status mirroring, add the corresponding API tokens above so the connector can post status updates back to those systems.
-4. Subscribe to the message events your workspace flow requires.
+3. Add bot token scopes: `app_mentions:read`, `channels:history`, `groups:history`, `im:history`, `mpim:history`, `chat:write`, `commands`. No user token scopes are required.
+4. Subscribe to `app_mention` and `message.channels`, `message.groups`, `message.im`, `message.mpim`.
 
 ## Operator Workflows
 

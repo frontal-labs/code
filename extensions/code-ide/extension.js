@@ -17,8 +17,11 @@ function config() {
   return vscode.workspace.getConfiguration("frontal-code");
 }
 
+// Only the user or machine value is honored. A workspace .vscode/settings.json
+// must not be able to point the extension at an arbitrary executable.
 function frontalCodeCliPath() {
-  const value = config().get("cliPath", "frontal-code");
+  const inspected = config().inspect("cliPath");
+  const value = inspected?.globalValue ?? inspected?.defaultValue;
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : "frontal-code";
 }
 
@@ -31,9 +34,24 @@ function frontalCodeModelArgs() {
 }
 
 function startRepl() {
-  const terminal = vscode.window.createTerminal("Frontal Code");
+  if (!requireTrustedWorkspace()) {
+    return;
+  }
+  // Launch the binary directly rather than typing the path into a shell.
+  const terminal = vscode.window.createTerminal({
+    name: "Frontal Code",
+    shellPath: frontalCodeCliPath(),
+    shellArgs: [],
+  });
   terminal.show(true);
-  terminal.sendText(frontalCodeCliPath(), true);
+}
+
+function requireTrustedWorkspace() {
+  if (vscode.workspace.isTrusted) {
+    return true;
+  }
+  vscode.window.showWarningMessage("Frontal Code: trust this workspace to run the CLI.");
+  return false;
 }
 
 async function askInput() {
@@ -70,6 +88,9 @@ async function askSelection() {
 }
 
 async function runFrontalCodePrompt(prompt) {
+  if (!requireTrustedWorkspace()) {
+    return;
+  }
   const output = vscode.window.createOutputChannel("Frontal Code");
   output.show(true);
   output.appendLine("Running Frontal Code...");

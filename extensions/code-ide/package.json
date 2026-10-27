@@ -10,6 +10,12 @@
   "categories": [
     "Other"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Runs a local CLI binary, so it is disabled in untrusted workspaces."
+    }
+  },
   "main": "./extension.js",
   "scripts": {
     "build": "node --check extension.js"
@@ -40,7 +46,8 @@
         "frontal-code.cliPath": {
           "type": "string",
           "default": "frontal-code",
-          "description": "Path to the Frontal Code CLI binary."
+          "scope": "machine",
+          "description": "Path to the Frontal Code CLI binary. Set in user or machine settings only; workspace settings are ignored."
         },
         "frontal-code.defaultModel": {
           "type": "string",

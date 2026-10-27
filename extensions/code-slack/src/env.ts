@@ -1,6 +1,27 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+/**
+ * Parses a comma-separated list of Slack IDs (e.g. "U012ABC,U034DEF") and validates each entry
+ * against the expected Slack ID prefix pattern. Empty or unset values yield an empty list.
+ */
+const slackIdList = (pattern: RegExp, kind: string, example: string) =>
+  z
+    .string()
+    .optional()
+    .transform((value) =>
+      (value ?? "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    )
+    .pipe(
+      z.array(z.string().regex(pattern, `Each entry must be a Slack ${kind} ID (e.g. ${example})`)),
+    );
+
+const SLACK_USER_ID = /^[UW][A-Z0-9]+$/;
+const SLACK_CHANNEL_ID = /^[CGD][A-Z0-9]+$/;
+
 export const env = createEnv({
   clientPrefix: "",
   /**
@@ -23,6 +44,15 @@ export const env = createEnv({
       .string()
       .min(32, "Slack signing secret must be at least 32 characters")
       .describe("Slack signing secret for request verification"),
+    SLACK_ALLOWED_USER_IDS: slackIdList(SLACK_USER_ID, "user", "U012ABC3DE").describe(
+      "Comma-separated Slack user IDs allowed to create tasks. Empty denies all task creation.",
+    ),
+    SLACK_ALLOWED_CHANNEL_IDS: slackIdList(SLACK_CHANNEL_ID, "channel", "C012ABC3DE").describe(
+      "Comma-separated Slack channel IDs where tasks may be created. Empty allows any channel (DMs are never channel-restricted).",
+    ),
+    SLACK_ADMIN_USER_IDS: slackIdList(SLACK_USER_ID, "user", "U012ABC3DE").describe(
+      "Comma-separated Slack user IDs (also in SLACK_ALLOWED_USER_IDS) allowed to approve, retry, or cancel any task.",
+    ),
 
     // Frontal Code API Configuration
     FRONTAL_CODE_API_URL: z
@@ -107,6 +137,9 @@ export const env = createEnv({
     SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
     SLACK_APP_TOKEN: process.env.SLACK_APP_TOKEN,
     SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET,
+    SLACK_ALLOWED_USER_IDS: process.env.SLACK_ALLOWED_USER_IDS,
+    SLACK_ALLOWED_CHANNEL_IDS: process.env.SLACK_ALLOWED_CHANNEL_IDS,
+    SLACK_ADMIN_USER_IDS: process.env.SLACK_ADMIN_USER_IDS,
     FRONTAL_CODE_API_URL: process.env.FRONTAL_CODE_API_URL,
     FRONTAL_CODE_API_TIMEOUT: process.env.FRONTAL_CODE_API_TIMEOUT
       ? Number(process.env.FRONTAL_CODE_API_TIMEOUT)
@@ -180,6 +213,9 @@ export function getEnvConfig() {
       botToken: env.SLACK_BOT_TOKEN,
       appToken: env.SLACK_APP_TOKEN,
       signingSecret: env.SLACK_SIGNING_SECRET,
+      allowedUserIds: env.SLACK_ALLOWED_USER_IDS,
+      allowedChannelIds: env.SLACK_ALLOWED_CHANNEL_IDS,
+      adminUserIds: env.SLACK_ADMIN_USER_IDS,
     },
     frontalCode: {
       apiUrl: env.FRONTAL_CODE_API_URL,

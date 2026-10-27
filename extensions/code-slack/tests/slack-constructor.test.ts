@@ -11,10 +11,16 @@ const slackState = vi.hoisted(() => {
   let actionHandler:
     | ((args: { action: unknown; ack: () => Promise<void> | void; body: unknown }) => Promise<void>)
     | undefined;
-  let eventHandler: ((args: { event: unknown }) => Promise<void>) | undefined;
+  // Event listeners are keyed by their pattern so tests can reach both app_mention and the
+  // catch-all connector forwarder.
+  const eventHandlers = new Map<
+    string,
+    (args: { event: unknown; next: () => Promise<void> }) => Promise<void>
+  >();
 
   const chatPostMessage = vi.fn();
   const chatUpdate = vi.fn();
+  const chatPostEphemeral = vi.fn();
   const appStart = vi.fn();
   const appStop = vi.fn();
   const isListening = vi.fn();
@@ -24,6 +30,7 @@ const slackState = vi.hoisted(() => {
       chat: {
         postMessage: chatPostMessage,
         update: chatUpdate,
+        postEphemeral: chatPostEphemeral,
       },
     };
 
@@ -43,8 +50,11 @@ const slackState = vi.hoisted(() => {
       actionHandler = handler;
     }
 
-    event(_pattern: unknown, handler: typeof eventHandler): void {
-      eventHandler = handler;
+    event(
+      pattern: unknown,
+      handler: (args: { event: unknown; next: () => Promise<void> }) => Promise<void>,
+    ): void {
+      eventHandlers.set(String(pattern), handler);
     }
   }
 
@@ -52,18 +62,19 @@ const slackState = vi.hoisted(() => {
     MockApp,
     chatPostMessage,
     chatUpdate,
+    chatPostEphemeral,
     appStart,
     appStop,
     isListening,
     getMessageHandler: () => messageHandler,
     getCommandHandler: () => commandHandler,
     getActionHandler: () => actionHandler,
-    getEventHandler: () => eventHandler,
+    getEventHandler: (pattern = "/.*/") => eventHandlers.get(pattern),
     resetHandlers: () => {
       messageHandler = undefined;
       commandHandler = undefined;
       actionHandler = undefined;
-      eventHandler = undefined;
+      eventHandlers.clear();
     },
   };
 });
@@ -126,6 +137,13 @@ const frontalCodeEventsState = vi.hoisted(() => {
   };
 });
 
+// Mutable allowlist read by the mocked config each time a SlackInterface is constructed.
+const accessState = vi.hoisted(() => ({
+  allowedUserIds: [] as string[],
+  allowedChannelIds: [] as string[],
+  adminUserIds: [] as string[],
+}));
+
 vi.mock("@slack/bolt", () => ({
   App: slackState.MockApp,
 }));
@@ -149,6 +167,15 @@ vi.mock("../src/config", () => ({
       botToken: "xoxb-test",
       appToken: "xapp-test",
       signingSecret: "secret",
+      get allowedUserIds() {
+        return accessState.allowedUserIds;
+      },
+      get allowedChannelIds() {
+        return accessState.allowedChannelIds;
+      },
+      get adminUserIds() {
+        return accessState.adminUserIds;
+      },
     },
     frontalCode: {
       apiUrl: "http://localhost:8787",
@@ -164,6 +191,9 @@ describe("SlackInterface constructor wiring", () => {
     vi.clearAllMocks();
     slackState.resetHandlers();
     frontalCodeEventsState.resetTrackedHandler();
+    accessState.allowedUserIds = ["U123"];
+    accessState.allowedChannelIds = [];
+    accessState.adminUserIds = [];
   });
 
   it("constructs the Slack app, Frontal Code clients, and tracked-event subscription", async () => {
@@ -183,6 +213,7 @@ describe("SlackInterface constructor wiring", () => {
     expect(slackState.getCommandHandler()).toBeTypeOf("function");
     expect(slackState.getActionHandler()).toBeTypeOf("function");
     expect(slackState.getEventHandler()).toBeTypeOf("function");
+    expect(slackState.getEventHandler("app_mention")).toBeTypeOf("function");
 
     await frontalCodeEventsState.getTrackedHandler()?.(
       { event: "lane.started" },
@@ -199,24 +230,52 @@ describe("SlackInterface constructor wiring", () => {
       message: {
         text: "",
         user: "U123",
-        channel: "C123",
+        channel: "D123",
         ts: "1710000000.100",
+        channel_type: "im",
       },
     });
     await slackState.getMessageHandler()?.({
       message: {
         text: "hello",
         user: "U123",
-        channel: "C123",
+        channel: "D123",
         ts: "1710000000.101",
         bot_id: "B123",
+        channel_type: "im",
       },
     });
 
     expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
   });
 
-  it("creates and registers a task from a Slack message event", async () => {
+  it("ignores ordinary channel messages even from allowlisted users (no mention)", async () => {
+    new SlackInterface();
+
+    await slackState.getMessageHandler()?.({
+      message: {
+        text: "anyone want to look at the flaky test?",
+        user: "U123",
+        channel: "C123",
+        ts: "1710000000.102",
+        channel_type: "channel",
+      },
+    });
+    await slackState.getMessageHandler()?.({
+      message: {
+        text: "reply in a thread",
+        user: "U123",
+        channel: "C123",
+        ts: "1710000000.103",
+        thread_ts: "1710000000.100",
+        channel_type: "group",
+      },
+    });
+
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+  });
+
+  it("creates and registers a task from a direct message by an allowlisted user", async () => {
     const registerSpy = vi
       .spyOn(
         SlackInterface.prototype as unknown as {
@@ -236,15 +295,16 @@ describe("SlackInterface constructor wiring", () => {
       message: {
         text: "Investigate flaky test",
         user: "U123",
-        channel: "C123",
+        channel: "D123",
         ts: "1710000000.100",
+        channel_type: "im",
       },
     });
 
     expect(frontalCodeApiState.createTask).toHaveBeenCalledWith({
       prompt: "Investigate flaky test",
       user_id: "U123",
-      channel_id: "C123",
+      channel_id: "D123",
       thread_ts: "1710000000.100",
       source: "slack",
     });
@@ -252,12 +312,140 @@ describe("SlackInterface constructor wiring", () => {
       expect.objectContaining({ task_id: "task-123" }),
       {
         taskId: "task-123",
-        channelId: "C123",
+        channelId: "D123",
         threadTs: "1710000000.100",
         userId: "U123",
       },
       "Investigate flaky test",
     );
+  });
+
+  it("denies direct messages from users who are not allowlisted", async () => {
+    new SlackInterface();
+
+    await slackState.getMessageHandler()?.({
+      message: {
+        text: "run something expensive",
+        user: "U999",
+        channel: "D999",
+        ts: "1710000000.104",
+        channel_type: "im",
+      },
+    });
+
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+  });
+
+  it("denies direct messages when the user allowlist is empty", async () => {
+    accessState.allowedUserIds = [];
+    new SlackInterface();
+
+    await slackState.getMessageHandler()?.({
+      message: {
+        text: "hello",
+        user: "U123",
+        channel: "D123",
+        ts: "1710000000.105",
+        channel_type: "im",
+      },
+    });
+
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+  });
+
+  it("starts a task when the bot is mentioned in an allowlisted channel, stripping the mention", async () => {
+    const registerSpy = vi
+      .spyOn(
+        SlackInterface.prototype as unknown as {
+          registerTask: (...args: unknown[]) => Promise<void>;
+        },
+        "registerTask",
+      )
+      .mockResolvedValue(undefined);
+    accessState.allowedChannelIds = ["C123"];
+    frontalCodeApiState.createTask.mockResolvedValue({
+      task_id: "task-mention",
+      status: "running",
+      message: "created",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    new SlackInterface();
+
+    await slackState.getEventHandler("app_mention")?.({
+      event: {
+        type: "app_mention",
+        user: "U123",
+        channel: "C123",
+        ts: "1710000000.200",
+        text: "<@UBOT123> fix the flaky test",
+      },
+      next,
+    });
+
+    expect(frontalCodeApiState.createTask).toHaveBeenCalledWith({
+      prompt: "fix the flaky test",
+      user_id: "U123",
+      channel_id: "C123",
+      thread_ts: "1710000000.200",
+      source: "slack",
+    });
+    expect(registerSpy).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("ignores a mention from a user who is not allowlisted", async () => {
+    accessState.allowedChannelIds = ["C123"];
+    const next = vi.fn().mockResolvedValue(undefined);
+    new SlackInterface();
+
+    await slackState.getEventHandler("app_mention")?.({
+      event: {
+        type: "app_mention",
+        user: "U999",
+        channel: "C123",
+        ts: "1710000000.201",
+        text: "<@UBOT123> run a task",
+      },
+      next,
+    });
+
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("ignores a mention in a channel outside the channel allowlist", async () => {
+    accessState.allowedChannelIds = ["C123"];
+    new SlackInterface();
+
+    await slackState.getEventHandler("app_mention")?.({
+      event: {
+        type: "app_mention",
+        user: "U123",
+        channel: "C404",
+        ts: "1710000000.202",
+        text: "<@UBOT123> run a task",
+      },
+      next: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+  });
+
+  it("ignores a mention that has no prompt after the bot mention is removed", async () => {
+    new SlackInterface();
+
+    await slackState.getEventHandler("app_mention")?.({
+      event: {
+        type: "app_mention",
+        user: "U123",
+        channel: "C123",
+        ts: "1710000000.203",
+        text: "<@UBOT123>",
+      },
+      next: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
   });
 
   it("acknowledges and returns policy previews for /code policy orphans", async () => {
@@ -352,6 +540,63 @@ describe("SlackInterface constructor wiring", () => {
     );
   });
 
+  it("denies /code task creation from a user who is not allowlisted", async () => {
+    const ack = vi.fn();
+    new SlackInterface();
+
+    await slackState.getCommandHandler()?.({
+      command: {
+        text: "Fix the flaky test",
+        user_id: "U999",
+        channel_id: "C123",
+      },
+      ack,
+    });
+
+    expect(ack).toHaveBeenCalledWith({
+      response_type: "ephemeral",
+      text: "You are not authorized to run Code tasks in this channel.",
+    });
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+  });
+
+  it("denies /code from every user when the allowlist is empty, including policy previews", async () => {
+    const ack = vi.fn();
+    accessState.allowedUserIds = [];
+    new SlackInterface();
+
+    await slackState.getCommandHandler()?.({
+      command: {
+        text: "policy orphans",
+        user_id: "U123",
+        channel_id: "C123",
+      },
+      ack,
+    });
+
+    expect(ack).toHaveBeenCalledWith(expect.objectContaining({ response_type: "ephemeral" }));
+    expect(frontalCodeApiState.getOrphanPolicy).not.toHaveBeenCalled();
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+  });
+
+  it("denies /code in a channel outside the channel allowlist", async () => {
+    const ack = vi.fn();
+    accessState.allowedChannelIds = ["C123"];
+    new SlackInterface();
+
+    await slackState.getCommandHandler()?.({
+      command: {
+        text: "Fix the flaky test",
+        user_id: "U123",
+        channel_id: "C404",
+      },
+      ack,
+    });
+
+    expect(ack).toHaveBeenCalledWith(expect.objectContaining({ response_type: "ephemeral" }));
+    expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
+  });
+
   it("acknowledges actions and forwards them to the Slack action handler", async () => {
     const ack = vi.fn();
     const handleSpy = vi
@@ -389,6 +634,7 @@ describe("SlackInterface constructor wiring", () => {
         user: "U123",
         reaction: "eyes",
       },
+      next: vi.fn().mockResolvedValue(undefined),
     });
 
     expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith("slack", {
@@ -410,6 +656,7 @@ describe("SlackInterface constructor wiring", () => {
         type: "member_joined_channel",
         channel: "C123",
       },
+      next: vi.fn().mockResolvedValue(undefined),
     });
 
     expect(frontalCodeApiState.sendConnectorEvent).toHaveBeenCalledWith("slack", {

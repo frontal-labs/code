@@ -32,10 +32,7 @@
     "scopes": {
       "bot": [
         "app_mentions:read",
-        "channels:history",
-        "groups:history",
         "im:history",
-        "mpim:history",
         "chat:write",
         "commands"
       ]
@@ -47,10 +44,7 @@
       "request_url": "https://your-code-server.com/slack/events",
       "bot_events": [
         "app_mention",
-        "message.channels",
-        "message.groups",
-        "message.im",
-        "message.mpim"
+        "message.im"
       ]
     },
     "interactivity": {

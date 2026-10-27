@@ -192,6 +192,51 @@ describe("Environment Variables", () => {
       expect(errorSpy).toHaveBeenCalledWith("Environment variable validation failed:");
     });
 
+    it("defaults the Slack access allowlists to empty lists", async () => {
+      const { getEnvConfig: loadConfig } = await importFreshEnvModule({
+        SLACK_ALLOWED_USER_IDS: undefined,
+        SLACK_ALLOWED_CHANNEL_IDS: undefined,
+        SLACK_ADMIN_USER_IDS: undefined,
+      });
+
+      const slack = loadConfig().slack;
+
+      expect(slack.allowedUserIds).toEqual([]);
+      expect(slack.allowedChannelIds).toEqual([]);
+      expect(slack.adminUserIds).toEqual([]);
+    });
+
+    it("parses comma-separated Slack access allowlists", async () => {
+      const { getEnvConfig: loadConfig } = await importFreshEnvModule({
+        SLACK_ALLOWED_USER_IDS: " U012ABC3DE, W034DEF5GH ,",
+        SLACK_ALLOWED_CHANNEL_IDS: "C0AAA1111,G0BBB2222",
+        SLACK_ADMIN_USER_IDS: "U012ABC3DE",
+      });
+
+      const slack = loadConfig().slack;
+
+      expect(slack.allowedUserIds).toEqual(["U012ABC3DE", "W034DEF5GH"]);
+      expect(slack.allowedChannelIds).toEqual(["C0AAA1111", "G0BBB2222"]);
+      expect(slack.adminUserIds).toEqual(["U012ABC3DE"]);
+    });
+
+    it("rejects allowlist entries that are not Slack user or channel ids", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      await expect(
+        importFreshEnvModule({
+          SLACK_ALLOWED_USER_IDS: "U012ABC3DE,alice@example.com",
+        }),
+      ).rejects.toThrow("Environment variable validation failed");
+      await expect(
+        importFreshEnvModule({
+          SLACK_ALLOWED_CHANNEL_IDS: "U012ABC3DE",
+        }),
+      ).rejects.toThrow("Environment variable validation failed");
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("SLACK_ALLOWED_USER_IDS"));
+    });
+
     it("throws on client-side access to server env variables", async () => {
       const originalWindow = globalThis.window;
       Object.defineProperty(globalThis, "window", {

@@ -27,16 +27,22 @@ jobs:
         with:
           node-version: 20
         
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+      - name: Install cargo-audit and cargo-deny
+        run: cargo install cargo-audit --locked && cargo install cargo-deny --locked
 
       - name: Run cargo audit
         run: cargo audit
 
+      - name: Run cargo deny (advisories, licenses, sources)
+        run: cargo deny check
+
       - name: Run npm audit for Slack extension
         working-directory: extensions/code-slack
         run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true
+
+      - name: Run npm audit for TypeScript SDK
+        working-directory: sdks/typescript
+        run: npm audit --audit-level=high
 
   dependency-review:
     name: Dependency Review

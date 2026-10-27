@@ -1,0 +1,42 @@
+# cargo-deny policy for the Frontal Code workspace.
+#
+# Run with `cargo deny check`. Advisories fail the check; license and source
+# rules fail it for anything outside the allow-list below. Duplicate versions
+# are reported but do not fail, since several are transitive and unavoidable.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Only licenses already present in the dependency graph. Adding one is a
+# deliberate policy decision, so do it in its own reviewed change.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

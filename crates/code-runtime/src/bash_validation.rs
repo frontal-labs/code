@@ -105,6 +105,15 @@ pub fn validate_read_only(command: &str, mode: PermissionMode) -> ValidationResu
         return ValidationResult::Allow;
     }
 
+    // bash splits words only on space, tab and newline. This parser's trimming and
+    // splitting use Unicode whitespace, so any other whitespace character can make it
+    // report a different command from the one bash runs. Refuse those commands instead.
+    if has_non_bash_whitespace(command) {
+        return ValidationResult::Block {
+            reason: "Command contains whitespace other than space, tab, or newline and cannot be checked in read-only mode".to_string(),
+        };
+    }
+
     let first_command = extract_first_command(command);
 
     // Check for write commands.
@@ -618,6 +627,14 @@ pub fn validate_command(command: &str, mode: PermissionMode, workspace: &Path) -
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// True when the command contains a whitespace character that bash does not treat as a
+/// word separator (for example U+00A0, U+3000, `\r`, or `\x0b`).
+fn has_non_bash_whitespace(command: &str) -> bool {
+    command
+        .chars()
+        .any(|c| c.is_whitespace() && !matches!(c, ' ' | '\t' | '\n'))
+}
+
 /// Extract the first bare command from a pipeline/chain, stripping env vars and sudo.
 fn extract_first_command(command: &str) -> String {
     let trimmed = command.trim();
@@ -1027,5 +1044,31 @@ mod tests {
         assert_eq!(extract_first_command("A=1 B=  rm x"), "rm");
         assert_eq!(extract_first_command("A="), "");
         assert_eq!(extract_first_command("A=1 B=2 echo hello"), "echo");
+    }
+
+    #[test]
+    fn read_only_refuses_whitespace_bash_does_not_split_on() {
+        // U+00A0 is whitespace to Rust but part of the word to bash. Here bash runs `rm`
+        // after an empty assignment, but a parser that skips the NBSP would report `ls`.
+        let mode = PermissionMode::ReadOnly;
+        for command in [
+            "A=\u{a0}ls rm -rf /tmp/x",
+            "ls\u{3000}-la",
+            "A=\rls rm x",
+            "A=\u{b}ls rm x",
+        ] {
+            assert!(
+                matches!(
+                    validate_read_only(command, mode),
+                    ValidationResult::Block { .. }
+                ),
+                "expected a block for {command:?}"
+            );
+        }
+        assert_eq!(
+            validate_read_only("ls -la", mode),
+            ValidationResult::Allow,
+            "plain ASCII commands are still allowed"
+        );
     }
 }

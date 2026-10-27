@@ -105,6 +105,15 @@ pub fn validate_read_only(command: &str, mode: PermissionMode) -> ValidationResu
         return ValidationResult::Allow;
     }
 
+    // bash splits words only on space, tab and newline. This parser's trimming and
+    // splitting use Unicode whitespace, so any other whitespace character can make it
+    // report a different command from the one bash runs. Refuse those commands instead.
+    if has_non_bash_whitespace(command) {
+        return ValidationResult::Block {
+            reason: "Command contains whitespace other than space, tab, or newline and cannot be checked in read-only mode".to_string(),
+        };
+    }
+
     let first_command = extract_first_command(command);
 
     // Check for write commands.
@@ -618,6 +627,14 @@ pub fn validate_command(command: &str, mode: PermissionMode, workspace: &Path) -
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// True when the command contains a whitespace character that bash does not treat as a
+/// word separator (for example U+00A0, U+3000, `\r`, or `\x0b`).
+fn has_non_bash_whitespace(command: &str) -> bool {
+    command
+        .chars()
+        .any(|c| c.is_whitespace() && !matches!(c, ' ' | '\t' | '\n'))
+}
+
 /// Extract the first bare command from a pipeline/chain, stripping env vars and sudo.
 fn extract_first_command(command: &str) -> String {
     let trimmed = command.trim();
@@ -634,10 +651,18 @@ fn extract_first_command(command: &str) -> String {
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '_')
             {
-                // Skip past the value (might be quoted).
-                let after_eq = &next[eq_pos + 1..];
-                if let Some(space) = find_end_of_value(after_eq) {
-                    remaining = &after_eq[space..];
+                // The value starts immediately after `=`. If that is whitespace (or nothing),
+                // the assignment has an empty value and the next word is the command, so it
+                // must not be consumed as the value. Trimming before measuring would do that
+                // and hide the real command from the permission check.
+                let value_start = &next[eq_pos + 1..];
+                if value_start.is_empty() || value_start.starts_with(char::is_whitespace) {
+                    remaining = value_start;
+                    continue;
+                }
+                // Skip past the value (might be quoted). Measure and slice the same string.
+                if let Some(space) = find_end_of_value(value_start) {
+                    remaining = &value_start[space..];
                     continue;
                 }
                 // No space found means value goes to end of string — no actual command.
@@ -1000,5 +1025,50 @@ mod tests {
     #[test]
     fn extracts_plain_command() {
         assert_eq!(extract_first_command("grep -r pattern ."), "grep");
+    }
+
+    #[test]
+    fn env_prefix_with_whitespace_and_multibyte_quoted_value_does_not_panic() {
+        // Whitespace right after '=' makes the assignment empty, so the next word is the
+        // command (bash runs `'é'` here, not `ls`).
+        assert_eq!(extract_first_command("A=  'é' ls"), "'é'");
+        assert_eq!(extract_first_command("A=  \"é\" ls -la"), "\"é\"");
+    }
+
+    #[test]
+    fn empty_assignment_does_not_hide_the_real_command() {
+        // With `A=` followed by whitespace, bash runs the following word. Treating that word
+        // as the assignment's value would report the wrong command to the permission check.
+        assert_eq!(extract_first_command("A=  rm x"), "rm");
+        assert_eq!(extract_first_command("A= rm x"), "rm");
+        assert_eq!(extract_first_command("A=1 B=  rm x"), "rm");
+        assert_eq!(extract_first_command("A="), "");
+        assert_eq!(extract_first_command("A=1 B=2 echo hello"), "echo");
+    }
+
+    #[test]
+    fn read_only_refuses_whitespace_bash_does_not_split_on() {
+        // U+00A0 is whitespace to Rust but part of the word to bash. Here bash runs `rm`
+        // after an empty assignment, but a parser that skips the NBSP would report `ls`.
+        let mode = PermissionMode::ReadOnly;
+        for command in [
+            "A=\u{a0}ls rm -rf /tmp/x",
+            "ls\u{3000}-la",
+            "A=\rls rm x",
+            "A=\u{b}ls rm x",
+        ] {
+            assert!(
+                matches!(
+                    validate_read_only(command, mode),
+                    ValidationResult::Block { .. }
+                ),
+                "expected a block for {command:?}"
+            );
+        }
+        assert_eq!(
+            validate_read_only("ls -la", mode),
+            ValidationResult::Allow,
+            "plain ASCII commands are still allowed"
+        );
     }
 }

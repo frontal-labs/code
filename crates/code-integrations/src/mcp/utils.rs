@@ -175,6 +175,15 @@ fn collapse_underscores(value: &str) -> String {
     collapsed
 }
 
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
 fn percent_decode(value: &str) -> String {
     let bytes = value.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
@@ -182,9 +191,12 @@ fn percent_decode(value: &str) -> String {
     while index < bytes.len() {
         match bytes[index] {
             b'%' if index + 2 < bytes.len() => {
-                let hex = &value[index + 1..index + 3];
-                if let Ok(byte) = u8::from_str_radix(hex, 16) {
-                    decoded.push(byte);
+                // Work on bytes, not `&value[..]`: slicing the str panics when the two bytes
+                // after '%' are part of a multi-byte character.
+                if let (Some(high), Some(low)) =
+                    (hex_nibble(bytes[index + 1]), hex_nibble(bytes[index + 2]))
+                {
+                    decoded.push((high << 4) | low);
                     index += 3;
                     continue;
                 }
@@ -239,6 +251,20 @@ mod tests {
         assert_eq!(
             unwrap_ccr_proxy_url("https://vendor.example/mcp"),
             "https://vendor.example/mcp"
+        );
+    }
+
+    #[test]
+    fn unwrapping_ccr_proxy_url_with_multibyte_percent_sequence_does_not_panic() {
+        // In "%aé" the escape window after '%' ends in the middle of the 2-byte 'é'.
+        // Slicing the str there used to panic. The malformed escape must be kept literally.
+        let malformed = "https://api.anthropic.com/v2/ccr-sessions/1?mcp_url=%aé";
+        assert_eq!(unwrap_ccr_proxy_url(malformed), "%aé");
+
+        let wrapped = "https://api.anthropic.com/v2/ccr-sessions/1?mcp_url=https%3A%2F%2Fvendor.example%2F%zz%é";
+        assert_eq!(
+            unwrap_ccr_proxy_url(wrapped),
+            "https://vendor.example/%zz%é"
         );
     }
 

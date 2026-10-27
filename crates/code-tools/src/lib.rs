@@ -3726,7 +3726,10 @@ fn summarize_web_fetch(
 
 fn extract_title(content: &str, raw_body: &str, content_type: &str) -> Option<String> {
     if content_type.contains("html") {
-        let lowered = raw_body.to_lowercase();
+        // ASCII lowercasing keeps byte offsets identical to `raw_body`. Full Unicode
+        // lowercasing can change byte lengths (e.g. 'İ'), which would make the offsets
+        // below land inside a multi-byte character of `raw_body` and panic.
+        let lowered = raw_body.to_ascii_lowercase();
         if let Some(start) = lowered.find("<title>") {
             let after = start + "<title>".len();
             if let Some(end_rel) = lowered[after..].find("</title>") {
@@ -3821,7 +3824,7 @@ fn extract_search_hits(html: &str) -> Vec<SearchHit> {
         };
         let after_tag = &rest[close_tag_idx + 1..];
         let Some(end_anchor_idx) = after_tag.find("</a>") else {
-            remaining = &after_tag[1..];
+            remaining = skip_one_char(after_tag);
             continue;
         };
         let title = html_to_text(&after_tag[..end_anchor_idx]);
@@ -3877,6 +3880,15 @@ fn extract_search_hits_from_generic_links(html: &str) -> Vec<SearchHit> {
     }
 
     hits
+}
+
+/// Drops the first character of `input`. Unlike `&input[1..]`, this never panics on an
+/// empty string or a multi-byte leading character in untrusted HTML.
+fn skip_one_char(input: &str) -> &str {
+    input
+        .chars()
+        .next()
+        .map_or("", |ch| &input[ch.len_utf8()..])
 }
 
 fn extract_quoted_value(input: &str) -> Option<(String, &str)> {
@@ -6737,6 +6749,43 @@ fn parse_skill_description(contents: &str) -> Option<String> {
 }
 
 pub mod lane_completion;
+
+#[cfg(test)]
+mod untrusted_html_panic_regression_tests {
+    use super::{extract_search_hits, extract_title};
+
+    #[test]
+    fn title_extraction_survives_unicode_that_changes_length_when_lowercased() {
+        // 'İ' (2 bytes) lowercases to 3 bytes, so full Unicode lowercasing shifts the
+        // offset of "<title>" relative to the original body. Must not panic.
+        let body = "<html><body>İİİİ</body><TITLE>Hello &amp; welcome</TITLE></html>";
+        let title = extract_title("", body, "text/html");
+        assert_eq!(title.as_deref(), Some("Hello & welcome"));
+    }
+
+    #[test]
+    fn title_extraction_handles_unclosed_title_with_unicode_prefix() {
+        let body = "İ<title>no end tag";
+        assert_eq!(
+            extract_title("fallback line", body, "text/html").as_deref(),
+            Some("fallback line")
+        );
+    }
+
+    #[test]
+    fn search_hit_parsing_survives_anchor_ending_at_end_of_input() {
+        // The anchor tag closes with '>' and then the input ends, with no "</a>".
+        let html = "result__a href=\"https://example.com/\">";
+        assert!(extract_search_hits(html).is_empty());
+    }
+
+    #[test]
+    fn search_hit_parsing_survives_multibyte_char_after_anchor_tag() {
+        // No "</a>" follows, and the first byte after '>' starts a multi-byte char.
+        let html = "result__a href=\"https://example.com/\">é trailing";
+        assert!(extract_search_hits(html).is_empty());
+    }
+}
 
 #[cfg(test)]
 mod tests {

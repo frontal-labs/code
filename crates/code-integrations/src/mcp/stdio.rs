@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::time::timeout;
 
@@ -1206,37 +1206,7 @@ impl McpStdioProcess {
     }
 
     pub async fn read_frame(&mut self) -> io::Result<Vec<u8>> {
-        let mut content_length = None;
-        loop {
-            let mut line = String::new();
-            let bytes_read = self.stdout.read_line(&mut line).await?;
-            if bytes_read == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "MCP stdio stream closed while reading headers",
-                ));
-            }
-            if line == "\r\n" {
-                break;
-            }
-            let header = line.trim_end_matches(['\r', '\n']);
-            if let Some((name, value)) = header.split_once(':') {
-                if name.trim().eq_ignore_ascii_case("Content-Length") {
-                    let parsed = value
-                        .trim()
-                        .parse::<usize>()
-                        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-                    content_length = Some(parsed);
-                }
-            }
-        }
-
-        let content_length = content_length.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "missing Content-Length header")
-        })?;
-        let mut payload = vec![0_u8; content_length];
-        self.stdout.read_exact(&mut payload).await?;
-        Ok(payload)
+        read_frame_from(&mut self.stdout).await
     }
 
     pub async fn write_jsonrpc_message<T: Serialize>(&mut self, message: &T) -> io::Result<()> {
@@ -1380,6 +1350,52 @@ fn apply_env(command: &mut Command, env: &BTreeMap<String, String>) {
     }
 }
 
+/// Reads one `Content-Length` framed message. The length comes from the peer, so the payload
+/// is read through `take` rather than preallocated: a huge declared length must not panic
+/// (`vec!` capacity overflow) or abort on allocation. A short stream is an error.
+async fn read_frame_from<R: AsyncBufRead + Unpin>(reader: &mut R) -> io::Result<Vec<u8>> {
+    let mut content_length = None;
+    loop {
+        let mut line = String::new();
+        let bytes_read = reader.read_line(&mut line).await?;
+        if bytes_read == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "MCP stdio stream closed while reading headers",
+            ));
+        }
+        if line == "\r\n" {
+            break;
+        }
+        let header = line.trim_end_matches(['\r', '\n']);
+        if let Some((name, value)) = header.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("Content-Length") {
+                let parsed = value
+                    .trim()
+                    .parse::<usize>()
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+                content_length = Some(parsed);
+            }
+        }
+    }
+
+    let content_length = content_length.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "missing Content-Length header")
+    })?;
+    let mut payload = Vec::new();
+    let read = (&mut *reader)
+        .take(u64::try_from(content_length).unwrap_or(u64::MAX))
+        .read_to_end(&mut payload)
+        .await?;
+    if read != content_length {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "MCP stdio stream closed while reading payload",
+        ));
+    }
+    Ok(payload)
+}
+
 fn encode_frame(payload: &[u8]) -> Vec<u8> {
     let header = format!("Content-Length: {}\r\n\r\n", payload.len());
     let mut framed = header.into_bytes();
@@ -1404,6 +1420,39 @@ mod tests {
     use std::fs;
     use std::io::ErrorKind;
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn huge_declared_content_length_returns_error_instead_of_panicking() {
+        // A hostile peer declares a payload far larger than it sends. Preallocating the
+        // declared size used to panic ("capacity overflow") or abort on allocation.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let wire: &[u8] = b"Content-Length: 18446744073709551615\r\n\r\n{\"partial\":true}";
+        let result = runtime.block_on(async {
+            let mut reader = tokio::io::BufReader::new(wire);
+            super::read_frame_from(&mut reader).await
+        });
+        let error = result.expect_err("oversized frame must fail");
+        assert_eq!(error.kind(), ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn reads_well_formed_content_length_frame() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let wire: &[u8] = b"Content-Length: 2\r\n\r\n{}";
+        let payload = runtime
+            .block_on(async {
+                let mut reader = tokio::io::BufReader::new(wire);
+                super::read_frame_from(&mut reader).await
+            })
+            .expect("frame should parse");
+        assert_eq!(payload, b"{}");
+    }
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};

@@ -486,6 +486,7 @@ dependencies = [
  "code-sandbox",
  "code-telemetry",
  "code-types",
+ "getrandom 0.2.17",
  "glob",
  "regex",
  "serde",

@@ -13221,6 +13221,12 @@ mod tests {
         assert!(report.contains("Config file"));
     }
 
+    /// The `.frontal-code/settings.local.json` suffix as this platform spells it, so the
+    /// assertions also hold on Windows where the separator is a backslash.
+    fn local_settings_suffix() -> PathBuf {
+        Path::new(".frontal-code").join("settings.local.json")
+    }
+
     #[test]
     fn telemetry_report_shows_highest_precedence_config_file() {
         let _guard = env_lock();
@@ -13242,7 +13248,7 @@ mod tests {
             render_telemetry_report(None).expect("telemetry report should render")
         });
         assert!(report.contains("Effective path   local/log.jsonl"));
-        assert!(report.contains(".frontal-code/settings.local.json"));
+        assert!(report.contains(&local_settings_suffix().display().to_string()));
 
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
@@ -13264,7 +13270,7 @@ mod tests {
         });
         assert!(report.contains("Effective source env"));
         assert!(report.contains("Shadowed config"));
-        assert!(report.contains(".frontal-code/settings.local.json"));
+        assert!(report.contains(&local_settings_suffix().display().to_string()));
         assert!(report.contains("Env override     /tmp/from-env.jsonl"));
 
         std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
@@ -13438,10 +13444,12 @@ mod tests {
         assert_eq!(value["merged_section"]["redacted"], true);
         assert_eq!(value["effective"]["path"], "local/log.jsonl");
         assert_eq!(value["effective"]["effective_source"], "config");
-        assert!(value["effective"]["config_source_path"]
-            .as_str()
-            .expect("config path")
-            .ends_with(".frontal-code/settings.local.json"));
+        assert!(Path::new(
+            value["effective"]["config_source_path"]
+                .as_str()
+                .expect("config path")
+        )
+        .ends_with(local_settings_suffix()));
 
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
     }
@@ -13464,10 +13472,12 @@ mod tests {
         assert_eq!(value["effective"]["effective_source"], "env");
         assert_eq!(value["effective"]["env_override"], "/tmp/from-env.jsonl");
         assert_eq!(value["effective"]["config_shadowed_by_env"], true);
-        assert!(value["effective"]["config_source_path"]
-            .as_str()
-            .expect("config path")
-            .ends_with(".frontal-code/settings.local.json"));
+        assert!(Path::new(
+            value["effective"]["config_source_path"]
+                .as_str()
+                .expect("config path")
+        )
+        .ends_with(local_settings_suffix()));
 
         std::env::remove_var(FRONTAL_CODE_TELEMETRY_PATH);
         fs::remove_dir_all(cwd).expect("cleanup temp dir");
@@ -13791,7 +13801,8 @@ UU conflicted.rs",
         assert!(message.contains("Unstaged changes:"));
         assert!(message.contains("tracked.txt"));
 
-        fs::remove_dir_all(root).expect("cleanup temp dir");
+        // Best effort: on Windows git can still hold handles inside `.git` here.
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -14427,6 +14438,7 @@ UU conflicted.rs",
     }
 
     #[test]
+    #[cfg(unix)]
     #[allow(clippy::too_many_lines)]
     fn build_runtime_plugin_state_discovers_mcp_tools_and_surfaces_pending_servers() {
         let config_home = temp_dir();
@@ -14599,6 +14611,7 @@ UU conflicted.rs",
     }
 
     #[test]
+    #[cfg(unix)]
     fn build_runtime_runs_plugin_lifecycle_init_and_shutdown() {
         let config_home = temp_dir();
         // Inject a dummy API key so runtime construction succeeds without real credentials.

@@ -713,15 +713,19 @@ enum CommandExecution {
 }
 
 #[cfg(test)]
+// Several helpers here drive shell-script hooks and are compiled only on Unix. On
+// Windows the remaining tests still compile, so allow the resulting unused items.
+#[cfg_attr(not(unix), allow(dead_code, unused_imports))]
 mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use super::{
-        HookAbortSignal, HookEvent, HookProgressEvent, HookProgressReporter, HookRunResult,
-        HookRunner,
-    };
+    #[cfg(unix)]
+    use super::HookRunResult;
+    use super::{HookAbortSignal, HookEvent, HookProgressEvent, HookProgressReporter, HookRunner};
+    #[cfg(unix)]
     use crate::config::{RuntimeFeatureConfig, RuntimeHookConfig};
+    #[cfg(unix)]
     use crate::permissions::PermissionOverride;
 
     struct RecordingReporter {
@@ -734,6 +738,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn allows_exit_code_zero_and_captures_stdout() {
         let runner = HookRunner::new(RuntimeHookConfig::new(
@@ -747,6 +752,7 @@ mod tests {
         assert_eq!(result, HookRunResult::allow(vec!["pre ok".to_string()]));
     }
 
+    #[cfg(unix)]
     #[test]
     fn denies_exit_code_two() {
         let runner = HookRunner::new(RuntimeHookConfig::new(
@@ -761,6 +767,7 @@ mod tests {
         assert_eq!(result.messages(), &["blocked by hook".to_string()]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn propagates_other_non_zero_statuses_as_failures() {
         let runner = HookRunner::from_feature_config(&RuntimeFeatureConfig::default().with_hooks(
@@ -783,6 +790,7 @@ mod tests {
             .any(|message| message.contains("warning hook")));
     }
 
+    #[cfg(unix)]
     #[test]
     fn parses_pre_hook_permission_override_and_updated_input() {
         let runner = HookRunner::new(RuntimeHookConfig::new(
@@ -804,6 +812,7 @@ mod tests {
         assert!(result.messages().iter().any(|message| message == "updated"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn runs_post_tool_use_failure_hooks() {
         // given
@@ -822,6 +831,7 @@ mod tests {
         assert_eq!(result.messages(), &["failure hook ran".to_string()]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn stops_running_failure_hooks_after_failure() {
         // given
@@ -850,6 +860,7 @@ mod tests {
             .any(|message| message == "later failure hook"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn executes_hooks_in_configured_order() {
         // given
@@ -911,6 +922,7 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn stops_running_hooks_after_failure() {
         // given
@@ -936,6 +948,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn abort_signal_cancels_long_running_hook_and_reports_progress() {
         let runner = HookRunner::new(RuntimeHookConfig::new(
             vec![shell_snippet("sleep 5")],

@@ -346,7 +346,7 @@ impl ConfigLoader {
             },
             ConfigEntry {
                 source: ConfigSource::Project,
-                path: self.cwd.join(".frontal-code/settings.json"),
+                path: self.cwd.join(".frontal-code").join("settings.json"),
             },
             ConfigEntry {
                 source: ConfigSource::Local,
@@ -354,7 +354,7 @@ impl ConfigLoader {
             },
         ];
         if let Some(parent) = self.config_home.parent() {
-            let legacy = parent.join(".frontal-code/settings.json");
+            let legacy = parent.join(".frontal-code").join("settings.json");
             if legacy != entries[0].path {
                 entries.insert(
                     0,

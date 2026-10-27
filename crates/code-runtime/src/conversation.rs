@@ -782,6 +782,9 @@ impl ToolExecutor for StaticToolExecutor {
 }
 
 #[cfg(test)]
+// Several helpers here drive shell-script hooks and are compiled only on Unix. On
+// Windows the remaining tests still compile, so allow the resulting unused items.
+#[cfg_attr(not(unix), allow(dead_code, unused_imports))]
 mod tests {
     use super::{
         build_assistant_message, parse_auto_compaction_threshold, ApiClient, ApiRequest,
@@ -797,6 +800,7 @@ mod tests {
     use crate::prompt::{ProjectContext, SystemPromptBuilder};
     use crate::session::{ContentBlock, MessageRole, Session};
     use crate::usage::TokenUsage;
+    #[cfg(unix)]
     use crate::ToolError;
     use code_telemetry::{MemoryTelemetrySink, SessionTracer, TelemetryEvent};
     use std::fs;
@@ -1013,6 +1017,7 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn denies_tool_use_when_pre_tool_hook_blocks() {
         struct SingleCallApiClient;
@@ -1075,6 +1080,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn denies_tool_use_when_pre_tool_hook_fails() {
         struct SingleCallApiClient;
@@ -1215,6 +1221,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn appends_post_tool_use_failure_hook_feedback_to_tool_result() {
         struct TwoCallApiClient {

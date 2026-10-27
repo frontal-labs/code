@@ -32,6 +32,7 @@ fn pre_tool_use_allow_when_hook_exits_zero() {
     assert_eq!(result.messages(), &["allowed".to_string()]);
 }
 
+#[cfg(unix)]
 #[test]
 fn pre_tool_use_denies_when_hook_exits_two() {
     let runner = HookRunner::new(PluginHooks {
@@ -44,6 +45,7 @@ fn pre_tool_use_denies_when_hook_exits_two() {
     assert_eq!(result.messages(), &["blocked".to_string()]);
 }
 
+#[cfg(unix)]
 #[test]
 fn pre_tool_use_fails_when_hook_exits_nonzero() {
     let runner = HookRunner::new(PluginHooks {
@@ -56,6 +58,7 @@ fn pre_tool_use_fails_when_hook_exits_nonzero() {
     assert!(result.messages()[0].contains("error occurred"));
 }
 
+#[cfg(unix)]
 #[test]
 fn deny_prevents_subsequent_hooks() {
     let runner = HookRunner::new(PluginHooks {
@@ -73,6 +76,7 @@ fn deny_prevents_subsequent_hooks() {
     assert_eq!(result.messages()[1], "blocked");
 }
 
+#[cfg(unix)]
 #[test]
 fn fail_prevents_subsequent_hooks() {
     let runner = HookRunner::new(PluginHooks {

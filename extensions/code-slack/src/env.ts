@@ -45,10 +45,13 @@ export const env = createEnv({
       .min(1, "Slack app token is required")
       .startsWith("xapp-", "Slack app token must start with xapp-")
       .describe("Slack app token for socket mode"),
+    // Socket Mode authenticates with the app token and never verifies request signatures,
+    // so this is optional. It is only used if the app is ever switched to HTTP receivers.
     SLACK_SIGNING_SECRET: z
       .string()
       .min(32, "Slack signing secret must be at least 32 characters")
-      .describe("Slack signing secret for request verification"),
+      .optional()
+      .describe("Slack signing secret (unused in Socket Mode)"),
     SLACK_ALLOWED_USER_IDS: slackIdList(SLACK_USER_ID, "user", "U012ABC3DE").describe(
       "Comma-separated Slack user IDs allowed to create tasks. Empty denies all task creation.",
     ),

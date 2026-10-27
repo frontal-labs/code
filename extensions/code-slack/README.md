@@ -52,7 +52,7 @@ Copy `.env.example` to `.env` and configure:
 # Slack
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
-SLACK_SIGNING_SECRET=your-signing-secret
+# SLACK_SIGNING_SECRET is optional in Socket Mode and can be omitted.
 
 # Slack access control (see "Access Control" below)
 SLACK_ALLOWED_USER_IDS=U0123456789   # required: empty denies all task creation

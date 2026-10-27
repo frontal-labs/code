@@ -5,7 +5,7 @@ export interface Config {
   slack: {
     botToken: string;
     appToken: string;
-    signingSecret: string;
+    signingSecret?: string;
     // Access control: who may start tasks and who may act on other users' tasks.
     allowedUserIds: string[];
     allowedChannelIds: string[];

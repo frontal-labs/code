@@ -63,7 +63,7 @@ Create a `.env` file in the `extensions/code-slack` directory:
 ```bash
 # Slack App Configuration
 SLACK_BOT_TOKEN=xoxb-your-bot-token-here
-SLACK_SIGNING_SECRET=your-signing-secret-here
+# SLACK_SIGNING_SECRET is optional in Socket Mode and can be omitted.
 SLACK_APP_ID=A0123456789012
 
 # Slack access control (deny-by-default; empty SLACK_ALLOWED_USER_IDS denies all task creation)

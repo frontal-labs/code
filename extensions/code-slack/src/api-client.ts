@@ -221,7 +221,9 @@ export class FrontalCodeApiClient {
 
   async getTask(taskId: string): Promise<FrontalCodeTask> {
     try {
-      const response: AxiosResponse<FrontalCodeTask> = await this.client.get(`/v1/tasks/${taskId}`);
+      const response: AxiosResponse<FrontalCodeTask> = await this.client.get(
+        `/v1/tasks/${encodeURIComponent(taskId)}`,
+      );
       return response.data;
     } catch (error) {
       logger.error("Task lookup failed", error as Error, { taskId });
@@ -261,7 +263,7 @@ export class FrontalCodeApiClient {
   async updateTaskContext(request: FrontalCodeUpdateTaskContextRequest): Promise<FrontalCodeTask> {
     try {
       const response: AxiosResponse<FrontalCodeTask> = await this.client.post(
-        `/v1/tasks/${request.taskId}/context`,
+        `/v1/tasks/${encodeURIComponent(request.taskId)}/context`,
         {
           source: request.source,
           user_id: request.user_id,
@@ -332,7 +334,7 @@ export class FrontalCodeApiClient {
   async resolveTaskApproval(request: FrontalCodeResolveApprovalRequest): Promise<FrontalCodeTask> {
     try {
       const response: AxiosResponse<FrontalCodeTask> = await this.client.post(
-        `/v1/tasks/${request.taskId}/approval`,
+        `/v1/tasks/${encodeURIComponent(request.taskId)}/approval`,
         {
           approval_kind: request.approvalKind,
           action: request.action,

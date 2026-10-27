@@ -1,4 +1,13 @@
 import { App } from "@slack/bolt";
+import {
+  canActOnTask,
+  canCreateTask,
+  createSlackAccessPolicy,
+  isDirectMessage,
+  isUserAllowed,
+  type SlackAccessPolicy,
+  stripBotMention,
+} from "./access";
 import { FrontalCodeApiClient } from "./api-client";
 import { FrontalCodeEventsClient } from "./code-events";
 import { config } from "./config";
@@ -27,6 +36,7 @@ interface SlackMessage {
   thread_ts?: string;
   bot_id?: string;
   subtype?: string;
+  channel_type?: string;
 }
 
 interface SlackAction {
@@ -48,6 +58,7 @@ export class SlackInterface {
   private readonly approvalMessageTsByTask = new Map<string, string>();
   private readonly approvalInFlight = new Set<string>();
   private readonly approvalResolved = new Set<string>();
+  private readonly access: SlackAccessPolicy;
 
   constructor() {
     // Initialize Slack WebSocket connection
@@ -57,6 +68,12 @@ export class SlackInterface {
       signingSecret: config.slack.signingSecret,
       socketMode: true, // WebSocket connection
       logLevel: undefined, // Minimal logging
+    });
+
+    this.access = createSlackAccessPolicy({
+      allowedUserIds: config.slack.allowedUserIds,
+      allowedChannelIds: config.slack.allowedChannelIds,
+      adminUserIds: config.slack.adminUserIds,
     });
 
     this.frontalCodeApi = new FrontalCodeApiClient();
@@ -71,37 +88,52 @@ export class SlackInterface {
   }
 
   private setupEventHandlers(): void {
-    // Handle all Slack events through WebSocket
+    // Direct messages are the only non-mention path that can start a task. Channel and group
+    // traffic is ignored here; channels are handled through explicit @mentions (app_mention).
     this.app.message(async ({ message }) => {
-      // Forward messages to Frontal Code AI
       const slackMessage = message as SlackMessage;
       if (!slackMessage.text || !slackMessage.user || slackMessage.bot_id || slackMessage.subtype) {
         return;
       }
+      if (!isDirectMessage(slackMessage.channel, slackMessage.channel_type)) {
+        return;
+      }
 
-      const threadTs = slackMessage.thread_ts || slackMessage.ts;
-      const task = await this.frontalCodeApi.createTask({
-        prompt: slackMessage.text,
-        user_id: slackMessage.user,
-        channel_id: slackMessage.channel,
-        thread_ts: threadTs,
-        source: "slack",
-      });
+      await this.startTaskFromSlackMessage(slackMessage, slackMessage.text);
+    });
 
-      await this.registerTask(
-        task,
-        {
-          taskId: task.task_id,
-          channelId: slackMessage.channel,
-          threadTs,
-          userId: slackMessage.user,
-        },
-        slackMessage.text,
-      );
+    // Channel tasks start only when the bot is explicitly mentioned. The chain continues so the
+    // generic connector event forwarder below still sees the mention.
+    this.app.event("app_mention", async ({ event, next }) => {
+      const mention = event as unknown as SlackMessage;
+      if (mention.user && mention.channel) {
+        const prompt = stripBotMention(mention.text || "");
+        if (prompt) {
+          await this.startTaskFromSlackMessage(mention, prompt);
+        }
+      }
+      await next();
     });
 
     // Handle slash commands
     this.app.command("/code", async ({ command, ack }) => {
+      if (
+        !canCreateTask(this.access, {
+          userId: command.user_id,
+          channelId: command.channel_id,
+        })
+      ) {
+        logger.info("Denied /code command", {
+          userId: command.user_id,
+          channelId: command.channel_id,
+        });
+        await ack({
+          response_type: "ephemeral",
+          text: "You are not authorized to run Code tasks in this channel.",
+        });
+        return;
+      }
+
       const policyQuery = this.parseOrphanPolicyCommand(command.text);
       if (policyQuery) {
         try {
@@ -199,6 +231,42 @@ export class SlackInterface {
     }
   }
 
+  private async startTaskFromSlackMessage(message: SlackMessage, prompt: string): Promise<void> {
+    if (
+      !canCreateTask(this.access, {
+        userId: message.user,
+        channelId: message.channel,
+        channelType: message.channel_type,
+      })
+    ) {
+      logger.info("Ignored Slack task request from unauthorized user or channel", {
+        userId: message.user,
+        channelId: message.channel,
+      });
+      return;
+    }
+
+    const threadTs = message.thread_ts || message.ts;
+    const task = await this.frontalCodeApi.createTask({
+      prompt,
+      user_id: message.user,
+      channel_id: message.channel,
+      thread_ts: threadTs,
+      source: "slack",
+    });
+
+    await this.registerTask(
+      task,
+      {
+        taskId: task.task_id,
+        channelId: message.channel,
+        threadTs,
+        userId: message.user,
+      },
+      prompt,
+    );
+  }
+
   private async registerTask(
     task: FrontalCodeCreateTaskResponse,
     trackedTask: FrontalCodeTrackedTask,
@@ -243,6 +311,14 @@ export class SlackInterface {
       return;
     }
 
+    if (!isUserAllowed(this.access, body.user.id)) {
+      logger.info("Ignored Slack action from unauthorized user", {
+        userId: body.user.id,
+        action: action.action_id,
+      });
+      return;
+    }
+
     const response = await this.frontalCodeApi.sendConnectorInteraction("slack", {
       action: action.action_id,
       value: action.value,
@@ -273,9 +349,52 @@ export class SlackInterface {
     );
   }
 
+  // Only the task's creator or an admin, and only when allowlisted, may resolve its approvals.
+  private async canResolveTaskApproval(taskId: string, actorId: string): Promise<boolean> {
+    if (!isUserAllowed(this.access, actorId)) {
+      return false;
+    }
+
+    let ownerId = this.trackedTasks.get(taskId)?.userId;
+    if (!ownerId && !this.access.adminUserIds.has(actorId)) {
+      try {
+        ownerId = (await this.frontalCodeApi.getTask(taskId))?.user_id;
+      } catch (error) {
+        logger.warn("Failed to load task owner for approval check", {
+          taskId,
+          error: (error as Error).message,
+        });
+        return false;
+      }
+    }
+
+    return canActOnTask(this.access, { actorId, ownerId });
+  }
+
+  private async denyApprovalAction(body: SlackBody, taskId: string): Promise<void> {
+    logger.info("Denied Slack approval action", { taskId, userId: body.user.id });
+    try {
+      await this.app.client.chat.postEphemeral({
+        channel: body.channel.id,
+        user: body.user.id,
+        text: `You are not authorized to act on task ${taskId}. Only the task creator or a Code admin can.`,
+      });
+    } catch (error) {
+      logger.warn("Failed to send approval denial notice", {
+        taskId,
+        error: (error as Error).message,
+      });
+    }
+  }
+
   private async handleOrphanApprovalAction(action: SlackAction, body: SlackBody): Promise<void> {
     const taskId = action.value;
     if (!taskId) {
+      return;
+    }
+
+    if (!(await this.canResolveTaskApproval(taskId, body.user.id))) {
+      await this.denyApprovalAction(body, taskId);
       return;
     }
 
@@ -355,6 +474,10 @@ export class SlackInterface {
   ): Promise<void> {
     const taskId = action.value;
     if (!taskId) {
+      return;
+    }
+    if (!(await this.canResolveTaskApproval(taskId, body.user.id))) {
+      await this.denyApprovalAction(body, taskId);
       return;
     }
     const actionName: FrontalCodeApprovalAction = action.action_id.endsWith(".retry")

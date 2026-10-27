@@ -30,14 +30,16 @@ The Frontal Code Slack bot provides autonomous engineering capabilities directly
 ### 2. Configure OAuth & Permissions
 
 Add these **Bot Token Scopes** (no user scopes are needed):
-- `app_mentions:read` - Receive `@code` mentions
-- `channels:history`, `groups:history`, `im:history`, `mpim:history` - Receive messages in threads the bot is part of
+- `app_mentions:read` - Receive `@code` mentions in channels
+- `im:history` - Receive direct messages to the bot
 - `chat:write` - Post and update replies
 - `commands` - Handle the `/code` slash command
 
 Add these **Event Subscriptions**:
 - `app_mention`
-- `message.channels`, `message.groups`, `message.im`, `message.mpim`
+- `message.im`
+
+Do not add `message.channels`, `message.groups`, or `message.mpim`. The bot only acts on explicit mentions and DMs, so it does not need to see all channel traffic.
 
 ### 3. Configure Interactive Components
 
@@ -63,6 +65,11 @@ Create a `.env` file in the `extensions/code-slack` directory:
 SLACK_BOT_TOKEN=xoxb-your-bot-token-here
 SLACK_SIGNING_SECRET=your-signing-secret-here
 SLACK_APP_ID=A0123456789012
+
+# Slack access control (deny-by-default; empty SLACK_ALLOWED_USER_IDS denies all task creation)
+SLACK_ALLOWED_USER_IDS=U0123456789
+SLACK_ALLOWED_CHANNEL_IDS=   # optional, comma-separated channel IDs; empty allows any channel
+SLACK_ADMIN_USER_IDS=        # optional, comma-separated; may approve/retry/cancel others' tasks
 
 # Frontal Code Server Configuration
 FRONTAL_API_URL=https://your-code-server.com

@@ -47,6 +47,7 @@ export default defineConfig({
       "tests/slack-constructor.test.ts",
       "tests/slack-formatting.test.ts",
       "tests/slack-behavior.test.ts",
+      "tests/access.test.ts",
     ],
 
     // Exclude patterns

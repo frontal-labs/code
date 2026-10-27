@@ -177,9 +177,12 @@ Bot Token Scopes:
 - `channels:read` - Read channel information
 
 Event Subscriptions:
-- `message.channels` - Channel messages
-- `app_mention` - Bot mentions
-- `message.groups` - Private channel messages
+- `app_mention` - Bot mentions in channels (the only channel path that starts a task)
+- `message.im` - Direct messages to the bot
+
+Access control is configured with `SLACK_ALLOWED_USER_IDS` (required to create tasks),
+`SLACK_ALLOWED_CHANNEL_IDS` (optional), and `SLACK_ADMIN_USER_IDS` (optional). See the
+connector README for details.
 
 ### Interactive Components
 

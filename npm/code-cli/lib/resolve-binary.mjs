@@ -7,7 +7,7 @@
 //      walk up from <pkgRoot> looking for <repo>/target/release/frontal-code(.exe)
 //   3. Otherwise null (caller decides what to do).
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectTarget } from "./platform.mjs";
@@ -50,20 +50,35 @@ export function resolveVendoredBinary(root = pkgRoot()) {
   return isExecutableFile(p) ? p : null;
 }
 
-// Walk up from `startDir` looking for a locally built `target/<profile>/<binName>`.
-// Checks both `release` and `debug` so a plain `cargo build` (debug) works too.
+// The only repo layout we trust for a local build is this package living inside
+// the Frontal Code monorepo: <repo>/npm/code-cli, with <repo>/Cargo.toml declaring
+// a workspace. Anything else (including ancestors of a user's project when the
+// package is installed under node_modules) is ignored, so a planted
+// target/<profile>/frontal-code in a cloned repo cannot be executed.
+function monorepoRootFor(pkgDir) {
+  const repo = resolve(pkgDir, "..", "..");
+  const cargoToml = join(repo, "Cargo.toml");
+  const marker = join(repo, "npm", "code-cli", "package.json");
+  if (resolve(pkgDir) !== join(repo, "npm", "code-cli")) return null;
+  if (!existsSync(cargoToml) || !existsSync(marker)) return null;
+  try {
+    if (!/^\s*\[workspace\]/m.test(readFileSync(cargoToml, "utf8"))) return null;
+  } catch {
+    return null;
+  }
+  return repo;
+}
+
+// Look for a locally built `target/<profile>/<binName>` in the monorepo root that
+// contains this package. Checks both `release` and `debug` so a plain `cargo build`
+// (debug) works too.
 export function resolveLocalBuild(startDir = pkgRoot()) {
   const { binName } = detectTarget();
-  let dir = resolve(startDir);
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    for (const profile of ["release", "debug"]) {
-      const candidate = join(dir, "target", profile, binName);
-      if (isExecutableFile(candidate)) return candidate;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
+  const repo = monorepoRootFor(resolve(startDir));
+  if (!repo) return null;
+  for (const profile of ["release", "debug"]) {
+    const candidate = join(repo, "target", profile, binName);
+    if (isExecutableFile(candidate)) return candidate;
   }
   return null;
 }

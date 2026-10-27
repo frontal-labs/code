@@ -106,7 +106,7 @@ resource "kubernetes_config_map" "frontal-code_server_config" {
     "FRONTAL_CODE_SERVER_ORPHAN_POLICY_RULES"        = "[]"
     "FRONTAL_CODE_SERVER_STATE_FILE"                 = "/var/lib/frontal-code/server/state.json"
     "FRONTAL_CODE_AGENT_STORE"                       = "/var/lib/frontal-code/agents"
-    "RUST_LOG"                                = "info"
+    "RUST_LOG"                                       = "info"
   }
 
   depends_on = [kubernetes_namespace.frontal-code]
@@ -125,19 +125,19 @@ resource "kubernetes_secret" "frontal-code_server_secrets" {
   }
 
   data = {
-    "FRONTAL_CODE_SERVER_API_KEY"  = var.frontal-code_server_api_key
-    "FRONTAL_API_KEY"       = var.api_keys.anthropic
-    "FRONTAL_BASE_URL"      = "https://tools.frontal.dev/frontal-code"
-    "OPENAI_API_KEY"        = var.api_keys.openai
-    "OPENAI_BASE_URL"       = ""
-    "XAI_API_KEY"           = var.api_keys.xai
-    "XAI_BASE_URL"          = ""
-    "AZURE_OPENAI_API_KEY"  = var.api_keys.azure
-    "AZURE_OPENAI_BASE_URL" = ""
-    "BEDROCK_API_KEY"       = var.api_keys.bedrock
-    "BEDROCK_BASE_URL"      = ""
-    "OLLAMA_BASE_URL"       = var.api_keys.ollama
-    "OLLAMA_MODEL"          = ""
+    "FRONTAL_CODE_SERVER_API_KEY" = var.frontal-code_server_api_key
+    "FRONTAL_API_KEY"             = var.api_keys.anthropic
+    "FRONTAL_BASE_URL"            = "https://tools.frontal.dev/frontal-code"
+    "OPENAI_API_KEY"              = var.api_keys.openai
+    "OPENAI_BASE_URL"             = ""
+    "XAI_API_KEY"                 = var.api_keys.xai
+    "XAI_BASE_URL"                = ""
+    "AZURE_OPENAI_API_KEY"        = var.api_keys.azure
+    "AZURE_OPENAI_BASE_URL"       = ""
+    "BEDROCK_API_KEY"             = var.api_keys.bedrock
+    "BEDROCK_BASE_URL"            = ""
+    "OLLAMA_BASE_URL"             = var.api_keys.ollama
+    "OLLAMA_MODEL"                = ""
   }
 
   type = "Opaque"
@@ -191,9 +191,14 @@ resource "kubernetes_deployment" "frontal-code_server" {
 
           security_context {
             allow_privilege_escalation = false
+            read_only_root_filesystem  = true
             run_as_group               = 1000
             run_as_non_root            = true
             run_as_user                = 1000
+
+            capabilities {
+              drop = ["ALL"]
+            }
           }
 
           port {
@@ -260,6 +265,11 @@ resource "kubernetes_deployment" "frontal-code_server" {
             name       = "frontal-code-agent-store"
             mount_path = "/var/lib/frontal-code/agents"
           }
+
+          volume_mount {
+            name       = "tmp"
+            mount_path = "/tmp"
+          }
         }
 
         volume {
@@ -281,6 +291,11 @@ resource "kubernetes_deployment" "frontal-code_server" {
           persistent_volume_claim {
             claim_name = "frontal-code-agent-store"
           }
+        }
+
+        volume {
+          name = "tmp"
+          empty_dir {}
         }
 
         affinity {

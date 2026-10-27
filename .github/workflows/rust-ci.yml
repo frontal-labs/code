@@ -110,7 +110,7 @@ jobs:
         with:
           workspaces: . -> target
       - name: Run CLI and runtime tests on Windows
-        run: cargo test -p cli -p code-runtime -p code-plugins
+        run: cargo test --no-fail-fast -p cli -p code-runtime -p code-plugins
 
   slack-extension-ci:
     name: slack contract + build + lint

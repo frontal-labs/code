@@ -349,12 +349,14 @@ impl<T: Neo4jTransport> MemoryGraphStore for Neo4jGraphStoreAdapter<T> {
     }
 }
 
+/// Builds the `scope_key` literal. Every component is caller-supplied, so each one is
+/// escaped before it is interpolated into a single-quoted Cypher string.
 fn scoped_key(scope: &MemoryScope) -> String {
     format!(
         "{}:{}:{}",
-        scope.session_id,
-        scope.repo_id.as_deref().unwrap_or_default(),
-        scope.branch_id.as_deref().unwrap_or_default()
+        escape_cypher_string(&scope.session_id),
+        escape_cypher_string(scope.repo_id.as_deref().unwrap_or_default()),
+        escape_cypher_string(scope.branch_id.as_deref().unwrap_or_default())
     )
 }
 
@@ -691,6 +693,33 @@ mod tests {
         assert_eq!(calls[0].0, "/db/neo4j/tx/commit");
         assert!(calls[0].1.contains("session-a:repo-a:main"));
         assert!(calls[0].1.contains("crate:memory"));
+    }
+
+    #[test]
+    fn scope_values_with_single_quotes_are_escaped_in_cypher() {
+        let scope = MemoryScope::new("sess'ion")
+            .with_repo_id("repo' OR 1=1 //")
+            .with_branch_id("main");
+        let entity = KgEntity {
+            id: "e1".to_string(),
+            label: "label".to_string(),
+            entity_type: "crate".to_string(),
+        };
+
+        let statement = Neo4jGraphStoreAdapter::<RecordingTransport>::build_upsert_entity_statement(
+            &scope, &entity,
+        );
+
+        assert!(
+            statement.contains(r"scope_key: 'sess\'ion:repo\' OR 1=1 //:main'"),
+            "{statement}"
+        );
+        // Every quote in the emitted literal must be backslash-escaped, so no
+        // unescaped quote can end the string early.
+        assert_eq!(
+            statement.matches('\'').count(),
+            statement.matches(r"\'").count() + 8
+        );
     }
 
     #[test]

@@ -9,7 +9,7 @@ use axum::{
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info};
@@ -22,8 +22,14 @@ use super::events::{EventProcessor, WebhookEvent, WebhookEventType};
 pub struct WebhookConfig {
     /// Server port
     pub port: u16,
+    /// Address to bind. Defaults to loopback so the receiver is not exposed on the network
+    /// unless the operator asks for it.
+    pub bind_ip: IpAddr,
     /// Authentication method
     pub auth: WebhookAuth,
+    /// Permit serving with `WebhookAuth::None`. Off by default: an unauthenticated receiver
+    /// accepts events from anyone who can reach it.
+    pub allow_unauthenticated: bool,
     /// Maximum events to store
     pub max_events: usize,
 }
@@ -32,10 +38,24 @@ impl Default for WebhookConfig {
     fn default() -> Self {
         Self {
             port: 8555,
+            bind_ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
             auth: WebhookAuth::None,
+            allow_unauthenticated: false,
             max_events: 1000,
         }
     }
+}
+
+/// Startup policy: refuse an unauthenticated receiver unless the operator opted in.
+fn check_startup_policy(config: &WebhookConfig) -> Result<(), String> {
+    if matches!(config.auth, WebhookAuth::None) && !config.allow_unauthenticated {
+        return Err(
+            "refusing to start webhook receiver without authentication; configure \
+             WebhookAuth::Hmac or set allow_unauthenticated to accept unsigned deliveries"
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 /// Shared state for the webhook server
@@ -69,7 +89,8 @@ impl WebhookReceiver {
 
     /// Start the webhook server
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let addr = SocketAddr::from(([0, 0, 0, 0], self.config.port));
+        check_startup_policy(&self.config)?;
+        let addr = SocketAddr::new(self.config.bind_ip, self.config.port);
         info!("Starting webhook server on {addr}");
 
         let app = self.create_app();
@@ -245,6 +266,36 @@ mod tests {
         assert_eq!(config.port, 8555);
         assert!(matches!(config.auth, WebhookAuth::None));
         assert_eq!(config.max_events, 1000);
+        assert!(config.bind_ip.is_loopback());
+        assert!(!config.allow_unauthenticated);
+    }
+
+    #[test]
+    fn unauthenticated_receiver_is_refused_by_default() {
+        let config = WebhookConfig::default();
+        let error = check_startup_policy(&config).expect_err("no auth, no opt-in");
+        assert!(error.contains("without authentication"));
+    }
+
+    #[test]
+    fn unauthenticated_receiver_starts_only_with_explicit_opt_in() {
+        let config = WebhookConfig {
+            allow_unauthenticated: true,
+            ..WebhookConfig::default()
+        };
+        assert!(check_startup_policy(&config).is_ok());
+    }
+
+    #[test]
+    fn authenticated_receiver_starts_without_opt_in() {
+        let config = WebhookConfig {
+            auth: WebhookAuth::Hmac {
+                secret: "s3cret".to_string(),
+                header: "x-signature".to_string(),
+            },
+            ..WebhookConfig::default()
+        };
+        assert!(check_startup_policy(&config).is_ok());
     }
 
     #[test]

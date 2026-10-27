@@ -8183,7 +8183,19 @@ fn run_git_diff_command_in(
     Ok(String::from_utf8(output.stdout)?)
 }
 
+/// Arguments for the content search. The `--` ends option parsing so a target that
+/// begins with `-` is treated as the pattern rather than as an rg flag.
+fn teleport_content_search_args(target: &str) -> Vec<String> {
+    ["-n", "-S", "--color", "never", "--", target, "."]
+        .into_iter()
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
 fn render_teleport_report(target: &str) -> Result<String, Box<dyn std::error::Error>> {
+    if target.starts_with('-') {
+        return Err("teleport target must not start with `-`".into());
+    }
     let cwd = env::current_dir()?;
 
     let file_list = Command::new("rg")
@@ -8202,7 +8214,7 @@ fn render_teleport_report(target: &str) -> Result<String, Box<dyn std::error::Er
     };
 
     let content_output = Command::new("rg")
-        .args(["-n", "-S", "--color", "never", target, "."])
+        .args(teleport_content_search_args(target))
         .current_dir(&cwd)
         .output()?;
 
@@ -14501,6 +14513,26 @@ fn write_mcp_server_fixture(script_path: &Path) {
         ]
         .join("\n");
     fs::write(script_path, script).expect("mcp fixture script should write");
+}
+
+#[cfg(test)]
+mod teleport_search_tests {
+    use super::{render_teleport_report, teleport_content_search_args};
+
+    #[test]
+    fn teleport_content_search_ends_options_before_the_target() {
+        let args = teleport_content_search_args("--files");
+        let separator = args.iter().position(|arg| arg == "--").expect("separator");
+        assert_eq!(args[separator + 1], "--files");
+        assert_eq!(args.last().map(String::as_str), Some("."));
+        assert!(!args[..separator].iter().any(|arg| arg == "--files"));
+    }
+
+    #[test]
+    fn teleport_rejects_targets_that_look_like_flags() {
+        let error = render_teleport_report("--no-ignore").expect_err("flag-like target");
+        assert!(error.to_string().contains("must not start with"));
+    }
 }
 
 #[cfg(test)]

@@ -10,9 +10,9 @@ For a task-oriented guide with copy/paste examples, see [`./USAGE.md`](./USAGE.m
 
 ```bash
 # Install the CLI with Homebrew
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 
-# Inspect available commands
+# Inspect available commands (npm and Homebrew installs use `frontal-code`; a Cargo build produces `code`)
 frontal-code --help
 
 # Run the interactive REPL

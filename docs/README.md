@@ -37,7 +37,7 @@ Welcome to the Frontal Code CLI documentation hub. This comprehensive guide cove
 # Install with Homebrew from this repo
 git clone <repository-url>
 cd claw-code-main
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 ```
 
 For local development, build from source with `cargo build --workspace`.

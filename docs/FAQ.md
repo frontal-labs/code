@@ -31,7 +31,7 @@ Frontal Code is open-source and free to use. However, you'll need API keys from 
 # Install with Homebrew from this repo
 git clone <repository-url>
 cd claw-code-main
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 frontal-code --help
 
 # Or build from source for development

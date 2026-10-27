@@ -9,10 +9,12 @@ This guide covers installing both the Frontal Code CLI tool and the Frontal Code
 The easiest way to install the Frontal Code CLI is via Homebrew:
 
 ```bash
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 ```
 
 This will build and install the `frontal-code` binary from source.
+
+Naming: npm and Homebrew installs expose `frontal-code`. A Cargo build (`cargo build -p cli` or `cargo install --path cli`) produces a binary named `code`, so use that name when running a local build.
 
 ### From Source
 
@@ -189,7 +191,7 @@ If you encounter build issues:
 If you get permission errors:
 
 1. Check binary permissions: `ls -la $(which frontal-code)`
-2. Reinstall with Homebrew: `brew reinstall --HEAD ./homebrew/frontal-code.rb`
+2. Reinstall with Homebrew: `brew reinstall --HEAD ./homebrew/Formula/code.rb`
 
 ### Server Issues
 

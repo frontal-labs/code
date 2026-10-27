@@ -914,7 +914,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
         "auth" => match rest.get(1).map(String::as_str) {
             None | Some("status") => Ok(CliAction::AuthStatus),
             Some(other) => Err(format!(
-                "unknown auth command `{other}`; try `code auth status`"
+                "unknown auth command `{other}`; try `frontal-code auth status`"
             )),
         },
         "dump-manifests" => Ok(CliAction::DumpManifests { output_format }),
@@ -2985,7 +2985,7 @@ fn print_version(output_format: CliOutputFormat) -> Result<(), Box<dyn std::erro
 }
 
 fn render_upgrade_guidance() -> String {
-    "Upgrade\n  Preferred        Homebrew\n  Install          brew install --HEAD ./homebrew/frontal-code.rb\n  Update           brew upgrade --fetch-HEAD frontal-code\n  Fallback         git pull --ff-only\n                   brew reinstall --HEAD ./homebrew/frontal-code.rb"
+    "Upgrade\n  Preferred        Homebrew\n  Install          brew install --HEAD ./homebrew/Formula/code.rb\n  Update           brew upgrade --fetch-HEAD frontal-code\n  Fallback         git pull --ff-only\n                   brew reinstall --HEAD ./homebrew/Formula/code.rb"
         .to_string()
 }
 
@@ -5285,11 +5285,11 @@ fn run_resume_command(
             message: Some(render_upgrade_guidance()),
             json: Some(json!({
                 "kind": "upgrade-guidance",
-                "install": "brew install --HEAD ./homebrew/frontal-code.rb",
+                "install": "brew install --HEAD ./homebrew/Formula/code.rb",
                 "update": "brew upgrade --fetch-HEAD frontal-code",
                 "fallback": [
                     "git pull --ff-only",
-                    "brew reinstall --HEAD ./homebrew/frontal-code.rb"
+                    "brew reinstall --HEAD ./homebrew/Formula/code.rb"
                 ],
             })),
         }),

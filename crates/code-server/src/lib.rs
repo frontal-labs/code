@@ -1590,11 +1590,13 @@ pub fn app(state: Arc<ServerState>) -> Router {
         )
         .route("/v1/connectors/:connector/events", post(connector_event))
         // Starting a login stores a pending state for the single tenant, so it needs the
-        // control-plane key. The callback stays public because the provider redirects the
-        // browser there; it is bound to the flow by the one-time `state` instead.
+        // control-plane key. It is a POST that returns the provider URL as JSON: a browser
+        // navigation cannot send the `x-api-key` header, so the caller opens the returned
+        // URL itself. The callback stays public because the provider redirects the browser
+        // there; it is bound to the flow by the one-time `state` instead.
         .route(
             "/v1/oauth/:provider/authorize",
-            get(generic_oauth_authorize),
+            post(generic_oauth_authorize),
         )
         .route_layer(middleware::from_fn_with_state(
             protected_state.clone(),
@@ -1703,7 +1705,7 @@ async fn health() -> Json<HealthResponse> {
 async fn generic_oauth_authorize(
     Path(provider): Path<String>,
     State(state): State<Arc<ServerState>>,
-) -> Result<axum::response::Redirect, AppError> {
+) -> Result<Json<serde_json::Value>, AppError> {
     let oauth = global_integration_registry()
         .get_oauth_config(&provider)
         .ok_or_else(|| {
@@ -1733,13 +1735,84 @@ async fn generic_oauth_authorize(
         );
     }
 
-    let scope = oauth.scopes.join(",");
-    let authorize_url = format!(
-        "{}?client_id={}&redirect_uri={}&scope={}&state={}",
-        oauth.auth_url, client_id, redirect_uri, scope, csrf_state
-    );
+    let authorize_url = build_oauth_authorize_url(
+        &oauth.auth_url,
+        &client_id,
+        &redirect_uri,
+        &oauth.scopes,
+        &csrf_state,
+    )
+    .map_err(|e| AppError::internal(format!("invalid OAuth auth_url for '{provider}': {e}")))?;
 
-    Ok(axum::response::Redirect::to(&authorize_url))
+    Ok(Json(serde_json::json!({
+        "provider": provider,
+        "authorize_url": authorize_url.as_str(),
+    })))
+}
+
+/// Builds a provider authorize URL. `parse_with_params` percent-encodes every value, so
+/// a redirect URI or scope containing reserved characters cannot break out of its
+/// parameter.
+fn build_oauth_authorize_url(
+    auth_url: &str,
+    client_id: &str,
+    redirect_uri: &str,
+    scopes: &[String],
+    state: &str,
+) -> Result<reqwest::Url, String> {
+    let scope = scopes.join(",");
+    reqwest::Url::parse_with_params(
+        auth_url,
+        [
+            ("client_id", client_id),
+            ("redirect_uri", redirect_uri),
+            ("scope", scope.as_str()),
+            ("state", state),
+        ],
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod oauth_authorize_url_tests {
+    use super::build_oauth_authorize_url;
+
+    #[test]
+    fn encodes_redirect_uri_and_scope_so_they_cannot_inject_parameters() {
+        let url = build_oauth_authorize_url(
+            "https://auth.example.com/authorize",
+            "client-1",
+            "https://app.example.com/cb?x=1&state=evil",
+            &["read".to_string(), "write&admin=1".to_string()],
+            "nonce-123",
+        )
+        .unwrap();
+
+        let pairs: Vec<(String, String)> = url
+            .query_pairs()
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        let get = |key: &str| {
+            pairs
+                .iter()
+                .filter(|(k, _)| k == key)
+                .map(|(_, v)| v.clone())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(get("client_id"), vec!["client-1"]);
+        assert_eq!(
+            get("redirect_uri"),
+            vec!["https://app.example.com/cb?x=1&state=evil"]
+        );
+        assert_eq!(get("scope"), vec!["read,write&admin=1"]);
+        assert_eq!(
+            get("state"),
+            vec!["nonce-123"],
+            "state must not be duplicated"
+        );
+        assert!(get("admin").is_empty(), "scope must not inject a parameter");
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -8364,6 +8437,7 @@ mod tests {
             .clone()
             .oneshot(
                 Request::builder()
+                    .method("POST")
                     .uri("/v1/oauth/linear/authorize")
                     .body(Body::empty())
                     .unwrap(),
@@ -8375,6 +8449,7 @@ mod tests {
         let authorized = router
             .oneshot(
                 Request::builder()
+                    .method("POST")
                     .uri("/v1/oauth/linear/authorize")
                     .header("x-api-key", "top-secret")
                     .body(Body::empty())
@@ -8383,6 +8458,11 @@ mod tests {
             .await
             .unwrap();
         assert_ne!(authorized.status(), StatusCode::UNAUTHORIZED);
+        assert_ne!(
+            authorized.status(),
+            StatusCode::METHOD_NOT_ALLOWED,
+            "authorize must be a POST"
+        );
     }
 
     #[tokio::test]

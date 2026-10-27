@@ -200,18 +200,18 @@ jobs:
           arm64_sha=$(cat code-cli-aarch64-apple-darwin.sha256 | awk '{print $1}')
           x64_sha=$(cat code-cli-x86_64-apple-darwin.sha256 | awk '{print $1}')
 
-          sed -i "s/<INSERT_ARM64_SHA256>/${arm64_sha}/" homebrew/frontal-code.rb
-          sed -i "s/<INSERT_X64_SHA256>/${x64_sha}/" homebrew/frontal-code.rb
+          sed -i "s/<INSERT_ARM64_SHA256>/${arm64_sha}/" homebrew/Formula/code.rb
+          sed -i "s/<INSERT_X64_SHA256>/${x64_sha}/" homebrew/Formula/code.rb
 
       - name: Commit and push formula update
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet homebrew/frontal-code.rb; then
+          if git diff --quiet homebrew/Formula/code.rb; then
             echo "No sha256 changes; skipping commit."
             exit 0
           fi
-          git add homebrew/frontal-code.rb
+          git add homebrew/Formula/code.rb
           git commit -m "chore: update Homebrew sha256 for ${GITHUB_REF#refs/tags/}"
           git push origin main

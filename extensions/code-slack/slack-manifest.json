@@ -26,26 +26,16 @@
     ]
   },
   "oauth_config": {
-    "redirect_urls": [
-      "https://your-code-server.com/slack/oauth/callback"
-    ],
+    "redirect_urls": ["https://your-code-server.com/slack/oauth/callback"],
     "scopes": {
-      "bot": [
-        "app_mentions:read",
-        "im:history",
-        "chat:write",
-        "commands"
-      ]
+      "bot": ["app_mentions:read", "im:history", "chat:write", "commands"]
     },
     "pkce_enabled": false
   },
   "settings": {
     "event_subscriptions": {
       "request_url": "https://your-code-server.com/slack/events",
-      "bot_events": [
-        "app_mention",
-        "message.im"
-      ]
+      "bot_events": ["app_mention", "message.im"]
     },
     "interactivity": {
       "is_enabled": true,

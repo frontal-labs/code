@@ -34,7 +34,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  # NPM_TOKEN is intentionally not set here. This workflow runs on pull_request and
+  # must never expose publish credentials to build/test steps.
 
 jobs:
   # ── TypeScript SDK: Biome + Bun (Vitest) ───────────────────────────────
@@ -54,7 +55,9 @@ jobs:
           node-version: "22"
 
       - name: Install workspace dependencies
-        run: bun install
+        # Lifecycle scripts are not needed for lint/build/test; skipping them keeps
+        # untrusted PR code from running install hooks.
+        run: bun install --ignore-scripts
 
       - name: Biome check
         run: bunx @biomejs/biome@2.5.14 ci .

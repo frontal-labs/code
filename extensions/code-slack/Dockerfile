@@ -6,11 +6,11 @@ FROM ${BUN_IMAGE} AS builder
 # Set working directory
 WORKDIR /app
 
-COPY package*.json ./
-COPY bunfig.toml ./
+COPY package.json bun.lock bunfig.toml ./
 
-# Generate lockfile if not present (bun.lockb is gitignored)
-RUN if [ -f bun.lockb ]; then bun install --frozen-lockfile; else bun install && echo "Note: bun.lockb regenerated; consider committing it for reproducible builds"; fi
+# Install from the committed bun.lock. --frozen-lockfile fails the build if the lock
+# is out of date with package.json instead of silently re-resolving dependencies.
+RUN if [ -f bun.lock ]; then bun install --frozen-lockfile; else bun install && echo "Note: bun.lock missing; dependencies were resolved without a lockfile"; fi
 
 # Copy source code
 COPY . .

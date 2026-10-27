@@ -1,4 +1,4 @@
-FROM rust:1.95-bookworm AS builder
+FROM rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -24,7 +24,7 @@ COPY tools ./tools
 
 RUN cargo build --release --locked -p code-server
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

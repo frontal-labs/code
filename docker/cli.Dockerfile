@@ -1,5 +1,5 @@
 # Multi-stage build for Frontal Code
-FROM rust:1.95-bookworm AS builder
+FROM rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 AS builder
 
 # Install build dependencies
 RUN apt-get update \

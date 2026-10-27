@@ -634,13 +634,18 @@ fn extract_first_command(command: &str) -> String {
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '_')
             {
-                // Skip past the value (might be quoted).
-                // `find_end_of_value` returns an offset into the *trimmed* value, so slice
-                // the trimmed value too. Slicing the untrimmed text with that offset can land
-                // inside a multi-byte character and panic.
-                let after_eq = next[eq_pos + 1..].trim_start();
-                if let Some(space) = find_end_of_value(after_eq) {
-                    remaining = &after_eq[space..];
+                // The value starts immediately after `=`. If that is whitespace (or nothing),
+                // the assignment has an empty value and the next word is the command, so it
+                // must not be consumed as the value. Trimming before measuring would do that
+                // and hide the real command from the permission check.
+                let value_start = &next[eq_pos + 1..];
+                if value_start.is_empty() || value_start.starts_with(char::is_whitespace) {
+                    remaining = value_start;
+                    continue;
+                }
+                // Skip past the value (might be quoted). Measure and slice the same string.
+                if let Some(space) = find_end_of_value(value_start) {
+                    remaining = &value_start[space..];
                     continue;
                 }
                 // No space found means value goes to end of string — no actual command.
@@ -1007,9 +1012,20 @@ mod tests {
 
     #[test]
     fn env_prefix_with_whitespace_and_multibyte_quoted_value_does_not_panic() {
-        // The quoted value contains a 2-byte character, and whitespace follows the '='.
-        // Slicing the untrimmed text with the trimmed offset used to panic here.
-        assert_eq!(extract_first_command("A=  'é' ls"), "ls");
-        assert_eq!(extract_first_command("A=  \"é\" ls -la"), "ls");
+        // Whitespace right after '=' makes the assignment empty, so the next word is the
+        // command (bash runs `'é'` here, not `ls`).
+        assert_eq!(extract_first_command("A=  'é' ls"), "'é'");
+        assert_eq!(extract_first_command("A=  \"é\" ls -la"), "\"é\"");
+    }
+
+    #[test]
+    fn empty_assignment_does_not_hide_the_real_command() {
+        // With `A=` followed by whitespace, bash runs the following word. Treating that word
+        // as the assignment's value would report the wrong command to the permission check.
+        assert_eq!(extract_first_command("A=  rm x"), "rm");
+        assert_eq!(extract_first_command("A= rm x"), "rm");
+        assert_eq!(extract_first_command("A=1 B=  rm x"), "rm");
+        assert_eq!(extract_first_command("A="), "");
+        assert_eq!(extract_first_command("A=1 B=2 echo hello"), "echo");
     }
 }

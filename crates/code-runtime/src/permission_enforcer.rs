@@ -381,6 +381,7 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn workspace_rejects_symlink_escape() {
         let root = std::env::temp_dir().join(format!("enforcer-ws-{}", std::process::id()));

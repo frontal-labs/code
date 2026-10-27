@@ -1,6 +1,12 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+// Shape of a Standard Schema issue as passed to onValidationError by @t3-oss/env-core >= 0.13.
+type StandardIssue = {
+  readonly message: string;
+  readonly path?: ReadonlyArray<PropertyKey | { readonly key: PropertyKey }>;
+};
+
 export const env = createEnv({
   clientPrefix: "",
   /**
@@ -140,10 +146,17 @@ export const env = createEnv({
    * Called when validation fails.
    * You can customize the error message or throw a different error.
    */
-  onValidationError: (error: z.ZodError) => {
+  onValidationError: (issues: readonly StandardIssue[]) => {
     console.error("Environment variable validation failed:");
     console.error(
-      error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n"),
+      issues
+        .map((issue) => {
+          const path = (issue.path ?? [])
+            .map((segment) => String(typeof segment === "object" ? segment.key : segment))
+            .join(".");
+          return `${path}: ${issue.message}`;
+        })
+        .join("\n"),
     );
     throw new Error("Environment variable validation failed");
   },

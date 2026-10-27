@@ -1,0 +1,65 @@
+{
+  "display_information": {
+    "name": "Code",
+    "description": "Autonomous engineering platform for code analysis, bug fixes, and deployments",
+    "background_color": "#000000",
+    "long_description": "Code is a complete autonomous engineering platform that can reason, plan, and execute like a full-stack engineer. It understands your infrastructure, code, and data in real time, then takes action to build, fix, and operate systems end-to-end through natural language commands in Slack."
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": true,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "Code",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/code",
+        "url": "https://your-code-server.com/slack/commands",
+        "description": "Autonomous engineering assistant",
+        "usage_hint": "ask 'question' | task 'description' | status | help",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://your-code-server.com/slack/oauth/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "channels:history",
+        "groups:history",
+        "im:history",
+        "mpim:history",
+        "chat:write",
+        "commands"
+      ]
+    },
+    "pkce_enabled": false
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://your-code-server.com/slack/events",
+      "bot_events": [
+        "app_mention",
+        "message.channels",
+        "message.groups",
+        "message.im",
+        "message.mpim"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://your-code-server.com/slack/interactive",
+      "message_menu_options_url": "https://your-code-server.com/slack/menu"
+    },
+    "org_deploy_enabled": true,
+    "socket_mode_enabled": true,
+    "token_rotation_enabled": false
+  }
+}

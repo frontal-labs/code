@@ -29,8 +29,8 @@ bun.lockb
 # OS
 .DS_Store
 Thumbs.db
-extensions/frontal-code-slack/.bun-cache/
-extensions/frontal-code-slack/node_modules/
+extensions/code-slack/.bun-cache/
+extensions/code-slack/node_modules/
 
 # Bazel (Bzlmod)
 .bazelrc.project

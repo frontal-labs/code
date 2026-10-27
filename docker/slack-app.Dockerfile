@@ -2,12 +2,12 @@ FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
-COPY extensions/frontal-code-slack/package*.json ./
-COPY extensions/frontal-code-slack/bun.lock ./
+COPY extensions/code-slack/package*.json ./
+COPY extensions/code-slack/bun.lock ./
 
 RUN bun install --frozen-lockfile
 
-COPY extensions/frontal-code-slack/ ./
+COPY extensions/code-slack/ ./
 
 RUN bun build --target node src/index.ts --outdir dist
 
@@ -20,7 +20,7 @@ RUN addgroup -g 1001 -S frontal-code \
 
 WORKDIR /app
 
-COPY extensions/frontal-code-slack/package*.json ./
+COPY extensions/code-slack/package*.json ./
 ENV NODE_ENV=production
 RUN npm ci --omit=dev && npm cache clean --force
 

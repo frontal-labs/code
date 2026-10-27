@@ -34,7 +34,7 @@ jobs:
         run: cargo audit
 
       - name: Run npm audit for Slack extension
-        working-directory: extensions/frontal-code-slack
+        working-directory: extensions/code-slack
         run: npm audit --omit=dev --audit-level=high
         continue-on-error: true
 

@@ -7,7 +7,7 @@ assets/
 docs/
 examples/
 extensions/*
-!extensions/frontal-code-slack
+!extensions/code-slack
 homebrew/
 infrastructure/
 scripts/

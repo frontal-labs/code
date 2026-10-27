@@ -50,7 +50,7 @@ This crate is active in the workspace and provides comprehensive integration cap
 - `/ide` target parsing and command handling
 - Workspace-local config persistence and management
 - Per-editor config wiring (`.vscode/frontal-code.json` / `.cursor/frontal-code.json` / `.antigravity/frontal-code.json` / `.windsurf/frontal-code.json`)
-- `.vsix` packaging from `extensions/frontal-code-ide`
+- `.vsix` packaging from `extensions/code-ide`
 - Extension install via editor CLI
 - Editor launching and detection
 

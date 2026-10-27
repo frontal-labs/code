@@ -194,9 +194,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
-      const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/code-create",
-      )?.[1];
+      const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-create")?.[1];
 
       // Execute the invalid command
       await handler({
@@ -237,9 +235,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
-      const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/code-create",
-      )?.[1];
+      const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-create")?.[1];
 
       // Execute the command
       await handler({ command, ack: mockAck, respond: mockRespond });
@@ -303,9 +299,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
-      const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/code-create",
-      )?.[1];
+      const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-create")?.[1];
 
       // Execute both commands concurrently
       await Promise.all([
@@ -457,9 +451,7 @@ describe("Slack Workflow Integration Tests", () => {
 
       // Get the create command handler
       const { mockSlackApp } = await import("../setup");
-      const handler = mockSlackApp.command.mock.calls.find(
-        ([cmd]) => cmd === "/code-create",
-      )?.[1];
+      const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-create")?.[1];
 
       // Execute the command
       await handler({ command, ack: mockAck, respond: mockRespond });

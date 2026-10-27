@@ -559,8 +559,6 @@ describe("FrontalCodeApiClient", () => {
       cursor: undefined,
     });
 
-    expect(url).toBe(
-      "wss://code.example.com/v1/events/ws?source=slack&channel_id=C123&limit=10",
-    );
+    expect(url).toBe("wss://code.example.com/v1/events/ws?source=slack&channel_id=C123&limit=10");
   });
 });

@@ -26,9 +26,7 @@
     ]
   },
   "oauth_config": {
-    "redirect_urls": [
-      "https://your-code-server.com/slack/oauth/callback"
-    ],
+    "redirect_urls": ["https://your-code-server.com/slack/oauth/callback"],
     "scopes": {
       "bot": [
         "app_mentions:read",

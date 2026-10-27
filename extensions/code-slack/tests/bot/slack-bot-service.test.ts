@@ -74,27 +74,12 @@ describe("SlackBotService", () => {
     });
 
     it("should register all handlers", () => {
-      expect(mockSlackApp.command).toHaveBeenCalledWith(
-        "/code-create",
-        expect.any(Function),
-      );
-      expect(mockSlackApp.command).toHaveBeenCalledWith(
-        "/code-status",
-        expect.any(Function),
-      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith("/code-create", expect.any(Function));
+      expect(mockSlackApp.command).toHaveBeenCalledWith("/code-status", expect.any(Function));
       expect(mockSlackApp.command).toHaveBeenCalledWith("/code-list", expect.any(Function));
-      expect(mockSlackApp.command).toHaveBeenCalledWith(
-        "/code-pause",
-        expect.any(Function),
-      );
-      expect(mockSlackApp.command).toHaveBeenCalledWith(
-        "/code-resume",
-        expect.any(Function),
-      );
-      expect(mockSlackApp.command).toHaveBeenCalledWith(
-        "/code-cancel",
-        expect.any(Function),
-      );
+      expect(mockSlackApp.command).toHaveBeenCalledWith("/code-pause", expect.any(Function));
+      expect(mockSlackApp.command).toHaveBeenCalledWith("/code-resume", expect.any(Function));
+      expect(mockSlackApp.command).toHaveBeenCalledWith("/code-cancel", expect.any(Function));
       expect(mockSlackApp.command).toHaveBeenCalledWith("/code-help", expect.any(Function));
 
       expect(mockSlackApp.message).toHaveBeenCalledWith("hello frontal-code", expect.any(Function));
@@ -391,9 +376,7 @@ describe("SlackBotService", () => {
         ];
         mockTaskManager.getUserTasks.mockResolvedValue(mockTasks);
 
-        const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === "/code-list",
-        )?.[1];
+        const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-list")?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
@@ -416,9 +399,7 @@ describe("SlackBotService", () => {
 
         mockTaskManager.getUserTasks.mockResolvedValue([]);
 
-        const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === "/code-list",
-        )?.[1];
+        const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-list")?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
@@ -494,9 +475,7 @@ describe("SlackBotService", () => {
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
-        const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === "/code-help",
-        )?.[1];
+        const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-help")?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();
@@ -524,9 +503,7 @@ describe("SlackBotService", () => {
         const mockAck = vi.fn();
         const mockRespond = vi.fn();
 
-        const handler = mockSlackApp.command.mock.calls.find(
-          ([cmd]) => cmd === "/code-pause",
-        )?.[1];
+        const handler = mockSlackApp.command.mock.calls.find(([cmd]) => cmd === "/code-pause")?.[1];
         await handler({ command, ack: mockAck, respond: mockRespond });
 
         expect(mockAck).toHaveBeenCalled();

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -3318,13 +3319,21 @@ struct SearchHit {
 }
 
 fn execute_web_fetch(input: &WebFetchInput) -> Result<WebFetchOutput, String> {
+    execute_web_fetch_with_policy(input, FetchPolicy::default())
+}
+
+fn execute_web_fetch_with_policy(
+    input: &WebFetchInput,
+    policy: FetchPolicy,
+) -> Result<WebFetchOutput, String> {
     let started = Instant::now();
-    let client = build_http_client()?;
     let request_url = normalize_fetch_url(&input.url)?;
+    check_fetch_target(&request_url, policy)?;
+    let client = build_fetch_client(policy)?;
     let response = client
         .get(request_url.clone())
         .send()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| describe_fetch_error(&error))?;
 
     let status = response.status();
     let final_url = response.url().to_string();
@@ -3414,19 +3423,247 @@ fn build_http_client() -> Result<Client, String> {
         .map_err(|error| error.to_string())
 }
 
-fn normalize_fetch_url(url: &str) -> Result<String, String> {
-    let parsed = reqwest::Url::parse(url).map_err(|error| error.to_string())?;
-    if parsed.scheme() == "http" {
-        let host = parsed.host_str().unwrap_or_default();
-        if host != "localhost" && host != "127.0.0.1" && host != "::1" {
-            let mut upgraded = parsed;
-            upgraded
-                .set_scheme("https")
-                .map_err(|()| String::from("failed to upgrade URL to https"))?;
-            return Ok(upgraded.to_string());
+const MAX_FETCH_REDIRECTS: usize = 10;
+
+/// Controls which destinations `WebFetch` may contact. Production code always uses
+/// the default, which blocks private and loopback targets. Tests opt into loopback
+/// explicitly so they can exercise the fetch path against a local server.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct FetchPolicy {
+    allow_loopback: bool,
+}
+
+/// Builds a client for `WebFetch`. Every hop is checked: the redirect policy vets the
+/// literal host of each redirect target, and the DNS resolver vets the addresses a
+/// hostname resolves to at connect time. Checking at connect time means a name that
+/// flips to a private address between checks is still refused (DNS rebinding).
+fn build_fetch_client(policy: FetchPolicy) -> Result<Client, String> {
+    Client::builder()
+        .timeout(Duration::from_secs(20))
+        // A proxy would connect to the destination itself, so the resolved-address
+        // check would never see the real target. Ignore HTTP(S)_PROXY and ALL_PROXY.
+        .no_proxy()
+        .redirect(fetch_redirect_policy(policy))
+        .dns_resolver(Arc::new(GuardedFetchResolver { policy }))
+        .user_agent("frontal-code-rust-tools/0.1")
+        .build()
+        .map_err(|error| error.to_string())
+}
+
+fn fetch_redirect_policy(policy: FetchPolicy) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= MAX_FETCH_REDIRECTS {
+            return attempt.error("too many redirects");
+        }
+        match check_fetch_host(attempt.url(), policy) {
+            Ok(()) => attempt.follow(),
+            Err(reason) => attempt.error(reason),
+        }
+    })
+}
+
+/// Resolves hostnames for the fetch client and refuses any address that is not
+/// allowed by the policy. Refusing if any one address is blocked keeps a mixed
+/// public/private answer from being used.
+struct GuardedFetchResolver {
+    policy: FetchPolicy,
+}
+
+impl reqwest::dns::Resolve for GuardedFetchResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_string();
+        let policy = self.policy;
+        Box::pin(async move {
+            let addrs = tokio::task::spawn_blocking(move || resolve_checked_host(&host, 0, policy))
+                .await
+                .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> { Box::new(error) })?
+                .map_err(|reason| -> Box<dyn std::error::Error + Send + Sync> { reason.into() })?;
+            let iter: Box<dyn Iterator<Item = SocketAddr> + Send> = Box::new(addrs.into_iter());
+            Ok(iter)
+        })
+    }
+}
+
+/// Full pre-flight check for a URL: scheme, literal host, hostname rules, and every
+/// address the hostname resolves to. Used for the initial URL so the caller gets a
+/// clear error before any request is sent.
+fn check_fetch_target(url: &reqwest::Url, policy: FetchPolicy) -> Result<(), String> {
+    check_fetch_host(url, policy)?;
+    if let Some(host) = fetch_url_bare_host(url) {
+        if host.parse::<IpAddr>().is_err() {
+            let port = url.port_or_known_default().unwrap_or(443);
+            resolve_checked_host(&host, port, policy)?;
         }
     }
-    Ok(parsed.to_string())
+    Ok(())
+}
+
+/// Checks everything that can be decided without DNS: the scheme, the literal IP if
+/// the host is one, and reserved hostnames such as `localhost`.
+fn check_fetch_host(url: &reqwest::Url, policy: FetchPolicy) -> Result<(), String> {
+    match url.scheme() {
+        "http" | "https" => {}
+        other => return Err(format!("unsupported URL scheme for WebFetch: {other}")),
+    }
+    let host = fetch_url_bare_host(url).ok_or_else(|| String::from("URL has no host"))?;
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return check_fetch_ip(ip, &host, policy);
+    }
+    check_fetch_hostname(&host, policy)
+}
+
+fn fetch_url_bare_host(url: &reqwest::Url) -> Option<String> {
+    let host = url.host_str()?;
+    let bare = host
+        .strip_prefix('[')
+        .and_then(|inner| inner.strip_suffix(']'))
+        .unwrap_or(host);
+    Some(bare.trim_end_matches('.').to_ascii_lowercase())
+}
+
+fn check_fetch_hostname(host: &str, policy: FetchPolicy) -> Result<(), String> {
+    let is_localhost = host == "localhost" || host.ends_with(".localhost");
+    if is_localhost && !policy.allow_loopback {
+        return Err(format!(
+            "WebFetch refused to contact '{host}': loopback and local destinations are blocked"
+        ));
+    }
+    Ok(())
+}
+
+fn check_fetch_ip(ip: IpAddr, host: &str, policy: FetchPolicy) -> Result<(), String> {
+    if policy.allow_loopback && ip.is_loopback() {
+        return Ok(());
+    }
+    if is_blocked_fetch_ip(ip) {
+        return Err(format!(
+            "WebFetch refused to contact {host}: {ip} is a loopback, link-local, private, or unspecified address"
+        ));
+    }
+    Ok(())
+}
+
+/// Resolves a hostname and returns its addresses only if every one is allowed.
+fn resolve_checked_host(
+    host: &str,
+    port: u16,
+    policy: FetchPolicy,
+) -> Result<Vec<SocketAddr>, String> {
+    check_fetch_hostname(host, policy)?;
+    let addrs = (host, port)
+        .to_socket_addrs()
+        .map_err(|error| format!("failed to resolve {host}: {error}"))?
+        .collect::<Vec<_>>();
+    if addrs.is_empty() {
+        return Err(format!("failed to resolve {host}: no addresses returned"));
+    }
+    for addr in &addrs {
+        check_fetch_ip(addr.ip(), host, policy)?;
+    }
+    Ok(addrs)
+}
+
+/// Blocks loopback, link-local (including the 169.254.169.254 metadata endpoint),
+/// RFC 1918 private, unique-local (`fc00::/7`), unspecified, multicast, broadcast, and
+/// carrier-grade NAT (100.64.0.0/10) addresses. IPv4-mapped IPv6 addresses are
+/// judged by their IPv4 form.
+fn is_blocked_fetch_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => is_blocked_ipv4(v4),
+        IpAddr::V6(v6) => v6
+            .to_ipv4_mapped()
+            .map_or_else(|| is_blocked_ipv6(v6), is_blocked_ipv4),
+    }
+}
+
+fn is_blocked_ipv4(ip: Ipv4Addr) -> bool {
+    // Matches the IANA IPv4 special-purpose registry, plus multicast and the
+    // reserved 240.0.0.0/4 block (which includes broadcast).
+    let [a, b, c, _] = ip.octets();
+    a == 0
+        || a == 10
+        || a == 127
+        || (a == 100 && (b & 0xc0) == 64)
+        || (a == 169 && b == 254)
+        || (a == 172 && (b & 0xf0) == 16)
+        || (a == 192 && b == 0 && c == 0)
+        || (a == 192 && b == 0 && c == 2)
+        || (a == 192 && b == 88 && c == 99)
+        || (a == 192 && b == 168)
+        || (a == 198 && (b & 0xfe) == 18)
+        || (a == 198 && b == 51 && c == 100)
+        || (a == 203 && b == 0 && c == 113)
+        || a >= 224
+}
+
+fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
+    let s = ip.segments();
+    if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
+        return true;
+    }
+    let unique_local = (s[0] & 0xfe00) == 0xfc00;
+    let link_local = (s[0] & 0xffc0) == 0xfe80;
+    let site_local = (s[0] & 0xffc0) == 0xfec0;
+    if unique_local || link_local || site_local {
+        return true;
+    }
+    // Discard-only (100::/64) and documentation (2001:db8::/32) prefixes.
+    if s[0] == 0x0100 && s[1] == 0 && s[2] == 0 && s[3] == 0 {
+        return true;
+    }
+    if s[0] == 0x2001 && s[1] == 0x0db8 {
+        return true;
+    }
+    // IPv4-compatible (::/96, deprecated): judge the embedded IPv4 address.
+    if s[0..6].iter().all(|segment| *segment == 0) {
+        return is_blocked_ipv4(embedded_ipv4(s[6], s[7]));
+    }
+    // NAT64 well-known prefix 64:ff9b::/96 embeds the IPv4 address in the low 32 bits.
+    if s[0] == 0x0064 && s[1] == 0xff9b && s[2..6].iter().all(|segment| *segment == 0) {
+        return is_blocked_ipv4(embedded_ipv4(s[6], s[7]));
+    }
+    // Local-use NAT64 prefix 64:ff9b:1::/48 is never routed publicly.
+    if s[0] == 0x0064 && s[1] == 0xff9b && s[2] == 0x0001 {
+        return true;
+    }
+    // 6to4 2002::/16 embeds the IPv4 address in segments 1 and 2.
+    if s[0] == 0x2002 {
+        return is_blocked_ipv4(embedded_ipv4(s[1], s[2]));
+    }
+    false
+}
+
+fn embedded_ipv4(high: u16, low: u16) -> Ipv4Addr {
+    let [a, b] = high.to_be_bytes();
+    let [c, d] = low.to_be_bytes();
+    Ipv4Addr::new(a, b, c, d)
+}
+
+/// Flattens a reqwest error and its causes so the redirect or DNS reason is visible.
+fn describe_fetch_error(error: &reqwest::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        message.push_str(": ");
+        message.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    message
+}
+
+/// Upgrades plain `http` to `https` for remote hosts. Loopback hosts are left as
+/// `http` so that they are refused by the target check, not by a TLS error.
+fn normalize_fetch_url(url: &str) -> Result<reqwest::Url, String> {
+    let mut parsed = reqwest::Url::parse(url).map_err(|error| error.to_string())?;
+    if parsed.scheme() == "http" {
+        let host = parsed.host_str().unwrap_or_default();
+        if host != "localhost" && host != "127.0.0.1" && host != "[::1]" {
+            parsed
+                .set_scheme("https")
+                .map_err(|()| String::from("failed to upgrade URL to https"))?;
+        }
+    }
+    Ok(parsed)
 }
 
 fn build_search_url(query: &str) -> Result<reqwest::Url, String> {
@@ -6996,12 +7233,9 @@ mod tests {
             )
         }));
 
-        let result = execute_tool(
-            "WebFetch",
-            &json!({
-                "url": format!("http://{}/page", server.addr()),
-                "prompt": "Summarize this page"
-            }),
+        let result = web_fetch_allowing_loopback(
+            &format!("http://{}/page", server.addr()),
+            "Summarize this page",
         )
         .expect("WebFetch should succeed");
 
@@ -7012,12 +7246,9 @@ mod tests {
         assert!(summary.contains("Test Page"));
         assert!(summary.contains("Hello world from local server"));
 
-        let titled = execute_tool(
-            "WebFetch",
-            &json!({
-                "url": format!("http://{}/page", server.addr()),
-                "prompt": "What is the page title?"
-            }),
+        let titled = web_fetch_allowing_loopback(
+            &format!("http://{}/page", server.addr()),
+            "What is the page title?",
         )
         .expect("WebFetch title query should succeed");
         let titled_output: serde_json::Value = serde_json::from_str(&titled).expect("valid json");
@@ -7036,12 +7267,9 @@ mod tests {
             HttpResponse::text(200, "OK", "plain text response")
         }));
 
-        let result = execute_tool(
-            "WebFetch",
-            &json!({
-                "url": format!("http://{}/plain", server.addr()),
-                "prompt": "Show me the content"
-            }),
+        let result = web_fetch_allowing_loopback(
+            &format!("http://{}/plain", server.addr()),
+            "Show me the content",
         )
         .expect("WebFetch should succeed for text content");
 
@@ -7061,6 +7289,209 @@ mod tests {
         )
         .expect_err("invalid URL should fail");
         assert!(error.contains("relative URL without a base") || error.contains("invalid"));
+    }
+
+    /// Runs `WebFetch` with loopback allowed. Only tests use this, to reach a local
+    /// test server. Production always uses the strict default policy.
+    fn web_fetch_allowing_loopback(url: &str, prompt: &str) -> Result<String, String> {
+        let output = super::execute_web_fetch_with_policy(
+            &super::WebFetchInput {
+                url: url.to_string(),
+                prompt: prompt.to_string(),
+            },
+            super::FetchPolicy {
+                allow_loopback: true,
+            },
+        )?;
+        serde_json::to_string(&output).map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn web_fetch_blocks_loopback_private_link_local_and_unspecified_literals() {
+        // Strict policy: each literal target is refused before any request is sent.
+        for url in [
+            "http://127.0.0.1:1/",
+            "https://127.0.0.1/",
+            "https://127.8.9.10/",
+            "https://[::1]/",
+            "https://localhost/",
+            "https://app.localhost/",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://[fd00:ec2::254]/latest/meta-data/",
+            "https://10.0.0.1/",
+            "https://172.16.0.1/",
+            "https://192.168.1.1/",
+            "https://[fc00::1]/",
+            "https://[fe80::1]/",
+            "https://0.0.0.0/",
+            "https://[::]/",
+            "https://100.64.0.1/",
+            "https://[::ffff:127.0.0.1]/",
+            "https://[::ffff:169.254.169.254]/",
+        ] {
+            let error = execute_tool("WebFetch", &json!({ "url": url, "prompt": "Summarize" }))
+                .expect_err("blocked target should be refused");
+            assert!(
+                error.contains("WebFetch refused") || error.contains("blocked"),
+                "unexpected error for {url}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn web_fetch_upgrades_http_and_rejects_non_http_schemes() {
+        assert_eq!(
+            super::normalize_fetch_url("http://example.com/a")
+                .expect("normalize")
+                .as_str(),
+            "https://example.com/a"
+        );
+        let error = execute_tool(
+            "WebFetch",
+            &json!({ "url": "file:///etc/passwd", "prompt": "Summarize" }),
+        )
+        .expect_err("file scheme should be refused");
+        assert!(error.contains("unsupported URL scheme"));
+    }
+
+    #[test]
+    fn fetch_ip_policy_classifies_reserved_ranges() {
+        use std::net::IpAddr;
+        for blocked in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.31.255.255",
+            "192.168.0.1",
+            "169.254.169.254",
+            "0.0.0.0",
+            "100.64.0.1",
+            "224.0.0.1",
+            "::1",
+            "::",
+            "fc00::1",
+            "fd00:ec2::254",
+            "fe80::1",
+            "::ffff:10.0.0.1",
+            "::ffff:127.0.0.1",
+            "::127.0.0.1",
+            "::10.0.0.1",
+            "64:ff9b::a00:1",
+            "64:ff9b::7f00:1",
+            "64:ff9b:1::808:808",
+            "2002:7f00:1::",
+            "2002:a9fe:a9fe::1",
+            "fec0::1",
+            "100::1",
+            "2001:db8::1",
+            "0.0.0.0",
+            "0.1.2.3",
+            "100.64.0.1",
+            "100.127.255.254",
+            "192.0.0.1",
+            "192.0.2.1",
+            "192.88.99.1",
+            "198.18.0.1",
+            "198.19.255.254",
+            "198.51.100.7",
+            "203.0.113.7",
+            "240.0.0.1",
+            "255.255.255.255",
+        ] {
+            let ip: IpAddr = blocked.parse().expect("ip literal");
+            assert!(
+                super::is_blocked_fetch_ip(ip),
+                "{blocked} should be blocked"
+            );
+        }
+        for allowed in [
+            "93.184.216.34",
+            "1.1.1.1",
+            "100.128.0.1",
+            "198.20.0.1",
+            "192.0.1.1",
+            "2606:4700:4700::1111",
+            "::ffff:8.8.8.8",
+            "::8.8.8.8",
+            "64:ff9b::808:808",
+            "2002:808:808::1",
+        ] {
+            let ip: IpAddr = allowed.parse().expect("ip literal");
+            assert!(
+                !super::is_blocked_fetch_ip(ip),
+                "{allowed} should be allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn web_fetch_ignores_proxy_environment() {
+        // With a proxy configured, the connection would go to the proxy and the
+        // resolved-address guard would not see the real destination. Point every
+        // proxy variable at a closed port. A fetch that honoured them would fail.
+        if !loopback_bind_available() {
+            return;
+        }
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let keys = [
+            "HTTP_PROXY",
+            "http_proxy",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "ALL_PROXY",
+            "all_proxy",
+        ];
+        let _restore = EnvRestoreGuard::capture(&keys);
+        for key in keys {
+            std::env::set_var(key, "http://127.0.0.1:9");
+        }
+
+        let server = TestServer::spawn(Arc::new(|request_line: &str| {
+            assert!(request_line.starts_with("GET /direct "));
+            HttpResponse::text(200, "OK", "reached directly")
+        }));
+        let result = web_fetch_allowing_loopback(
+            &format!("http://{}/direct", server.addr()),
+            "Show me the content",
+        )
+        .expect("WebFetch should ignore proxy environment variables");
+        assert!(result.contains("reached directly"));
+    }
+
+    #[test]
+    fn fetch_resolution_refuses_hostnames_that_resolve_to_local_addresses() {
+        // `localhost` resolves to loopback, so the resolver must refuse it under the
+        // strict policy. The same check runs at connect time for every redirect hop.
+        let strict = super::FetchPolicy::default();
+        let error = super::resolve_checked_host("localhost", 443, strict)
+            .expect_err("localhost must not resolve for WebFetch");
+        assert!(error.contains("refused") || error.contains("blocked"));
+
+        let permissive = super::FetchPolicy {
+            allow_loopback: true,
+        };
+        assert!(super::resolve_checked_host("localhost", 443, permissive).is_ok());
+    }
+
+    #[test]
+    fn web_fetch_refuses_redirect_to_metadata_endpoint() {
+        if !loopback_bind_available() {
+            return;
+        }
+
+        let server = TestServer::spawn(Arc::new(|_request_line: &str| {
+            HttpResponse::redirect(302, "Found", "http://169.254.169.254/latest/meta-data/")
+        }));
+
+        // Loopback is allowed for the first hop only, so the redirect is what must be refused.
+        let error =
+            web_fetch_allowing_loopback(&format!("http://{}/start", server.addr()), "Summarize")
+                .expect_err("redirect to metadata endpoint must be refused");
+        assert!(
+            error.contains("169.254.169.254"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
@@ -10617,6 +11048,8 @@ printf 'pwsh:%s' "$1"
 
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Accepted sockets inherit the listener's non-blocking mode on macOS.
+                        stream.set_nonblocking(false).expect("set blocking stream");
                         let mut buffer = [0_u8; 4096];
                         let size = stream.read(&mut buffer).expect("read request");
                         let request = String::from_utf8_lossy(&buffer[..size]).into_owned();
@@ -10685,6 +11118,8 @@ printf 'pwsh:%s' "$1"
 
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Accepted sockets inherit the listener's non-blocking mode on macOS.
+                        stream.set_nonblocking(false).expect("set blocking stream");
                         let request = read_http_request(&mut stream);
                         let response = handler(&request);
                         stream
@@ -10799,6 +11234,7 @@ printf 'pwsh:%s' "$1"
         reason: &'static str,
         content_type: &'static str,
         body: String,
+        location: Option<String>,
     }
 
     impl HttpResponse {
@@ -10808,6 +11244,7 @@ printf 'pwsh:%s' "$1"
                 reason,
                 content_type: "application/json; charset=utf-8",
                 body: body.to_string(),
+                location: None,
             }
         }
 
@@ -10817,6 +11254,7 @@ printf 'pwsh:%s' "$1"
                 reason,
                 content_type: "text/html; charset=utf-8",
                 body: body.to_string(),
+                location: None,
             }
         }
 
@@ -10826,14 +11264,31 @@ printf 'pwsh:%s' "$1"
                 reason,
                 content_type: "text/plain; charset=utf-8",
                 body: body.to_string(),
+                location: None,
+            }
+        }
+
+        fn redirect(status: u16, reason: &'static str, location: &str) -> Self {
+            Self {
+                status,
+                reason,
+                content_type: "text/plain; charset=utf-8",
+                body: String::new(),
+                location: Some(location.to_string()),
             }
         }
 
         fn to_bytes(&self) -> Vec<u8> {
+            let location = self
+                .location
+                .as_ref()
+                .map(|value| format!("Location: {value}\r\n"))
+                .unwrap_or_default();
             format!(
-                "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                "HTTP/1.1 {} {}\r\n{}Content-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 self.status,
                 self.reason,
+                location,
                 self.content_type,
                 self.body.len(),
                 self.body

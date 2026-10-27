@@ -11,6 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, ChildStdout, Command};
 
+const API_KEY: &str = "top-secret";
+
 struct TestServer {
     base_url: String,
     child: Child,
@@ -99,11 +101,12 @@ async fn status_endpoint_executes_cli_json_command() {
 
 #[tokio::test]
 async fn cli_run_endpoint_returns_failure_payload_without_http_error() {
-    let server = TestServer::start().await;
+    let server = TestServer::start_with_env(&[("FRONTAL_API_KEY", API_KEY)]).await;
 
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{}/v1/cli/run", server.base_url))
+        .header("x-api-key", API_KEY)
         .json(&serde_json::json!({
             "args": ["fail"],
             "force_json_output": true
@@ -126,11 +129,12 @@ async fn cli_run_endpoint_returns_failure_payload_without_http_error() {
 
 #[tokio::test]
 async fn cli_run_endpoint_rejects_empty_args() {
-    let server = TestServer::start().await;
+    let server = TestServer::start_with_env(&[("FRONTAL_API_KEY", API_KEY)]).await;
 
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{}/v1/cli/run", server.base_url))
+        .header("x-api-key", API_KEY)
         .json(&serde_json::json!({
             "args": []
         }))
@@ -199,11 +203,12 @@ async fn auth_rejects_missing_api_key_and_accepts_valid_key() {
 
 #[tokio::test]
 async fn cli_run_rejects_dangerous_permission_override_by_default() {
-    let server = TestServer::start().await;
+    let server = TestServer::start_with_env(&[("FRONTAL_API_KEY", API_KEY)]).await;
 
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{}/v1/cli/run", server.base_url))
+        .header("x-api-key", API_KEY)
         .json(&serde_json::json!({
             "args": ["--dangerously-skip-permissions", "status"],
             "force_json_output": true
@@ -246,13 +251,16 @@ async fn prompt_rejects_danger_full_access_permission_mode_by_default() {
 
 #[tokio::test]
 async fn cli_run_respects_allowed_commands() {
-    let server =
-        TestServer::start_with_env(&[("FRONTAL_CODE_API_ALLOWED_COMMANDS", "status,version")])
-            .await;
+    let server = TestServer::start_with_env(&[
+        ("FRONTAL_CODE_API_ALLOWED_COMMANDS", "status,version"),
+        ("FRONTAL_API_KEY", API_KEY),
+    ])
+    .await;
 
     let client = reqwest::Client::new();
     let forbidden = client
         .post(format!("{}/v1/cli/run", server.base_url))
+        .header("x-api-key", API_KEY)
         .json(&serde_json::json!({
             "args": ["fail"]
         }))
@@ -263,6 +271,7 @@ async fn cli_run_respects_allowed_commands() {
 
     let allowed = client
         .post(format!("{}/v1/cli/run", server.base_url))
+        .header("x-api-key", API_KEY)
         .json(&serde_json::json!({
             "args": ["status"]
         }))
@@ -272,6 +281,101 @@ async fn cli_run_respects_allowed_commands() {
     assert_eq!(allowed.status(), StatusCode::OK);
     let body: Value = allowed.json().await.expect("body should be JSON");
     assert_eq!(body["ok"], true);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn cli_run_requires_a_configured_api_key() {
+    let server = TestServer::start().await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{}/v1/cli/run", server.base_url))
+        .json(&serde_json::json!({ "args": ["status"] }))
+        .send()
+        .await
+        .expect("cli run request should return forbidden");
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body: Value = response.json().await.expect("body should be JSON");
+    assert_eq!(
+        body["error"],
+        "/v1/cli/run requires FRONTAL_API_KEY to be configured"
+    );
+
+    // Other routes keep the optional-key behaviour and still work without a key.
+    let status = client
+        .get(format!("{}/v1/status", server.base_url))
+        .send()
+        .await
+        .expect("status request should succeed");
+    assert_eq!(status.status(), StatusCode::OK);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn cli_run_rejects_wrong_api_key() {
+    let server = TestServer::start_with_env(&[("FRONTAL_API_KEY", API_KEY)]).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{}/v1/cli/run", server.base_url))
+        .header("x-api-key", "wrong")
+        .json(&serde_json::json!({ "args": ["status"] }))
+        .send()
+        .await
+        .expect("cli run request should return unauthorized");
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn foreign_host_header_is_rejected_against_dns_rebinding() {
+    let server = TestServer::start().await;
+
+    let client = reqwest::Client::new();
+    let rebound = client
+        .get(format!("{}/health", server.base_url))
+        .header(reqwest::header::HOST, "attacker.example.test:8787")
+        .send()
+        .await
+        .expect("request should complete");
+    assert_eq!(rebound.status(), StatusCode::FORBIDDEN);
+
+    let loopback_name = client
+        .get(format!("{}/health", server.base_url))
+        .header(reqwest::header::HOST, "localhost:8787")
+        .send()
+        .await
+        .expect("request should complete");
+    assert_eq!(loopback_name.status(), StatusCode::OK);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn cross_origin_browser_requests_are_rejected() {
+    let server = TestServer::start().await;
+
+    let client = reqwest::Client::new();
+    let cross_origin = client
+        .get(format!("{}/health", server.base_url))
+        .header(reqwest::header::ORIGIN, "https://evil.example.test")
+        .send()
+        .await
+        .expect("request should complete");
+    assert_eq!(cross_origin.status(), StatusCode::FORBIDDEN);
+
+    let same_origin = client
+        .get(format!("{}/health", server.base_url))
+        .header(reqwest::header::ORIGIN, server.base_url.as_str())
+        .send()
+        .await
+        .expect("request should complete");
+    assert_eq!(same_origin.status(), StatusCode::OK);
 
     server.shutdown().await;
 }

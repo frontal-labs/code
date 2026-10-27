@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Biome lint now covers the JS and TS packages without errors. Markdown is excluded from the Biome check, because Biome's Markdown formatter rewrites code samples.
 - Concurrent refreshes of the same saved login are serialized with a lock on `credentials.json.lock`, and the credentials are re-read after the lock is taken, so a refresh token is not used twice.
 
+### Security
+- `code-api` rejects requests whose `Host` is not `localhost`, a loopback IP, or the bound address, and requests with a cross-origin `Origin`, to block DNS-rebinding attacks. `POST /v1/cli/run` now returns `403` unless `FRONTAL_API_KEY` is set. Callers that used `/v1/cli/run` without a key must set one.
+- The hosted server URL (`FRONTAL_CODE_SERVER_URL`) must use `https`/`wss` unless the host is `localhost`, `127.0.0.1`, or `[::1]`. Cleartext `http`/`ws` to other hosts is refused, so the API key is not sent in the clear.
+- WebFetch refuses loopback, link-local (including `169.254.169.254`), RFC 1918 private, unique-local, unspecified, multicast, and CGNAT addresses. The check applies to the initial URL, to every redirect hop, and to the addresses each hostname resolves to at connect time.
+
 ### Changed
 - Docs: `FRONTAL_API_KEY` is sent as a bearer token to the Frontal gateway by default. Anthropic and Anthropic-compatible proxies need `--provider anthropic`.
 - `settings.oauth` accepts a map keyed by provider. The legacy single-object form still works and is read as `anthropic`.

@@ -3017,7 +3017,7 @@ fn run_hosted_command(
     command: HostedCommand,
     output_format: CliOutputFormat,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let server_url = hosted_server_url();
+    let server_url = hosted_server_url()?;
     let client = HttpClient::builder()
         .timeout(Duration::from_secs(HOSTED_SERVER_TIMEOUT_SECS))
         .build()?;
@@ -3136,13 +3136,41 @@ fn run_hosted_command(
     Ok(())
 }
 
-fn hosted_server_url() -> String {
-    env::var("FRONTAL_CODE_SERVER_URL")
+fn hosted_server_url() -> Result<String, Box<dyn std::error::Error>> {
+    let raw = env::var("FRONTAL_CODE_SERVER_URL")
         .ok()
         .or_else(|| env::var("FRONTAL_CODE_SERVER_BASE_URL").ok())
         .map(|value| value.trim().trim_end_matches('/').to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| DEFAULT_HOSTED_SERVER_URL.to_string())
+        .unwrap_or_else(|| DEFAULT_HOSTED_SERVER_URL.to_string());
+    validate_hosted_server_url(&raw)?;
+    Ok(raw)
+}
+
+/// The hosted API key is sent in an `x-api-key` header, so the server URL must
+/// not allow it to travel in cleartext. Plain `http`/`ws` is only accepted for
+/// loopback hosts (`localhost`, `127.0.0.1`, `[::1]`). Anything else needs
+/// `https`/`wss`.
+fn validate_hosted_server_url(raw: &str) -> Result<reqwest::Url, Box<dyn std::error::Error>> {
+    let url = reqwest::Url::parse(raw)
+        .map_err(|error| format!("invalid hosted server URL '{raw}': {error}"))?;
+    let host = url.host_str().unwrap_or_default();
+    let is_loopback = matches!(host, "localhost" | "127.0.0.1" | "[::1]");
+    match url.scheme() {
+        "https" | "wss" => Ok(url),
+        "http" | "ws" if is_loopback => Ok(url),
+        "http" | "ws" => Err(format!(
+            "refusing to send credentials over cleartext {} to non-loopback host '{host}'; \
+             use https (or wss) for hosted server URLs. http/ws is only permitted for \
+             localhost, 127.0.0.1, and [::1]",
+            url.scheme()
+        )
+        .into()),
+        other => Err(format!(
+            "unsupported hosted server URL scheme: {other} (expected https or http for localhost)"
+        )
+        .into()),
+    }
 }
 
 fn hosted_server_api_key() -> Option<String> {
@@ -3975,7 +4003,7 @@ fn hosted_events_ws_url(
     server_url: &str,
     query_pairs: &[(String, String)],
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let mut url = reqwest::Url::parse(server_url)?;
+    let mut url = validate_hosted_server_url(server_url)?;
     match url.scheme() {
         "http" => {
             url.set_scheme("ws")
@@ -3985,13 +4013,7 @@ fn hosted_events_ws_url(
             url.set_scheme("wss")
                 .map_err(|()| "failed to convert hosted server URL from https to wss")?;
         }
-        "ws" | "wss" => {}
-        other => {
-            return Err(format!(
-                "unsupported hosted server URL scheme: {other} (expected http or https)"
-            )
-            .into())
-        }
+        _ => {}
     }
     url.set_path("/v1/events/ws");
     url.query_pairs_mut().clear();
@@ -11004,8 +11026,8 @@ mod tests {
         format_model_switch_report, format_permissions_report, format_permissions_switch_report,
         format_pr_report, format_resume_report, format_status_report, format_tool_call_start,
         format_tool_result, format_ultraplan_report, format_unknown_slash_command,
-        format_unknown_slash_command_message, format_user_visible_api_error, hosted_server_url,
-        hosted_task_snapshot_from_event, load_hosted_task_worker_payload,
+        format_unknown_slash_command_message, format_user_visible_api_error, hosted_events_ws_url,
+        hosted_server_url, hosted_task_snapshot_from_event, load_hosted_task_worker_payload,
         normalize_permission_mode, parse_args, parse_git_status_branch,
         parse_git_status_metadata_for, parse_git_workspace_summary, permission_policy,
         print_help_to, publish_hosted_repo_changes, push_output_block, render_config_report,
@@ -11014,9 +11036,9 @@ mod tests {
         resolve_session_reference, resolve_telemetry_config, response_to_events,
         resume_supported_slash_commands, run_resume_command,
         slash_command_completion_candidates_with_sessions, status_context,
-        telemetry_status_json_value, update_project_telemetry_settings, validate_no_args,
-        write_mcp_server_fixture, CliAction, CliOutputFormat, CliToolExecutor, EventEnvelope,
-        GitWorkspaceSummary, HostedApprovalAction, HostedCommand, HostedEventName,
+        telemetry_status_json_value, update_project_telemetry_settings, validate_hosted_server_url,
+        validate_no_args, write_mcp_server_fixture, CliAction, CliOutputFormat, CliToolExecutor,
+        EventEnvelope, GitWorkspaceSummary, HostedApprovalAction, HostedCommand, HostedEventName,
         HostedEventStatus, HostedEventTopic, HostedEventWatchQuery, HostedTaskGithubResponse,
         HostedTaskListQuery, HostedTaskWorkerPayload, InternalPromptProgressEvent,
         InternalPromptProgressState, LiveCli, LocalHelpTopic, SlashCommand, StatusUsage,
@@ -12119,18 +12141,86 @@ mod tests {
         let _guard = env_lock();
         std::env::set_var(
             "FRONTAL_CODE_SERVER_URL",
-            "http://hosted.frontal-code.test/",
+            "https://hosted.frontal-code.test/",
         );
         std::env::remove_var("FRONTAL_CODE_SERVER_BASE_URL");
-        assert_eq!(hosted_server_url(), "http://hosted.frontal-code.test");
+        assert_eq!(
+            hosted_server_url().expect("https url"),
+            "https://hosted.frontal-code.test"
+        );
         std::env::remove_var("FRONTAL_CODE_SERVER_URL");
 
-        std::env::set_var(
-            "FRONTAL_CODE_SERVER_BASE_URL",
-            "http://fallback.frontal-code.test/",
+        std::env::set_var("FRONTAL_CODE_SERVER_BASE_URL", "http://localhost:8788/");
+        assert_eq!(
+            hosted_server_url().expect("loopback http url"),
+            "http://localhost:8788"
         );
-        assert_eq!(hosted_server_url(), "http://fallback.frontal-code.test");
         std::env::remove_var("FRONTAL_CODE_SERVER_BASE_URL");
+    }
+
+    #[test]
+    fn hosted_server_url_rejects_cleartext_non_loopback_hosts() {
+        let _guard = env_lock();
+        std::env::remove_var("FRONTAL_CODE_SERVER_BASE_URL");
+        std::env::set_var("FRONTAL_CODE_SERVER_URL", "http://hosted.frontal-code.test");
+        let error = hosted_server_url().expect_err("cleartext remote host must be rejected");
+        assert!(error.to_string().contains("cleartext http"));
+        assert!(error
+            .to_string()
+            .contains("localhost, 127.0.0.1, and [::1]"));
+        std::env::remove_var("FRONTAL_CODE_SERVER_URL");
+    }
+
+    #[test]
+    fn validate_hosted_server_url_scheme_policy() {
+        // Accepted: TLS for any host, cleartext only for loopback.
+        for url in [
+            "https://hosted.frontal-code.test",
+            "https://10.0.0.5:8788",
+            "wss://hosted.frontal-code.test",
+            "http://localhost:8788",
+            "http://127.0.0.1:8788",
+            "http://[::1]:8788",
+            "ws://localhost:8788",
+        ] {
+            assert!(
+                validate_hosted_server_url(url).is_ok(),
+                "expected ok: {url}"
+            );
+        }
+
+        // Rejected: cleartext to anything non-loopback, including private and
+        // link-local addresses, and unsupported schemes.
+        for url in [
+            "http://hosted.frontal-code.test",
+            "http://10.0.0.5:8788",
+            "http://192.168.1.10",
+            "http://169.254.169.254",
+            "http://[::2]:8788",
+            "ws://hosted.frontal-code.test",
+            "http://localhost.evil.test",
+            "ftp://localhost",
+        ] {
+            assert!(
+                validate_hosted_server_url(url).is_err(),
+                "expected rejection: {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn hosted_events_ws_url_refuses_cleartext_remote_hosts() {
+        let error = hosted_events_ws_url("http://hosted.frontal-code.test", &[])
+            .expect_err("cleartext remote host must not become ws://");
+        assert!(error.to_string().contains("cleartext http"));
+
+        let ws = hosted_events_ws_url("https://hosted.frontal-code.test", &[])
+            .expect("https maps to wss");
+        assert!(ws.starts_with("wss://hosted.frontal-code.test/v1/events/ws"));
+
+        let local =
+            hosted_events_ws_url("http://127.0.0.1:8788", &[]).expect("loopback maps to ws");
+        assert!(local.starts_with("ws://127.0.0.1:8788/v1/events/ws"));
     }
 
     #[test]

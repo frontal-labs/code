@@ -1,7 +1,8 @@
 use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
+    extract::{Request, State},
+    http::{header, HeaderMap, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
@@ -263,7 +264,11 @@ pub async fn serve(
         .route("/v1/status", get(run_status))
         .route("/v1/sandbox", get(run_sandbox))
         .route("/v1/version", get(run_version))
-        .with_state(state);
+        .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            config.bind_addr,
+            guard_local_requests,
+        ));
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     // Report the address the OS actually assigned, not the requested one, so
@@ -283,6 +288,7 @@ async fn run_cli(
     headers: axum::http::HeaderMap,
     Json(mut request): Json<CliRunRequest>,
 ) -> Result<Json<CliRunResponse>, (StatusCode, Json<ErrorResponse>)> {
+    require_api_key_for_cli_run(&state)?;
     authorize(&state, &headers)?;
     if request.args.is_empty() {
         return Err((
@@ -488,6 +494,111 @@ fn internal_error(
             error: error.to_string(),
         }),
     )
+}
+
+/// `/v1/cli/run` can execute arbitrary CLI subcommands, including agent prompts,
+/// so it never runs unauthenticated. Other routes keep the optional-key behaviour.
+fn require_api_key_for_cli_run(state: &AppState) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if state.api_key.is_some() {
+        return Ok(());
+    }
+    Err((
+        StatusCode::FORBIDDEN,
+        Json(ErrorResponse {
+            error: "/v1/cli/run requires FRONTAL_API_KEY to be configured".to_string(),
+        }),
+    ))
+}
+
+/// Rejects requests that could only have come from a DNS-rebinding page or a
+/// cross-origin browser context. Requests must carry a `Host` naming loopback
+/// (or the address the server is bound to), and any `Origin` must be the
+/// same origin as that `Host`.
+async fn guard_local_requests(
+    State(bind_addr): State<SocketAddr>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if let Err(reason) = check_local_request(request.headers(), bind_addr) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: reason.to_string(),
+            }),
+        )
+            .into_response();
+    }
+    next.run(request).await
+}
+
+fn check_local_request(headers: &HeaderMap, bind_addr: SocketAddr) -> Result<(), &'static str> {
+    let host = headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .ok_or("missing or invalid Host header")?;
+    let host_name = host_name_from_authority(host).ok_or("invalid Host header")?;
+    if !is_allowed_host_name(&host_name, bind_addr) {
+        return Err("Host header is not a local address; request rejected");
+    }
+
+    if let Some(origin) = headers.get(header::ORIGIN) {
+        let origin = origin
+            .to_str()
+            .map_err(|_| "invalid Origin header")?
+            .to_ascii_lowercase();
+        let same_origin = ["http://", "https://"]
+            .iter()
+            .any(|scheme| origin == format!("{scheme}{}", host.to_ascii_lowercase()));
+        if !same_origin {
+            return Err("cross-origin requests are not allowed");
+        }
+    }
+
+    Ok(())
+}
+
+/// Extracts the bare host name from an authority such as `localhost:8787`,
+/// `127.0.0.1`, or `[::1]:8787`.
+fn host_name_from_authority(authority: &str) -> Option<String> {
+    let authority = authority.trim();
+    let name = if let Some(rest) = authority.strip_prefix('[') {
+        let (inner, after) = rest.split_once(']')?;
+        if !after.is_empty() && !after.starts_with(':') {
+            return None;
+        }
+        inner
+    } else {
+        match authority.matches(':').count() {
+            0 => authority,
+            1 => authority.split_once(':')?.0,
+            _ => return None,
+        }
+    };
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_ascii_lowercase())
+}
+
+/// Loopback names and literal loopback IPs are always accepted. The bound IP
+/// literal is accepted when the server is bound to a specific address, and any
+/// IP literal is accepted when bound to a wildcard address. Hostnames other
+/// than `localhost` are refused, since DNS rebinding relies on attacker-chosen
+/// hostnames. IP literals cannot be rebound.
+fn is_allowed_host_name(name: &str, bind_addr: SocketAddr) -> bool {
+    if name == "localhost" || name.ends_with(".localhost") {
+        return true;
+    }
+    let Ok(ip) = name.parse::<IpAddr>() else {
+        return false;
+    };
+    if ip.is_loopback() {
+        return true;
+    }
+    if bind_addr.ip().is_unspecified() {
+        return true;
+    }
+    ip == bind_addr.ip()
 }
 
 fn authorize(

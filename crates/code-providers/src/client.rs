@@ -32,6 +32,7 @@ impl ProviderClient {
         model: &str,
         anthropic_auth: Option<AuthSource>,
     ) -> Result<Self, ApiError> {
+        crate::providers::enforce_policy_for_model(model)?;
         let resolved_model = crate::providers::resolve_model_alias(model);
         match crate::providers::detect_provider_kind(&resolved_model) {
             crate::providers::ProviderKind::Anthropic => {

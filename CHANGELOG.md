@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Project policy: a `policy` object in `.frontal-code/settings.json` (or the user or local settings) limits `allowedProviders`, `allowedModels` (with `*` globs), per-provider `authMethods`, a `permissionCeiling`, and `deny` tools. Each source only adds restrictions. Enforced by the CLI on client construction and permission setup, and by the hosted server before a worker starts. See CONFIGURATION.md#project-policy.
+- `code login [anthropic|openai]`, `logout`, and `auth status`: OAuth (authorization code + PKCE) sign-in as an alternative to API keys. Providers are configured per name under `settings.oauth`, and no vendor client ID is bundled.
+- OpenAI accepts a saved OAuth login in place of `OPENAI_API_KEY`, and the Anthropic provider uses saved logins as well as env keys.
+- Codex-family models (for example `gpt-5-codex`) on the OpenAI provider now go through the Responses API (`/responses`), since they are not served by chat completions. Requests are sent with `store: false`. A Codex model selects the OpenAI provider without `--provider`, even when the default provider is `frontal`.
+- Biome lint now covers the JS and TS packages without errors. Markdown is excluded from the Biome check, because Biome's Markdown formatter rewrites code samples.
+- Concurrent refreshes of the same saved login are serialized with a lock on `credentials.json.lock`, and the credentials are re-read after the lock is taken, so a refresh token is not used twice.
+
+### Changed
+- Docs: `FRONTAL_API_KEY` is sent as a bearer token to the Frontal gateway by default. Anthropic and Anthropic-compatible proxies need `--provider anthropic`.
+- `settings.oauth` accepts a map keyed by provider. The legacy single-object form still works and is read as `anthropic`.
+
+### Security
+- Project and local settings can no longer widen access. Their `permissionMode` cannot raise the mode the user set (the lower value wins), and their `permissions.allow` rules are ignored with a warning. Allow rules belong in user settings. Repositories that relied on project-level `allow` rules need to move them to `~/.frontal-code/settings.json`.
+- `credentials.json` is written with mode `0600`.
+- Saved OAuth tokens are stored per provider. Refreshing one provider's token no longer touches the Anthropic entry.
+- Token refresh uses only the token endpoint recorded at login. It no longer reads `settings.oauth` from project config, which could have sent a refresh token to a host set by a repository. Token endpoints must be `https`, and token requests do not follow redirects. Logins saved before this change need to be redone with `frontal-code login`.
+- `code login` reads `settings.oauth` from user-level settings only. Project and local settings are ignored, so a repository cannot send an authorization code to a host it chooses. Move any login config from `.frontal-code/settings.json` to `~/.frontal-code/settings.json`.
+
 ## [0.1.1] - 2026-04-09
 
 ### Changed

@@ -179,7 +179,9 @@ impl PermissionPolicy {
         context: &PermissionContext,
         prompter: Option<&mut dyn PermissionPrompter>,
     ) -> PermissionOutcome {
-        if let Some(rule) = Self::find_matching_rule(&self.deny_rules, tool_name, input) {
+        if let Some(rule) =
+            Self::find_matching_rule(&self.deny_rules, tool_name, input, MatchScope::Restrict)
+        {
             return PermissionOutcome::Deny {
                 reason: format!(
                     "Permission to use {tool_name} has been denied by rule '{}'",
@@ -190,8 +192,10 @@ impl PermissionPolicy {
 
         let current_mode = self.active_mode();
         let required_mode = self.required_mode_for(tool_name);
-        let ask_rule = Self::find_matching_rule(&self.ask_rules, tool_name, input);
-        let allow_rule = Self::find_matching_rule(&self.allow_rules, tool_name, input);
+        let ask_rule =
+            Self::find_matching_rule(&self.ask_rules, tool_name, input, MatchScope::Restrict);
+        let allow_rule =
+            Self::find_matching_rule(&self.allow_rules, tool_name, input, MatchScope::Grant);
 
         match context.override_decision() {
             Some(PermissionOverride::Deny) => {
@@ -327,8 +331,11 @@ impl PermissionPolicy {
         rules: &'a [PermissionRule],
         tool_name: &str,
         input: &str,
+        scope: MatchScope,
     ) -> Option<&'a PermissionRule> {
-        rules.iter().find(|rule| rule.matches(tool_name, input))
+        rules
+            .iter()
+            .find(|rule| rule.matches(tool_name, input, scope))
     }
 }
 
@@ -374,7 +381,7 @@ impl PermissionRule {
         }
     }
 
-    fn matches(&self, tool_name: &str, input: &str) -> bool {
+    fn matches(&self, tool_name: &str, input: &str, scope: MatchScope) -> bool {
         if self.tool_name != tool_name {
             return false;
         }
@@ -384,10 +391,60 @@ impl PermissionRule {
             PermissionRuleMatcher::Exact(expected) => {
                 extract_permission_subject(input).is_some_and(|candidate| candidate == *expected)
             }
-            PermissionRuleMatcher::Prefix(prefix) => extract_permission_subject(input)
-                .is_some_and(|candidate| candidate.starts_with(prefix)),
+            PermissionRuleMatcher::Prefix(prefix) => {
+                extract_permission_subject(input).is_some_and(|candidate| match scope {
+                    // A grant covers the whole command, so every part has to match.
+                    MatchScope::Grant => prefix_matches_on_token_boundary(prefix, &candidate),
+                    // A restriction applies if any part of a chained command matches.
+                    // Plain prefix matching is intentionally broad: over-matching a deny
+                    // rule fails closed. Checking the unsplit input keeps prefixes that
+                    // contain control characters effective.
+                    MatchScope::Restrict => {
+                        candidate.starts_with(prefix.as_str())
+                            || split_command_segments(&candidate)
+                                .any(|segment| segment.starts_with(prefix.as_str()))
+                    }
+                })
+            }
         }
     }
+}
+
+/// Which side of a rule a match decides. A grant (allow) must cover the whole input,
+/// so chained commands never match. A restriction (deny, ask) applies to any part.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MatchScope {
+    Grant,
+    Restrict,
+}
+
+const SHELL_CONTROL_CHARS: &[char] = &[';', '&', '|', '$', '`', '<', '>', '(', ')', '\n', '\r'];
+
+/// Splits a command at shell control operators, substitutions, and newlines.
+fn split_command_segments(command: &str) -> impl Iterator<Item = &str> {
+    command
+        .split(|c| SHELL_CONTROL_CHARS.contains(&c))
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+}
+
+/// Whether a `:*` rule's prefix matches `candidate` as a whole.
+///
+/// The prefix must end on a token boundary, so `git status:*` covers `git status -s` but
+/// not `git statusx`. A candidate with a control operator, substitution, or newline does
+/// not match here, because the grant only approved a single command.
+fn prefix_matches_on_token_boundary(prefix: &str, candidate: &str) -> bool {
+    if candidate.contains(SHELL_CONTROL_CHARS) {
+        return false;
+    }
+    matches_prefix_at_token_boundary(prefix, candidate)
+}
+
+fn matches_prefix_at_token_boundary(prefix: &str, candidate: &str) -> bool {
+    let Some(rest) = candidate.strip_prefix(prefix) else {
+        return false;
+    };
+    rest.is_empty() || prefix.ends_with('/') || rest.starts_with(char::is_whitespace)
 }
 
 fn parse_rule_matcher(content: &str) -> PermissionRuleMatcher {
@@ -582,6 +639,56 @@ mod tests {
         );
         assert!(matches!(
             policy.authorize("bash", r#"{"command":"rm -rf /tmp/x"}"#, None),
+            PermissionOutcome::Deny { reason } if reason.contains("denied by rule")
+        ));
+    }
+
+    #[test]
+    fn prefix_rules_do_not_cover_chained_or_partial_commands() {
+        let rules = RuntimePermissionRuleConfig::new(
+            vec!["bash(git status:*)".to_string()],
+            vec!["bash(rm -rf:*)".to_string()],
+            Vec::new(),
+        );
+        let policy = PermissionPolicy::new(PermissionMode::ReadOnly)
+            .with_tool_requirement("bash", PermissionMode::DangerFullAccess)
+            .with_permission_rules(&rules);
+
+        // The grant covers the command it names, with arguments.
+        assert_eq!(
+            policy.authorize("bash", r#"{"command":"git status -s"}"#, None),
+            PermissionOutcome::Allow
+        );
+        // A chained command is not covered by the grant, even though it starts the same way.
+        assert!(!matches!(
+            policy.authorize("bash", r#"{"command":"git status; rm -rf /tmp/x"}"#, None),
+            PermissionOutcome::Allow
+        ));
+        // A partial token is not covered.
+        assert!(!matches!(
+            policy.authorize("bash", r#"{"command":"git statusx"}"#, None),
+            PermissionOutcome::Allow
+        ));
+        // A deny rule applies to any chained part, so chaining cannot hide it.
+        assert!(matches!(
+            policy.authorize("bash", r#"{"command":"echo hi && rm -rf /tmp/x"}"#, None),
+            PermissionOutcome::Deny { reason } if reason.contains("denied by rule")
+        ));
+    }
+
+    #[test]
+    fn deny_rule_with_control_character_prefix_still_applies() {
+        let rules = RuntimePermissionRuleConfig::new(
+            Vec::new(),
+            vec!["bash(echo a|b:*)".to_string()],
+            Vec::new(),
+        );
+        let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess)
+            .with_tool_requirement("bash", PermissionMode::DangerFullAccess)
+            .with_permission_rules(&rules);
+
+        assert!(matches!(
+            policy.authorize("bash", r#"{"command":"echo a|b hi"}"#, None),
             PermissionOutcome::Deny { reason } if reason.contains("denied by rule")
         ));
     }

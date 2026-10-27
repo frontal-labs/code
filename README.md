@@ -34,12 +34,24 @@ If you are developing from source instead of installing the CLI, use `cargo buil
 Set your API credentials:
 
 ```bash
-export FRONTAL_API_KEY="sk-ant-..."
-# Or use Frontal's OpenAI-compatible API gateway
+# Default provider: Frontal's OpenAI-compatible gateway. FRONTAL_API_KEY is sent as a bearer token.
 export FRONTAL_API_KEY="frontal-..."
 export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
-# Or use an Anthropic proxy
-export FRONTAL_BASE_URL="https://your-proxy.com"
+
+# Anthropic, or an Anthropic-compatible proxy: select the provider explicitly.
+export FRONTAL_API_KEY="sk-ant-..."
+export FRONTAL_BASE_URL="https://your-proxy.example.com"
+code --provider anthropic prompt "..."
+```
+
+Without `--provider anthropic`, a `sk-ant-` key is sent to the gateway as a bearer token.
+
+Or sign in with OAuth instead of a key, after adding an OAuth client to your user
+settings (see [CONFIGURATION.md](./CONFIGURATION.md#oauth-login)):
+
+```bash
+code login --provider openai
+code auth status
 ```
 
 ### Core Configuration

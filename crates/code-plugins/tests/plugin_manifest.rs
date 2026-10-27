@@ -103,11 +103,17 @@ fn loads_minimal_manifest() {
     );
     let manifest = load_plugin_from_directory(&root).expect("should load");
     assert_eq!(manifest.name, "minimal");
-    assert!(manifest.permissions.is_empty());
+    assert_eq!(
+        manifest.permissions,
+        [] as [code_plugins::PluginPermission; 0]
+    );
     assert!(manifest.hooks.is_empty());
     assert!(manifest.lifecycle.is_empty());
-    assert!(manifest.tools.is_empty());
-    assert!(manifest.commands.is_empty());
+    assert_eq!(manifest.tools, [] as [code_plugins::PluginToolManifest; 0]);
+    assert_eq!(
+        manifest.commands,
+        [] as [code_plugins::PluginCommandManifest; 0]
+    );
     assert!(!manifest.default_enabled);
 
     let _ = fs::remove_dir_all(root);

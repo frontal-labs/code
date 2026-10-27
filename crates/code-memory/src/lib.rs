@@ -1087,7 +1087,7 @@ mod tests {
         );
 
         let results = memory.search("commit message style", 2, None);
-        assert!(!results.is_empty());
+        assert_ne!(results.len(), 0);
         assert_eq!(results[0].id, "mem-1");
         assert_eq!(results[0].embedding_model, "local-hash-embedding-v1");
         assert_eq!(results[0].embedding_provider, "local-hash");
@@ -1234,7 +1234,7 @@ mod tests {
                 .with_top_k(5)
                 .with_min_score(0.95),
         );
-        assert!(results.is_empty());
+        assert_eq!(results.len(), 0);
     }
 
     #[test]
@@ -1250,7 +1250,7 @@ mod tests {
 
         assert!(memory.delete_memory("mem-1"));
         assert_eq!(memory.item_count(), 0);
-        assert!(memory.search("commit message style", 2, None).is_empty());
+        assert_eq!(memory.search("commit message style", 2, None).len(), 0);
         assert!(!memory.delete_memory("missing"));
     }
 
@@ -1286,7 +1286,7 @@ mod tests {
         );
 
         let results = reader.search(&scope, "commit message style", 5, None);
-        assert!(results.is_empty());
+        assert_eq!(results.len(), 0);
     }
 
     #[test]
@@ -1309,7 +1309,7 @@ mod tests {
         });
 
         assert!(memory.delete_entity("crate:runtime"));
-        assert!(memory.neighbors("crate:runtime").is_empty());
+        assert_eq!(memory.neighbors("crate:runtime").len(), 0);
         assert!(!memory.delete_entity("missing"));
     }
 
@@ -1324,7 +1324,7 @@ mod tests {
         memory.add_relation(relation.clone());
 
         assert!(memory.delete_relation(&relation));
-        assert!(memory.neighbors("crate:runtime").is_empty());
+        assert_eq!(memory.neighbors("crate:runtime").len(), 0);
         assert!(!memory.delete_relation(&relation));
     }
 

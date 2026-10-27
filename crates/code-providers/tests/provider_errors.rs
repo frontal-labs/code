@@ -64,7 +64,7 @@ fn api_error_display_without_message_uses_body() {
         retryable: true,
     };
     let display = format!("{error}");
-    assert!(!display.is_empty());
+    assert_ne!(display, "");
 }
 
 #[test]

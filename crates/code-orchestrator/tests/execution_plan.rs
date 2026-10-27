@@ -14,7 +14,7 @@ fn plan_has_a_unique_plan_id() {
         WorkItemContext::default(),
     );
     let plan = plan_work_item(item);
-    assert!(!plan.plan_id.is_empty());
+    assert_ne!(plan.plan_id, "");
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn lane_assignments_have_unique_ids() {
     let plan = plan_work_item(item);
     assert!(!plan.lanes.is_empty());
     for lane in &plan.lanes {
-        assert!(!lane.lane_id.is_empty());
+        assert_ne!(lane.lane_id, "");
     }
     if plan.lanes.len() > 1 {
         assert_ne!(plan.lanes[0].lane_id, plan.lanes[1].lane_id);
@@ -120,7 +120,7 @@ fn lane_assignments_have_descriptions() {
     );
     let plan = plan_work_item(item);
     for lane in &plan.lanes {
-        assert!(!lane.description.is_empty());
+        assert_ne!(lane.description, "");
     }
 }
 

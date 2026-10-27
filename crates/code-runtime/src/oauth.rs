@@ -83,6 +83,17 @@ pub struct OAuthCallbackParams {
     pub error_description: Option<String>,
 }
 
+/// Where a saved login's tokens were issued, recorded at login time.
+///
+/// Refreshes go only to this endpoint. They never take the token URL from whatever
+/// project settings say at refresh time, because a cloned repository could point it
+/// at a host that collects the refresh token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OAuthEndpoint {
+    pub client_id: String,
+    pub token_url: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredOAuthCredentials {
@@ -93,6 +104,11 @@ struct StoredOAuthCredentials {
     expires_at: Option<u64>,
     #[serde(default)]
     scopes: Vec<String>,
+    /// Endpoint recorded at login. Absent for entries written before it was tracked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    client_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    token_url: Option<String>,
 }
 
 impl From<OAuthTokenSet> for StoredOAuthCredentials {
@@ -102,6 +118,8 @@ impl From<OAuthTokenSet> for StoredOAuthCredentials {
             refresh_token: value.refresh_token,
             expires_at: value.expires_at,
             scopes: value.scopes,
+            client_id: None,
+            token_url: None,
         }
     }
 }
@@ -266,6 +284,20 @@ pub fn credentials_path() -> io::Result<PathBuf> {
     Ok(credentials_home_dir()?.join("credentials.json"))
 }
 
+/// Key under which a provider's login is stored in `credentials.json`.
+///
+/// Anthropic keeps the historical `oauth` key, so logins saved before per-provider
+/// storage existed keep working. Every caller that reads or writes a provider's
+/// login should go through this mapping.
+#[must_use]
+pub fn credentials_key_for_provider(provider: &str) -> &str {
+    if provider == "anthropic" {
+        "oauth"
+    } else {
+        provider
+    }
+}
+
 pub fn load_oauth_credentials() -> io::Result<Option<OAuthTokenSet>> {
     load_oauth_credentials_for("oauth")
 }
@@ -288,12 +320,53 @@ pub fn save_oauth_credentials(token_set: &OAuthTokenSet) -> io::Result<()> {
     save_oauth_credentials_for(token_set, "oauth")
 }
 
+/// Saves tokens for `provider`, keeping the endpoint already recorded for it
+/// (so a refresh does not drop the endpoint saved at login).
 pub fn save_oauth_credentials_for(token_set: &OAuthTokenSet, provider: &str) -> io::Result<()> {
+    let endpoint = load_oauth_endpoint_for(provider)?;
+    write_oauth_entry(token_set, provider, endpoint.as_ref())
+}
+
+/// Saves tokens from a completed login together with the endpoint they were issued from.
+pub fn save_oauth_login_for(
+    token_set: &OAuthTokenSet,
+    provider: &str,
+    endpoint: &OAuthEndpoint,
+) -> io::Result<()> {
+    write_oauth_entry(token_set, provider, Some(endpoint))
+}
+
+/// Endpoint recorded at login for `provider`, if the saved entry has one.
+pub fn load_oauth_endpoint_for(provider: &str) -> io::Result<Option<OAuthEndpoint>> {
+    let path = credentials_path()?;
+    let root = read_credentials_root(&path)?;
+    let Some(entry) = root.get(provider).filter(|entry| !entry.is_null()) else {
+        return Ok(None);
+    };
+    let stored = serde_json::from_value::<StoredOAuthCredentials>(entry.clone())
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(match (stored.client_id, stored.token_url) {
+        (Some(client_id), Some(token_url)) => Some(OAuthEndpoint {
+            client_id,
+            token_url,
+        }),
+        _ => None,
+    })
+}
+
+fn write_oauth_entry(
+    token_set: &OAuthTokenSet,
+    provider: &str,
+    endpoint: Option<&OAuthEndpoint>,
+) -> io::Result<()> {
     let path = credentials_path()?;
     let mut root = read_credentials_root(&path)?;
+    let mut stored = StoredOAuthCredentials::from(token_set.clone());
+    stored.client_id = endpoint.map(|endpoint| endpoint.client_id.clone());
+    stored.token_url = endpoint.map(|endpoint| endpoint.token_url.clone());
     root.insert(
         provider.to_string(),
-        serde_json::to_value(StoredOAuthCredentials::from(token_set.clone()))
+        serde_json::to_value(stored)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
     );
     write_credentials_root(&path, &root)
@@ -380,8 +453,30 @@ fn write_credentials_root(path: &PathBuf, root: &Map<String, Value>) -> io::Resu
     let rendered = serde_json::to_string_pretty(&Value::Object(root.clone()))
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let temp_path = path.with_extension("json.tmp");
-    fs::write(&temp_path, format!("{rendered}\n"))?;
+    write_private_file(&temp_path, format!("{rendered}\n").as_bytes())?;
     fs::rename(temp_path, path)
+}
+
+/// Writes a file readable only by the owner, since it holds bearer tokens.
+/// The mode is set at creation so the secret is never briefly world-readable.
+fn write_private_file(path: &PathBuf, contents: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+
+    // `mode` only applies on creation, so drop any leftover file with looser permissions.
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(contents)
 }
 
 fn base64url_encode(bytes: &[u8]) -> String {
@@ -471,9 +566,10 @@ mod tests {
 
     use super::{
         clear_oauth_credentials, code_challenge_s256, credentials_path, generate_pkce_pair,
-        generate_state, load_oauth_credentials, loopback_redirect_uri, parse_oauth_callback_query,
-        parse_oauth_callback_request_target, save_oauth_credentials, OAuthAuthorizationRequest,
-        OAuthConfig, OAuthRefreshRequest, OAuthTokenExchangeRequest, OAuthTokenSet,
+        generate_state, load_oauth_credentials, load_oauth_endpoint_for, loopback_redirect_uri,
+        parse_oauth_callback_query, parse_oauth_callback_request_target, save_oauth_credentials,
+        save_oauth_credentials_for, save_oauth_login_for, OAuthAuthorizationRequest, OAuthConfig,
+        OAuthEndpoint, OAuthRefreshRequest, OAuthTokenExchangeRequest, OAuthTokenSet,
     };
 
     fn sample_config() -> OAuthConfig {
@@ -514,9 +610,9 @@ mod tests {
     fn generates_pkce_pair_and_state() {
         let pair = generate_pkce_pair().expect("pkce pair");
         let state = generate_state().expect("state");
-        assert!(!pair.verifier.is_empty());
-        assert!(!pair.challenge.is_empty());
-        assert!(!state.is_empty());
+        assert_ne!(pair.verifier.len(), 0);
+        assert_ne!(pair.challenge.len(), 0);
+        assert_ne!(state.len(), 0);
     }
 
     #[test]
@@ -585,6 +681,75 @@ mod tests {
         let cleared = std::fs::read_to_string(&path).expect("read cleared file");
         assert!(cleared.contains("\"other\": \"value\""));
         assert!(!cleared.contains("\"oauth\""));
+
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
+        std::fs::remove_dir_all(config_home).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn login_endpoint_is_recorded_kept_across_saves_and_absent_for_legacy_entries() {
+        let _guard = env_lock();
+        let config_home = temp_config_home();
+        std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &config_home);
+        let token_set = OAuthTokenSet {
+            access_token: "access-token".to_string(),
+            refresh_token: Some("refresh-token".to_string()),
+            expires_at: Some(123),
+            scopes: vec![],
+        };
+        let endpoint = OAuthEndpoint {
+            client_id: "client-1".to_string(),
+            token_url: "https://auth.example/token".to_string(),
+        };
+
+        save_oauth_login_for(&token_set, "openai", &endpoint).expect("save login");
+        assert_eq!(
+            load_oauth_endpoint_for("openai").expect("load endpoint"),
+            Some(endpoint.clone())
+        );
+
+        // A plain token save (as after a refresh) keeps the recorded endpoint.
+        save_oauth_credentials_for(&token_set, "openai").expect("re-save tokens");
+        assert_eq!(
+            load_oauth_endpoint_for("openai").expect("load kept endpoint"),
+            Some(endpoint)
+        );
+
+        // Entries written without an endpoint (older versions) report none.
+        save_oauth_credentials_for(&token_set, "legacy").expect("save legacy-style entry");
+        assert_eq!(
+            load_oauth_endpoint_for("legacy").expect("load legacy endpoint"),
+            None
+        );
+
+        std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
+        std::fs::remove_dir_all(config_home).expect("cleanup temp dir");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn credentials_file_is_owner_readable_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = env_lock();
+        let config_home = temp_config_home();
+        std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &config_home);
+        save_oauth_credentials_for(
+            &OAuthTokenSet {
+                access_token: "access-token".to_string(),
+                refresh_token: None,
+                expires_at: None,
+                scopes: vec![],
+            },
+            "openai",
+        )
+        .expect("save credentials");
+
+        let mode = std::fs::metadata(credentials_path().expect("credentials path"))
+            .expect("credentials metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
 
         std::env::remove_var("FRONTAL_CODE_CONFIG_HOME");
         std::fs::remove_dir_all(config_home).expect("cleanup temp dir");

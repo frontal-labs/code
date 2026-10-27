@@ -91,5 +91,5 @@ fn prompt_cache_record_contains_cache_break() {
         stats: PromptCacheStats::default(),
     };
     assert!(record.cache_break.is_some());
-    assert!(record.stats.completion_cache_hits == 0);
+    assert_eq!(record.stats.completion_cache_hits, 0);
 }

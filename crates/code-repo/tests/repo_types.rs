@@ -125,5 +125,5 @@ fn repo_commit_request_empty_message_is_valid() {
         author_name: None,
         author_email: None,
     };
-    assert!(request.message.is_empty());
+    assert_eq!(request.message, "");
 }

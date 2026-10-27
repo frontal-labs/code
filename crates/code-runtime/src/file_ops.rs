@@ -221,6 +221,15 @@ pub fn read_file(
 
 /// Replaces a file's contents and returns patch metadata.
 pub fn write_file(path: &str, content: &str) -> io::Result<WriteFileOutput> {
+    check_write_size(content)?;
+    let absolute_path = normalize_path_allow_missing(path)?;
+    if let Some(parent) = absolute_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    write_resolved(&absolute_path, content, false)
+}
+
+fn check_write_size(content: &str) -> io::Result<()> {
     if content.len() > MAX_WRITE_SIZE {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -231,13 +240,38 @@ pub fn write_file(path: &str, content: &str) -> io::Result<WriteFileOutput> {
             ),
         ));
     }
+    Ok(())
+}
 
-    let absolute_path = normalize_path_allow_missing(path)?;
-    let original_file = fs::read_to_string(&absolute_path).ok();
-    if let Some(parent) = absolute_path.parent() {
-        fs::create_dir_all(parent)?;
+/// `O_NOFOLLOW` for the platforms this is built on, so an open never follows a symlink
+/// at the final path component. Other platforms rely on the `symlink_metadata` check.
+#[cfg(target_os = "linux")]
+const O_NOFOLLOW: i32 = 0x20000;
+#[cfg(target_os = "macos")]
+const O_NOFOLLOW: i32 = 0x0100;
+
+/// Writes `content` to `path`, which must already be resolved. When `refuse_symlink` is
+/// set, a symlink at the final component is an error rather than a write target.
+fn write_resolved(path: &Path, content: &str, refuse_symlink: bool) -> io::Result<WriteFileOutput> {
+    let original_file = fs::read_to_string(path).ok();
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    if refuse_symlink {
+        if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("refusing to write through symlink {}", path.display()),
+            ));
+        }
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(O_NOFOLLOW);
+        }
     }
-    fs::write(&absolute_path, content)?;
+    let mut file = options.open(path)?;
+    io::Write::write_all(&mut file, content.as_bytes())?;
+    let absolute_path = path.to_path_buf();
 
     Ok(WriteFileOutput {
         kind: if original_file.is_some() {
@@ -577,12 +611,33 @@ pub fn write_file_in_workspace(
     content: &str,
     workspace_root: &Path,
 ) -> io::Result<WriteFileOutput> {
+    check_write_size(content)?;
     let absolute_path = normalize_path_allow_missing(path)?;
     let canonical_root = workspace_root
         .canonicalize()
         .unwrap_or_else(|_| workspace_root.to_path_buf());
     validate_workspace_boundary(&absolute_path, &canonical_root)?;
-    write_file(path, content)
+
+    // Validate the location that will actually be written, not the path string: create
+    // the parents, resolve them, and check again. The write then goes to that resolved
+    // location and refuses a symlink at the final component.
+    let parent = absolute_path.parent().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "path has no parent directory")
+    })?;
+    // Check the deepest ancestor that already exists before creating anything, so
+    // `create_dir_all` never builds directories outside the workspace through a symlink.
+    let deepest_existing = parent
+        .ancestors()
+        .find(|ancestor| ancestor.exists())
+        .unwrap_or(parent);
+    validate_workspace_boundary(&deepest_existing.canonicalize()?, &canonical_root)?;
+    fs::create_dir_all(parent)?;
+    let canonical_parent = parent.canonicalize()?;
+    validate_workspace_boundary(&canonical_parent, &canonical_root)?;
+    let file_name = absolute_path
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?;
+    write_resolved(&canonical_parent.join(file_name), content, true)
 }
 
 /// Edit a file with explicit workspace boundary enforcement.
@@ -760,5 +815,56 @@ mod tests {
         })
         .expect("grep should succeed");
         assert!(grep_output.content.unwrap_or_default().contains("hello"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_write_refuses_symlink_at_final_component() {
+        let root = std::env::temp_dir().join(format!("file-ops-symlink-{}", std::process::id()));
+        let outside = std::env::temp_dir().join(format!("file-ops-outside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&root).expect("workspace");
+        std::fs::create_dir_all(&outside).expect("outside");
+        let victim = outside.join("victim.txt");
+        std::fs::write(&victim, "original").expect("victim");
+        std::os::unix::fs::symlink(&victim, root.join("link.txt")).expect("symlink");
+
+        let error = super::write_file_in_workspace("link.txt", "pwned", &root)
+            .expect_err("write through a symlink should be refused");
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(
+            std::fs::read_to_string(&victim).expect("read victim"),
+            "original"
+        );
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+        std::fs::remove_dir_all(&outside).expect("cleanup outside");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_write_does_not_create_directories_outside_through_symlink() {
+        let root = std::env::temp_dir().join(format!("file-ops-mkdir-{}", std::process::id()));
+        let outside =
+            std::env::temp_dir().join(format!("file-ops-mkdir-out-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&root).expect("workspace");
+        std::fs::create_dir_all(&outside).expect("outside");
+        std::os::unix::fs::symlink(&outside, root.join("link")).expect("symlink");
+
+        let result = super::write_file_in_workspace("link/newdir/file.txt", "x", &root);
+        assert!(
+            result.is_err(),
+            "write through a symlinked directory should be refused"
+        );
+        assert!(
+            !outside.join("newdir").exists(),
+            "no directory may be created outside"
+        );
+
+        std::fs::remove_dir_all(&root).expect("cleanup");
+        std::fs::remove_dir_all(&outside).expect("cleanup outside");
     }
 }

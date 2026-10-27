@@ -502,7 +502,7 @@ mod tests {
         assert_eq!(task.description, None);
         assert_eq!(task.task_packet, None);
         assert!(task.messages.is_empty());
-        assert!(task.output.is_empty());
+        assert_eq!(task.output.len(), 0);
         assert_eq!(task.team_id, None);
     }
 

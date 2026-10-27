@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 #[test]
 fn memory_telemetry_sink_empty_initially() {
     let sink = MemoryTelemetrySink::default();
-    assert!(sink.events().is_empty());
+    assert_eq!(sink.events(), [] as [code_telemetry::TelemetryEvent; 0]);
 }
 
 #[test]

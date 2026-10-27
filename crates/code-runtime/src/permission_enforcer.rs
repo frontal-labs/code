@@ -6,6 +6,9 @@
 //! Permission enforcement layer that gates tool execution based on the
 //! active `PermissionPolicy`.
 
+use std::fs;
+use std::path::{Component, Path, PathBuf};
+
 use crate::permissions::{PermissionMode, PermissionOutcome, PermissionPolicy};
 use serde::{Deserialize, Serialize};
 
@@ -140,24 +143,79 @@ impl PermissionEnforcer {
 }
 
 /// Simple workspace boundary check via string prefix.
+/// Whether `path` resolves to a location inside `workspace_root`.
+///
+/// `..` components are resolved before the comparison, and containment is checked
+/// component by component, so `/ws/../etc` and `/workspacex` are both outside `/ws`.
+/// When the root exists, the nearest existing ancestor of the target must also resolve
+/// inside the canonical root, which catches symlinks that point out of the workspace.
 fn is_within_workspace(path: &str, workspace_root: &str) -> bool {
-    let normalized = if path.starts_with('/') {
-        path.to_owned()
+    let root = Path::new(workspace_root);
+    if !root.is_absolute() {
+        return false;
+    }
+    let target = if Path::new(path).is_absolute() {
+        PathBuf::from(path)
     } else {
-        format!("{workspace_root}/{path}")
+        root.join(path)
     };
-
-    let root = if workspace_root.ends_with('/') {
-        workspace_root.to_owned()
-    } else {
-        format!("{workspace_root}/")
+    let (Some(lexical_root), Some(lexical_target)) =
+        (normalize_lexically(root), normalize_lexically(&target))
+    else {
+        return false;
     };
+    if !lexical_target.starts_with(&lexical_root) {
+        return false;
+    }
 
-    normalized.starts_with(&root) || normalized == workspace_root.trim_end_matches('/')
+    let Ok(canonical_root) = fs::canonicalize(root) else {
+        // A root that does not exist has no symlinks, so the lexical check is complete.
+        return true;
+    };
+    let mut probe = lexical_target.as_path();
+    loop {
+        match fs::canonicalize(probe) {
+            Ok(resolved) => return resolved.starts_with(&canonical_root),
+            Err(_) => match probe.parent() {
+                Some(parent) => probe = parent,
+                None => return false,
+            },
+        }
+    }
+}
+
+/// Resolves `.` and `..` without touching the filesystem. Returns `None` when a `..`
+/// would climb above the root of an absolute path.
+fn normalize_lexically(path: &Path) -> Option<PathBuf> {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir => normalized.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            Component::Normal(part) => normalized.push(part),
+        }
+    }
+    Some(normalized)
 }
 
 /// Conservative heuristic: is this bash command read-only?
+/// Whether a bash command is a plain read that cannot modify state.
+///
+/// Fails closed. Any shell control operator, substitution, or newline disqualifies the
+/// command, so `cat x; rm y` is never read-only. The allowlist covers only utilities that
+/// cannot write or run another program in their default form. Interpreters, `git`,
+/// `find`, `sed`, `awk`, `xargs`, `env`, and similar tools can execute or write, so
+/// they are not listed.
 fn is_read_only_command(command: &str) -> bool {
+    const CONTROL_CHARS: &[char] = &[';', '&', '|', '$', '`', '<', '>', '(', ')', '\n', '\r'];
+    if command.contains(CONTROL_CHARS) {
+        return false;
+    }
     let first_token = command
         .split_whitespace()
         .next()
@@ -171,40 +229,26 @@ fn is_read_only_command(command: &str) -> bool {
         "cat"
             | "head"
             | "tail"
-            | "less"
-            | "more"
             | "wc"
             | "ls"
-            | "find"
             | "grep"
-            | "rg"
-            | "awk"
-            | "sed"
             | "echo"
             | "printf"
             | "which"
             | "where"
             | "whoami"
             | "pwd"
-            | "env"
-            | "printenv"
-            | "date"
             | "cal"
             | "df"
             | "du"
             | "free"
             | "uptime"
             | "uname"
-            | "file"
             | "stat"
             | "diff"
-            | "sort"
-            | "uniq"
             | "tr"
             | "cut"
             | "paste"
-            | "tee"
-            | "xargs"
             | "test"
             | "true"
             | "false"
@@ -216,25 +260,14 @@ fn is_read_only_command(command: &str) -> bool {
             | "sha256sum"
             | "md5sum"
             | "b3sum"
-            | "xxd"
-            | "hexdump"
             | "od"
+            | "hexdump"
             | "strings"
-            | "tree"
             | "jq"
-            | "yq"
-            | "python3"
-            | "python"
-            | "node"
-            | "ruby"
-            | "cargo"
-            | "rustc"
-            | "git"
-            | "gh"
-    ) && !command.contains("-i ")
+    ) && !command.contains(" -i")
         && !command.contains("--in-place")
-        && !command.contains(" > ")
-        && !command.contains(" >> ")
+        && !command.contains(" -o")
+        && !command.contains("--output")
 }
 
 #[cfg(test)]
@@ -332,13 +365,64 @@ mod tests {
     }
 
     #[test]
+    fn workspace_rejects_parent_traversal() {
+        assert!(!is_within_workspace(
+            "/workspace/../etc/passwd",
+            "/workspace"
+        ));
+        assert!(!is_within_workspace(
+            "/workspace/src/../../etc/passwd",
+            "/workspace"
+        ));
+        assert!(!is_within_workspace("../etc/passwd", "/workspace"));
+        assert!(is_within_workspace(
+            "/workspace/src/../lib.rs",
+            "/workspace"
+        ));
+    }
+
+    #[test]
+    fn workspace_rejects_symlink_escape() {
+        let root = std::env::temp_dir().join(format!("enforcer-ws-{}", std::process::id()));
+        let outside = std::env::temp_dir().join(format!("enforcer-out-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+        fs::create_dir_all(root.join("src")).expect("workspace");
+        fs::create_dir_all(&outside).expect("outside");
+        std::os::unix::fs::symlink(&outside, root.join("link")).expect("symlink");
+
+        let root_str = root.to_string_lossy().into_owned();
+        assert!(!is_within_workspace(
+            &format!("{root_str}/link/owned.txt"),
+            &root_str
+        ));
+        assert!(is_within_workspace(
+            &format!("{root_str}/src/new.txt"),
+            &root_str
+        ));
+
+        fs::remove_dir_all(&root).expect("cleanup");
+        fs::remove_dir_all(&outside).expect("cleanup outside");
+    }
+
+    #[test]
     fn read_only_command_heuristic() {
         assert!(is_read_only_command("cat file.txt"));
         assert!(is_read_only_command("grep pattern file"));
-        assert!(is_read_only_command("git log --oneline"));
         assert!(!is_read_only_command("rm file.txt"));
         assert!(!is_read_only_command("echo test > file.txt"));
         assert!(!is_read_only_command("sed -i 's/a/b/' file"));
+        // Interpreters, git, and exec-capable tools are not read-only in any form.
+        assert!(!is_read_only_command("git log --oneline"));
+        assert!(!is_read_only_command("python3 -c 'print(1)'"));
+        assert!(!is_read_only_command("find . -exec rm {} +"));
+        // Control operators and substitutions can chain a write onto a read.
+        assert!(!is_read_only_command("cat x; rm -rf y"));
+        assert!(!is_read_only_command("cat x && rm y"));
+        assert!(!is_read_only_command("cat x | sh"));
+        assert!(!is_read_only_command("cat $(rm y)"));
+        assert!(!is_read_only_command("cat `rm y`"));
+        assert!(!is_read_only_command("cat x\nrm y"));
     }
 
     #[test]
@@ -443,15 +527,12 @@ mod tests {
     fn bash_heuristic_full_path_prefix() {
         // given
         let full_path_command = "/usr/bin/cat Cargo.toml";
-        let git_path_command = "/usr/local/bin/git status";
 
         // when
         let cat_result = is_read_only_command(full_path_command);
-        let git_result = is_read_only_command(git_path_command);
 
         // then
         assert!(cat_result);
-        assert!(git_result);
     }
 
     #[test]

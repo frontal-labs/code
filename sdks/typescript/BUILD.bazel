@@ -19,6 +19,8 @@ filegroup(
 biome_lint(
     name = "lint",
     target = "sdks/typescript",
+    # bunx downloads Biome into a temp directory, which the test sandbox blocks.
+    tags = ["lint", "biome", "typescript", "no-sandbox"],
     data = [":typescript_sdk_srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
 )
 

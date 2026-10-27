@@ -3,7 +3,7 @@ use code_commands::{CommandManifestEntry, CommandRegistry, CommandSource};
 #[test]
 fn command_registry_empty_by_default() {
     let registry = CommandRegistry::new(vec![]);
-    assert!(registry.entries().is_empty());
+    assert_eq!(registry.entries(), []);
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn command_source_debug_and_clone() {
         let cloned = source;
         assert_eq!(source, cloned);
         let debug = format!("{source:?}");
-        assert!(!debug.is_empty());
+        assert_ne!(debug, "");
     }
 }
 

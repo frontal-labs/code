@@ -450,8 +450,7 @@ fn docker_available() -> bool {
 
 fn docker_backend_enabled() -> bool {
     env::var("FRONTAL_CODE_SANDBOX_ENABLE_DOCKER")
-        .ok()
-        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .is_ok_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
 }
 
 fn detect_backend_capabilities(in_container: bool) -> BackendCapabilities {
@@ -684,7 +683,10 @@ mod tests {
         {
             assert_eq!(launcher.program, "unshare");
             assert!(launcher.args.iter().any(|arg| arg == "--mount"));
-            assert!(launcher.args.iter().any(|arg| arg == "--net") == status.network_active);
+            assert_eq!(
+                launcher.args.iter().any(|arg| arg == "--net"),
+                status.network_active
+            );
         }
     }
 

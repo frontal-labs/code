@@ -123,7 +123,7 @@ fn contains_generated_header() {
 #[test]
 fn bindings_are_non_empty() {
     let bindings = render_typescript_bindings();
-    assert!(!bindings.is_empty());
+    assert_ne!(bindings, "");
     assert!(bindings.lines().count() > 50);
 }
 

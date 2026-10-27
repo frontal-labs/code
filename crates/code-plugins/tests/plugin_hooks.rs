@@ -6,7 +6,7 @@ fn empty_hooks_returns_allow() {
     let result = runner.run_pre_tool_use("Read", r#"{"path":"test.md"}"#);
     assert!(!result.is_denied());
     assert!(!result.is_failed());
-    assert!(result.messages().is_empty());
+    assert_eq!(result.messages().len(), 0);
 }
 
 #[test]
@@ -146,10 +146,7 @@ fn different_hook_events_have_independent_lists() {
 #[test]
 fn hook_runner_default_is_empty() {
     let runner = HookRunner::default();
-    assert!(runner
-        .run_pre_tool_use("Any", "input")
-        .messages()
-        .is_empty());
+    assert_eq!(runner.run_pre_tool_use("Any", "input").messages().len(), 0);
 }
 
 #[test]
@@ -165,7 +162,7 @@ fn hook_run_result_accessors() {
     let allow = HookRunResult::allow(vec![]);
     assert!(!allow.is_denied());
     assert!(!allow.is_failed());
-    assert!(allow.messages().is_empty());
+    assert_eq!(allow.messages().len(), 0);
 }
 
 #[test]

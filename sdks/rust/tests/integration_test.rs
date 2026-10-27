@@ -285,7 +285,7 @@ async fn skip_git_repo_check_passed_as_config() {
     .iter()
     .filter(|a| a.starts_with("skip_git_repo_check"))
     .collect();
-  assert!(!overrides.is_empty());
+  assert_ne!(overrides.len(), 0);
   assert!(overrides[0].contains("true"));
 }
 

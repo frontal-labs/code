@@ -370,6 +370,22 @@ frontal-code tools enable bash
 frontal-code tools disable bash
 ```
 
+### login / logout / auth
+
+Sign in to a provider with OAuth instead of an API key. Login needs an OAuth
+client in settings (see [OAuth Login](../CONFIGURATION.md#oauth-login)).
+
+```bash
+frontal-code login [anthropic|openai]    # default: anthropic
+frontal-code logout [anthropic|openai]
+frontal-code auth status                 # how each provider is authenticated
+```
+
+`login` opens your browser, waits for the redirect on the configured callback
+port, and stores the tokens in `~/.frontal-code/credentials.json` (mode `0600`).
+`auth status` lists env keys and saved logins per provider and never prints token
+values. Environment API keys take precedence over a saved login.
+
 ### doctor
 
 Run system diagnostics.

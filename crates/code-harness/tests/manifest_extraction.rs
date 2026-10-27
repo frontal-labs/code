@@ -41,7 +41,7 @@ export const INTERNAL_ONLY_COMMANDS = [
 fn extract_commands_detects_feature_gated() {
     let source = r"BetaFeature = feature('beta') && require('./commands/beta');";
     let registry = extract_commands(source);
-    assert!(!registry.entries().is_empty());
+    assert_ne!(registry.entries().len(), 0);
     let entry = &registry.entries()[0];
     assert_eq!(entry.name, "BetaFeature");
     assert_eq!(entry.source, code_commands::CommandSource::FeatureGated);
@@ -50,13 +50,13 @@ fn extract_commands_detects_feature_gated() {
 #[test]
 fn extract_commands_empty_source() {
     let registry = extract_commands("");
-    assert!(registry.entries().is_empty());
+    assert_eq!(registry.entries().len(), 0);
 }
 
 #[test]
 fn extract_commands_no_matches() {
     let registry = extract_commands("fn main() { }");
-    assert!(registry.entries().is_empty());
+    assert_eq!(registry.entries().len(), 0);
 }
 
 #[test]
@@ -84,7 +84,7 @@ import { Helper } from "./utils/helper";
 "#;
     let registry = extract_tools(source);
     // Non-tool imports from ./tools/ won't match, those from other paths are ignored
-    assert!(registry.entries().is_empty());
+    assert_eq!(registry.entries().len(), 0);
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn extract_tools_detects_conditional_tools() {
 #[test]
 fn extract_tools_empty_source() {
     let registry = extract_tools("");
-    assert!(registry.entries().is_empty());
+    assert_eq!(registry.entries().len(), 0);
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn extract_bootstrap_plan_minimal() {
     let source = "console.log('start');";
     let plan = extract_bootstrap_plan(source);
     let phases = plan.phases();
-    assert!(!phases.is_empty());
+    assert_ne!(phases.len(), 0);
     assert_eq!(phases[0], code_runtime::BootstrapPhase::CliEntry);
     assert_eq!(
         phases[phases.len() - 1],

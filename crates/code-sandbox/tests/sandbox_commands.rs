@@ -159,7 +159,10 @@ fn macos_command_includes_expected_args_when_available() {
             assert_eq!(cmd.args[2], "sh");
             assert_eq!(cmd.args[3], "-lc");
             assert_eq!(cmd.args[4], "echo test");
-            assert!(!cmd.env.is_empty());
+            assert_ne!(
+                cmd.env,
+                [] as [(std::string::String, std::string::String); 0]
+            );
         }
     }
 

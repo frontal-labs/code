@@ -53,7 +53,7 @@ fn clone_and_debug() {
     let cloned = paths.clone();
     assert_eq!(paths, cloned);
     let debug = format!("{paths:?}");
-    assert!(!debug.is_empty());
+    assert_ne!(debug, "");
 }
 
 #[test]

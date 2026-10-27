@@ -21,7 +21,15 @@ By default it binds to `127.0.0.1:8787`.
 - `FRONTAL_CODE_API_PORT` (default: `8787`)
 - `FRONTAL_CODE_CLI_BIN` (optional path to `frontal-code` binary)
 - `FRONTAL_CODE_API_WORKDIR` (optional working directory for executed CLI commands)
-- `FRONTAL_API_KEY` (required API key for server authentication; accepts `x-api-key` or `Authorization: Bearer ...`)
+- `FRONTAL_API_KEY` (API key for server authentication; accepts `x-api-key` or `Authorization: Bearer ...`. Required for `POST /v1/cli/run` and for any non-loopback bind)
+
+## Request Guards
+
+Every route checks the request before it is handled:
+
+- The `Host` header must name `localhost`, a loopback IP, or the address the server is bound to. A missing or other hostname returns `403`. This blocks DNS-rebinding attacks.
+- If an `Origin` header is present, it must match the request's own `Host` (same origin). Cross-origin browser requests return `403`.
+- `POST /v1/cli/run` returns `403` unless `FRONTAL_API_KEY` is configured, because it can run agent prompts. Other routes keep the optional-key behaviour.
 
 ## REST Endpoints
 

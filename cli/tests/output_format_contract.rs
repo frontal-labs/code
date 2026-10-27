@@ -132,24 +132,52 @@ fn config_sections_emit_structured_json_when_requested() {
     )
     .expect("project settings");
 
-    let env = assert_json_command(&workspace, &["--output-format", "json", "config", "env"]);
+    // Project hooks and plugins only load once the workspace is trusted. Keep the
+    // trust record and home directory inside this test's temp root.
+    let config_home = root.join("config-home");
+    let home = root.join("home");
+    fs::create_dir_all(&config_home).expect("config home should exist");
+    fs::create_dir_all(&home).expect("home should exist");
+    let home_text = home.to_str().expect("utf8 home").to_string();
+    let config_text = config_home.to_str().expect("utf8 config home").to_string();
+    let envs: [(&str, &str); 2] = [
+        ("HOME", home_text.as_str()),
+        ("FRONTAL_CODE_CONFIG_HOME", config_text.as_str()),
+    ];
+    let trust = run_frontal_code(&workspace, &["trust"], &envs);
+    assert!(trust.status.success(), "trust should succeed");
+
+    let env = assert_json_command_with_env(
+        &workspace,
+        &["--output-format", "json", "config", "env"],
+        &envs,
+    );
     assert_eq!(env["kind"], "config");
     assert_eq!(env["section"], "env");
     assert_eq!(env["merged_section"]["redacted"], true);
 
-    let hooks = assert_json_command(&workspace, &["--output-format", "json", "config", "hooks"]);
+    let hooks = assert_json_command_with_env(
+        &workspace,
+        &["--output-format", "json", "config", "hooks"],
+        &envs,
+    );
     assert_eq!(hooks["kind"], "config");
     assert_eq!(hooks["section"], "hooks");
     assert_eq!(hooks["merged_section"]["redacted"], true);
 
-    let model = assert_json_command(&workspace, &["--output-format", "json", "config", "model"]);
+    let model = assert_json_command_with_env(
+        &workspace,
+        &["--output-format", "json", "config", "model"],
+        &envs,
+    );
     assert_eq!(model["kind"], "config");
     assert_eq!(model["section"], "model");
     assert_eq!(model["merged_section"]["redacted"], true);
 
-    let plugins = assert_json_command(
+    let plugins = assert_json_command_with_env(
         &workspace,
         &["--output-format", "json", "config", "plugins"],
+        &envs,
     );
     assert_eq!(plugins["kind"], "config");
     assert_eq!(plugins["section"], "plugins");

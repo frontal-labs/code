@@ -24,7 +24,7 @@
         "default_model": "claude-opus-5-5"
       }
     },
-    "permission_mode": "workspace-write",
+    "permission_mode": "prompt",
     "log_level": "info",
     "max_concurrent_requests": 10,
     "request_timeout_seconds": 30

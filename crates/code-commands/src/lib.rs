@@ -5157,6 +5157,9 @@ mod tests {
         )
         .expect("write local settings");
 
+        ConfigLoader::new(&workspace, &config_home)
+            .trust_workspace()
+            .expect("workspace should be trusted");
         let loader = ConfigLoader::new(&workspace, &config_home);
         let list = super::render_mcp_report_for(&loader, &workspace, None)
             .expect("mcp list report should render");
@@ -5234,6 +5237,9 @@ mod tests {
         )
         .expect("write local settings");
 
+        ConfigLoader::new(&workspace, &config_home)
+            .trust_workspace()
+            .expect("workspace should be trusted");
         let loader = ConfigLoader::new(&workspace, &config_home);
         let list =
             render_mcp_report_json_for(&loader, &workspace, None).expect("mcp list json render");

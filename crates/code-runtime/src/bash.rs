@@ -172,8 +172,11 @@ fn sandbox_status_for_input(input: &BashCommandInput, cwd: &std::path::Path) -> 
         |_| SandboxConfig::default(),
         |runtime_config| runtime_config.sandbox().clone(),
     );
+    // The model-supplied `dangerouslyDisableSandbox` is deliberately not forwarded. Only
+    // the operator's sandbox settings decide whether the sandbox is on, so the model
+    // cannot turn off a sandbox the operator enabled.
     let request = config.resolve_request(
-        input.dangerously_disable_sandbox.map(|disabled| !disabled),
+        None,
         input.namespace_restrictions,
         input.isolate_network,
         input.filesystem_mode,
@@ -277,7 +280,9 @@ mod tests {
     }
 
     #[test]
-    fn disables_sandbox_when_requested() {
+    fn model_requested_sandbox_disable_is_ignored() {
+        // The unit test runs with no workspace settings, so the sandbox defaults to on.
+        // A model-supplied `dangerouslyDisableSandbox: true` must not change that.
         let output = execute_bash(BashCommandInput {
             command: String::from("printf 'hello'"),
             timeout: Some(1_000),
@@ -291,7 +296,9 @@ mod tests {
         })
         .expect("bash command should execute");
 
-        assert!(!output.sandbox_status.expect("sandbox status").enabled);
+        let status = output.sandbox_status.expect("sandbox status");
+        assert!(status.requested.enabled);
+        assert_eq!(output.dangerously_disable_sandbox, Some(true));
     }
 }
 

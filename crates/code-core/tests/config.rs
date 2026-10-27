@@ -8,7 +8,7 @@ fn default_config_has_expected_values() {
     assert_eq!(config.project.name, "Frontal Code");
     assert_eq!(config.project.version, "0.1.0");
     assert_eq!(config.runtime.default_provider, "frontal");
-    assert_eq!(config.runtime.permission_mode, "workspace-write");
+    assert_eq!(config.runtime.permission_mode, "prompt");
     assert_eq!(config.runtime.max_concurrent_requests, 10);
     assert_eq!(config.runtime.request_timeout_seconds, 30);
 }
@@ -303,12 +303,17 @@ fn get_provider_config_returns_correct_details() {
     assert_eq!(anthropic.default_model, "claude-opus-5-5");
 }
 
-/// The runtime only accepts these three permission-mode labels. A value outside
+/// The runtime only accepts these four permission-mode labels. A value outside
 /// the set (`"permissive"` shipped here for a long time) is silently ignored at
 /// resolution time, which reads as "no restrictions configured".
 #[test]
 fn default_permission_mode_is_one_the_runtime_accepts() {
-    const ACCEPTED: [&str; 3] = ["read-only", "workspace-write", "danger-full-access"];
+    const ACCEPTED: [&str; 4] = [
+        "read-only",
+        "workspace-write",
+        "prompt",
+        "danger-full-access",
+    ];
     let configured = ProjectConfig::default().runtime.permission_mode;
     assert!(
         ACCEPTED.contains(&configured.as_str()),
@@ -320,7 +325,12 @@ fn default_permission_mode_is_one_the_runtime_accepts() {
 /// is what ships to users.
 #[test]
 fn shipped_project_json_permission_mode_is_accepted() {
-    const ACCEPTED: [&str; 3] = ["read-only", "workspace-write", "danger-full-access"];
+    const ACCEPTED: [&str; 4] = [
+        "read-only",
+        "workspace-write",
+        "prompt",
+        "danger-full-access",
+    ];
     let raw = std::fs::read_to_string(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../config/project.json"),
     )

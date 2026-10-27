@@ -153,6 +153,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             args,
             output_format,
         } => LiveCli::print_mcp(args.as_deref(), output_format)?,
+        CliAction::Trust { revoke } => print_workspace_trust(revoke)?,
         CliAction::Skills {
             args,
             output_format,
@@ -336,6 +337,9 @@ enum CliAction {
     Mcp {
         args: Option<String>,
         output_format: CliOutputFormat,
+    },
+    Trust {
+        revoke: bool,
     },
     Skills {
         args: Option<String>,
@@ -933,6 +937,13 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             args: join_optional_args(&rest[1..]),
             output_format,
         }),
+        "trust" => match rest.get(1).map(String::as_str) {
+            None => Ok(CliAction::Trust { revoke: false }),
+            Some("--revoke") if rest.len() == 2 => Ok(CliAction::Trust { revoke: true }),
+            Some(other) => Err(format!(
+                "unsupported trust argument `{other}`; use `frontal-code trust` or `frontal-code trust --revoke`"
+            )),
+        },
         "skills" => {
             let args = join_optional_args(&rest[1..]);
             match classify_skills_slash_command(args.as_deref()) {
@@ -1890,7 +1901,7 @@ fn parse_permission_mode_arg(value: &str) -> Result<PermissionMode, String> {
     normalize_permission_mode(value)
         .ok_or_else(|| {
             format!(
-                "unsupported permission mode '{value}'. Use read-only, workspace-write, or danger-full-access."
+                "unsupported permission mode '{value}'. Use read-only, workspace-write, prompt, or danger-full-access."
             )
         })
         .map(permission_mode_from_label)
@@ -1900,6 +1911,7 @@ fn permission_mode_from_label(mode: &str) -> PermissionMode {
     match mode {
         "read-only" => PermissionMode::ReadOnly,
         "workspace-write" => PermissionMode::WorkspaceWrite,
+        "prompt" => PermissionMode::Prompt,
         "danger-full-access" => PermissionMode::DangerFullAccess,
         other => panic!("unsupported permission mode label: {other}"),
     }
@@ -1916,6 +1928,11 @@ fn permission_mode_from_resolved(mode: ResolvedPermissionMode) -> PermissionMode
 /// Resolve the permission mode, most specific source first:
 /// `RUSTY_CLAUDE_PERMISSION_MODE`, then the runtime settings files, then
 /// `config/project.json`, then the built-in fallback.
+///
+/// The built-in fallback is `prompt`: shell commands and file writes need the user's
+/// approval, and read-only tools run freely. Users opt into broader access with
+/// `--permission-mode`, `--dangerously-skip-permissions`, `RUSTY_CLAUDE_PERMISSION_MODE`,
+/// or a `permissionMode` setting.
 fn default_permission_mode() -> PermissionMode {
     env::var("RUSTY_CLAUDE_PERMISSION_MODE")
         .ok()
@@ -1924,16 +1941,23 @@ fn default_permission_mode() -> PermissionMode {
         .map(permission_mode_from_label)
         .or_else(config_permission_mode_for_current_dir)
         .or_else(project_config_permission_mode)
-        .unwrap_or(PermissionMode::DangerFullAccess)
+        .unwrap_or(DEFAULT_PERMISSION_MODE)
 }
+
+/// Permission mode used when no source sets one.
+const DEFAULT_PERMISSION_MODE: PermissionMode = PermissionMode::Prompt;
 
 /// Permission mode declared in the core `project.json` configuration.
 ///
-/// Returns `None` when the file declares no mode or declares one the runtime
-/// does not recognise, so an unparseable value falls through to the next
-/// source instead of being silently treated as permissive.
+/// Only a file that exists and declares a mode counts. `load_or_default` is not
+/// used: its built-in default (`workspace-write`) would otherwise override the
+/// built-in permission fallback for every user without a `project.json`.
+///
+/// Returns `None` when the file is missing, declares no mode, or declares one the
+/// runtime does not recognise, so the value falls through to the next source.
 fn project_config_permission_mode() -> Option<PermissionMode> {
-    let configured = code_core::config::ProjectConfig::load_or_default()
+    let configured = code_core::config::ProjectConfig::load()
+        .ok()?
         .runtime
         .permission_mode;
     normalize_permission_mode(&configured).map(permission_mode_from_label)
@@ -8138,6 +8162,7 @@ fn normalize_permission_mode(mode: &str) -> Option<&'static str> {
     match mode.trim() {
         "read-only" => Some("read-only"),
         "workspace-write" => Some("workspace-write"),
+        "prompt" => Some("prompt"),
         "danger-full-access" => Some("danger-full-access"),
         _ => None,
     }
@@ -10643,6 +10668,37 @@ fn cap_permission_mode_for_policy(
     }
 }
 
+/// Records or removes trust for the current workspace. Trust is what lets the
+/// workspace's `.frontal-code/` hooks, MCP servers, plugins, and sandbox settings run.
+fn print_workspace_trust(revoke: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let cwd = env::current_dir()?;
+    let loader = ConfigLoader::default_for(&cwd);
+    if revoke {
+        let removed = loader.untrust_workspace()?;
+        if !removed {
+            println!("Workspace {} was not in the trusted list.", cwd.display());
+        } else if loader.is_workspace_trusted()? {
+            println!(
+                "Removed {} from the trusted list, but a parent directory is still trusted.",
+                cwd.display()
+            );
+        } else {
+            println!(
+                "Workspace {} is no longer trusted. Project hooks, MCP servers, plugins, and sandbox settings are withheld.",
+                cwd.display()
+            );
+        }
+    } else {
+        let root = loader.trust_workspace()?;
+        println!(
+            "Trusted workspace {}. Project hooks, MCP servers, plugins, and sandbox settings in .frontal-code/ now load.",
+            root.display()
+        );
+        println!("Run `frontal-code trust --revoke` to undo this.");
+    }
+    Ok(())
+}
+
 /// Prints settings the runtime ignored because they would widen access, so the user
 /// can see why a repository's setting had no effect. Errors are skipped here; the
 /// command reports them when it loads config.
@@ -10807,6 +10863,7 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
     writeln!(out, "  frontal-code bootstrap-plan")?;
     writeln!(out, "  frontal-code agents")?;
     writeln!(out, "  frontal-code mcp")?;
+    writeln!(out, "  frontal-code trust [--revoke]")?;
     writeln!(out, "  frontal-code skills")?;
     writeln!(
         out,
@@ -11281,6 +11338,9 @@ mod tests {
         std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &config_home);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
 
+        code_runtime::ConfigLoader::new(&cwd, &config_home)
+            .trust_workspace()
+            .expect("workspace should be trusted");
         let resolved = with_current_dir(&cwd, super::default_permission_mode);
 
         match original_config_home {
@@ -11294,6 +11354,96 @@ mod tests {
         std::fs::remove_dir_all(root).expect("temp config root should clean up");
 
         assert_eq!(resolved, PermissionMode::WorkspaceWrite);
+    }
+
+    #[test]
+    fn default_permission_mode_is_prompt_when_nothing_is_configured() {
+        let _guard = env_lock();
+        let root = temp_dir();
+        let cwd = root.join("project");
+        let config_home = root.join("config-home");
+        std::fs::create_dir_all(&cwd).expect("project dir should exist");
+        std::fs::create_dir_all(&config_home).expect("config home should exist");
+
+        let original = [
+            "FRONTAL_CODE_CONFIG_HOME",
+            "HOME",
+            "RUSTY_CLAUDE_PERMISSION_MODE",
+        ]
+        .map(|key| (key, std::env::var(key).ok()));
+        std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &config_home);
+        // Keep a developer's own ~/.frontal-code/project.json out of the lookup.
+        std::env::set_var("HOME", &root);
+        std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
+
+        let resolved = with_current_dir(&cwd, super::default_permission_mode);
+
+        for (key, value) in original {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+        std::fs::remove_dir_all(root).expect("temp config root should clean up");
+
+        assert_eq!(resolved, PermissionMode::Prompt);
+    }
+
+    #[test]
+    fn untrusted_project_permission_mode_is_withheld_and_falls_back_to_prompt() {
+        let _guard = env_lock();
+        let root = temp_dir();
+        let cwd = root.join("project");
+        let config_home = root.join("config-home");
+        std::fs::create_dir_all(cwd.join(".frontal-code"))
+            .expect("project config dir should exist");
+        std::fs::create_dir_all(&config_home).expect("config home should exist");
+        std::fs::write(
+            cwd.join(".frontal-code").join("settings.json"),
+            r#"{"permissionMode":"danger-full-access"}"#,
+        )
+        .expect("project config should write");
+
+        let original = [
+            "FRONTAL_CODE_CONFIG_HOME",
+            "HOME",
+            "RUSTY_CLAUDE_PERMISSION_MODE",
+        ]
+        .map(|key| (key, std::env::var(key).ok()));
+        std::env::set_var("FRONTAL_CODE_CONFIG_HOME", &config_home);
+        std::env::set_var("HOME", &root);
+        std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
+
+        let resolved = with_current_dir(&cwd, super::default_permission_mode);
+
+        for (key, value) in original {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+        std::fs::remove_dir_all(root).expect("temp config root should clean up");
+
+        // A repository cannot raise the mode to full access before the user trusts it.
+        assert_eq!(resolved, PermissionMode::Prompt);
+    }
+
+    #[test]
+    fn trust_subcommand_and_prompt_mode_label_parse() {
+        assert!(matches!(
+            parse_args(&["trust".to_string()]),
+            Ok(CliAction::Trust { revoke: false })
+        ));
+        assert!(matches!(
+            parse_args(&["trust".to_string(), "--revoke".to_string()]),
+            Ok(CliAction::Trust { revoke: true })
+        ));
+        assert!(parse_args(&["trust".to_string(), "--bogus".to_string()]).is_err());
+        assert_eq!(normalize_permission_mode("prompt"), Some("prompt"));
+        assert_eq!(
+            super::permission_mode_from_label("prompt"),
+            PermissionMode::Prompt
+        );
     }
 
     #[test]

@@ -140,7 +140,7 @@ impl Default for ProjectConfig {
                         default_model: "claude-opus-5-5".to_string(),
                     },
                 },
-                permission_mode: "workspace-write".to_string(),
+                permission_mode: "prompt".to_string(),
                 log_level: "info".to_string(),
                 max_concurrent_requests: 10,
                 request_timeout_seconds: 30,

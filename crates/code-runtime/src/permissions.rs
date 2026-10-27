@@ -260,10 +260,16 @@ impl PermissionPolicy {
             );
         }
 
-        if allow_rule.is_some()
-            || current_mode == PermissionMode::Allow
-            || current_mode >= required_mode
-        {
+        // `Prompt` sorts above every other mode, so it must not take the ordering shortcut
+        // below. Read-only tools still run without asking; anything that needs more
+        // than read-only goes to the prompter.
+        let prompt_mode = current_mode == PermissionMode::Prompt;
+        let meets_requirement = if prompt_mode {
+            required_mode == PermissionMode::ReadOnly
+        } else {
+            current_mode >= required_mode
+        };
+        if allow_rule.is_some() || current_mode == PermissionMode::Allow || meets_requirement {
             return PermissionOutcome::Allow;
         }
 
@@ -786,5 +792,93 @@ mod tests {
             prompter.seen[0].reason.as_deref(),
             Some("hook requested confirmation")
         );
+    }
+
+    fn prompt_default_policy() -> PermissionPolicy {
+        PermissionPolicy::new(PermissionMode::Prompt)
+            .with_tool_requirement("read_file", PermissionMode::ReadOnly)
+            .with_tool_requirement("write_file", PermissionMode::WorkspaceWrite)
+            .with_tool_requirement("bash", PermissionMode::DangerFullAccess)
+    }
+
+    #[test]
+    fn prompt_mode_runs_read_only_tools_without_asking() {
+        let policy = prompt_default_policy();
+        let mut prompter = RecordingPrompter {
+            seen: Vec::new(),
+            allow: false,
+        };
+
+        let outcome = policy.authorize("read_file", "{}", Some(&mut prompter));
+
+        assert_eq!(outcome, PermissionOutcome::Allow);
+        assert_eq!(prompter.seen, &[] as &[PermissionRequest]);
+    }
+
+    #[test]
+    fn prompt_mode_asks_before_shell_and_file_writes() {
+        let policy = prompt_default_policy();
+
+        for tool in ["bash", "write_file"] {
+            let mut prompter = RecordingPrompter {
+                seen: Vec::new(),
+                allow: false,
+            };
+            let outcome = policy.authorize(tool, "{}", Some(&mut prompter));
+            assert_eq!(prompter.seen.len(), 1, "{tool} must reach the prompter");
+            assert!(
+                matches!(outcome, PermissionOutcome::Deny { .. }),
+                "{tool} must be denied when the user declines"
+            );
+        }
+    }
+
+    #[test]
+    fn prompt_mode_denies_shell_and_writes_without_a_prompter() {
+        let policy = prompt_default_policy();
+
+        assert!(matches!(
+            policy.authorize("bash", "{}", None),
+            PermissionOutcome::Deny { .. }
+        ));
+        assert!(matches!(
+            policy.authorize("write_file", "{}", None),
+            PermissionOutcome::Deny { .. }
+        ));
+        assert_eq!(
+            policy.authorize("read_file", "{}", None),
+            PermissionOutcome::Allow
+        );
+    }
+
+    #[test]
+    fn prompt_mode_allows_shell_after_user_approval() {
+        let policy = prompt_default_policy();
+        let mut prompter = RecordingPrompter {
+            seen: Vec::new(),
+            allow: true,
+        };
+
+        assert_eq!(
+            policy.authorize("bash", "echo hi", Some(&mut prompter)),
+            PermissionOutcome::Allow
+        );
+        assert_eq!(prompter.seen.len(), 1);
+    }
+
+    #[test]
+    fn danger_full_access_still_runs_shell_without_prompting() {
+        let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess)
+            .with_tool_requirement("bash", PermissionMode::DangerFullAccess);
+        let mut prompter = RecordingPrompter {
+            seen: Vec::new(),
+            allow: false,
+        };
+
+        assert_eq!(
+            policy.authorize("bash", "{}", Some(&mut prompter)),
+            PermissionOutcome::Allow
+        );
+        assert_eq!(prompter.seen, &[] as &[PermissionRequest]);
     }
 }

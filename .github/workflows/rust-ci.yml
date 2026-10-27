@@ -96,6 +96,22 @@ jobs:
       - name: Run workspace tests
         run: cargo test --workspace
 
+  # Runs the CLI and runtime tests on Windows so the Windows-only code paths (browser
+  # launch for OAuth login, `cmd`-free hook execution, path handling) execute on a real
+  # Windows host rather than only type-checking. Scope is the crates that own those paths.
+  test-windows:
+    name: cargo test (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+      - name: Run CLI and runtime tests on Windows
+        run: cargo test -p cli -p code-runtime -p code-plugins
+
   slack-extension-ci:
     name: slack contract + build + lint
     runs-on: blacksmith-4vcpu-ubuntu-2404

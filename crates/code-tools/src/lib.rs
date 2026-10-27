@@ -3554,13 +3554,25 @@ fn resolve_checked_host(
         .to_socket_addrs()
         .map_err(|error| format!("failed to resolve {host}: {error}"))?
         .collect::<Vec<_>>();
+    check_resolved_addrs(host, &addrs, policy)?;
+    Ok(addrs)
+}
+
+/// Applies the address policy to a resolution result. Every address must pass, so a
+/// hostname that answers with a mix of public and private addresses is refused rather
+/// than partially used.
+fn check_resolved_addrs(
+    host: &str,
+    addrs: &[SocketAddr],
+    policy: FetchPolicy,
+) -> Result<(), String> {
     if addrs.is_empty() {
         return Err(format!("failed to resolve {host}: no addresses returned"));
     }
-    for addr in &addrs {
+    for addr in addrs {
         check_fetch_ip(addr.ip(), host, policy)?;
     }
-    Ok(addrs)
+    Ok(())
 }
 
 /// Blocks loopback, link-local (including the 169.254.169.254 metadata endpoint),
@@ -7457,6 +7469,26 @@ mod tests {
         )
         .expect("WebFetch should ignore proxy environment variables");
         assert!(result.contains("reached directly"));
+    }
+
+    #[test]
+    fn resolved_addresses_are_all_checked_on_every_lookup() {
+        // The guarded resolver runs this check on every connection, not once per
+        // request, so a name that flips from public to private is refused on the
+        // lookup that returns the private address. Model each answer directly.
+        let strict = super::FetchPolicy::default();
+        let public: std::net::SocketAddr = "93.184.216.34:443".parse().unwrap();
+        let private: std::net::SocketAddr = "10.0.0.5:443".parse().unwrap();
+        let metadata: std::net::SocketAddr = "169.254.169.254:443".parse().unwrap();
+
+        assert!(super::check_resolved_addrs("example.com", &[public], strict).is_ok());
+        assert!(super::check_resolved_addrs("rebind.example", &[private], strict).is_err());
+        assert!(super::check_resolved_addrs("rebind.example", &[metadata], strict).is_err());
+        assert!(
+            super::check_resolved_addrs("mixed.example", &[public, private], strict).is_err(),
+            "a mixed public/private answer must be refused"
+        );
+        assert!(super::check_resolved_addrs("empty.example", &[], strict).is_err());
     }
 
     #[test]

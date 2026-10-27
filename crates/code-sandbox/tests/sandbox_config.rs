@@ -27,7 +27,10 @@ fn resolve_request_with_false_overrides() {
         Some(FilesystemIsolationMode::Off),
         Some(vec![]),
     );
-    assert!(!request.enabled);
+    assert!(
+        request.enabled,
+        "a false override must not disable the sandbox the operator left enabled"
+    );
     assert!(!request.namespace_restrictions);
     assert!(!request.network_isolation);
     assert_eq!(request.filesystem_mode, FilesystemIsolationMode::Off);
@@ -112,9 +115,47 @@ fn resolve_request_override_precedence() {
         network_isolation: Some(false),
         ..SandboxConfig::default()
     };
-    let request = config.resolve_request(Some(false), None, Some(true), None, None);
-    assert!(!request.enabled, "override should override config");
+    let request = config.resolve_request(None, None, Some(true), None, None);
+    assert!(request.enabled, "operator-enabled sandbox stays enabled");
     assert!(request.network_isolation, "override should override config");
+}
+
+#[test]
+fn enabled_override_cannot_disable_an_operator_enabled_sandbox() {
+    for operator in [None, Some(true)] {
+        let config = SandboxConfig {
+            enabled: operator,
+            ..SandboxConfig::default()
+        };
+        let request = config.resolve_request(Some(false), None, None, None, None);
+        assert!(
+            request.enabled,
+            "disable override must not turn off a sandbox with operator setting {operator:?}"
+        );
+    }
+}
+
+#[test]
+fn enabled_override_can_enable_but_operator_disable_is_respected_without_override() {
+    let disabled = SandboxConfig {
+        enabled: Some(false),
+        ..SandboxConfig::default()
+    };
+    assert!(
+        !disabled
+            .resolve_request(None, None, None, None, None)
+            .enabled
+    );
+    assert!(
+        disabled
+            .resolve_request(Some(true), None, None, None, None)
+            .enabled
+    );
+    assert!(
+        !disabled
+            .resolve_request(Some(false), None, None, None, None)
+            .enabled
+    );
 }
 
 #[test]

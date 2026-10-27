@@ -54,6 +54,11 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
 SLACK_SIGNING_SECRET=your-signing-secret
 
+# Slack access control (see "Access Control" below)
+SLACK_ALLOWED_USER_IDS=U0123456789   # required: empty denies all task creation
+SLACK_ALLOWED_CHANNEL_IDS=           # optional: empty allows any channel
+SLACK_ADMIN_USER_IDS=                # optional: may act on other users' tasks
+
 # Frontal Code server
 FRONTAL_CODE_API_URL=http://127.0.0.1:8788
 FRONTAL_CODE_API_TIMEOUT=30000
@@ -107,8 +112,21 @@ bun run format
 
 1. Create a Slack app and enable Socket Mode.
 2. Configure a slash command for `/code`.
-3. Add bot token scopes: `app_mentions:read`, `channels:history`, `groups:history`, `im:history`, `mpim:history`, `chat:write`, `commands`. No user token scopes are required.
-4. Subscribe to `app_mention` and `message.channels`, `message.groups`, `message.im`, `message.mpim`.
+3. Add bot token scopes: `app_mentions:read`, `im:history`, `chat:write`, `commands`. No user token scopes are required.
+4. Subscribe to bot events `app_mention` and `message.im`. Do not subscribe to `message.channels`, `message.groups`, or `message.mpim`.
+
+If you previously installed the app with the older manifest, remove the `channels:history`, `groups:history`, and `mpim:history` scopes and the `message.channels`, `message.groups`, and `message.mpim` subscriptions, then reinstall the app so Slack applies the change.
+
+## Access Control
+
+Tasks run with the organization's GitHub, Linear, and Graphite credentials, so access is deny-by-default:
+
+- **Who can start tasks:** only users listed in `SLACK_ALLOWED_USER_IDS`. An empty list denies all task creation, including `/code` and DMs.
+- **Where tasks start:** channels are only used through an explicit `@code` mention (`app_mention`). Ordinary channel messages never start a task. Direct messages from an allowlisted user start a task without a mention.
+- **Channel restriction:** if `SLACK_ALLOWED_CHANNEL_IDS` is set, mentions and `/code` in other channels are ignored. DMs are not channel-restricted. An empty list allows any channel.
+- **Acting on tasks:** approve, retry, and cancel buttons only work for the user who created the task or a user in `SLACK_ADMIN_USER_IDS`. The actor must also be in `SLACK_ALLOWED_USER_IDS`.
+
+Slack user IDs look like `U0123456789` (or `W...` for enterprise grid users). Channel IDs start with `C`, `G`, or `D`. Find IDs in the Slack profile or channel details menu. Invalid entries fail startup validation.
 
 ## Operator Workflows
 

@@ -561,4 +561,40 @@ describe("FrontalCodeApiClient", () => {
 
     expect(url).toBe("wss://code.example.com/v1/events/ws?source=slack&channel_id=C123&limit=10");
   });
+
+  it("encodes task ids in task lookup paths so they cannot alter the request path", async () => {
+    mockHttpClient.get.mockResolvedValueOnce({ data: createTaskSnapshot() });
+
+    await client.getTask("task/../admin?x=1#frag");
+
+    expect(mockHttpClient.get).toHaveBeenCalledWith("/v1/tasks/task%2F..%2Fadmin%3Fx%3D1%23frag");
+  });
+
+  it("encodes task ids in context and approval paths", async () => {
+    mockHttpClient.post.mockResolvedValue({ data: createTaskSnapshot() });
+
+    await client.updateTaskContext({
+      taskId: "a/b",
+      source: "slack",
+      user_id: "U123",
+      channel_id: "C123",
+    });
+    await client.resolveTaskApproval({
+      taskId: "a/b",
+      approvalKind: "orphaned_hosted_agent",
+      action: "retry",
+      resolvedBy: "U123",
+    });
+
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(
+      1,
+      "/v1/tasks/a%2Fb/context",
+      expect.any(Object),
+    );
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(
+      2,
+      "/v1/tasks/a%2Fb/approval",
+      expect.any(Object),
+    );
+  });
 });

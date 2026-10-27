@@ -86,7 +86,6 @@ export class FrontalCodeEventsClient {
   private async openSocket(): Promise<void> {
     const nextUrl = this.buildSocketUrl();
     const headers = this.headersBuilder();
-    this.currentUrl = nextUrl;
     await new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(nextUrl, headers ? { headers } : undefined);
       this.socket = socket;

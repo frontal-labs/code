@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createSlackAccessPolicy } from "../src/access";
 import { logger } from "../src/log";
 import { SlackInterface } from "../src/slack";
 import type {
@@ -24,6 +25,10 @@ type TestableSlackInterface = SlackInterface & {
     action: { action_id: string; value?: string },
     body: SlackBody,
   ): Promise<void>;
+  handleGithubFollowupApprovalAction(
+    action: { action_id: string; value?: string },
+    body: SlackBody,
+  ): Promise<void>;
   handleFrontalCodeTaskEvent(
     event: FrontalCodeEventEnvelope,
     task?: FrontalCodeTrackedTask,
@@ -42,12 +47,14 @@ type TestableSlackInterface = SlackInterface & {
   approvalMessageTsByTask: Map<string, string>;
   approvalInFlight: Set<string>;
   approvalResolved: Set<string>;
+  access: ReturnType<typeof createSlackAccessPolicy>;
 };
 
 function createTestSlackInterface() {
   const slack = Object.create(SlackInterface.prototype) as TestableSlackInterface;
   const postMessage = vi.fn();
   const updateMessage = vi.fn();
+  const postEphemeral = vi.fn();
   const updateTaskContext = vi.fn();
   const getTask = vi.fn();
   const listTasks = vi.fn();
@@ -71,9 +78,11 @@ function createTestSlackInterface() {
         chat: {
           postMessage,
           update: updateMessage,
+          postEphemeral,
         },
       },
     },
+    access: createSlackAccessPolicy({ allowedUserIds: ["U123"] }),
     frontalCodeApi: {
       updateTaskContext,
       getTask,
@@ -97,6 +106,7 @@ function createTestSlackInterface() {
   return {
     slack,
     postMessage,
+    postEphemeral,
     updateMessage,
     updateTaskContext,
     getTask,
@@ -400,6 +410,7 @@ describe("SlackInterface behavior", () => {
       message: { ts: "1710000000.510" },
     };
     slack.approvalResolved.add("task-123");
+    slack.trackedTasks.set("task-123", createTrackedTask());
 
     await slack.handleOrphanApprovalAction(
       {
@@ -426,6 +437,7 @@ describe("SlackInterface behavior", () => {
       message: { ts: "1710000000.520" },
     };
     slack.approvalInFlight.add("task-123");
+    slack.trackedTasks.set("task-123", createTrackedTask());
 
     await slack.handleOrphanApprovalAction(
       {
@@ -469,6 +481,7 @@ describe("SlackInterface behavior", () => {
       channel: { id: "C123" },
       message: { ts: "1710000000.540" },
     };
+    slack.trackedTasks.set("task-123", createTrackedTask());
     resolveTaskApproval.mockResolvedValue(
       createTaskSnapshot({
         status: "running",
@@ -519,6 +532,7 @@ describe("SlackInterface behavior", () => {
       channel: { id: "C123" },
       message: { ts: "1710000000.550" },
     };
+    slack.trackedTasks.set("task-123", createTrackedTask());
     resolveTaskApproval.mockRejectedValue(new Error("provider down"));
 
     await expect(
@@ -553,6 +567,7 @@ describe("SlackInterface behavior", () => {
       channel: { id: "C123" },
       message: { ts: "1710000000.530" },
     };
+    slack.trackedTasks.set("task-123", createTrackedTask());
     resolveTaskApproval.mockResolvedValue(
       createTaskSnapshot({
         worker_status: "ready_for_prompt",
@@ -605,6 +620,7 @@ describe("SlackInterface behavior", () => {
       channel: { id: "C123" },
       message: { ts: "1710000000.540" },
     };
+    slack.trackedTasks.set("task-123", createTrackedTask());
     const failure = new Error("approval backend unavailable");
     resolveTaskApproval.mockRejectedValue(failure);
 
@@ -648,6 +664,7 @@ describe("SlackInterface behavior", () => {
       channel: { id: "C123" },
       message: { ts: "1710000000.550" },
     };
+    slack.trackedTasks.set("task-123", createTrackedTask());
     updateMessage.mockRejectedValue(new Error("slack update failed"));
 
     await expect(
@@ -1291,6 +1308,167 @@ describe("SlackInterface behavior", () => {
       channelId: "C456",
       threadTs: "1710000000.100",
       userId: "U456",
+    });
+  });
+
+  describe("approval and action authorization", () => {
+    const body: SlackBody = {
+      user: { id: "U123" },
+      channel: { id: "C123" },
+      message: { ts: "1710000000.600" },
+    };
+    const retryAction = { action_id: "orphaned_hosted_agent.retry", value: "task-123" };
+
+    it("denies an orphan approval from an allowlisted user who did not create the task", async () => {
+      const { slack, resolveTaskApproval, updateMessage, postEphemeral } =
+        createTestSlackInterface();
+      slack.trackedTasks.set("task-123", createTrackedTask({ userId: "U555" }));
+      const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+
+      await slack.handleOrphanApprovalAction(retryAction, body);
+
+      expect(resolveTaskApproval).not.toHaveBeenCalled();
+      expect(updateMessage).not.toHaveBeenCalled();
+      expect(postEphemeral).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: "C123", user: "U123" }),
+      );
+      expect(slack.approvalInFlight.has("task-123")).toBe(false);
+      expect(infoSpy).toHaveBeenCalledWith("Denied Slack approval action", {
+        taskId: "task-123",
+        userId: "U123",
+      });
+    });
+
+    it("denies a github follow-up action from a user who did not create the task", async () => {
+      const { slack, resolveTaskApproval, postEphemeral } = createTestSlackInterface();
+      slack.trackedTasks.set("task-123", createTrackedTask({ userId: "U555" }));
+
+      await slack.handleGithubFollowupApprovalAction(
+        { action_id: "github_review_followup.ack", value: "task-123" },
+        body,
+      );
+
+      expect(resolveTaskApproval).not.toHaveBeenCalled();
+      expect(postEphemeral).toHaveBeenCalled();
+    });
+
+    it("allows the task creator to resolve their own approval", async () => {
+      const { slack, resolveTaskApproval } = createTestSlackInterface();
+      slack.trackedTasks.set("task-123", createTrackedTask({ userId: "U123" }));
+      resolveTaskApproval.mockResolvedValue(createTaskSnapshot());
+
+      await slack.handleOrphanApprovalAction(retryAction, body);
+
+      expect(resolveTaskApproval).toHaveBeenCalledWith(
+        expect.objectContaining({ taskId: "task-123", resolvedBy: "U123" }),
+      );
+    });
+
+    it("allows an allowlisted admin to resolve a task created by someone else", async () => {
+      const { slack, resolveTaskApproval } = createTestSlackInterface();
+      slack.access = createSlackAccessPolicy({
+        allowedUserIds: ["U123"],
+        adminUserIds: ["U123"],
+      });
+      slack.trackedTasks.set("task-123", createTrackedTask({ userId: "U555" }));
+      resolveTaskApproval.mockResolvedValue(createTaskSnapshot());
+
+      await slack.handleOrphanApprovalAction(retryAction, body);
+
+      expect(resolveTaskApproval).toHaveBeenCalledTimes(1);
+    });
+
+    it("denies approvals from a user who is not on the allowlist even if they created the task", async () => {
+      const { slack, resolveTaskApproval, postEphemeral } = createTestSlackInterface();
+      slack.access = createSlackAccessPolicy({ allowedUserIds: [] });
+      slack.trackedTasks.set("task-123", createTrackedTask({ userId: "U123" }));
+
+      await slack.handleOrphanApprovalAction(retryAction, body);
+
+      expect(resolveTaskApproval).not.toHaveBeenCalled();
+      expect(postEphemeral).toHaveBeenCalled();
+    });
+
+    it("looks up the task owner from Frontal Code when the task is not tracked locally", async () => {
+      const { slack, getTask, resolveTaskApproval } = createTestSlackInterface();
+      getTask.mockResolvedValue(createTaskSnapshot({ user_id: "U555" }));
+
+      await slack.handleOrphanApprovalAction(retryAction, body);
+
+      expect(getTask).toHaveBeenCalledWith("task-123");
+      expect(resolveTaskApproval).not.toHaveBeenCalled();
+    });
+
+    it("denies approvals when the task owner cannot be determined", async () => {
+      const { slack, getTask, resolveTaskApproval } = createTestSlackInterface();
+      getTask.mockRejectedValue(new Error("not found"));
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+
+      await slack.handleOrphanApprovalAction(retryAction, body);
+
+      expect(resolveTaskApproval).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Failed to load task owner for approval check",
+        expect.objectContaining({ taskId: "task-123", error: "not found" }),
+      );
+    });
+
+    it("denies generic connector actions from users who are not allowlisted", async () => {
+      const { slack, sendConnectorInteraction, updateMessage } = createTestSlackInterface();
+      slack.access = createSlackAccessPolicy({ allowedUserIds: [] });
+
+      await slack.handleSlackAction({ action_id: "connector.action", value: "task-123" }, body);
+
+      expect(sendConnectorInteraction).not.toHaveBeenCalled();
+      expect(updateMessage).not.toHaveBeenCalled();
+    });
+
+    it("tracks the task for Frontal Code events after a github follow-up is resolved", async () => {
+      const { slack, resolveTaskApproval, updateMessage, trackTask } = createTestSlackInterface();
+      slack.trackedTasks.set("task-123", createTrackedTask());
+      resolveTaskApproval.mockResolvedValue(
+        createTaskSnapshot({
+          channel_id: "C123",
+          thread_ts: "1710000000.100",
+          user_id: "U123",
+        }),
+      );
+
+      await slack.handleGithubFollowupApprovalAction(
+        { action_id: "github_review_followup.ack", value: "task-123" },
+        body,
+      );
+
+      expect(updateMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "Follow-up resolved for task task-123." }),
+      );
+      expect(trackTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task-123",
+          channelId: "C123",
+          threadTs: "1710000000.100",
+          userId: "U123",
+        }),
+      );
+      expect(slack.trackedTasks.get("task-123")).toEqual(
+        expect.objectContaining({ channelId: "C123", threadTs: "1710000000.100" }),
+      );
+    });
+
+    it("skips tracking a github follow-up result that has no Slack routing", async () => {
+      const { slack, resolveTaskApproval, updateMessage, trackTask } = createTestSlackInterface();
+      slack.trackedTasks.set("task-123", createTrackedTask());
+      resolveTaskApproval.mockResolvedValue(createTaskSnapshot({ channel_id: undefined }));
+
+      await slack.handleGithubFollowupApprovalAction(
+        { action_id: "github_review_followup.retry", value: "task-123" },
+        body,
+      );
+
+      expect(updateMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "Follow-up resolved for task task-123." }),
+      );
+      expect(trackTask).not.toHaveBeenCalled();
     });
   });
 });

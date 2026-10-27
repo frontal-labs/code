@@ -38,8 +38,7 @@ pub mod summary_compression;
 pub mod task_packet;
 pub mod task_registry;
 pub mod team_cron_registry;
-#[cfg(test)]
-mod trust_resolver;
+pub mod trust_resolver;
 mod usage;
 pub mod worker_boot;
 

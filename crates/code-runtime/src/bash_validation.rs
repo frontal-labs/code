@@ -635,7 +635,10 @@ fn extract_first_command(command: &str) -> String {
                     .all(|c| c.is_ascii_alphanumeric() || c == '_')
             {
                 // Skip past the value (might be quoted).
-                let after_eq = &next[eq_pos + 1..];
+                // `find_end_of_value` returns an offset into the *trimmed* value, so slice
+                // the trimmed value too. Slicing the untrimmed text with that offset can land
+                // inside a multi-byte character and panic.
+                let after_eq = next[eq_pos + 1..].trim_start();
                 if let Some(space) = find_end_of_value(after_eq) {
                     remaining = &after_eq[space..];
                     continue;
@@ -1000,5 +1003,13 @@ mod tests {
     #[test]
     fn extracts_plain_command() {
         assert_eq!(extract_first_command("grep -r pattern ."), "grep");
+    }
+
+    #[test]
+    fn env_prefix_with_whitespace_and_multibyte_quoted_value_does_not_panic() {
+        // The quoted value contains a 2-byte character, and whitespace follows the '='.
+        // Slicing the untrimmed text with the trimmed offset used to panic here.
+        assert_eq!(extract_first_command("A=  'é' ls"), "ls");
+        assert_eq!(extract_first_command("A=  \"é\" ls -la"), "ls");
     }
 }

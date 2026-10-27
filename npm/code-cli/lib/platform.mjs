@@ -28,6 +28,12 @@ const TARGETS = {
   "win32/x64": { target: "x86_64-pc-windows-msvc", ext: ".exe" },
 };
 
+// Every release asset name the launcher can download. The checksum pin script uses this
+// list so the packaged checksums cover every platform, not just the one that publishes.
+export function allAssetNames() {
+  return Object.values(TARGETS).map((entry) => `code-cli-${entry.target}${entry.ext}`);
+}
+
 // Pure helper: resolve a descriptor from explicit platform/arch.
 export function targetFor(platform, arch) {
   const entry = TARGETS[`${platform}/${arch}`];

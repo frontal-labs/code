@@ -682,7 +682,7 @@ logical name to an MCP `server` plus the tool names it exposes and optional OAut
 | Method & Path | Purpose |
 | --- | --- |
 | `POST /v1/webhooks/:source` | Receive a webhook for any integration. The raw payload is stored in the task's `metadata` map and a `ConnectorEventReceived` event is broadcast. |
-| `GET/POST /v1/oauth/:provider/authorize` + `/callback` | Generic OAuth flow driven entirely by the integration's `oauth` config. |
+| `POST /v1/oauth/:provider/authorize` (requires the control-plane API key; returns `{ "authorize_url": ... }` to open in a browser) + `GET /v1/oauth/:provider/callback` | Generic OAuth flow driven entirely by the integration's `oauth` config. The callback is public and bound to the flow by a one-time `state`. |
 | `GET/POST /v1/tasks/:task_id/integration/:name` | Read or patch a task's integration-specific data (stored in `metadata`). |
 
 ### How it works

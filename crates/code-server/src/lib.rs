@@ -261,11 +261,38 @@ impl ServerConfig {
     }
 }
 
+/// How long an issued OAuth `state` nonce is accepted by the callback.
+const OAUTH_STATE_TTL: Duration = Duration::from_mins(10);
+
 #[derive(Debug, Clone)]
 struct LinearOAuthPendingState {
-    state: String,
+    provider: String,
     redirect_uri: String,
     created_at: Instant,
+}
+
+/// Consumes the pending OAuth `state` that a callback presents.
+///
+/// The entry is removed on every attempt, valid or not, so a `state` can be used at most
+/// once. It must also belong to `provider` and be presented within [`OAUTH_STATE_TTL`].
+fn take_pending_oauth_state(
+    states: &mut HashMap<String, LinearOAuthPendingState>,
+    provider: &str,
+    state_param: &str,
+    now: Instant,
+) -> Result<LinearOAuthPendingState, AppError> {
+    let pending = states
+        .remove(state_param)
+        .ok_or_else(|| AppError::bad_request("unknown, expired, or already used OAuth state"))?;
+    if now.saturating_duration_since(pending.created_at) >= OAUTH_STATE_TTL {
+        return Err(AppError::bad_request("expired OAuth state"));
+    }
+    if pending.provider != provider {
+        return Err(AppError::bad_request(
+            "OAuth state was issued for a different provider",
+        ));
+    }
+    Ok(pending)
 }
 
 pub struct ServerState {
@@ -1562,6 +1589,13 @@ pub fn app(state: Arc<ServerState>) -> Router {
             post(connector_interaction),
         )
         .route("/v1/connectors/:connector/events", post(connector_event))
+        // Starting a login stores a pending state for the single tenant, so it needs the
+        // control-plane key. The callback stays public because the provider redirects the
+        // browser there; it is bound to the flow by the one-time `state` instead.
+        .route(
+            "/v1/oauth/:provider/authorize",
+            get(generic_oauth_authorize),
+        )
         .route_layer(middleware::from_fn_with_state(
             protected_state.clone(),
             require_control_plane_auth,
@@ -1571,10 +1605,6 @@ pub fn app(state: Arc<ServerState>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/v1/webhooks/:source", post(integration_webhook))
-        .route(
-            "/v1/oauth/:provider/authorize",
-            get(generic_oauth_authorize),
-        )
         .route("/v1/oauth/:provider/callback", get(generic_oauth_callback))
         .merge(protected)
         .with_state(state)
@@ -1690,16 +1720,18 @@ async fn generic_oauth_authorize(
     let csrf_state = generate_state()
         .map_err(|e| AppError::internal(format!("state generation failed: {e}")))?;
 
-    let mut states = state.pending_oauth_states.lock().unwrap();
-    states.insert(
-        csrf_state.clone(),
-        LinearOAuthPendingState {
-            state: csrf_state.clone(),
-            redirect_uri: redirect_uri.clone(),
-            created_at: Instant::now(),
-        },
-    );
-    states.retain(|_, v| v.created_at.elapsed() < Duration::from_mins(10));
+    {
+        let mut states = state.pending_oauth_states.lock().unwrap();
+        states.retain(|_, v| v.created_at.elapsed() < OAUTH_STATE_TTL);
+        states.insert(
+            csrf_state.clone(),
+            LinearOAuthPendingState {
+                provider: provider.clone(),
+                redirect_uri: redirect_uri.clone(),
+                created_at: Instant::now(),
+            },
+        );
+    }
 
     let scope = oauth.scopes.join(",");
     let authorize_url = format!(
@@ -1738,13 +1770,8 @@ async fn generic_oauth_callback(
 
     let pending = {
         let mut states = state.pending_oauth_states.lock().unwrap();
-        states.remove(state_param)
-    }
-    .ok_or_else(|| AppError::bad_request("unknown or expired OAuth state"))?;
-
-    if pending.state != *state_param {
-        return Err(AppError::bad_request("OAuth state mismatch"));
-    }
+        take_pending_oauth_state(&mut states, &provider, state_param, Instant::now())?
+    };
 
     let client_id = std::env::var(&oauth.client_id_env)
         .map_err(|_| AppError::internal(format!("{} not set", oauth.client_id_env)))?;
@@ -1759,7 +1786,13 @@ async fn generic_oauth_callback(
     ];
 
     code_types::require_secure_transport(&oauth.token_url).map_err(AppError::internal)?;
-    let http = reqwest::Client::new();
+    // The client secret is sent here, so the client is HTTPS-only and never follows a
+    // redirect: a redirect could otherwise re-send the secret to another host.
+    let http = reqwest::Client::builder()
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| AppError::internal(format!("could not build OAuth HTTP client: {e}")))?;
     let response = http
         .post(&oauth.token_url)
         .header("Accept", "application/json")
@@ -1767,6 +1800,12 @@ async fn generic_oauth_callback(
         .send()
         .await
         .map_err(|e| AppError::internal(format!("token exchange failed: {e}")))?;
+
+    if response.status().is_redirection() {
+        return Err(AppError::internal(format!(
+            "{provider} token endpoint answered with a redirect; refusing to follow it"
+        )));
+    }
 
     if !response.status().is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -8242,6 +8281,108 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    fn pending_oauth_state(
+        provider: &str,
+        state: &str,
+        created_at: Instant,
+    ) -> (String, LinearOAuthPendingState) {
+        (
+            state.to_string(),
+            LinearOAuthPendingState {
+                provider: provider.to_string(),
+                redirect_uri: "https://example.test/v1/oauth/linear/callback".to_string(),
+                created_at,
+            },
+        )
+    }
+
+    #[test]
+    fn oauth_state_is_accepted_once_for_the_issuing_flow() {
+        let now = Instant::now();
+        let mut states: HashMap<String, LinearOAuthPendingState> =
+            [pending_oauth_state("linear", "nonce-1", now)]
+                .into_iter()
+                .collect();
+
+        let pending = take_pending_oauth_state(&mut states, "linear", "nonce-1", now)
+            .expect("first use of a valid state");
+        assert_eq!(pending.provider, "linear");
+
+        // Replaying the same state after it was consumed must fail.
+        assert!(take_pending_oauth_state(&mut states, "linear", "nonce-1", now).is_err());
+    }
+
+    #[test]
+    fn oauth_callback_rejects_missing_and_forged_state() {
+        let now = Instant::now();
+        let mut states: HashMap<String, LinearOAuthPendingState> =
+            [pending_oauth_state("linear", "nonce-1", now)]
+                .into_iter()
+                .collect();
+
+        assert!(take_pending_oauth_state(&mut states, "linear", "", now).is_err());
+        assert!(take_pending_oauth_state(&mut states, "linear", "forged", now).is_err());
+        // A forged value must not evict the real pending flow.
+        assert!(take_pending_oauth_state(&mut states, "linear", "nonce-1", now).is_ok());
+    }
+
+    #[test]
+    fn oauth_state_expires_after_its_ttl() {
+        let created_at = Instant::now();
+        let mut states: HashMap<String, LinearOAuthPendingState> =
+            [pending_oauth_state("linear", "nonce-1", created_at)]
+                .into_iter()
+                .collect();
+
+        let too_late = created_at + OAUTH_STATE_TTL + Duration::from_secs(1);
+        assert!(take_pending_oauth_state(&mut states, "linear", "nonce-1", too_late).is_err());
+        assert!(states.is_empty(), "expired state must be discarded");
+    }
+
+    #[test]
+    fn oauth_state_is_bound_to_the_provider_that_issued_it() {
+        let now = Instant::now();
+        let mut states: HashMap<String, LinearOAuthPendingState> =
+            [pending_oauth_state("linear", "nonce-1", now)]
+                .into_iter()
+                .collect();
+
+        assert!(take_pending_oauth_state(&mut states, "github", "nonce-1", now).is_err());
+        // The failed cross-provider attempt still consumed the state.
+        assert!(take_pending_oauth_state(&mut states, "linear", "nonce-1", now).is_err());
+    }
+
+    #[tokio::test]
+    async fn oauth_authorize_requires_the_control_plane_api_key() {
+        let router = super::app(Arc::new(
+            ServerState::new(10).with_control_plane_api_key(Some("top-secret".to_string())),
+        ));
+
+        let unauthorized = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/oauth/linear/authorize")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+
+        let authorized = router
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/oauth/linear/authorize")
+                    .header("x-api-key", "top-secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(authorized.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

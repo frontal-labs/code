@@ -13,7 +13,9 @@ fn webhook_config_custom_port() {
     let config = WebhookConfig {
         port: 9000,
         auth: WebhookAuth::None,
+        allow_unauthenticated: true,
         max_events: 500,
+        ..WebhookConfig::default()
     };
     assert_eq!(config.port, 9000);
     assert_eq!(config.max_events, 500);
@@ -28,6 +30,7 @@ fn webhook_config_with_hmac_auth() {
             header: "X-Signature".to_string(),
         },
         max_events: 1000,
+        ..WebhookConfig::default()
     };
     match &config.auth {
         WebhookAuth::Hmac { secret, header } => {

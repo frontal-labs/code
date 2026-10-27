@@ -271,16 +271,26 @@ fn read_pasted_callback() -> Result<OAuthCallbackParams, String> {
     parse_oauth_callback_query(query).map_err(|error| format!("login failed: {error}"))
 }
 
+/// Program and arguments that open `url` in the default browser, for the given OS name
+/// (`std::env::consts::OS`).
+///
+/// Windows deliberately avoids `cmd /C start`: cmd treats `&` in the authorize URL as a
+/// command separator, which truncates the query after the first parameter. `rundll32`
+/// receives the URL as a single argv entry with no shell parsing involved.
+fn browser_open_command(url: &str, os: &str) -> (&'static str, Vec<String>) {
+    match os {
+        "macos" => ("open", vec![url.to_string()]),
+        "windows" => (
+            "rundll32",
+            vec!["url.dll,FileProtocolHandler".to_string(), url.to_string()],
+        ),
+        _ => ("xdg-open", vec![url.to_string()]),
+    }
+}
+
 fn open_in_browser(url: &str) -> io::Result<()> {
-    let status = if cfg!(target_os = "macos") {
-        Command::new("open").arg(url).status()?
-    } else if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .status()?
-    } else {
-        Command::new("xdg-open").arg(url).status()?
-    };
+    let (program, args) = browser_open_command(url, std::env::consts::OS);
+    let status = Command::new(program).args(&args).status()?;
     if status.success() {
         Ok(())
     } else {
@@ -353,5 +363,32 @@ mod tests {
         let (favicon, callback) = browser.join().expect("browser thread");
         assert!(favicon.starts_with("HTTP/1.1 404"), "{favicon}");
         assert!(callback.starts_with("HTTP/1.1 200 OK"), "{callback}");
+    }
+
+    #[test]
+    fn windows_browser_open_passes_full_url_as_one_argument() {
+        use super::browser_open_command;
+
+        let url = "https://auth.example.com/authorize?client_id=abc&scope=a%20b&state=s1";
+        let (program, args) = browser_open_command(url, "windows");
+        assert_eq!(program, "rundll32");
+        assert_eq!(args, vec!["url.dll,FileProtocolHandler", url]);
+        assert!(!program.eq_ignore_ascii_case("cmd"));
+        assert!(args.iter().any(|arg| arg == url));
+    }
+
+    #[test]
+    fn macos_and_linux_browser_open_commands_are_unchanged() {
+        use super::browser_open_command;
+
+        let url = "https://auth.example.com/authorize?a=1&b=2";
+        assert_eq!(
+            browser_open_command(url, "macos"),
+            ("open", vec![url.to_string()])
+        );
+        assert_eq!(
+            browser_open_command(url, "linux"),
+            ("xdg-open", vec![url.to_string()])
+        );
     }
 }

@@ -21,6 +21,8 @@ class FrontalCode < Formula
   def install
     if build.head?
       system "cargo", "install", *std_cargo_args(path: "cli")
+      # cargo installs the `code` bin; expose it under the package name like the release build.
+      mv bin/"code", bin/"frontal-code"
     else
       # Release asset is a raw binary named code-cli-<target>; install it as frontal-code.
       bin.install Dir["code-cli-*"].first => "frontal-code"

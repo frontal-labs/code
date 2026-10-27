@@ -74,7 +74,7 @@ zsh: command not found: frontal-code
 **Solutions:**
 ```bash
 # Install with Homebrew
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 
 # Verify Homebrew's bin directory is on PATH
 eval "$(brew shellenv)"

@@ -12,7 +12,7 @@ brew install --HEAD ./homebrew/Formula/code.rb
 
 This will:
 - Build the Frontal Code CLI from source using Rust
-- Install the `frontal-code` binary to your Homebrew prefix
+- Install the `frontal-code` binary to your Homebrew prefix (a Cargo build of this repo produces `code` instead)
 - Enable tab completion and shell integration
 
 ## Formula Details

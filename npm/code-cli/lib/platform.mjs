@@ -2,7 +2,7 @@
 //
 // This module maps the current Node platform/arch to the per-platform release
 // asset names produced by `.github/workflows/release.yml` (and consumed by
-// `homebrew/frontal-code.rb`). It deliberately has no side effects so it is unit
+// `homebrew/Formula/code.rb`). It deliberately has no side effects so it is unit
 // testable.
 
 export class UnsupportedPlatformError extends Error {

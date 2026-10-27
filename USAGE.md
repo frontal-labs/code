@@ -7,7 +7,7 @@ This guide covers the current Rust workspace at the repository root and the `fro
 Run this before prompts, sessions, or automation:
 
 ```bash
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 frontal-code
 # first command inside the REPL
 /doctor
@@ -113,7 +113,7 @@ export FRONTAL_CODE_PERMISSION_MODE="restricted"
 
 ```bash
 # Install the CLI with Homebrew
-brew install --HEAD ./homebrew/frontal-code.rb
+brew install --HEAD ./homebrew/Formula/code.rb
 
 # Or build from source
 cargo build --workspace

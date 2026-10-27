@@ -26,6 +26,7 @@
   "files": [
     "bin/index.js",
     "lib/**/*.mjs",
+    "checksums.json",
     "scripts/postinstall.sh",
     "README.md"
   ],

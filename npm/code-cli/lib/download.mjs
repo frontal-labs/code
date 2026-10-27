@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { loadPinnedChecksums, pinnedSha256 } from "./pinned-checksums.mjs";
 import { detectTarget, UnsupportedPlatformError } from "./platform.mjs";
 
 export const RELEASE_BASE = "https://github.com/frontal-labs/code/releases/download";
@@ -51,7 +52,7 @@ export async function fetchSha256(version, assetName) {
   }
 }
 
-async function downloadTo({ version, destDir, log = () => undefined }) {
+async function downloadTo({ version, destDir, log = () => undefined, pinned }) {
   const { target, assetName, binName } = detectTarget();
   const url = releaseAssetUrl(version, assetName);
   log(`Downloading ${assetName} (${target}) from ${url}`);
@@ -72,7 +73,15 @@ async function downloadTo({ version, destDir, log = () => undefined }) {
   if (!verifySha256(buf, expected)) {
     throw new Error(`SHA-256 mismatch for ${assetName}`);
   }
-  log(`Verified SHA-256 for ${assetName}`);
+  // The sidecar comes from the same release as the binary, so it cannot catch a release
+  // that was replaced wholesale. The checksum pinned at publish time can.
+  if (!verifySha256(buf, pinnedSha256(pinned, version, assetName))) {
+    throw new Error(
+      `SHA-256 for ${assetName} does not match the checksum pinned in this npm package. ` +
+        `The release may have been altered after publish; refusing to install it.`,
+    );
+  }
+  log(`Verified SHA-256 for ${assetName} against the pinned checksum`);
 
   const binDir = join(destDir, "vendor", target, "bin");
   mkdirSync(binDir, { recursive: true });
@@ -82,7 +91,12 @@ async function downloadTo({ version, destDir, log = () => undefined }) {
 }
 
 // Public entry point. Returns the resolved binary path under vendor/.
-export async function downloadRelease({ version, destDir, log = () => undefined }) {
+export async function downloadRelease({
+  version,
+  destDir,
+  log = () => undefined,
+  pinned = loadPinnedChecksums(),
+}) {
   if (!version || /dev$/.test(version) || version === "0.0.0") {
     throw new Error(
       `Refusing to download for dev version "${version}". Use a tagged release version.`,
@@ -90,7 +104,7 @@ export async function downloadRelease({ version, destDir, log = () => undefined 
   }
   let binPath;
   try {
-    binPath = await downloadTo({ version, destDir, log });
+    binPath = await downloadTo({ version, destDir, log, pinned });
   } catch (e) {
     if (e instanceof UnsupportedPlatformError) throw e;
     throw e;

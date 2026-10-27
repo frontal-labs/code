@@ -18,5 +18,9 @@ for f in bin/index.js lib/platform.mjs lib/resolve-binary.mjs lib/download.mjs s
   fi
 done
 
+# Pin the release binaries' checksums into the package. Requires the GitHub release
+# for v$VERSION to exist, so publish after the release workflow has finished.
+node ./scripts/pin-checksums.mjs "$VERSION"
+
 echo "==> Pre-publish checks passed (v$VERSION). Running tests."
 exec ./scripts/test.sh

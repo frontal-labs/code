@@ -149,7 +149,9 @@ npm test
 # Dry-run `npm pack` and inspect the published file list
 npm run pack:dry
 
-# Pre-publish guard: version check + tests
+# Pre-publish guard: version check, pin release checksums, tests.
+# Publish only after the GitHub release for v<version> exists: the pin step downloads
+# each release binary and writes checksums.json into the package.
 npm run prepublishOnly
 
 # Full CI/presubmit checks

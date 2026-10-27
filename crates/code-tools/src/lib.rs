@@ -3440,6 +3440,9 @@ struct FetchPolicy {
 fn build_fetch_client(policy: FetchPolicy) -> Result<Client, String> {
     Client::builder()
         .timeout(Duration::from_secs(20))
+        // A proxy would connect to the destination itself, so the resolved-address
+        // check would never see the real target. Ignore HTTP(S)_PROXY and ALL_PROXY.
+        .no_proxy()
         .redirect(fetch_redirect_policy(policy))
         .dns_resolver(Arc::new(GuardedFetchResolver { policy }))
         .user_agent("frontal-code-rust-tools/0.1")
@@ -3574,28 +3577,66 @@ fn is_blocked_fetch_ip(ip: IpAddr) -> bool {
 }
 
 fn is_blocked_ipv4(ip: Ipv4Addr) -> bool {
-    let octets = ip.octets();
-    let carrier_grade_nat = octets[0] == 100 && (octets[1] & 0xc0) == 64;
-    ip.is_loopback()
-        || ip.is_private()
-        || ip.is_link_local()
-        || ip.is_unspecified()
-        || ip.is_broadcast()
-        || ip.is_multicast()
-        || carrier_grade_nat
+    // Matches the IANA IPv4 special-purpose registry, plus multicast and the
+    // reserved 240.0.0.0/4 block (which includes broadcast).
+    let [a, b, c, _] = ip.octets();
+    a == 0
+        || a == 10
+        || a == 127
+        || (a == 100 && (b & 0xc0) == 64)
+        || (a == 169 && b == 254)
+        || (a == 172 && (b & 0xf0) == 16)
+        || (a == 192 && b == 0 && c == 0)
+        || (a == 192 && b == 0 && c == 2)
+        || (a == 192 && b == 88 && c == 99)
+        || (a == 192 && b == 168)
+        || (a == 198 && (b & 0xfe) == 18)
+        || (a == 198 && b == 51 && c == 100)
+        || (a == 203 && b == 0 && c == 113)
+        || a >= 224
 }
 
 fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
-    let first = ip.segments()[0];
-    let unique_local = (first & 0xfe00) == 0xfc00;
-    let link_local = (first & 0xffc0) == 0xfe80;
-    let site_local = (first & 0xffc0) == 0xfec0;
-    ip.is_loopback()
-        || ip.is_unspecified()
-        || ip.is_multicast()
-        || unique_local
-        || link_local
-        || site_local
+    let s = ip.segments();
+    if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
+        return true;
+    }
+    let unique_local = (s[0] & 0xfe00) == 0xfc00;
+    let link_local = (s[0] & 0xffc0) == 0xfe80;
+    let site_local = (s[0] & 0xffc0) == 0xfec0;
+    if unique_local || link_local || site_local {
+        return true;
+    }
+    // Discard-only (100::/64) and documentation (2001:db8::/32) prefixes.
+    if s[0] == 0x0100 && s[1] == 0 && s[2] == 0 && s[3] == 0 {
+        return true;
+    }
+    if s[0] == 0x2001 && s[1] == 0x0db8 {
+        return true;
+    }
+    // IPv4-compatible (::/96, deprecated): judge the embedded IPv4 address.
+    if s[0..6].iter().all(|segment| *segment == 0) {
+        return is_blocked_ipv4(embedded_ipv4(s[6], s[7]));
+    }
+    // NAT64 well-known prefix 64:ff9b::/96 embeds the IPv4 address in the low 32 bits.
+    if s[0] == 0x0064 && s[1] == 0xff9b && s[2..6].iter().all(|segment| *segment == 0) {
+        return is_blocked_ipv4(embedded_ipv4(s[6], s[7]));
+    }
+    // Local-use NAT64 prefix 64:ff9b:1::/48 is never routed publicly.
+    if s[0] == 0x0064 && s[1] == 0xff9b && s[2] == 0x0001 {
+        return true;
+    }
+    // 6to4 2002::/16 embeds the IPv4 address in segments 1 and 2.
+    if s[0] == 0x2002 {
+        return is_blocked_ipv4(embedded_ipv4(s[1], s[2]));
+    }
+    false
+}
+
+fn embedded_ipv4(high: u16, low: u16) -> Ipv4Addr {
+    let [a, b] = high.to_be_bytes();
+    let [c, d] = low.to_be_bytes();
+    Ipv4Addr::new(a, b, c, d)
 }
 
 /// Flattens a reqwest error and its causes so the redirect or DNS reason is visible.
@@ -7332,6 +7373,29 @@ mod tests {
             "fe80::1",
             "::ffff:10.0.0.1",
             "::ffff:127.0.0.1",
+            "::127.0.0.1",
+            "::10.0.0.1",
+            "64:ff9b::a00:1",
+            "64:ff9b::7f00:1",
+            "64:ff9b:1::808:808",
+            "2002:7f00:1::",
+            "2002:a9fe:a9fe::1",
+            "fec0::1",
+            "100::1",
+            "2001:db8::1",
+            "0.0.0.0",
+            "0.1.2.3",
+            "100.64.0.1",
+            "100.127.255.254",
+            "192.0.0.1",
+            "192.0.2.1",
+            "192.88.99.1",
+            "198.18.0.1",
+            "198.19.255.254",
+            "198.51.100.7",
+            "203.0.113.7",
+            "240.0.0.1",
+            "255.255.255.255",
         ] {
             let ip: IpAddr = blocked.parse().expect("ip literal");
             assert!(
@@ -7343,7 +7407,13 @@ mod tests {
             "93.184.216.34",
             "1.1.1.1",
             "100.128.0.1",
+            "198.20.0.1",
+            "192.0.1.1",
             "2606:4700:4700::1111",
+            "::ffff:8.8.8.8",
+            "::8.8.8.8",
+            "64:ff9b::808:808",
+            "2002:808:808::1",
         ] {
             let ip: IpAddr = allowed.parse().expect("ip literal");
             assert!(
@@ -7351,6 +7421,42 @@ mod tests {
                 "{allowed} should be allowed"
             );
         }
+    }
+
+    #[test]
+    fn web_fetch_ignores_proxy_environment() {
+        // With a proxy configured, the connection would go to the proxy and the
+        // resolved-address guard would not see the real destination. Point every
+        // proxy variable at a closed port. A fetch that honoured them would fail.
+        if !loopback_bind_available() {
+            return;
+        }
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let keys = [
+            "HTTP_PROXY",
+            "http_proxy",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "ALL_PROXY",
+            "all_proxy",
+        ];
+        let _restore = EnvRestoreGuard::capture(&keys);
+        for key in keys {
+            std::env::set_var(key, "http://127.0.0.1:9");
+        }
+
+        let server = TestServer::spawn(Arc::new(|request_line: &str| {
+            assert!(request_line.starts_with("GET /direct "));
+            HttpResponse::text(200, "OK", "reached directly")
+        }));
+        let result = web_fetch_allowing_loopback(
+            &format!("http://{}/direct", server.addr()),
+            "Show me the content",
+        )
+        .expect("WebFetch should ignore proxy environment variables");
+        assert!(result.contains("reached directly"));
     }
 
     #[test]
@@ -10942,6 +11048,8 @@ printf 'pwsh:%s' "$1"
 
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Accepted sockets inherit the listener's non-blocking mode on macOS.
+                        stream.set_nonblocking(false).expect("set blocking stream");
                         let mut buffer = [0_u8; 4096];
                         let size = stream.read(&mut buffer).expect("read request");
                         let request = String::from_utf8_lossy(&buffer[..size]).into_owned();
@@ -11010,6 +11118,8 @@ printf 'pwsh:%s' "$1"
 
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Accepted sockets inherit the listener's non-blocking mode on macOS.
+                        stream.set_nonblocking(false).expect("set blocking stream");
                         let request = read_http_request(&mut stream);
                         let response = handler(&request);
                         stream

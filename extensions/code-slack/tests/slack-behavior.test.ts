@@ -1422,5 +1422,53 @@ describe("SlackInterface behavior", () => {
       expect(sendConnectorInteraction).not.toHaveBeenCalled();
       expect(updateMessage).not.toHaveBeenCalled();
     });
+
+    it("tracks the task for Frontal Code events after a github follow-up is resolved", async () => {
+      const { slack, resolveTaskApproval, updateMessage, trackTask } = createTestSlackInterface();
+      slack.trackedTasks.set("task-123", createTrackedTask());
+      resolveTaskApproval.mockResolvedValue(
+        createTaskSnapshot({
+          channel_id: "C123",
+          thread_ts: "1710000000.100",
+          user_id: "U123",
+        }),
+      );
+
+      await slack.handleGithubFollowupApprovalAction(
+        { action_id: "github_review_followup.ack", value: "task-123" },
+        body,
+      );
+
+      expect(updateMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "Follow-up resolved for task task-123." }),
+      );
+      expect(trackTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task-123",
+          channelId: "C123",
+          threadTs: "1710000000.100",
+          userId: "U123",
+        }),
+      );
+      expect(slack.trackedTasks.get("task-123")).toEqual(
+        expect.objectContaining({ channelId: "C123", threadTs: "1710000000.100" }),
+      );
+    });
+
+    it("skips tracking a github follow-up result that has no Slack routing", async () => {
+      const { slack, resolveTaskApproval, updateMessage, trackTask } = createTestSlackInterface();
+      slack.trackedTasks.set("task-123", createTrackedTask());
+      resolveTaskApproval.mockResolvedValue(createTaskSnapshot({ channel_id: undefined }));
+
+      await slack.handleGithubFollowupApprovalAction(
+        { action_id: "github_review_followup.retry", value: "task-123" },
+        body,
+      );
+
+      expect(updateMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "Follow-up resolved for task task-123." }),
+      );
+      expect(trackTask).not.toHaveBeenCalled();
+    });
   });
 });

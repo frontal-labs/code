@@ -6,9 +6,26 @@ use std::path::{Path, PathBuf};
 use crate::json::JsonValue;
 use crate::policy::{AuthMethod, PolicyLayer, ProjectPolicy};
 use crate::sandbox::{FilesystemIsolationMode, SandboxConfig};
+use crate::trust_resolver::{TrustConfig, TrustResolver};
 
 /// Schema name advertised by generated settings files.
 pub const FRONTAL_CODE_SETTINGS_SCHEMA_NAME: &str = "SettingsSchema";
+
+/// File under the config home that lists the workspaces the user has trusted.
+/// It lives in user-level config so a repository cannot trust itself.
+pub const TRUSTED_WORKSPACES_FILE_NAME: &str = "trusted-workspaces.json";
+
+/// Settings from workspace-controlled files (project and local) that can run
+/// commands, reach the network, or widen access. They are withheld until the
+/// workspace is trusted. User-level files are never withheld.
+const WORKSPACE_CONTROLLED_KEYS: &[&str] = &[
+    "hooks",
+    "mcpServers",
+    "plugins",
+    "enabledPlugins",
+    "sandbox",
+    "permissionMode",
+];
 
 /// Origin of a loaded settings file in the configuration precedence chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -43,6 +60,9 @@ pub struct RuntimeConfig {
     /// Settings from project or local files that were ignored because they would
     /// widen access. Shown to the user so the ignored setting is not silent.
     ignored_settings: Vec<String>,
+    /// Whether the workspace is trusted, which controls if workspace-controlled
+    /// settings (hooks, MCP servers, plugins, sandbox) were loaded.
+    workspace_trusted: bool,
 }
 
 /// Parsed plugin-related settings extracted from runtime config.
@@ -266,6 +286,57 @@ impl ConfigLoader {
         &self.config_home
     }
 
+    /// Path of the user-level file that records trusted workspaces.
+    #[must_use]
+    pub fn trusted_workspaces_path(&self) -> PathBuf {
+        self.config_home.join(TRUSTED_WORKSPACES_FILE_NAME)
+    }
+
+    /// Whether the current workspace is trusted, using the user's persisted list.
+    ///
+    /// A workspace is trusted when it, or a parent directory, is in the list. An
+    /// untrusted workspace still loads user-level settings, but its project and local
+    /// settings cannot run hooks, start MCP servers, load plugins, or change the
+    /// sandbox or permission mode.
+    pub fn is_workspace_trusted(&self) -> Result<bool, ConfigError> {
+        let roots = read_trusted_workspace_roots(&self.trusted_workspaces_path())?;
+        let config = roots.into_iter().fold(TrustConfig::new(), |config, root| {
+            config.with_allowlisted(root)
+        });
+        Ok(TrustResolver::new(config).trusts(&self.cwd.to_string_lossy()))
+    }
+
+    /// Records the current workspace as trusted in the user-level trust file.
+    /// Returns the canonical workspace path that was stored.
+    pub fn trust_workspace(&self) -> Result<PathBuf, ConfigError> {
+        let root = canonical_workspace_root(&self.cwd);
+        let path = self.trusted_workspaces_path();
+        let mut roots = read_trusted_workspace_roots(&path)?;
+        let root_text = root.to_string_lossy().into_owned();
+        if !roots.contains(&root_text) {
+            roots.push(root_text);
+            write_trusted_workspace_roots(&path, &roots)?;
+        }
+        Ok(root)
+    }
+
+    /// Removes the current workspace from the trust file. Returns `false` when it
+    /// was not listed. A trusted parent directory still trusts this workspace.
+    pub fn untrust_workspace(&self) -> Result<bool, ConfigError> {
+        let root = canonical_workspace_root(&self.cwd)
+            .to_string_lossy()
+            .into_owned();
+        let path = self.trusted_workspaces_path();
+        let mut roots = read_trusted_workspace_roots(&path)?;
+        let before = roots.len();
+        roots.retain(|existing| *existing != root);
+        if roots.len() == before {
+            return Ok(false);
+        }
+        write_trusted_workspace_roots(&path, &roots)?;
+        Ok(true)
+    }
+
     #[must_use]
     pub fn discover(&self) -> Vec<ConfigEntry> {
         let mut entries = vec![
@@ -305,12 +376,22 @@ impl ConfigLoader {
         let mut policy_layers = Vec::new();
         let mut modes: Vec<(ConfigSource, String, ResolvedPermissionMode)> = Vec::new();
         let mut ignored_settings = Vec::new();
+        let workspace_trusted = self.is_workspace_trusted()?;
 
         for entry in self.discover() {
-            let Some(value) = read_optional_json_object(&entry.path)? else {
+            let Some(mut value) = read_optional_json_object(&entry.path)? else {
                 continue;
             };
             let path = entry.path.display().to_string();
+            if entry.source != ConfigSource::User && !workspace_trusted {
+                let withheld = withhold_workspace_controlled_settings(&mut value);
+                if !withheld.is_empty() {
+                    ignored_settings.push(format!(
+                        "{path}: {} withheld until this workspace is trusted; run `frontal-code trust` to enable",
+                        withheld.join(", ")
+                    ));
+                }
+            }
             validate_optional_hooks_config(&value, &entry.path)?;
             merge_mcp_servers(&mut mcp_servers, entry.source, &value, &entry.path)?;
             deep_merge_objects(&mut merged, &value);
@@ -381,6 +462,7 @@ impl ConfigLoader {
             loaded_entries,
             feature_config,
             ignored_settings,
+            workspace_trusted,
         })
     }
 }
@@ -393,7 +475,14 @@ impl RuntimeConfig {
             loaded_entries: Vec::new(),
             feature_config: RuntimeFeatureConfig::default(),
             ignored_settings: Vec::new(),
+            workspace_trusted: false,
         }
+    }
+
+    /// Whether project and local settings were loaded (the workspace is trusted).
+    #[must_use]
+    pub fn workspace_trusted(&self) -> bool {
+        self.workspace_trusted
     }
 
     #[must_use]
@@ -774,6 +863,71 @@ fn read_optional_json_object(
         )));
     };
     Ok(Some(object.clone()))
+}
+
+/// Removes workspace-controlled settings from a project or local file and returns
+/// the names of the keys that were removed.
+fn withhold_workspace_controlled_settings(value: &mut BTreeMap<String, JsonValue>) -> Vec<String> {
+    let mut withheld = Vec::new();
+    for key in WORKSPACE_CONTROLLED_KEYS {
+        if value.remove(*key).is_some() {
+            withheld.push((*key).to_string());
+        }
+    }
+    if let Some(JsonValue::Object(permissions)) = value.get_mut("permissions") {
+        if permissions.remove("defaultMode").is_some() {
+            withheld.push("permissions.defaultMode".to_string());
+        }
+    }
+    withheld
+}
+
+fn canonical_workspace_root(cwd: &Path) -> PathBuf {
+    fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf())
+}
+
+fn read_trusted_workspace_roots(path: &Path) -> Result<Vec<String>, ConfigError> {
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(ConfigError::Io(error)),
+    };
+    if contents.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let parsed: serde_json::Value = serde_json::from_str(&contents)
+        .map_err(|error| ConfigError::Parse(format!("{}: {error}", path.display())))?;
+    let roots = parsed
+        .get("trustedWorkspaces")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| {
+            ConfigError::Parse(format!(
+                "{}: expected a \"trustedWorkspaces\" array",
+                path.display()
+            ))
+        })?;
+    roots
+        .iter()
+        .map(|root| {
+            root.as_str().map(str::to_string).ok_or_else(|| {
+                ConfigError::Parse(format!(
+                    "{}: trustedWorkspaces entries must be strings",
+                    path.display()
+                ))
+            })
+        })
+        .collect()
+}
+
+fn write_trusted_workspace_roots(path: &Path, roots: &[String]) -> Result<(), ConfigError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let document = serde_json::json!({ "trustedWorkspaces": roots });
+    let rendered = serde_json::to_string_pretty(&document)
+        .map_err(|error| ConfigError::Parse(error.to_string()))?;
+    fs::write(path, format!("{rendered}\n"))?;
+    Ok(())
 }
 
 fn merge_mcp_servers(
@@ -1466,6 +1620,7 @@ mod tests {
             Some(r#"{"permissionMode":"danger-full-access"}"#),
             None,
         );
+        loader.trust_workspace().expect("trust should persist");
         let config = loader.load().expect("config should load");
 
         assert_eq!(
@@ -1636,6 +1791,9 @@ mod tests {
         let home = root.join("home").join(".frontal-code");
         fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
+        ConfigLoader::new(&cwd, &home)
+            .trust_workspace()
+            .expect("trust should persist");
 
         fs::write(
             home.join("settings.json"),
@@ -1741,6 +1899,9 @@ mod tests {
         let home = root.join("home").join(".frontal-code");
         fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
+        ConfigLoader::new(&cwd, &home)
+            .trust_workspace()
+            .expect("trust should persist");
 
         fs::write(
             cwd.join(".frontal-code").join("settings.local.json"),
@@ -1779,6 +1940,9 @@ mod tests {
         let home = root.join("home").join(".frontal-code");
         fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
+        ConfigLoader::new(&cwd, &home)
+            .trust_workspace()
+            .expect("trust should persist");
 
         fs::write(
             home.join("settings.json"),
@@ -2082,6 +2246,9 @@ mod tests {
         let project_settings = cwd.join(".frontal-code").join("settings.json");
         fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
         fs::create_dir_all(&home).expect("home config dir");
+        ConfigLoader::new(&cwd, &home)
+            .trust_workspace()
+            .expect("trust should persist");
 
         fs::write(
             home.join("settings.json"),
@@ -2169,5 +2336,127 @@ mod tests {
         assert!(config.state_for("known", false));
         assert!(config.state_for("missing", true));
         assert!(!config.state_for("missing", false));
+    }
+
+    const WORKSPACE_CONTROLLED_SETTINGS: &str = r#"{
+        "hooks": {"PreToolUse": ["project-hook"]},
+        "mcpServers": {"project-server": {"command": "evil"}},
+        "plugins": {"externalDirectories": ["./plugins"]},
+        "enabledPlugins": {"project-plugin@external": true},
+        "sandbox": {"enabled": false},
+        "permissionMode": "danger-full-access",
+        "permissions": {"defaultMode": "danger-full-access", "ask": ["Edit"]}
+    }"#;
+
+    #[test]
+    fn untrusted_workspace_withholds_project_and_local_command_settings() {
+        // given: a repository that ships hooks, an MCP server, and plugin settings
+        let (root, loader) = policy_fixture(
+            r#"{"hooks":{"PreToolUse":["user-hook"]}}"#,
+            Some(WORKSPACE_CONTROLLED_SETTINGS),
+            Some(r#"{"hooks":{"PostToolUse":["local-hook"]}}"#),
+        );
+
+        // when
+        let config = loader.load().expect("config should load");
+
+        // then: nothing from the workspace runs; user-level hooks still apply
+        assert!(!config.workspace_trusted());
+        assert_eq!(config.hooks().pre_tool_use(), &["user-hook".to_string()]);
+        assert_eq!(config.hooks().post_tool_use(), &[] as &[String]);
+        assert!(config.mcp().get("project-server").is_none());
+        assert!(config.plugins().enabled_plugins().is_empty());
+        assert_eq!(config.plugins().external_directories(), &[] as &[String]);
+        assert_eq!(config.sandbox().enabled, None);
+        assert_eq!(config.permission_mode(), None);
+        // Permission rules the workspace sets still tighten access.
+        assert_eq!(config.permission_rules().ask(), &["Edit".to_string()]);
+        let notes = config.ignored_settings().join("\n");
+        assert!(notes.contains("hooks"), "notes: {notes}");
+        assert!(notes.contains("mcpServers"), "notes: {notes}");
+        assert!(notes.contains("permissions.defaultMode"), "notes: {notes}");
+        assert!(notes.contains("frontal-code trust"), "notes: {notes}");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn trusting_the_workspace_loads_project_command_settings() {
+        // given
+        let (root, loader) = policy_fixture(
+            r#"{"hooks":{"PreToolUse":["user-hook"]}}"#,
+            Some(WORKSPACE_CONTROLLED_SETTINGS),
+            None,
+        );
+        assert!(!loader
+            .load()
+            .expect("config should load")
+            .workspace_trusted());
+
+        // when
+        loader.trust_workspace().expect("trust should persist");
+        let config = loader.load().expect("config should load after trust");
+
+        // then: project hooks load (array values in project settings replace user ones,
+        // as before this change)
+        assert!(config.workspace_trusted());
+        assert_eq!(config.hooks().pre_tool_use(), &["project-hook".to_string()]);
+        assert!(config.mcp().get("project-server").is_some());
+        assert_eq!(
+            config.permission_mode(),
+            Some(ResolvedPermissionMode::DangerFullAccess)
+        );
+        assert_eq!(config.ignored_settings(), &[] as &[String]);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn trusting_a_parent_directory_covers_child_workspaces() {
+        let (root, loader) = policy_fixture("{}", Some(WORKSPACE_CONTROLLED_SETTINGS), None);
+        let parent = root.join("project");
+        let child = parent.join("nested");
+        fs::create_dir_all(&child).expect("child dir");
+        let home = loader.config_home().to_path_buf();
+
+        ConfigLoader::new(&parent, &home)
+            .trust_workspace()
+            .expect("trust should persist");
+
+        assert!(ConfigLoader::new(&child, &home)
+            .is_workspace_trusted()
+            .expect("trust check"));
+        let sibling = root.join("other");
+        fs::create_dir_all(&sibling).expect("sibling dir");
+        assert!(!ConfigLoader::new(&sibling, &home)
+            .is_workspace_trusted()
+            .expect("trust check"));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn repository_cannot_grant_its_own_trust() {
+        // A trust file inside the repository is not read; only the user-level file counts.
+        let (root, loader) = policy_fixture("{}", None, None);
+        let cwd = root.join("project");
+        fs::write(
+            cwd.join(".frontal-code")
+                .join(super::TRUSTED_WORKSPACES_FILE_NAME),
+            format!(r#"{{"trustedWorkspaces":["{}"]}}"#, cwd.display()),
+        )
+        .expect("write repo-local trust file");
+
+        assert!(!loader.is_workspace_trusted().expect("trust check"));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn untrust_workspace_removes_only_the_current_entry() {
+        let (root, loader) = policy_fixture("{}", None, None);
+        loader.trust_workspace().expect("trust should persist");
+        assert!(loader.is_workspace_trusted().expect("trust check"));
+
+        assert!(loader.untrust_workspace().expect("untrust should persist"));
+        assert!(!loader.is_workspace_trusted().expect("trust check"));
+        assert!(!loader.untrust_workspace().expect("second untrust"));
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }

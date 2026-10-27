@@ -61,7 +61,7 @@ The system looks for `project.json` in this order:
     "default_provider": "frontal",
     "max_concurrent_requests": 10,
     "request_timeout_seconds": 30,
-    "permission_mode": "permissive",
+    "permission_mode": "prompt",
     "log_level": "info"
   },
   "features": {
@@ -105,8 +105,8 @@ export FRONTAL_CODE_DEFAULT_PROVIDER="openai"
 # Override log level
 export FRONTAL_CODE_LOG_LEVEL="debug"
 
-# Override permission mode
-export FRONTAL_CODE_PERMISSION_MODE="restricted"
+# Override permission mode (read-only, workspace-write, prompt, danger-full-access)
+export RUSTY_CLAUDE_PERMISSION_MODE="prompt"
 ```
 
 ## Install / build the workspace
@@ -165,9 +165,24 @@ frontal-code --allowedTools read,glob "inspect the runtime crate"
 
 Supported permission modes:
 
+- `prompt` (the default when nothing is configured): read-only tools run freely. Shell
+  commands and file writes ask for your approval each time. Without an interactive
+  approval (for example, piped input), they are denied.
 - `read-only`
-- `workspace-write`
-- `danger-full-access`
+- `workspace-write`: file writes inside the workspace run without asking. Shell
+  commands still ask.
+- `danger-full-access`: shell commands and writes run without asking. This is an
+  explicit opt-in: `--permission-mode danger-full-access`,
+  `--dangerously-skip-permissions`, `RUSTY_CLAUDE_PERMISSION_MODE`, or a
+  `permissionMode` setting in your user-level `~/.frontal-code/settings.json`.
+
+### Trusting a repository
+
+Hooks, MCP servers, plugins, sandbox, and permission-mode settings in a repository's
+`.frontal-code/settings.json` or `settings.local.json` do not run until you trust that
+workspace. Run `frontal-code trust` in the repository to trust it, and
+`frontal-code trust --revoke` to undo it. Your user-level settings always apply. The CLI
+prints a warning for each repository setting that is being withheld.
 
 Model aliases currently supported by the CLI:
 

@@ -93,6 +93,12 @@ pub enum SandboxBackend {
 }
 
 impl SandboxConfig {
+    /// Resolves the sandbox request for one command.
+    ///
+    /// The operator's `enabled` setting is a ceiling. `enabled_override` can only turn
+    /// the sandbox on; it can never turn off a sandbox the operator left enabled (the
+    /// default when unset). Callers must not pass a model-supplied "disable" request
+    /// through this argument.
     #[must_use]
     pub fn resolve_request(
         &self,
@@ -103,7 +109,7 @@ impl SandboxConfig {
         allowed_mounts_override: Option<Vec<String>>,
     ) -> SandboxRequest {
         SandboxRequest {
-            enabled: enabled_override.unwrap_or(self.enabled.unwrap_or(true)),
+            enabled: self.enabled.unwrap_or(true) || enabled_override.unwrap_or(false),
             namespace_restrictions: namespace_override
                 .unwrap_or(self.namespace_restrictions.unwrap_or(true)),
             network_isolation: network_override.unwrap_or(self.network_isolation.unwrap_or(false)),

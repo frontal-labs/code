@@ -99,7 +99,7 @@ The main configuration file is `config/project.json`:
 #### Runtime
 - `default_provider`: Default AI provider (`anthropic`, `openai`, `xai`, `frontal`)
 - `providers`: Provider-specific configurations
-- `permission_mode`: Permission mode — one of `read-only`, `workspace-write`, `danger-full-access`. Overridden by `RUSTY_CLAUDE_PERMISSION_MODE` and by the runtime settings files; an unrecognised value is ignored rather than treated as permissive.
+- `permission_mode`: Permission mode — one of `read-only`, `workspace-write`, `prompt`, `danger-full-access`. Defaults to `prompt`, which lets read-only tools run and asks for approval before shell commands and file writes. `danger-full-access` must be chosen explicitly. Overridden by `RUSTY_CLAUDE_PERMISSION_MODE` and by the runtime settings files; an unrecognised value is ignored rather than treated as permissive. Only a `project.json` that exists and sets this key counts; a missing file falls through to the built-in `prompt` default.
 - `log_level`: Logging level (`debug`, `info`, `warn`, `error`)
 - `max_concurrent_requests`: Maximum concurrent API requests
 - `request_timeout_seconds`: Request timeout in seconds
@@ -252,7 +252,27 @@ The legacy runtime configuration system is still supported for backward compatib
 ### Runtime Configuration Files
 - `~/.frontal-code/settings.json` - User settings
 - `.frontal-code/settings.json` - Project settings
-- `.frontal-code/local-settings.json` - Local overrides
+- `.frontal-code/settings.local.json` - Local overrides
+
+### Workspace Trust
+
+Project and local settings files are read from the repository, so they are untrusted
+until you trust the workspace. While a workspace is untrusted, these keys in its
+project and local files are withheld, and the CLI prints a warning for each one:
+
+- `hooks`, `mcpServers`, `plugins`, `enabledPlugins`: these run commands or start
+  servers.
+- `sandbox`: a repository cannot weaken your sandbox.
+- `permissionMode` and `permissions.defaultMode`: a repository cannot change the mode.
+
+Your user-level settings (`~/.frontal-code/settings.json`) always apply, and
+`permissions.ask` and `permissions.deny` from a repository still tighten access.
+
+To trust a repository, run `frontal-code trust` from its root. This writes the
+directory to `trusted-workspaces.json` in your config home (`~/.frontal-code/` unless
+`FRONTAL_CODE_CONFIG_HOME` is set). Trusting a parent directory also trusts every
+workspace below it. A repository cannot add itself to that file. To undo, run
+`frontal-code trust --revoke` in the same directory.
 
 ### Migration Path
 

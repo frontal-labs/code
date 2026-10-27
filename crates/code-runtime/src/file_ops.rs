@@ -1,7 +1,7 @@
 use std::cmp::Reverse;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
 use glob::Pattern;
@@ -177,9 +177,17 @@ pub fn read_file(
     limit: Option<usize>,
 ) -> io::Result<ReadFileOutput> {
     let absolute_path = normalize_path(path)?;
+    read_resolved(&absolute_path, offset, limit)
+}
 
+/// Reads an already-resolved (canonical) path.
+fn read_resolved(
+    absolute_path: &Path,
+    offset: Option<usize>,
+    limit: Option<usize>,
+) -> io::Result<ReadFileOutput> {
     // Check file size before reading
-    let metadata = fs::metadata(&absolute_path)?;
+    let metadata = fs::metadata(absolute_path)?;
     if metadata.len() > MAX_READ_SIZE {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -192,14 +200,14 @@ pub fn read_file(
     }
 
     // Detect binary files
-    if is_binary_file(&absolute_path)? {
+    if is_binary_file(absolute_path)? {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "file appears to be binary",
         ));
     }
 
-    let content = fs::read_to_string(&absolute_path)?;
+    let content = fs::read_to_string(absolute_path)?;
     let lines: Vec<&str> = content.lines().collect();
     let start_index = offset.unwrap_or(0).min(lines.len());
     let end_index = limit.map_or(lines.len(), |limit| {
@@ -295,7 +303,17 @@ pub fn edit_file(
     replace_all: bool,
 ) -> io::Result<EditFileOutput> {
     let absolute_path = normalize_path(path)?;
-    let original_file = fs::read_to_string(&absolute_path)?;
+    edit_resolved(&absolute_path, old_string, new_string, replace_all)
+}
+
+/// Edits an already-resolved (canonical) path.
+fn edit_resolved(
+    absolute_path: &Path,
+    old_string: &str,
+    new_string: &str,
+    replace_all: bool,
+) -> io::Result<EditFileOutput> {
+    let original_file = fs::read_to_string(absolute_path)?;
     if old_string == new_string {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -314,7 +332,7 @@ pub fn edit_file(
     } else {
         original_file.replacen(old_string, new_string, 1)
     };
-    fs::write(&absolute_path, &updated)?;
+    fs::write(absolute_path, &updated)?;
 
     Ok(EditFileOutput {
         file_path: absolute_path.to_string_lossy().into_owned(),
@@ -330,11 +348,21 @@ pub fn edit_file(
 
 /// Expands a glob pattern and returns matching filenames.
 pub fn glob_search(pattern: &str, path: Option<&str>) -> io::Result<GlobSearchOutput> {
-    let started = Instant::now();
     let base_dir = path
         .map(normalize_path)
         .transpose()?
         .unwrap_or(std::env::current_dir()?);
+    glob_in(pattern, &base_dir, None)
+}
+
+/// Shared glob implementation. When `workspace_root` is set, matches whose canonical
+/// location falls outside that root (for example through `../` or a symlink) are dropped.
+fn glob_in(
+    pattern: &str,
+    base_dir: &Path,
+    workspace_root: Option<&Path>,
+) -> io::Result<GlobSearchOutput> {
+    let started = Instant::now();
     let search_pattern = if Path::new(pattern).is_absolute() {
         pattern.to_owned()
     } else {
@@ -345,9 +373,18 @@ pub fn glob_search(pattern: &str, path: Option<&str>) -> io::Result<GlobSearchOu
     let entries = glob::glob(&search_pattern)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
     for entry in entries.flatten() {
-        if entry.is_file() {
-            matches.push(entry);
+        if !entry.is_file() {
+            continue;
         }
+        if let Some(root) = workspace_root {
+            let Ok(canonical) = entry.canonicalize() else {
+                continue;
+            };
+            if !canonical.starts_with(root) {
+                continue;
+            }
+        }
+        matches.push(entry);
     }
 
     matches.sort_by_key(|path| {
@@ -380,7 +417,10 @@ pub fn grep_search(input: &GrepSearchInput) -> io::Result<GrepSearchOutput> {
         .map(normalize_path)
         .transpose()?
         .unwrap_or(std::env::current_dir()?);
+    grep_in(input, &base_path)
+}
 
+fn grep_in(input: &GrepSearchInput, base_path: &Path) -> io::Result<GrepSearchOutput> {
     let regex = RegexBuilder::new(&input.pattern)
         .case_insensitive(input.case_insensitive.unwrap_or(false))
         .dot_matches_new_line(input.multiline.unwrap_or(false))
@@ -404,7 +444,7 @@ pub fn grep_search(input: &GrepSearchInput) -> io::Result<GrepSearchOutput> {
     let mut content_lines = Vec::new();
     let mut total_matches = 0usize;
 
-    for file_path in collect_search_files(&base_path)? {
+    for file_path in collect_search_files(base_path)? {
         if !matches_optional_filters(&file_path, glob_filter.as_ref(), file_type) {
             continue;
         }
@@ -590,6 +630,63 @@ fn normalize_path_allow_missing(path: &str) -> io::Result<PathBuf> {
     Ok(candidate)
 }
 
+/// Resolves a write target that may not exist yet. The deepest existing prefix of the path is
+/// canonicalized, which resolves every symlink in it. The components after that prefix do not
+/// exist, so `.` and `..` are applied to them lexically. The returned path is the location the
+/// write will target, so callers validate exactly what is written.
+fn resolve_for_write(path: &str) -> io::Result<PathBuf> {
+    let candidate = if Path::new(path).is_absolute() {
+        PathBuf::from(path)
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let components: Vec<Component<'_>> = candidate.components().collect();
+
+    // `symlink_metadata` treats a dangling symlink as existing. canonicalize then fails for it,
+    // so the write is refused rather than creating through the link.
+    let mut split = components.len();
+    while split > 0 {
+        let prefix: PathBuf = components[..split].iter().collect();
+        if fs::symlink_metadata(&prefix).is_ok() {
+            break;
+        }
+        split -= 1;
+    }
+
+    let mut resolved = components[..split]
+        .iter()
+        .collect::<PathBuf>()
+        .canonicalize()?;
+    for component in &components[split..] {
+        match component {
+            Component::Normal(name) => resolved.push(name),
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            Component::CurDir => {}
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "unexpected root component in write path",
+                ));
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// Resolves an existing path (or the current directory when `path` is `None`) and checks that
+/// it lies inside `canonical_root`. Symlinks are resolved first, so a link pointing outside the
+/// root is rejected.
+fn resolve_existing_in_workspace(path: Option<&str>, canonical_root: &Path) -> io::Result<PathBuf> {
+    let resolved = match path {
+        Some(path) => normalize_path(path)?,
+        None => std::env::current_dir()?.canonicalize()?,
+    };
+    validate_workspace_boundary(&resolved, canonical_root)?;
+    Ok(resolved)
+}
+
 /// Read a file with explicit workspace boundary enforcement.
 pub fn read_file_in_workspace(
     path: &str,
@@ -597,46 +694,33 @@ pub fn read_file_in_workspace(
     limit: Option<usize>,
     workspace_root: &Path,
 ) -> io::Result<ReadFileOutput> {
-    let absolute_path = normalize_path(path)?;
-    let canonical_root = workspace_root
-        .canonicalize()
-        .unwrap_or_else(|_| workspace_root.to_path_buf());
-    validate_workspace_boundary(&absolute_path, &canonical_root)?;
-    read_file(path, offset, limit)
+    let canonical_root = workspace_root.canonicalize()?;
+    let resolved = resolve_existing_in_workspace(Some(path), &canonical_root)?;
+    read_resolved(&resolved, offset, limit)
 }
 
-/// Write a file with explicit workspace boundary enforcement.
+/// Write a file with explicit workspace boundary enforcement. Parent directories are created
+/// only after the target is validated, and the write refuses a symlink at the final component.
 pub fn write_file_in_workspace(
     path: &str,
     content: &str,
     workspace_root: &Path,
 ) -> io::Result<WriteFileOutput> {
     check_write_size(content)?;
-    let absolute_path = normalize_path_allow_missing(path)?;
-    let canonical_root = workspace_root
-        .canonicalize()
-        .unwrap_or_else(|_| workspace_root.to_path_buf());
-    validate_workspace_boundary(&absolute_path, &canonical_root)?;
+    let canonical_root = workspace_root.canonicalize()?;
+    let target = resolve_for_write(path)?;
+    validate_workspace_boundary(&target, &canonical_root)?;
 
-    // Validate the location that will actually be written, not the path string: create
-    // the parents, resolve them, and check again. The write then goes to that resolved
-    // location and refuses a symlink at the final component.
-    let parent = absolute_path.parent().ok_or_else(|| {
+    let parent = target.parent().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, "path has no parent directory")
     })?;
-    // Check the deepest ancestor that already exists before creating anything, so
-    // `create_dir_all` never builds directories outside the workspace through a symlink.
-    let deepest_existing = parent
-        .ancestors()
-        .find(|ancestor| ancestor.exists())
-        .unwrap_or(parent);
-    validate_workspace_boundary(&deepest_existing.canonicalize()?, &canonical_root)?;
-    fs::create_dir_all(parent)?;
-    let canonical_parent = parent.canonicalize()?;
-    validate_workspace_boundary(&canonical_parent, &canonical_root)?;
-    let file_name = absolute_path
+    let file_name = target
         .file_name()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?;
+    fs::create_dir_all(parent)?;
+    // Re-check after creating directories: the resolved parent must still be inside the root.
+    let canonical_parent = parent.canonicalize()?;
+    validate_workspace_boundary(&canonical_parent, &canonical_root)?;
     write_resolved(&canonical_parent.join(file_name), content, true)
 }
 
@@ -648,12 +732,32 @@ pub fn edit_file_in_workspace(
     replace_all: bool,
     workspace_root: &Path,
 ) -> io::Result<EditFileOutput> {
-    let absolute_path = normalize_path(path)?;
-    let canonical_root = workspace_root
-        .canonicalize()
-        .unwrap_or_else(|_| workspace_root.to_path_buf());
-    validate_workspace_boundary(&absolute_path, &canonical_root)?;
-    edit_file(path, old_string, new_string, replace_all)
+    let canonical_root = workspace_root.canonicalize()?;
+    let resolved = resolve_existing_in_workspace(Some(path), &canonical_root)?;
+    edit_resolved(&resolved, old_string, new_string, replace_all)
+}
+
+/// Glob with explicit workspace boundary enforcement. The search base must lie inside the
+/// workspace, and matches that resolve outside it (via `..` or symlinks) are dropped.
+pub fn glob_search_in_workspace(
+    pattern: &str,
+    path: Option<&str>,
+    workspace_root: &Path,
+) -> io::Result<GlobSearchOutput> {
+    let canonical_root = workspace_root.canonicalize()?;
+    let base_dir = resolve_existing_in_workspace(path, &canonical_root)?;
+    glob_in(pattern, &base_dir, Some(&canonical_root))
+}
+
+/// Grep with explicit workspace boundary enforcement. The search base must lie inside the
+/// workspace. The walk does not follow symlinks, so linked files outside it are not read.
+pub fn grep_search_in_workspace(
+    input: &GrepSearchInput,
+    workspace_root: &Path,
+) -> io::Result<GrepSearchOutput> {
+    let canonical_root = workspace_root.canonicalize()?;
+    let base_path = resolve_existing_in_workspace(input.path.as_deref(), &canonical_root)?;
+    grep_in(input, &base_path)
 }
 
 /// Check whether a path is a symlink that resolves outside the workspace.
@@ -866,5 +970,227 @@ mod tests {
 
         std::fs::remove_dir_all(&root).expect("cleanup");
         std::fs::remove_dir_all(&outside).expect("cleanup outside");
+    }
+
+    /// Creates a workspace directory and a sibling "outside" directory holding `secret.txt`.
+    /// Both live under the temp dir with a unique name so parallel tests do not collide.
+    fn boundary_fixture(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "file-ops-boundary-{name}-{}-{unique}",
+            std::process::id()
+        ));
+        let root = base.join("workspace");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&root).expect("workspace");
+        std::fs::create_dir_all(&outside).expect("outside");
+        std::fs::write(root.join("inside.txt"), "inside needle\n").expect("inside file");
+        std::fs::write(outside.join("secret.txt"), "secret needle\n").expect("secret file");
+        (root, outside)
+    }
+
+    fn grep_input(pattern: &str, path: Option<String>) -> super::GrepSearchInput {
+        super::GrepSearchInput {
+            pattern: pattern.to_string(),
+            path,
+            glob: None,
+            output_mode: Some("content".to_string()),
+            before: None,
+            after: None,
+            context_short: None,
+            context: None,
+            line_numbers: None,
+            case_insensitive: None,
+            file_type: None,
+            head_limit: None,
+            offset: None,
+            multiline: None,
+        }
+    }
+
+    #[test]
+    fn workspace_tools_reject_absolute_path_outside_workspace() {
+        let (root, outside) = boundary_fixture("absolute");
+        let secret = outside.join("secret.txt");
+        let secret_str = secret.to_string_lossy().into_owned();
+        let new_file = outside.join("planted.txt");
+
+        let read = super::read_file_in_workspace(&secret_str, None, None, &root)
+            .expect_err("read outside should be refused");
+        assert_eq!(read.kind(), std::io::ErrorKind::PermissionDenied);
+
+        let write = super::write_file_in_workspace(&new_file.to_string_lossy(), "pwned", &root)
+            .expect_err("write outside should be refused");
+        assert_eq!(write.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(!new_file.exists());
+
+        let edit = super::edit_file_in_workspace(&secret_str, "secret", "pwned", false, &root)
+            .expect_err("edit outside should be refused");
+        assert_eq!(edit.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(
+            std::fs::read_to_string(&secret).expect("read secret"),
+            "secret needle\n"
+        );
+
+        let outside_dir = outside.to_string_lossy().into_owned();
+        super::glob_search_in_workspace("*.txt", Some(&outside_dir), &root)
+            .expect_err("glob base outside should be refused");
+        super::grep_search_in_workspace(&grep_input("needle", Some(outside_dir)), &root)
+            .expect_err("grep base outside should be refused");
+
+        std::fs::remove_dir_all(root.parent().expect("base")).expect("cleanup");
+    }
+
+    #[test]
+    fn workspace_tools_reject_dotdot_traversal_out_of_workspace() {
+        let (root, outside) = boundary_fixture("dotdot");
+        let root_str = root.to_string_lossy().into_owned();
+        let outside_name = outside
+            .file_name()
+            .expect("outside name")
+            .to_string_lossy()
+            .into_owned();
+        let secret_traversal = format!("{root_str}/../{outside_name}/secret.txt");
+        let write_traversal = format!("{root_str}/../{outside_name}/planted.txt");
+        let write_through_missing = format!("{root_str}/missing/../../{outside_name}/planted.txt");
+
+        let read = super::read_file_in_workspace(&secret_traversal, None, None, &root)
+            .expect_err("read via ../ should be refused");
+        assert_eq!(read.kind(), std::io::ErrorKind::PermissionDenied);
+
+        let edit =
+            super::edit_file_in_workspace(&secret_traversal, "secret", "pwned", false, &root)
+                .expect_err("edit via ../ should be refused");
+        assert_eq!(edit.kind(), std::io::ErrorKind::PermissionDenied);
+
+        let write = super::write_file_in_workspace(&write_traversal, "pwned", &root)
+            .expect_err("write via ../ should be refused");
+        assert_eq!(write.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(!outside.join("planted.txt").exists());
+
+        let write_missing = super::write_file_in_workspace(&write_through_missing, "pwned", &root)
+            .expect_err("write via missing/../../ should be refused");
+        assert_eq!(write_missing.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(!outside.join("planted.txt").exists());
+
+        std::fs::remove_dir_all(root.parent().expect("base")).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_tools_reject_symlink_escape() {
+        let (root, outside) = boundary_fixture("symlink");
+        let at = |rel: &str| root.join(rel).to_string_lossy().into_owned();
+        let secret = outside.join("secret.txt");
+        std::os::unix::fs::symlink(&outside, root.join("linkdir")).expect("dir symlink");
+        std::os::unix::fs::symlink(&secret, root.join("linkfile.txt")).expect("file symlink");
+        std::os::unix::fs::symlink(outside.join("new.txt"), root.join("dangling.txt"))
+            .expect("dangling symlink");
+
+        // Read through a symlinked directory and a symlinked file.
+        let read_dir = super::read_file_in_workspace(&at("linkdir/secret.txt"), None, None, &root)
+            .expect_err("read through dir symlink should be refused");
+        assert_eq!(read_dir.kind(), std::io::ErrorKind::PermissionDenied);
+        let read_file = super::read_file_in_workspace(&at("linkfile.txt"), None, None, &root)
+            .expect_err("read through file symlink should be refused");
+        assert_eq!(read_file.kind(), std::io::ErrorKind::PermissionDenied);
+
+        // Write through a symlinked directory, onto a symlinked file, and onto a dangling link.
+        let write_dir = super::write_file_in_workspace(&at("linkdir/planted.txt"), "pwned", &root)
+            .expect_err("write through dir symlink should be refused");
+        assert_eq!(write_dir.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(!outside.join("planted.txt").exists());
+        super::write_file_in_workspace(&at("linkfile.txt"), "pwned", &root)
+            .expect_err("write through file symlink should be refused");
+        super::write_file_in_workspace(&at("dangling.txt"), "pwned", &root)
+            .expect_err("write through dangling symlink should be refused");
+        assert!(!outside.join("new.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(&secret).expect("read secret"),
+            "secret needle\n"
+        );
+
+        // Edit through the file symlink must not change the target.
+        super::edit_file_in_workspace(&at("linkfile.txt"), "secret", "pwned", false, &root)
+            .expect_err("edit through file symlink should be refused");
+        assert_eq!(
+            std::fs::read_to_string(&secret).expect("read secret"),
+            "secret needle\n"
+        );
+
+        // Search bases through the directory symlink are refused.
+        super::glob_search_in_workspace("*.txt", Some(at("linkdir").as_str()), &root)
+            .expect_err("glob through dir symlink should be refused");
+        super::grep_search_in_workspace(&grep_input("needle", Some(at("linkdir"))), &root)
+            .expect_err("grep through dir symlink should be refused");
+
+        // Glob over the workspace drops the file symlink whose target is outside.
+        let root_path = root.to_string_lossy().into_owned();
+        let glob = super::glob_search_in_workspace("*.txt", Some(&root_path), &root)
+            .expect("glob inside workspace should succeed");
+        assert!(glob
+            .filenames
+            .iter()
+            .all(|name| !name.ends_with("linkfile.txt")));
+        assert!(glob
+            .filenames
+            .iter()
+            .any(|name| name.ends_with("inside.txt")));
+
+        std::fs::remove_dir_all(root.parent().expect("base")).expect("cleanup");
+    }
+
+    #[test]
+    fn workspace_tools_keep_inside_paths_working() {
+        let (root, _outside) = boundary_fixture("inside");
+        let at = |rel: &str| root.join(rel).to_string_lossy().into_owned();
+        let root_str = root.to_string_lossy().into_owned();
+
+        let read = super::read_file_in_workspace(&at("inside.txt"), None, None, &root)
+            .expect("read inside should succeed");
+        assert_eq!(read.file.content, "inside needle");
+
+        let absolute_read =
+            super::read_file_in_workspace(&format!("{root_str}/inside.txt"), None, None, &root)
+                .expect("absolute read inside should succeed");
+        assert_eq!(absolute_read.file.total_lines, 1);
+
+        let write = super::write_file_in_workspace(
+            &format!("{root_str}/nested/dir/new.txt"),
+            "hello\n",
+            &root,
+        )
+        .expect("write inside should succeed");
+        assert_eq!(write.kind, "create");
+        assert_eq!(
+            std::fs::read_to_string(root.join("nested/dir/new.txt")).expect("read new"),
+            "hello\n"
+        );
+
+        // A `..` that stays inside the workspace is still allowed.
+        super::write_file_in_workspace(&at("nested/../renamed.txt"), "moved\n", &root)
+            .expect("in-workspace .. should succeed");
+        assert!(root.join("renamed.txt").exists());
+
+        let edit =
+            super::edit_file_in_workspace(&at("inside.txt"), "inside", "changed", false, &root)
+                .expect("edit inside should succeed");
+        assert!(!edit.replace_all);
+
+        let glob =
+            super::glob_search_in_workspace("*.txt", Some(&root_str), &root).expect("glob inside");
+        assert!(glob
+            .filenames
+            .iter()
+            .any(|name| name.ends_with("inside.txt")));
+
+        let grep = super::grep_search_in_workspace(&grep_input("changed", Some(root_str)), &root)
+            .expect("grep inside");
+        assert_eq!(grep.num_files, 1);
+
+        std::fs::remove_dir_all(root.parent().expect("base")).expect("cleanup");
     }
 }

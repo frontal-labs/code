@@ -16,20 +16,21 @@ use code_memory::{
 };
 use code_plugins::PluginTool;
 use code_runtime::{
-    check_freshness, dedupe_superseded_commit_events, edit_file, execute_bash, glob_search,
-    grep_search, load_system_prompt,
+    check_freshness, dedupe_superseded_commit_events, edit_file_in_workspace, execute_bash,
+    glob_search_in_workspace, grep_search_in_workspace, load_system_prompt,
     lsp_client::LspRegistry,
     permission_enforcer::{EnforcementResult, PermissionEnforcer},
-    read_file,
+    read_file_in_workspace,
     summary_compression::compress_summary_text,
     task_registry::TaskRegistry,
     team_cron_registry::{CronRegistry, TeamRegistry},
     worker_boot::{WorkerReadySnapshot, WorkerRegistry},
-    write_file, ApiClient, ApiRequest, AssistantEvent, BashCommandInput, BashCommandOutput,
-    BranchFreshness, ContentBlock, ConversationMessage, ConversationRuntime, GrepSearchInput,
-    HookAbortSignal, LaneCommitProvenance, LaneEvent, LaneEventBlocker, LaneEventName,
-    LaneEventStatus, LaneFailureClass, McpDegradedReport, MessageRole, PermissionMode,
-    PermissionPolicy, PromptCacheEvent, RuntimeError, Session, TaskPacket, ToolError, ToolExecutor,
+    write_file_in_workspace, ApiClient, ApiRequest, AssistantEvent, BashCommandInput,
+    BashCommandOutput, BranchFreshness, ContentBlock, ConversationMessage, ConversationRuntime,
+    GrepSearchInput, HookAbortSignal, LaneCommitProvenance, LaneEvent, LaneEventBlocker,
+    LaneEventName, LaneEventStatus, LaneFailureClass, McpDegradedReport, MessageRole,
+    PermissionMode, PermissionPolicy, PromptCacheEvent, RuntimeError, Session, TaskPacket,
+    ToolError, ToolExecutor,
 };
 use code_telemetry::{AnalyticsEvent, JsonlTelemetrySink, SessionTracer, TelemetrySink};
 use code_training::{
@@ -2551,24 +2552,38 @@ fn branch_divergence_output(
     }
 }
 
+/// Root that file tools are confined to: the directory the session runs in.
+fn file_tool_workspace_root() -> Result<PathBuf, String> {
+    env::current_dir().map_err(|error| error.to_string())
+}
+
 #[allow(clippy::needless_pass_by_value)]
 fn run_read_file(input: ReadFileInput) -> Result<String, String> {
-    to_pretty_json(read_file(&input.path, input.offset, input.limit).map_err(io_to_string)?)
+    let root = file_tool_workspace_root()?;
+    to_pretty_json(
+        read_file_in_workspace(&input.path, input.offset, input.limit, &root)
+            .map_err(io_to_string)?,
+    )
 }
 
 #[allow(clippy::needless_pass_by_value)]
 fn run_write_file(input: WriteFileInput) -> Result<String, String> {
-    to_pretty_json(write_file(&input.path, &input.content).map_err(io_to_string)?)
+    let root = file_tool_workspace_root()?;
+    to_pretty_json(
+        write_file_in_workspace(&input.path, &input.content, &root).map_err(io_to_string)?,
+    )
 }
 
 #[allow(clippy::needless_pass_by_value)]
 fn run_edit_file(input: EditFileInput) -> Result<String, String> {
+    let root = file_tool_workspace_root()?;
     to_pretty_json(
-        edit_file(
+        edit_file_in_workspace(
             &input.path,
             &input.old_string,
             &input.new_string,
             input.replace_all.unwrap_or(false),
+            &root,
         )
         .map_err(io_to_string)?,
     )
@@ -2576,12 +2591,17 @@ fn run_edit_file(input: EditFileInput) -> Result<String, String> {
 
 #[allow(clippy::needless_pass_by_value)]
 fn run_glob_search(input: GlobSearchInputValue) -> Result<String, String> {
-    to_pretty_json(glob_search(&input.pattern, input.path.as_deref()).map_err(io_to_string)?)
+    let root = file_tool_workspace_root()?;
+    to_pretty_json(
+        glob_search_in_workspace(&input.pattern, input.path.as_deref(), &root)
+            .map_err(io_to_string)?,
+    )
 }
 
 #[allow(clippy::needless_pass_by_value)]
 fn run_grep_search(input: GrepSearchInput) -> Result<String, String> {
-    to_pretty_json(grep_search(&input).map_err(io_to_string)?)
+    let root = file_tool_workspace_root()?;
+    to_pretty_json(grep_search_in_workspace(&input, &root).map_err(io_to_string)?)
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -8581,8 +8601,13 @@ mod tests {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let path = temp_path("subagent-input.txt");
+        // File tools are confined to the working directory, so the input lives inside it.
+        let root = temp_path("subagent-workspace");
+        std::fs::create_dir_all(&root).expect("create workspace");
+        let path = root.join("subagent-input.txt");
         std::fs::write(&path, "hello from child").expect("write input file");
+        let original_dir = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&root).expect("set cwd");
 
         let mut runtime = ConversationRuntime::new(
             Session::new(),
@@ -8598,9 +8623,9 @@ mod tests {
             vec![String::from("system prompt")],
         );
 
-        let summary = runtime
-            .run_turn("Inspect the delegated file", None)
-            .expect("subagent loop should succeed");
+        let summary = runtime.run_turn("Inspect the delegated file", None);
+        std::env::set_current_dir(&original_dir).expect("restore cwd");
+        let summary = summary.expect("subagent loop should succeed");
 
         assert_eq!(
             final_assistant_text(&summary),
@@ -8886,6 +8911,74 @@ mod tests {
 
         std::env::set_current_dir(&original_dir).expect("restore cwd");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn file_tools_refuse_paths_outside_the_workspace() {
+        let _guard = env_lock().lock().expect("env lock should acquire");
+        let base = temp_path("file-tools-boundary");
+        let root = base.join("workspace");
+        let outside = base.join("outside");
+        fs::create_dir_all(&root).expect("create workspace");
+        fs::create_dir_all(&outside).expect("create outside");
+        let secret = outside.join("secret.txt");
+        fs::write(&secret, "secret\n").expect("write secret");
+        std::os::unix::fs::symlink(&secret, root.join("link.txt")).expect("create symlink");
+        let original_dir = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&root).expect("set cwd");
+
+        let absolute = secret.to_string_lossy().into_owned();
+        let dotdot = format!("{}/../outside/secret.txt", root.display());
+        let planted_dotdot = format!("{}/../outside/planted.txt", root.display());
+        let planted_absolute = outside.join("planted.txt").to_string_lossy().into_owned();
+
+        for path in [absolute.as_str(), dotdot.as_str(), "link.txt"] {
+            let read = execute_tool("read_file", &json!({ "path": path }))
+                .expect_err("read outside the workspace should fail");
+            assert!(read.contains("escapes workspace boundary"), "read: {read}");
+
+            let edit = execute_tool(
+                "edit_file",
+                &json!({ "path": path, "old_string": "secret", "new_string": "pwned" }),
+            )
+            .expect_err("edit outside the workspace should fail");
+            assert!(edit.contains("escapes workspace boundary"), "edit: {edit}");
+        }
+
+        for path in [
+            absolute.as_str(),
+            dotdot.as_str(),
+            "link.txt",
+            planted_absolute.as_str(),
+            planted_dotdot.as_str(),
+        ] {
+            let write = execute_tool("write_file", &json!({ "path": path, "content": "pwned" }))
+                .expect_err("write outside the workspace should fail");
+            assert!(
+                write.contains("escapes workspace boundary"),
+                "write: {write}"
+            );
+        }
+
+        assert_eq!(
+            fs::read_to_string(&secret).expect("read secret"),
+            "secret\n"
+        );
+        assert!(!outside.join("planted.txt").exists());
+
+        // Paths inside the workspace keep working.
+        execute_tool(
+            "write_file",
+            &json!({ "path": "inside.txt", "content": "ok\n" }),
+        )
+        .expect("write inside should succeed");
+        let read_inside = execute_tool("read_file", &json!({ "path": "inside.txt" }))
+            .expect("read inside should succeed");
+        assert!(read_inside.contains("ok"));
+
+        std::env::set_current_dir(&original_dir).expect("restore cwd");
+        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
@@ -9545,9 +9638,13 @@ printf 'pwsh:%s' "$1"
         fs::create_dir_all(&root).expect("create root");
         let file = root.join("readable.txt");
         fs::write(&file, "content\n").expect("write test file");
+        let original_dir = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&root).expect("set cwd");
 
         let registry = read_only_registry();
         let result = registry.execute("read_file", &json!({ "path": file.display().to_string() }));
+
+        std::env::set_current_dir(&original_dir).expect("restore cwd");
         assert!(result.is_ok(), "read_file should be allowed: {result:?}");
 
         let _ = fs::remove_dir_all(root);

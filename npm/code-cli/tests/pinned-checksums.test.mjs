@@ -47,7 +47,11 @@ test("downloadRelease refuses a binary that matches its sidecar but not the pinn
   try {
     const pinned = { version: VERSION, assets: { [assetName]: sha(Buffer.from("genuine")) } };
     await assert.rejects(
-      downloadRelease({ version: VERSION, destDir: mkdtempSync(join(tmpdir(), "fc-pin-")), pinned }),
+      downloadRelease({
+        version: VERSION,
+        destDir: mkdtempSync(join(tmpdir(), "fc-pin-")),
+        pinned,
+      }),
       /does not match the checksum pinned/,
     );
   } finally {

@@ -12,7 +12,10 @@ import { fileURLToPath } from "node:url";
 import { fetchSha256, fetchUrl, releaseAssetUrl } from "../lib/download.mjs";
 import { allAssetNames } from "../lib/platform.mjs";
 
-export async function pinChecksums(version, { out, fetchBinary = fetchUrl, fetchSidecar = fetchSha256 } = {}) {
+export async function pinChecksums(
+  version,
+  { out, fetchBinary = fetchUrl, fetchSidecar = fetchSha256 } = {},
+) {
   const assets = {};
   for (const assetName of allAssetNames()) {
     const bytes = await fetchBinary(releaseAssetUrl(version, assetName));
@@ -22,7 +25,9 @@ export async function pinChecksums(version, { out, fetchBinary = fetchUrl, fetch
       throw new Error(`No .sha256 sidecar published for ${assetName} in v${version}.`);
     }
     if (sidecar.toLowerCase() !== actual) {
-      throw new Error(`Sidecar for ${assetName} does not match the binary (sidecar ${sidecar}, binary ${actual}).`);
+      throw new Error(
+        `Sidecar for ${assetName} does not match the binary (sidecar ${sidecar}, binary ${actual}).`,
+      );
     }
     assets[assetName] = actual;
   }

@@ -11328,6 +11328,9 @@ mod tests {
     #[test]
     fn defaults_to_repl_when_no_args() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         assert_eq!(
             parse_args(&[]).expect("args should parse"),
@@ -11452,6 +11455,9 @@ mod tests {
 
     #[test]
     fn trust_subcommand_and_prompt_mode_label_parse() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert!(matches!(
             parse_args(&["trust".to_string()]),
             Ok(CliAction::Trust { revoke: false })
@@ -11506,6 +11512,9 @@ mod tests {
     #[test]
     fn parses_prompt_subcommand() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         let args = vec![
             "prompt".to_string(),
@@ -11528,6 +11537,9 @@ mod tests {
     #[test]
     fn parses_bare_prompt_and_json_output_flag() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         let args = vec![
             "--output-format=json".to_string(),
@@ -11552,6 +11564,9 @@ mod tests {
     #[test]
     fn resolves_model_aliases_in_args() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         let args = vec![
             "--model".to_string(),
@@ -11584,6 +11599,9 @@ mod tests {
     #[test]
     fn parses_provider_flag() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         let args = vec!["--provider=ollama".to_string(), "hello world".to_string()];
         assert_eq!(
@@ -11602,6 +11620,9 @@ mod tests {
     #[test]
     fn parses_provider_and_model_flags() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         let args = vec![
             "--provider=anthropic".to_string(),
@@ -11623,6 +11644,9 @@ mod tests {
 
     #[test]
     fn parses_version_flags_without_initializing_prompt_mode() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&["--version".to_string()]).expect("args should parse"),
             CliAction::Version {
@@ -11639,6 +11663,9 @@ mod tests {
 
     #[test]
     fn parses_permission_mode_flag() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let args = vec!["--permission-mode=read-only".to_string()];
         assert_eq!(
             parse_args(&args).expect("args should parse"),
@@ -11654,6 +11681,9 @@ mod tests {
     #[test]
     fn parses_allowed_tools_flags_with_aliases_and_lists() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         let args = vec![
             "--allowedTools".to_string(),
@@ -11678,6 +11708,9 @@ mod tests {
 
     #[test]
     fn rejects_unknown_allowed_tools() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let error = parse_args(&["--allowedTools".to_string(), "teleport".to_string()])
             .expect_err("tool should be rejected");
         assert!(error.contains("unsupported tool in --allowedTools: teleport"));
@@ -11685,6 +11718,9 @@ mod tests {
 
     #[test]
     fn parses_system_prompt_options() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let args = vec![
             "system-prompt".to_string(),
             "--cwd".to_string(),
@@ -11707,6 +11743,9 @@ mod tests {
         // Compares against `default_permission_mode()`, which reads the
         // environment that sibling tests mutate.
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         assert_eq!(
             parse_args(&["doctor".to_string()]).expect("doctor should parse"),
@@ -11792,6 +11831,9 @@ mod tests {
 
     #[test]
     fn parses_hosted_policy_preview_command() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "hosted".to_string(),
@@ -11818,6 +11860,9 @@ mod tests {
 
     #[test]
     fn parses_hosted_events_watch_command() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "hosted".to_string(),
@@ -11852,6 +11897,9 @@ mod tests {
 
     #[test]
     fn parses_hosted_tasks_list_command() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "hosted".to_string(),
@@ -11890,6 +11938,9 @@ mod tests {
 
     #[test]
     fn parses_hosted_tasks_watch_command() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "hosted".to_string(),
@@ -11928,6 +11979,9 @@ mod tests {
 
     #[test]
     fn parses_hosted_approval_orphan_default_kind() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "hosted".to_string(),
@@ -11956,6 +12010,9 @@ mod tests {
 
     #[test]
     fn parses_hosted_approval_github_followup_ack() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "hosted".to_string(),
@@ -12035,6 +12092,9 @@ mod tests {
 
     #[test]
     fn parses_hosted_task_reconcile_and_approval_commands() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "hosted".to_string(),
@@ -12413,6 +12473,9 @@ mod tests {
 
     #[test]
     fn config_subcommand_allows_unknown_sections_and_rejects_extra_args() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&["config".to_string(), "unknown".to_string()])
                 .expect("unknown config section should parse"),
@@ -12432,6 +12495,9 @@ mod tests {
 
     #[test]
     fn parses_config_subcommand_with_json_output_format() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&[
                 "--output-format=json".to_string(),
@@ -12448,6 +12514,9 @@ mod tests {
 
     #[test]
     fn local_command_help_flags_stay_on_the_local_parser_path() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&["status".to_string(), "--help".to_string()])
                 .expect("status help should parse"),
@@ -12468,6 +12537,9 @@ mod tests {
     #[test]
     fn parses_single_word_command_aliases_without_falling_back_to_prompt_mode() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         assert_eq!(
             parse_args(&["help".to_string()]).expect("help should parse"),
@@ -12485,6 +12557,9 @@ mod tests {
 
     #[test]
     fn parses_json_output_for_mcp_and_skills_commands() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&["--output-format=json".to_string(), "mcp".to_string()])
                 .expect("json mcp should parse"),
@@ -12509,6 +12584,9 @@ mod tests {
 
     #[test]
     fn single_word_slash_command_names_return_guidance_instead_of_hitting_prompt_mode() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let error = parse_args(&["cost".to_string()]).expect_err("cost should return guidance");
         assert!(error.contains("slash command"));
         assert!(error.contains("/cost"));
@@ -12517,6 +12595,9 @@ mod tests {
     #[test]
     fn multi_word_prompt_still_uses_shorthand_prompt_mode() {
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         assert_eq!(
             parse_args(&["help".to_string(), "me".to_string(), "debug".to_string()])
@@ -12538,6 +12619,9 @@ mod tests {
         // which reads RUSTY_CLAUDE_PERMISSION_MODE. Sibling tests mutate that
         // variable, so hold the env lock for the whole test.
         let _guard = env_lock();
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         std::env::remove_var("RUSTY_CLAUDE_PERMISSION_MODE");
         assert_eq!(
             parse_args(&["/agents".to_string()]).expect("/agents should parse"),
@@ -12632,6 +12716,9 @@ mod tests {
 
     #[test]
     fn direct_slash_commands_surface_shared_validation_errors() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let compact_error = parse_args(&["/compact".to_string(), "now".to_string()])
             .expect_err("invalid /compact shape should be rejected");
         assert!(compact_error.contains("Unexpected arguments for /compact."));
@@ -12667,6 +12754,9 @@ mod tests {
 
     #[test]
     fn parses_resume_flag_with_slash_command() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let args = vec![
             "--resume".to_string(),
             "session.jsonl".to_string(),
@@ -12684,6 +12774,9 @@ mod tests {
 
     #[test]
     fn parses_resume_flag_without_path_as_latest_session() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             parse_args(&["--resume".to_string()]).expect("args should parse"),
             CliAction::ResumeSession {
@@ -12705,6 +12798,9 @@ mod tests {
 
     #[test]
     fn parses_resume_flag_with_multiple_slash_commands() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let args = vec![
             "--resume".to_string(),
             "session.jsonl".to_string(),
@@ -12728,6 +12824,9 @@ mod tests {
 
     #[test]
     fn rejects_unknown_options_with_helpful_guidance() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let error = parse_args(&["--resum".to_string()]).expect_err("unknown option should fail");
         assert!(error.contains("unknown option: --resum"));
         assert!(error.contains("Did you mean --resume?"));
@@ -12736,6 +12835,9 @@ mod tests {
 
     #[test]
     fn parses_resume_flag_with_slash_command_arguments() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let args = vec![
             "--resume".to_string(),
             "session.jsonl".to_string(),
@@ -12759,6 +12861,9 @@ mod tests {
 
     #[test]
     fn parses_resume_flag_with_absolute_export_path() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let args = vec![
             "--resume".to_string(),
             "session.jsonl".to_string(),

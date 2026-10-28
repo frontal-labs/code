@@ -4,11 +4,17 @@ primary_region = "iad"
 [build]
   dockerfile = "../docker/slack-app.Dockerfile"
 
+# Migrates the OCP event store before each release. Set the database with:
+#   fly secrets set OCP_DATABASE_URL=postgres://... --app frontal-code-slack
+[deploy]
+  release_command = "node dist/migrate.js"
+
 [env]
   NODE_ENV = "production"
   LOG_LEVEL = "info"
   PORT = "3000"
   FRONTAL_CODE_API_URL = "https://frontal-code.fly.dev"
+  OCP_RUN_MIGRATIONS = "false"
 
 [http_service]
   internal_port = 3000
@@ -20,5 +26,5 @@ primary_region = "iad"
     grace_period = "10s"
     interval = "30s"
     method = "GET"
-    path = "/health"
+    path = "/ready"
     timeout = "5s"

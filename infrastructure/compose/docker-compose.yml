@@ -64,6 +64,22 @@ services:
     restart: "no"
     profiles: ["worker-image"]
 
+  # Event store for the Slack bot's OpenChannel Protocol host (ocp-sdk).
+  ocp-postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${OCP_POSTGRES_USER:-frontal_code_slack}
+      POSTGRES_PASSWORD: ${OCP_POSTGRES_PASSWORD:-frontal_code_slack}
+      POSTGRES_DB: ${OCP_POSTGRES_DB:-frontal_code_slack}
+    volumes:
+      - frontal-code_ocp_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   frontal-code-slack:
     build:
       context: ../..
@@ -85,8 +101,12 @@ services:
       HEALTH_CHECK_INTERVAL: ${HEALTH_CHECK_INTERVAL:-30000}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      OCP_DATABASE_URL: ${OCP_DATABASE_URL:-postgres://frontal_code_slack:frontal_code_slack@ocp-postgres:5432/frontal_code_slack}
+      OCP_RUN_MIGRATIONS: ${OCP_RUN_MIGRATIONS:-true}
     depends_on:
       code-server:
+        condition: service_healthy
+      ocp-postgres:
         condition: service_healthy
     read_only: true
     tmpfs:
@@ -96,13 +116,20 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD-SHELL", "pidof node >/dev/null"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/ready', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 20s
 
 volumes:
+  frontal-code_ocp_postgres:
   frontal-code_workspace:
   frontal-code_server_state:
   frontal-code_agent_store:

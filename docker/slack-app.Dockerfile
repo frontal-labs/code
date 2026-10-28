@@ -9,9 +9,10 @@ RUN bun install --frozen-lockfile
 
 COPY extensions/code-slack/ ./
 
-RUN bun build --target node src/index.ts --outdir dist
+RUN bun build --target node --external pg-native src/main.ts src/migrate.ts --outdir dist
 
-FROM node:20-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
+# ocp-sdk requires Node >= 22.18.
+FROM node:22-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
 
 RUN apk add --no-cache dumb-init
 
@@ -31,4 +32,4 @@ RUN mkdir -p /tmp && chown -R frontal-code:frontal-code /app /tmp
 USER frontal-code
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/main.js"]

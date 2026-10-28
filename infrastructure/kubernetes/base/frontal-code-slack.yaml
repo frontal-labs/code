@@ -16,6 +16,26 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      # Idempotent OCP event store migration; the app runs with OCP_RUN_MIGRATIONS=false.
+      initContainers:
+        - name: ocp-migrate
+          image: frontal-code-slack:v0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/migrate.js"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+          envFrom:
+            - configMapRef:
+                name: frontal-code-config
+            - secretRef:
+                name: frontal-code-slack-secrets
       containers:
         - name: frontal-code-slack
           image: frontal-code-slack:v0.1.0
@@ -31,20 +51,26 @@ spec:
             runAsGroup: 1001
           envFrom:
             - configMapRef:
-                name: frontal-code-slack-config
+                name: frontal-code-config
             - secretRef:
                 name: frontal-code-slack-secrets
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+          ports:
+            - name: http
+              containerPort: 3000
+          # /ready requires the Slack socket and the OCP event store; /health is liveness only.
           readinessProbe:
-            exec:
-              command: ["sh", "-c", "pidof node >/dev/null"]
+            httpGet:
+              path: /ready
+              port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            exec:
-              command: ["sh", "-c", "pidof node >/dev/null"]
+            httpGet:
+              path: /health
+              port: http
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:

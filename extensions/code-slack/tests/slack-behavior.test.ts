@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSlackAccessPolicy } from "../src/access";
+import type { SlackApprovalDecision, SlackMessageUpdate, SlackThreadMessage } from "../src/bridge";
 import { logger } from "../src/log";
-import type {
-  SlackApprovalDecision,
-  SlackMessageUpdate,
-  SlackThreadMessage,
-} from "../src/bridge";
 import { SlackInterface } from "../src/slack";
 import type {
   FrontalCodeCreateTaskResponse,

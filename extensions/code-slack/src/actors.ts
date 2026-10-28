@@ -1,6 +1,6 @@
 // OCP actor identities used by the Slack host. Slack users follow the `slack:<userId>` convention
-// that `ocp-sdk/slack` uses when it normalizes inbound messages, so audit queries can join on it.
-import { type ActorRef, ActorType, createActor } from "ocp-sdk";
+// that `@openchannelprotocol/sdk/slack` uses when it normalizes inbound messages, so audit queries can join on it.
+import { type ActorRef, ActorType, createActor } from "@openchannelprotocol/sdk";
 
 export const SLACK_PROVIDER = "slack";
 export const DEFAULT_AGENT_ID = "agent:frontal-code";

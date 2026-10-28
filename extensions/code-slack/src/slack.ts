@@ -122,7 +122,7 @@ export class SlackInterface {
   private setupEventHandlers(): void {
     // Direct messages are the only non-mention path that can start a task. Channel and group
     // traffic is ignored here; channels are handled through explicit @mentions (app_mention).
-    // Allowed DMs go through the `ocp-sdk/slack` normalizer, which dedupes Slack retries by event_id.
+    // Allowed DMs go through the `@openchannelprotocol/sdk/slack` normalizer, which dedupes Slack retries by event_id.
     this.app.message(async ({ message, body }) => {
       const slackMessage = message as SlackMessage;
       if (!slackMessage.text || !slackMessage.user || slackMessage.bot_id || slackMessage.subtype) {

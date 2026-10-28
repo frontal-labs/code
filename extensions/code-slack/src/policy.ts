@@ -1,7 +1,7 @@
 // OCP policy for the Slack host. Default deny: only the two Frontal Code actions are granted.
 // Who may trigger them (allowlists, task ownership) is enforced by `src/access.ts` before a request
 // reaches the agent; this policy bounds what the agent itself is able to do.
-import { type PolicyEngine, RuleBasedPolicyEngine } from "ocp-sdk";
+import { type PolicyEngine, RuleBasedPolicyEngine } from "@openchannelprotocol/sdk";
 import { CREATE_TASK_ACTION, RESOLVE_APPROVAL_ACTION } from "./actions";
 
 export function createFrontalCodePolicy(): PolicyEngine {

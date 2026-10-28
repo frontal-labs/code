@@ -1,6 +1,6 @@
 // Policy-controlled OCP actions the Frontal Code agent may request. Each action validates its
 // untrusted input before the runtime records it, then calls the Frontal Code control plane.
-import { type ActionDefinition, action } from "ocp-sdk";
+import { type ActionDefinition, action } from "@openchannelprotocol/sdk";
 import { z } from "zod";
 import type {
   FrontalCodeCreateTaskRequest,

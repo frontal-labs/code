@@ -81,7 +81,7 @@ export const env = createEnv({
       .optional()
       .describe("Frontal Code API key for protected hosted control-plane routes"),
 
-    // OpenChannel Protocol (ocp-sdk) Configuration
+    // OpenChannel Protocol (@openchannelprotocol/sdk) Configuration
     OCP_DATABASE_URL: z
       .string()
       .regex(/^postgres(ql)?:\/\//, "OCP database URL must be a postgres:// connection string")

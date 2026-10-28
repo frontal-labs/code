@@ -1,4 +1,4 @@
-import { type EventEnvelope, eventType } from "ocp-sdk";
+import { type EventEnvelope, eventType } from "@openchannelprotocol/sdk";
 import type { EventStore, OcpStoreHandle } from "../../src/store";
 
 type ActionRecord = NonNullable<Awaited<ReturnType<NonNullable<EventStore["getAction"]>>>>;

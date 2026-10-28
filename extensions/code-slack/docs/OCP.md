@@ -1,6 +1,6 @@
 # OpenChannel Protocol host
 
-The Slack bot hosts its behavior as an [OpenChannel Protocol](https://github.com/frontal-labs/open-channel) (OCP) application built with [`ocp-sdk`](https://www.npmjs.com/package/ocp-sdk) 2.x. Every Slack request the bot acts on and every message it sends is a typed OCP v2.0 event in a durable Postgres event store. Task creation and approval decisions run as policy-checked OCP actions.
+The Slack bot hosts its behavior as an [OpenChannel Protocol](https://github.com/frontal-labs/open-channel) (OCP) application built with [`@openchannelprotocol/sdk`](https://www.npmjs.com/package/@openchannelprotocol/sdk) 0.1.x. Every Slack request the bot acts on and every message it sends is a typed OCP v2.0 event in a durable Postgres event store. Task creation and approval decisions run as policy-checked OCP actions.
 
 Code lives in `src/`: `bridge.ts`, `agent.ts`, `actions.ts`, `policy.ts`, `actors.ts`, `transport.ts`, and `store.ts`. `SlackInterface` (`src/slack.ts`) only talks to OCP through `OcpBridge` (`src/bridge.ts`).
 
@@ -11,8 +11,8 @@ Code lives in `src/`: `bridge.ts`, `agent.ts`, `actions.ts`, `policy.ts`, `actor
 | Agent `agent:frontal-code` | `agent.ts` | Receives every `message.received`. Plain messages become task prompts; messages with metadata `kind=frontal-code.approval.decision` are approval clicks. |
 | Actions | `actions.ts` | `frontal-code.task.create` → `POST /v1/tasks`; `frontal-code.task.approval.resolve` → `POST /v1/tasks/:id/approval`. Inputs are validated with zod before they are recorded. |
 | Policy | `policy.ts` | Rule-based, default deny. Only the two actions above are granted. |
-| Slack channel | `transport.ts` + `ocp-sdk/slack` | The SDK normalizes DMs and delivers `message.sent` through a Bolt-backed transport. Block Kit travels as an `application/vnd.slack.blocks+json` artifact. |
-| Event store | `store.ts` + `ocp-sdk/postgres` | Postgres tables `ocp_events` (configurable) and `ocp_actions`. |
+| Slack channel | `transport.ts` + `@openchannelprotocol/sdk/slack` | The SDK normalizes DMs and delivers `message.sent` through a Bolt-backed transport. Block Kit travels as an `application/vnd.slack.blocks+json` artifact. |
+| Event store | `store.ts` + `@openchannelprotocol/sdk/postgres` | Postgres tables `ocp_events` (configurable) and `ocp_actions`. |
 | Migration | `src/migrate.ts` | Idempotent schema migration that reads only `OCP_DATABASE_URL` and `OCP_EVENTS_TABLE`. |
 
 Who may trigger an action is still decided by `src/access.ts` (user/channel allowlists, task owner or admin) before a request reaches the agent. The OCP policy bounds what the agent itself may do.

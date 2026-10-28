@@ -11,7 +11,7 @@ The Frontal Code Slack bot provides autonomous engineering capabilities directly
 
 ## Prerequisites
 
-1. **Node.js 22.18+** installed on the deployment machine (required by `ocp-sdk`)
+1. **Node.js 22.18+** installed on the deployment machine (required by `@openchannelprotocol/sdk`)
 2. **Postgres** reachable from the bot, for the OpenChannel Protocol event store (see `docs/OCP.md`)
 3. **Frontal Code Server** running and accessible from the internet
 4. **Slack App** created in your Slack workspace

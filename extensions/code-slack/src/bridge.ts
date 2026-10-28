@@ -1,5 +1,5 @@
 // OcpBridge composes the OpenChannel Protocol host for the Slack bot: the Frontal Code agent, its
-// policy-controlled actions, the `ocp-sdk/slack` channel, and the Postgres event store. SlackInterface
+// policy-controlled actions, the `@openchannelprotocol/sdk/slack` channel, and the Postgres event store. SlackInterface
 // talks to OCP only through this class, so every Slack request and every bot message is a typed OCP
 // event recorded in the store.
 import { randomUUID } from "node:crypto";
@@ -13,8 +13,8 @@ import {
   messageSent,
   type OpenChannel,
   openChannel,
-} from "ocp-sdk";
-import { slackChannel } from "ocp-sdk/slack";
+} from "@openchannelprotocol/sdk";
+import { slackChannel } from "@openchannelprotocol/sdk/slack";
 import { type FrontalCodeActionsApi, frontalCodeActions } from "./actions";
 import { frontalCodeAgentActor, SLACK_PROVIDER, slackUserActor, taskCorrelationId } from "./actors";
 import {
@@ -157,7 +157,7 @@ export class OcpBridge {
     return this.options.store.ping();
   }
 
-  // Ingests a Slack Events API message through the `ocp-sdk/slack` normalizer. Accepts either the
+  // Ingests a Slack Events API message through the `@openchannelprotocol/sdk/slack` normalizer. Accepts either the
   // event_callback envelope or a bare message event. Returns false for duplicates and non-messages.
   async receiveSlackEvent(input: unknown, eventId?: string): Promise<boolean> {
     await this.start();

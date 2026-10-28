@@ -1,9 +1,9 @@
-// Slack Web API port for the `ocp-sdk/slack` sink.
+// Slack Web API port for the `@openchannelprotocol/sdk/slack` sink.
 //
 // OCP `message.sent` events carry attachments as `ArtifactRef`s, which have no slot for Block Kit.
 // Blocks travel as one artifact with media type `application/vnd.slack.blocks+json` whose `uri` is a
 // base64 `data:` URI; the transport decodes it back into `blocks`. Other artifacts are ignored.
-import type { SlackSendInput, SlackTransport } from "ocp-sdk/slack";
+import type { SlackSendInput, SlackTransport } from "@openchannelprotocol/sdk/slack";
 import type { SlackBlock } from "./types";
 
 export const SLACK_BLOCKS_MEDIA_TYPE = "application/vnd.slack.blocks+json";

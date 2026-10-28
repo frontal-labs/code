@@ -723,7 +723,7 @@ describe("SlackInterface constructor wiring", () => {
       await handler({ message: envelope.event, body: envelope });
 
       expect(frontalCodeApiState.createTask).toHaveBeenCalledTimes(1);
-      // The confirmation is delivered by the ocp-sdk Slack sink into the DM thread.
+      // The confirmation is delivered by the @openchannelprotocol/sdk Slack sink into the DM thread.
       expect(slackState.chatPostMessage).toHaveBeenCalledTimes(1);
       expect(slackState.chatPostMessage).toHaveBeenCalledWith(
         expect.objectContaining({

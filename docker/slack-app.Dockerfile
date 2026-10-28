@@ -11,7 +11,7 @@ COPY extensions/code-slack/ ./
 
 RUN bun build --target node --external pg-native src/main.ts src/migrate.ts --outdir dist
 
-# ocp-sdk requires Node >= 22.18.
+# @openchannelprotocol/sdk requires Node >= 22.18.
 FROM node:22-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
 
 RUN apk add --no-cache dumb-init

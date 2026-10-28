@@ -1,4 +1,4 @@
-import { ActorType, createActor } from "ocp-sdk";
+import { ActorType, createActor } from "@openchannelprotocol/sdk";
 import { describe, expect, it } from "vitest";
 import { CREATE_TASK_ACTION, RESOLVE_APPROVAL_ACTION } from "../../src/actions";
 import { frontalCodeAgentActor, slackUserActor, slackUserIdOf } from "../../src/actors";

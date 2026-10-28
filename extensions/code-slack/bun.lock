@@ -5,12 +5,12 @@
     "": {
       "name": "code-slack",
       "dependencies": {
+        "@openchannelprotocol/sdk": "^0.1.0",
         "@sentry/node": "^11.8.0",
         "@slack/bolt": "^3.21.0",
         "@slack/web-api": "^6.12.0",
         "@t3-oss/env-core": "^0.13.11",
         "axios": "^1.20.0",
-        "ocp-sdk": "^2.2.1",
         "pg": "^8.23.1",
         "qs": "^6.16.0",
         "winston": "^3.11.0",
@@ -107,6 +107,8 @@
     "@open-draft/logger": ["@open-draft/logger@0.3.0", "", { "dependencies": { "is-node-process": "^1.2.0", "outvariant": "^1.4.0" } }, ""],
 
     "@open-draft/until": ["@open-draft/until@2.1.0", "", {}, ""],
+
+    "@openchannelprotocol/sdk": ["@openchannelprotocol/sdk@0.1.0", "", { "dependencies": { "@bufbuild/protobuf": "^2.2.5" } }, "sha512-SXo8p9lU6ZOXhNj/ZxEd5QOrhb1SoIRCyIFWtNK93ndjHWOViUspWxq1sarlRmv3Qnsqjh1/Y8GeZCNLf/pK9Q=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.1", "", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
 
@@ -665,8 +667,6 @@
     "object.assign": ["object.assign@4.1.7", "", { "dependencies": { "call-bind": "^1.0.8", "call-bound": "^1.0.3", "define-properties": "^1.2.1", "es-object-atoms": "^1.0.0", "has-symbols": "^1.1.0", "object-keys": "^1.1.1" } }, ""],
 
     "obug": ["obug@3.0.0", "", {}, "sha512-5vvB5+W7ePv+p3uqxi+RcW1XAzLW0/hxt3/4X4Lc4qHudzOhmBiBwOY6DRob4WnanAEGvNcLjF+KNOufrUoEQw=="],
-
-    "ocp-sdk": ["ocp-sdk@2.2.1", "", { "dependencies": { "@bufbuild/protobuf": "^2.2.5" } }, "sha512-QKnJJdi2kMG/a6ZMBHf2HozA1OsbvojlrVG3q/Gi8bszItlkPKq3BsxtD9Gwx9lZB/P8tm173cOZY3+hS4pjoQ=="],
 
     "on-finished": ["on-finished@2.4.1", "", { "dependencies": { "ee-first": "1.1.1" } }, ""],
 

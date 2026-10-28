@@ -2,7 +2,7 @@
 
 TypeScript Slack connector for Frontal Code hosted tasks. It creates tasks from Slack, subscribes to Frontal Code task events over WebSocket, reconstructs Slack routing from Frontal Code task snapshots and event payloads, renders approval workflows, and exposes lightweight operator commands such as orphan policy inspection.
 
-The bot is an [OpenChannel Protocol](https://github.com/frontal-labs/open-channel) host built on [`ocp-sdk`](https://www.npmjs.com/package/ocp-sdk): every Slack request and bot message is a typed OCP event, task creation and approval decisions are policy-checked OCP actions, and the full trail is stored in Postgres. See [`docs/OCP.md`](docs/OCP.md).
+The bot is an [OpenChannel Protocol](https://github.com/frontal-labs/open-channel) host built on [`@openchannelprotocol/sdk`](https://www.npmjs.com/package/@openchannelprotocol/sdk): every Slack request and bot message is a typed OCP event, task creation and approval decisions are policy-checked OCP actions, and the full trail is stored in Postgres. See [`docs/OCP.md`](docs/OCP.md).
 
 ## Current Capabilities
 
@@ -97,7 +97,7 @@ HEALTH_CHECK_INTERVAL=30000
 
 Prerequisites:
 
-- Node.js 22.18+ (required by `ocp-sdk`)
+- Node.js 22.18+ (required by `@openchannelprotocol/sdk`)
 - Postgres for the OCP event store, e.g. `docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev postgres:17-alpine`
 - a running Frontal Code server with hosted task APIs enabled
 - Slack app configured for Socket Mode

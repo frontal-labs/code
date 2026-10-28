@@ -3,7 +3,7 @@
 // - messages whose metadata `kind` is APPROVAL_DECISION_KIND are approval button clicks and become a
 //   `frontal-code.task.approval.resolve` action.
 // Both go through the OCP policy engine and are recorded in the event store.
-import type { ActionResult, AgentContext, AgentDefinition } from "ocp-sdk";
+import type { ActionResult, AgentContext, AgentDefinition } from "@openchannelprotocol/sdk";
 import { stripBotMention } from "./access";
 import { CREATE_TASK_ACTION, type CreateTaskActionInput, RESOLVE_APPROVAL_ACTION } from "./actions";
 import { DEFAULT_AGENT_ID, slackUserIdOf } from "./actors";

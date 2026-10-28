@@ -1,5 +1,5 @@
 ARG BUN_IMAGE=oven/bun:1-alpine@sha256:7ed9f74c326d1c260abe247ac423ccbf5ac92af62bb442d515d1f92f21e8ea9b
-# ocp-sdk requires Node >= 22.18.
+# @openchannelprotocol/sdk requires Node >= 22.18.
 ARG NODE_IMAGE=node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
 
 FROM ${BUN_IMAGE} AS builder

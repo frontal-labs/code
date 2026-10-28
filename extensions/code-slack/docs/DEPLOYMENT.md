@@ -161,7 +161,7 @@ For simple deployments without containerization.
 #### Prerequisites
 
 ```bash
-# Install Node.js 22 LTS (ocp-sdk requires >= 22.18)
+# Install Node.js 22 LTS (@openchannelprotocol/sdk requires >= 22.18)
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 

@@ -1,7 +1,11 @@
-// Durable OCP event store backed by Postgres (`ocp-sdk/postgres`). The pool is created eagerly but
+// Durable OCP event store backed by Postgres (`@openchannelprotocol/sdk/postgres`). The pool is created eagerly but
 // connects lazily, so constructing the store never blocks; `migrate()` runs the idempotent schema.
-import type { OpenChannelOptions } from "ocp-sdk";
-import { migratePostgresStore, type PostgresClient, postgresStore } from "ocp-sdk/postgres";
+import type { OpenChannelOptions } from "@openchannelprotocol/sdk";
+import {
+  migratePostgresStore,
+  type PostgresClient,
+  postgresStore,
+} from "@openchannelprotocol/sdk/postgres";
 import pg from "pg";
 
 // The SDK root does not export `EventStore`; derive it from the option that consumes it.

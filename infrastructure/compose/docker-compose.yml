@@ -64,7 +64,7 @@ services:
     restart: "no"
     profiles: ["worker-image"]
 
-  # Event store for the Slack bot's OpenChannel Protocol host (ocp-sdk).
+  # Event store for the Slack bot's OpenChannel Protocol host (@openchannelprotocol/sdk).
   ocp-postgres:
     image: postgres:17-alpine
     restart: unless-stopped

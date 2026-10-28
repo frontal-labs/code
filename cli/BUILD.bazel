@@ -24,6 +24,7 @@ sh_binary(
 
 sh_test(
     name = "test",
+    size = "large",
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
     args = [

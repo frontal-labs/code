@@ -19,6 +19,14 @@ export interface Config {
     apiKey?: string;
   };
 
+  // OpenChannel Protocol (ocp-sdk) event store and agent identity
+  ocp: {
+    databaseUrl: string;
+    eventsTable: string;
+    runMigrations: boolean;
+    agentId: string;
+  };
+
   // Application Configuration
   app: {
     nodeEnv: string;

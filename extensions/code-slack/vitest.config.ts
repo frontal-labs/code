@@ -41,13 +41,13 @@ export default defineConfig({
       "tests/types/slack-types.test.ts",
       "tests/api-client.test.ts",
       "tests/api-client-interceptors.test.ts",
-      "tests/code-events.test.ts",
-      "tests/events-client.test.ts",
+      "tests/frontal-code-events.test.ts",
       "tests/log.test.ts",
       "tests/slack-constructor.test.ts",
       "tests/slack-formatting.test.ts",
       "tests/slack-behavior.test.ts",
       "tests/access.test.ts",
+      "tests/ocp/*.test.ts",
     ],
 
     // Exclude patterns

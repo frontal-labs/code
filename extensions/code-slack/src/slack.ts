@@ -8,10 +8,12 @@ import {
   type SlackAccessPolicy,
   stripBotMention,
 } from "./access";
+import { taskCorrelationId } from "./actors";
 import { FrontalCodeApiClient } from "./api-client";
-import { FrontalCodeEventsClient } from "./code-events";
+import { OcpBridge, type SlackUpdateClient } from "./bridge";
 import { config } from "./config";
 import { logger } from "./log";
+import { createOcpStore, type OcpStoreHandle } from "./store";
 import type {
   FrontalCodeAppliedOrphanPolicy,
   FrontalCodeApprovalAction,
@@ -26,6 +28,7 @@ import type {
   SlackBlock,
   SlackBody,
 } from "./types";
+import { FrontalCodeEventsClient } from "./websocket";
 
 // Type definitions for Slack Bolt handlers
 interface SlackMessage {
@@ -42,6 +45,19 @@ interface SlackMessage {
 interface SlackAction {
   action_id: string;
   value?: string;
+  action_ts?: string;
+}
+
+interface SlackCommand {
+  text: string;
+  user_id: string;
+  channel_id: string;
+  trigger_id?: string;
+}
+
+export interface SlackInterfaceDeps {
+  // Event store for the OCP host; defaults to Postgres at OCP_DATABASE_URL.
+  ocpStore?: OcpStoreHandle;
 }
 
 interface SlackMessagePayload {
@@ -49,9 +65,11 @@ interface SlackMessagePayload {
   blocks?: SlackBlock[];
 }
 
-// Pure Slack interface - WebSocket connection to Slack, talks to Frontal Code AI
+// Slack interface: Socket Mode connection to Slack, hosted as an OpenChannel Protocol agent that
+// talks to the Frontal Code control plane. Slack requests and bot messages flow through `ocp`.
 export class SlackInterface {
   private readonly app: App;
+  private readonly ocp: OcpBridge;
   private readonly frontalCodeApi: FrontalCodeApiClient;
   private readonly frontalCodeEvents: FrontalCodeEventsClient;
   private readonly trackedTasks = new Map<string, FrontalCodeTrackedTask>();
@@ -60,7 +78,7 @@ export class SlackInterface {
   private readonly approvalResolved = new Set<string>();
   private readonly access: SlackAccessPolicy;
 
-  constructor() {
+  constructor(deps: SlackInterfaceDeps = {}) {
     // Initialize Slack WebSocket connection
     this.app = new App({
       token: config.slack.botToken,
@@ -77,6 +95,20 @@ export class SlackInterface {
     });
 
     this.frontalCodeApi = new FrontalCodeApiClient();
+    this.ocp = new OcpBridge({
+      agentId: config.ocp.agentId,
+      api: this.frontalCodeApi,
+      slack: this.app.client as unknown as SlackUpdateClient,
+      store:
+        deps.ocpStore ??
+        createOcpStore({
+          databaseUrl: config.ocp.databaseUrl,
+          tableName: config.ocp.eventsTable,
+        }),
+      runMigrations: config.ocp.runMigrations,
+      logger,
+      onTaskCreated: (task, routing, prompt) => this.registerTask(task, routing, prompt),
+    });
     this.frontalCodeEvents = new FrontalCodeEventsClient(
       (query) => this.frontalCodeApi.getEventsWebSocketUrl(query),
       () => this.frontalCodeApi.getEventsWebSocketHeaders(),
@@ -90,7 +122,8 @@ export class SlackInterface {
   private setupEventHandlers(): void {
     // Direct messages are the only non-mention path that can start a task. Channel and group
     // traffic is ignored here; channels are handled through explicit @mentions (app_mention).
-    this.app.message(async ({ message }) => {
+    // Allowed DMs go through the `ocp-sdk/slack` normalizer, which dedupes Slack retries by event_id.
+    this.app.message(async ({ message, body }) => {
       const slackMessage = message as SlackMessage;
       if (!slackMessage.text || !slackMessage.user || slackMessage.bot_id || slackMessage.subtype) {
         return;
@@ -98,25 +131,36 @@ export class SlackInterface {
       if (!isDirectMessage(slackMessage.channel, slackMessage.channel_type)) {
         return;
       }
+      if (!this.canStartTaskFrom(slackMessage)) {
+        return;
+      }
 
-      await this.startTaskFromSlackMessage(slackMessage, slackMessage.text);
+      // Bolt always passes the event_callback envelope; without one, wrap the bare event.
+      await this.ocp.receiveSlackEvent(body ?? { event: { type: "message", ...slackMessage } });
     });
 
     // Channel tasks start only when the bot is explicitly mentioned. The chain continues so the
     // generic connector event forwarder below still sees the mention.
-    this.app.event("app_mention", async ({ event, next }) => {
+    this.app.event("app_mention", async ({ event, body, next }) => {
       const mention = event as unknown as SlackMessage;
       if (mention.user && mention.channel) {
         const prompt = stripBotMention(mention.text || "");
-        if (prompt) {
-          await this.startTaskFromSlackMessage(mention, prompt);
+        if (prompt && this.canStartTaskFrom(mention)) {
+          await this.ocp.receiveSlackPrompt({
+            eventId: (body as { event_id?: string } | undefined)?.event_id,
+            userId: mention.user,
+            channelId: mention.channel,
+            threadTs: mention.thread_ts || mention.ts,
+            text: prompt,
+          });
         }
       }
       await next();
     });
 
     // Handle slash commands
-    this.app.command("/code", async ({ command, ack }) => {
+    this.app.command("/code", async ({ command: rawCommand, ack }) => {
+      const command = rawCommand as SlackCommand;
       if (
         !canCreateTask(this.access, {
           userId: command.user_id,
@@ -148,24 +192,19 @@ export class SlackInterface {
         return;
       }
 
+      if (!command.text.trim()) {
+        await ack({ response_type: "ephemeral", text: "Usage: /code <what you want done>" });
+        return;
+      }
+
       await ack();
 
-      const task = await this.frontalCodeApi.createTask({
-        prompt: command.text,
-        user_id: command.user_id,
-        channel_id: command.channel_id,
-        source: "slack",
+      await this.ocp.receiveSlackPrompt({
+        eventId: command.trigger_id ? `slack-command:${command.trigger_id}` : undefined,
+        userId: command.user_id,
+        channelId: command.channel_id,
+        text: command.text,
       });
-
-      await this.registerTask(
-        task,
-        {
-          taskId: task.task_id,
-          channelId: command.channel_id,
-          userId: command.user_id,
-        },
-        command.text,
-      );
     });
 
     // Handle interactions (buttons, modals, etc.)
@@ -189,6 +228,8 @@ export class SlackInterface {
   // Start WebSocket connection to Slack
   async connect(): Promise<void> {
     try {
+      // Postgres is required: fail fast before Slack starts delivering events.
+      await this.ocp.start();
       await this.syncTrackedTasksFromFrontalCode();
       await this.app.start();
       await this.frontalCodeEvents.connect();
@@ -204,6 +245,7 @@ export class SlackInterface {
     try {
       await this.frontalCodeEvents.disconnect();
       await this.app.stop();
+      await this.ocp.stop();
       logger.info("Slack WebSocket interface disconnected");
     } catch (error) {
       logger.error("Failed to disconnect from Slack", error as Error);
@@ -212,59 +254,43 @@ export class SlackInterface {
   }
 
   // Health check
-  async healthCheck(): Promise<{ slack: boolean; frontal_code: boolean }> {
+  async healthCheck(): Promise<{ slack: boolean; frontal_code: boolean; ocp: boolean }> {
     try {
       const slackConnected =
         (this.app as unknown as { isListening?: () => boolean }).isListening?.() || false;
-      const frontalCodeConnected = await this.frontalCodeApi.healthCheck();
+      const [frontalCodeConnected, ocpStoreReachable] = await Promise.all([
+        this.frontalCodeApi.healthCheck(),
+        this.ocp.ping(),
+      ]);
 
       return {
         slack: slackConnected,
         frontal_code: frontalCodeConnected,
+        ocp: ocpStoreReachable,
       };
     } catch (error) {
       logger.error("Health check failed", error as Error);
       return {
         slack: false,
         frontal_code: false,
+        ocp: false,
       };
     }
   }
 
-  private async startTaskFromSlackMessage(message: SlackMessage, prompt: string): Promise<void> {
-    if (
-      !canCreateTask(this.access, {
-        userId: message.user,
-        channelId: message.channel,
-        channelType: message.channel_type,
-      })
-    ) {
+  private canStartTaskFrom(message: SlackMessage): boolean {
+    const allowed = canCreateTask(this.access, {
+      userId: message.user,
+      channelId: message.channel,
+      channelType: message.channel_type,
+    });
+    if (!allowed) {
       logger.info("Ignored Slack task request from unauthorized user or channel", {
         userId: message.user,
         channelId: message.channel,
       });
-      return;
     }
-
-    const threadTs = message.thread_ts || message.ts;
-    const task = await this.frontalCodeApi.createTask({
-      prompt,
-      user_id: message.user,
-      channel_id: message.channel,
-      thread_ts: threadTs,
-      source: "slack",
-    });
-
-    await this.registerTask(
-      task,
-      {
-        taskId: task.task_id,
-        channelId: message.channel,
-        threadTs,
-        userId: message.user,
-      },
-      prompt,
-    );
+    return allowed;
   }
 
   private async registerTask(
@@ -273,10 +299,11 @@ export class SlackInterface {
     prompt: string,
   ): Promise<void> {
     const message = this.formatTaskCreatedMessage(task, prompt);
-    const response = await this.app.client.chat.postMessage({
-      channel: trackedTask.channelId,
+    const response = await this.ocp.sendToThread({
+      channelId: trackedTask.channelId,
+      threadTs: trackedTask.threadTs,
       text: message,
-      thread_ts: trackedTask.threadTs,
+      correlationId: taskCorrelationId(trackedTask.taskId),
     });
 
     const nextTask = {
@@ -326,8 +353,8 @@ export class SlackInterface {
       context: body,
     });
 
-    await this.app.client.chat.update({
-      channel: body.channel.id,
+    await this.ocp.updateMessage({
+      channelId: body.channel.id,
       ts: body.message.ts,
       blocks: response.blocks,
     });
@@ -434,12 +461,16 @@ export class SlackInterface {
     );
 
     try {
-      const task = await this.frontalCodeApi.resolveTaskApproval({
+      const task = await this.ocp.resolveApproval({
+        eventId: approvalEventId(action, body),
         taskId,
         approvalKind: "orphaned_hosted_agent",
         action: actionName,
+        slackUserId: body.user.id,
         resolvedBy: body.user.id,
         reason: "resolved from Slack approval action",
+        channelId: body.channel.id,
+        threadTs: this.trackedTasks.get(taskId)?.threadTs,
       });
 
       this.approvalInFlight.delete(taskId);
@@ -507,11 +538,15 @@ export class SlackInterface {
 
     this.approvalInFlight.add(taskId);
     try {
-      const result = await this.frontalCodeApi.resolveTaskApproval({
+      const result = await this.ocp.resolveApproval({
+        eventId: approvalEventId(action, body),
         taskId,
         approvalKind: "github_review_followup",
         action: actionName,
+        slackUserId: body.user.id,
         resolvedBy: body.user.name || body.user.id,
+        channelId: body.channel.id,
+        threadTs: this.trackedTasks.get(taskId)?.threadTs,
       });
       this.approvalResolved.add(taskId);
       this.approvalInFlight.delete(taskId);
@@ -543,12 +578,7 @@ export class SlackInterface {
     text: string,
     blocks: SlackBlock[],
   ): Promise<void> {
-    await this.app.client.chat.update({
-      channel,
-      ts,
-      text,
-      blocks,
-    });
+    await this.ocp.updateMessage({ channelId: channel, ts, text, blocks });
   }
 
   private async handleFrontalCodeTaskEvent(
@@ -577,8 +607,8 @@ export class SlackInterface {
       this.approvalResolved.add(nextTask.taskId);
       const approvalTs = this.approvalMessageTsByTask.get(nextTask.taskId);
       if (approvalTs) {
-        await this.app.client.chat.update({
-          channel: nextTask.channelId,
+        await this.ocp.updateMessage({
+          channelId: nextTask.channelId,
           text: message.text,
           blocks: message.blocks,
           ts: approvalTs,
@@ -590,11 +620,12 @@ export class SlackInterface {
       }
     }
 
-    const response = await this.app.client.chat.postMessage({
-      channel: nextTask.channelId,
+    const response = await this.ocp.sendToThread({
+      channelId: nextTask.channelId,
+      threadTs: nextTask.threadTs,
       text: message.text,
       blocks: message.blocks,
-      thread_ts: nextTask.threadTs,
+      correlationId: taskCorrelationId(nextTask.taskId),
     });
 
     if (event.event === "approval.requested") {
@@ -1458,6 +1489,12 @@ export class SlackInterface {
     this.approvalInFlight.delete(taskId);
     this.approvalResolved.delete(taskId);
   }
+}
+
+// Slack stamps each click with action_ts; with the user it identifies one decision, so a redelivered
+// click is recorded once.
+function approvalEventId(action: SlackAction, body: SlackBody): string | undefined {
+  return action.action_ts ? `slack-action:${body.user.id}:${action.action_ts}` : undefined;
 }
 
 export default SlackInterface;

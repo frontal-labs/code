@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSlackAccessPolicy } from "../src/access";
 import { logger } from "../src/log";
+import type {
+  SlackApprovalDecision,
+  SlackMessageUpdate,
+  SlackThreadMessage,
+} from "../src/bridge";
 import { SlackInterface } from "../src/slack";
 import type {
   FrontalCodeCreateTaskResponse,
@@ -14,7 +19,7 @@ import type {
 type TestableSlackInterface = SlackInterface & {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
-  healthCheck(): Promise<{ slack: boolean; frontal_code: boolean }>;
+  healthCheck(): Promise<{ slack: boolean; frontal_code: boolean; ocp: boolean }>;
   registerTask(
     task: FrontalCodeCreateTaskResponse,
     trackedTask: FrontalCodeTrackedTask,
@@ -68,6 +73,37 @@ function createTestSlackInterface() {
   const disconnectEvents = vi.fn();
   const trackTask = vi.fn();
   const untrackTask = vi.fn();
+  const ocpStart = vi.fn().mockResolvedValue(undefined);
+  const ocpStop = vi.fn().mockResolvedValue(undefined);
+  const ocpPing = vi.fn().mockResolvedValue(true);
+  // The OCP bridge is covered end to end in tests/ocp/bridge.test.ts. Here it forwards to the Slack
+  // and Frontal Code mocks so these tests keep asserting the calls users and the control plane see.
+  const sendToThread = vi.fn(async (message: SlackThreadMessage) => {
+    const response = await postMessage({
+      channel: message.channelId,
+      text: message.text,
+      blocks: message.blocks,
+      thread_ts: message.threadTs,
+    });
+    return { ts: (response as { ts?: string } | undefined)?.ts };
+  });
+  const ocpUpdateMessage = vi.fn(async (update: SlackMessageUpdate) => {
+    await updateMessage({
+      channel: update.channelId,
+      ts: update.ts,
+      text: update.text,
+      blocks: update.blocks,
+    });
+  });
+  const resolveApproval = vi.fn((decision: SlackApprovalDecision) =>
+    resolveTaskApproval({
+      taskId: decision.taskId,
+      approvalKind: decision.approvalKind,
+      action: decision.action,
+      resolvedBy: decision.resolvedBy,
+      reason: decision.reason,
+    }),
+  );
 
   Object.assign(slack, {
     app: {
@@ -97,6 +133,14 @@ function createTestSlackInterface() {
       trackTask,
       untrackTask,
     },
+    ocp: {
+      start: ocpStart,
+      stop: ocpStop,
+      ping: ocpPing,
+      sendToThread,
+      updateMessage: ocpUpdateMessage,
+      resolveApproval,
+    },
     trackedTasks: new Map<string, FrontalCodeTrackedTask>(),
     approvalMessageTsByTask: new Map<string, string>(),
     approvalInFlight: new Set<string>(),
@@ -105,6 +149,11 @@ function createTestSlackInterface() {
 
   return {
     slack,
+    ocpStart,
+    ocpStop,
+    ocpPing,
+    sendToThread,
+    resolveApproval,
     postMessage,
     postEphemeral,
     updateMessage,
@@ -224,13 +273,14 @@ describe("SlackInterface behavior", () => {
 
   it("connects by syncing tasks, starting Slack, and connecting Frontal Code events", async () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
-    const { slack, listTasks, appStart, connectEvents } = createTestSlackInterface();
+    const { slack, listTasks, appStart, connectEvents, ocpStart } = createTestSlackInterface();
     listTasks.mockResolvedValue([]);
     appStart.mockResolvedValue(undefined);
     connectEvents.mockResolvedValue(undefined);
 
     await slack.connect();
 
+    expect(ocpStart.mock.invocationCallOrder[0]).toBeLessThan(appStart.mock.invocationCallOrder[0]);
     expect(listTasks).toHaveBeenCalledWith({
       source: "slack",
       status: "pending,running",
@@ -238,6 +288,15 @@ describe("SlackInterface behavior", () => {
     expect(appStart).toHaveBeenCalled();
     expect(connectEvents).toHaveBeenCalled();
     expect(infoSpy).toHaveBeenCalledWith("Slack WebSocket interface connected");
+  });
+
+  it("fails to connect before starting Slack when the OCP event store is unavailable", async () => {
+    vi.spyOn(logger, "error").mockImplementation(() => undefined);
+    const { slack, appStart, ocpStart } = createTestSlackInterface();
+    ocpStart.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    await expect(slack.connect()).rejects.toThrow("ECONNREFUSED");
+    expect(appStart).not.toHaveBeenCalled();
   });
 
   it("rethrows connect failures after logging them", async () => {
@@ -253,7 +312,7 @@ describe("SlackInterface behavior", () => {
 
   it("disconnects Frontal Code events before stopping Slack", async () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
-    const { slack, disconnectEvents, appStop } = createTestSlackInterface();
+    const { slack, disconnectEvents, appStop, ocpStop } = createTestSlackInterface();
     disconnectEvents.mockResolvedValue(undefined);
     appStop.mockResolvedValue(undefined);
 
@@ -261,6 +320,9 @@ describe("SlackInterface behavior", () => {
 
     expect(disconnectEvents).toHaveBeenCalled();
     expect(appStop).toHaveBeenCalled();
+    expect(ocpStop.mock.invocationCallOrder[0]).toBeGreaterThan(
+      appStop.mock.invocationCallOrder[0],
+    );
     expect(infoSpy).toHaveBeenCalledWith("Slack WebSocket interface disconnected");
   });
 
@@ -282,6 +344,20 @@ describe("SlackInterface behavior", () => {
     await expect(slack.healthCheck()).resolves.toEqual({
       slack: true,
       frontal_code: true,
+      ocp: true,
+    });
+  });
+
+  it("reports the OCP event store as unhealthy when it cannot be reached", async () => {
+    const { slack, isListening, healthCheck, ocpPing } = createTestSlackInterface();
+    isListening.mockReturnValue(true);
+    healthCheck.mockResolvedValue(true);
+    ocpPing.mockResolvedValue(false);
+
+    await expect(slack.healthCheck()).resolves.toEqual({
+      slack: true,
+      frontal_code: true,
+      ocp: false,
     });
   });
 
@@ -293,6 +369,7 @@ describe("SlackInterface behavior", () => {
     await expect(slack.healthCheck()).resolves.toEqual({
       slack: false,
       frontal_code: true,
+      ocp: true,
     });
   });
 
@@ -306,6 +383,7 @@ describe("SlackInterface behavior", () => {
     await expect(slack.healthCheck()).resolves.toEqual({
       slack: false,
       frontal_code: false,
+      ocp: false,
     });
     expect(errorSpy).toHaveBeenCalledWith("Health check failed", expect.any(Error));
   });
@@ -523,6 +601,55 @@ describe("SlackInterface behavior", () => {
     );
     expect(slack.approvalInFlight.has("task-123")).toBe(false);
     expect(slack.approvalResolved.has("task-123")).toBe(true);
+  });
+
+  it("records orphan approval clicks as OCP decisions keyed by the Slack action", async () => {
+    const { slack, resolveApproval, resolveTaskApproval } = createTestSlackInterface();
+    slack.trackedTasks.set("task-123", createTrackedTask());
+    resolveTaskApproval.mockResolvedValue(createTaskSnapshot({ status: "running" }));
+
+    await slack.handleOrphanApprovalAction(
+      {
+        action_id: "orphaned_hosted_agent.cancel",
+        value: "task-123",
+        action_ts: "1710000009.000",
+      } as { action_id: string; value?: string },
+      {
+        user: { id: "U123" },
+        channel: { id: "C123" },
+        message: { ts: "1710000000.540" },
+      },
+    );
+
+    expect(resolveApproval).toHaveBeenCalledWith({
+      eventId: "slack-action:U123:1710000009.000",
+      taskId: "task-123",
+      approvalKind: "orphaned_hosted_agent",
+      action: "cancel",
+      slackUserId: "U123",
+      resolvedBy: "U123",
+      reason: "resolved from Slack approval action",
+      channelId: "C123",
+      threadTs: "1710000000.100",
+    });
+  });
+
+  it("correlates task-thread messages with the Frontal Code task for OCP audit", async () => {
+    const { slack, sendToThread, postMessage } = createTestSlackInterface();
+    postMessage.mockResolvedValue({ ts: "1710000000.900" });
+
+    await slack.handleFrontalCodeTaskEvent(
+      createEvent({ event: "lane.failed", payload: { error: "tests failed" } }),
+      createTrackedTask(),
+    );
+
+    expect(sendToThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: "C123",
+        threadTs: "1710000000.100",
+        correlationId: "frontal-code-task:task-123",
+      }),
+    );
   });
 
   it("updates the approval message with an error state when resolution fails", async () => {

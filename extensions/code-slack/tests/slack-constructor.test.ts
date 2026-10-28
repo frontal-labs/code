@@ -144,6 +144,12 @@ const accessState = vi.hoisted(() => ({
   adminUserIds: [] as string[],
 }));
 
+// Each SlackInterface gets a fresh in-memory OCP event store instead of Postgres.
+vi.mock("../src/store", async () => {
+  const { memoryStoreHandle } = await import("./helpers/memory-event-store");
+  return { createOcpStore: () => memoryStoreHandle() };
+});
+
 vi.mock("@slack/bolt", () => ({
   App: slackState.MockApp,
 }));
@@ -152,7 +158,7 @@ vi.mock("../src/api-client", () => ({
   FrontalCodeApiClient: frontalCodeApiState.MockFrontalCodeApiClient,
 }));
 
-vi.mock("../src/code-events", () => ({
+vi.mock("../src/websocket", () => ({
   FrontalCodeEventsClient: frontalCodeEventsState.MockFrontalCodeEventsClient,
 }));
 
@@ -180,6 +186,12 @@ vi.mock("../src/config", () => ({
     frontalCode: {
       apiUrl: "http://localhost:8787",
       timeout: 30_000,
+    },
+    ocp: {
+      databaseUrl: "postgres://ocp:ocp@localhost:5432/ocp_test",
+      eventsTable: "ocp_events",
+      runMigrations: true,
+      agentId: "agent:frontal-code",
     },
   },
 }));
@@ -666,6 +678,102 @@ describe("SlackInterface constructor wiring", () => {
         type: "member_joined_channel",
         channel: "C123",
       },
+    });
+  });
+
+  describe("OpenChannel Protocol host", () => {
+    beforeEach(() => {
+      // Earlier tests stub registerTask on the prototype; these run the real confirmation path.
+      const prototype = SlackInterface.prototype as unknown as {
+        registerTask: { mockRestore?: () => void };
+      };
+      prototype.registerTask.mockRestore?.();
+    });
+
+    function dmEnvelope(eventId: string) {
+      return {
+        type: "event_callback",
+        event_id: eventId,
+        event: {
+          type: "message",
+          text: "Investigate flaky test",
+          user: "U123",
+          channel: "D123",
+          ts: "1710000000.100",
+          channel_type: "im",
+        },
+      };
+    }
+
+    it("creates one task per Slack event even when Slack redelivers it", async () => {
+      frontalCodeApiState.createTask.mockResolvedValue({
+        task_id: "task-123",
+        status: "running",
+        message: "created",
+      });
+      slackState.chatPostMessage.mockResolvedValue({ ts: "1710000000.200" });
+      new SlackInterface();
+      const handler = slackState.getMessageHandler() as unknown as (args: {
+        message: unknown;
+        body: unknown;
+      }) => Promise<void>;
+      const envelope = dmEnvelope("Ev123");
+
+      await handler({ message: envelope.event, body: envelope });
+      await handler({ message: envelope.event, body: envelope });
+
+      expect(frontalCodeApiState.createTask).toHaveBeenCalledTimes(1);
+      // The confirmation is delivered by the ocp-sdk Slack sink into the DM thread.
+      expect(slackState.chatPostMessage).toHaveBeenCalledTimes(1);
+      expect(slackState.chatPostMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: "D123",
+          thread_ts: "1710000000.100",
+          text: expect.stringContaining("Task created: task-123"),
+        }),
+      );
+      expect(frontalCodeEventsState.trackTask).toHaveBeenCalledWith(
+        expect.objectContaining({ taskId: "task-123", threadTs: "1710000000.100" }),
+      );
+    });
+
+    it("replies in the thread when the control plane rejects a task", async () => {
+      frontalCodeApiState.createTask.mockRejectedValue(new Error("quota exceeded"));
+      slackState.chatPostMessage.mockResolvedValue({ ts: "1710000000.200" });
+      new SlackInterface();
+      const envelope = dmEnvelope("Ev124");
+
+      await (
+        slackState.getMessageHandler() as unknown as (args: {
+          message: unknown;
+          body: unknown;
+        }) => Promise<void>
+      )({ message: envelope.event, body: envelope });
+
+      expect(slackState.chatPostMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: "D123",
+          thread_ts: "1710000000.100",
+          text: "Code could not start this task: quota exceeded",
+        }),
+      );
+      expect(frontalCodeEventsState.trackTask).not.toHaveBeenCalled();
+    });
+
+    it("answers an empty /code with usage instead of creating a task", async () => {
+      const ack = vi.fn();
+      new SlackInterface();
+
+      await slackState.getCommandHandler()?.({
+        command: { text: "   ", user_id: "U123", channel_id: "C123" },
+        ack,
+      });
+
+      expect(ack).toHaveBeenCalledWith({
+        response_type: "ephemeral",
+        text: "Usage: /code <what you want done>",
+      });
+      expect(frontalCodeApiState.createTask).not.toHaveBeenCalled();
     });
   });
 });

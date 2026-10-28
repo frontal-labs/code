@@ -11,10 +11,11 @@ The Frontal Code Slack bot provides autonomous engineering capabilities directly
 
 ## Prerequisites
 
-1. **Node.js 20+** installed on the deployment machine
-2. **Frontal Code Server** running and accessible from the internet
-3. **Slack App** created in your Slack workspace
-4. **GitHub App** configured with appropriate permissions
+1. **Node.js 22.18+** installed on the deployment machine (required by `ocp-sdk`)
+2. **Postgres** reachable from the bot, for the OpenChannel Protocol event store (see `docs/OCP.md`)
+3. **Frontal Code Server** running and accessible from the internet
+4. **Slack App** created in your Slack workspace
+5. **GitHub App** configured with appropriate permissions
 
 ## Installation Steps
 
@@ -75,6 +76,9 @@ SLACK_ADMIN_USER_IDS=        # optional, comma-separated; may approve/retry/canc
 FRONTAL_API_URL=https://your-code-server.com
 FRONTAL_SERVER_API_KEY=your-code-api-key-here
 
+# OpenChannel Protocol event store (required)
+OCP_DATABASE_URL=postgres://user:password@db-host:5432/frontal_code_slack
+
 # Optional: GitHub Integration
 GITHUB_APP_ID=your-github-app-id
 GITHUB_PRIVATE_KEY_PATH=/path/to/github/private/key.pem
@@ -89,6 +93,8 @@ Set the same shared secret value as `FRONTAL_SERVER_API_KEY` on the hosted serve
 cd extensions/code-slack
 bun install
 bun run build
+# Creates the OCP tables; the bot also does this on startup unless OCP_RUN_MIGRATIONS=false.
+node dist/migrate.js
 ```
 
 ### 5. Start the Slack Bot

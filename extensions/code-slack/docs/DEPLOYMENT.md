@@ -161,8 +161,8 @@ For simple deployments without containerization.
 #### Prerequisites
 
 ```bash
-# Install Node.js 20 LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Install Node.js 22 LTS (ocp-sdk requires >= 22.18)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Install Bun from an official release and ensure `bun` is on PATH.
@@ -219,6 +219,10 @@ SLACK_SIGNING_SECRET=production-signing-secret
 # Frontal Code Server
 FRONTAL_CODE_API_URL=https://code-api.your-domain.com
 FRONTAL_CODE_API_TIMEOUT=30000
+
+# OpenChannel Protocol event store (required; see docs/OCP.md)
+OCP_DATABASE_URL=postgres://frontal_code_slack:secret@db.your-domain.com:5432/frontal_code_slack
+OCP_RUN_MIGRATIONS=false   # when `node dist/migrate.js` runs as a deploy step
 
 # Application
 NODE_ENV=production
@@ -637,7 +641,7 @@ bun update
 npm audit --omit=dev --package-lock-only
 
 # Update Docker base image
-FROM node:20-alpine@sha256:<new-sha>
+FROM node:22-alpine@sha256:<new-sha>
 ```
 
 ### Security Patching

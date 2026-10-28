@@ -2,6 +2,8 @@
 
 TypeScript Slack connector for Frontal Code hosted tasks. It creates tasks from Slack, subscribes to Frontal Code task events over WebSocket, reconstructs Slack routing from Frontal Code task snapshots and event payloads, renders approval workflows, and exposes lightweight operator commands such as orphan policy inspection.
 
+The bot is an [OpenChannel Protocol](https://github.com/frontal-labs/open-channel) host built on [`ocp-sdk`](https://www.npmjs.com/package/ocp-sdk): every Slack request and bot message is a typed OCP event, task creation and approval decisions are policy-checked OCP actions, and the full trail is stored in Postgres. See [`docs/OCP.md`](docs/OCP.md).
+
 ## Current Capabilities
 
 - create hosted Frontal Code tasks from `/code <prompt>` and Slack messages
@@ -9,6 +11,7 @@ TypeScript Slack connector for Frontal Code hosted tasks. It creates tasks from 
 - resolve orphaned hosted-lane approvals with `Retry Lane` and `Cancel Task`
 - inspect control-plane orphan policy with `/code policy orphans ...`
 - recover active Slack tasks and approval linkage from Frontal Code on startup
+- record an auditable OCP event trail in Postgres and ignore Slack redeliveries, including across restarts
 
 ## Command Surface
 
@@ -36,10 +39,14 @@ TypeScript Slack connector for Frontal Code hosted tasks. It creates tasks from 
 
 The current connector implementation lives in `src/`:
 
-- `src/index.ts`: process entrypoint
+- `src/main.ts`: process entrypoint
+- `src/index.ts`: app wiring, health (`/health`) and readiness (`/ready`) server, graceful shutdown
+- `src/migrate.ts`: standalone OCP event store migration for deploy steps
 - `src/slack.ts`: Slack socket-mode interface, command handling, thread updates, approval actions
+- `src/bridge.ts`, `src/agent.ts`, `src/actions.ts`, `src/policy.ts`, `src/actors.ts`, `src/transport.ts`, `src/store.ts`: OpenChannel Protocol host (agent, actions, policy, Slack transport, Postgres store, `OcpBridge` facade)
 - `src/api-client.ts`: Frontal Code HTTP client for tasks, approvals, Slack connector callbacks, context updates, and orphan policy inspection
-- `src/code-events.ts`: Frontal Code WebSocket event stream client with tracked-task scoped subscriptions
+- `src/websocket.ts`: Frontal Code WebSocket event stream client (connection, reconnect, parsing)
+- `src/events.ts`: event routing for tracked-task subscriptions (replay buffer, dedupe, handler fan-out)
 - `src/config.ts` and `src/env.ts`: validated environment configuration
 - `src/log.ts`: connector logging
 - `src/types.ts`: Slack and Frontal Code API types
@@ -63,6 +70,12 @@ SLACK_ADMIN_USER_IDS=                # optional: may act on other users' tasks
 FRONTAL_CODE_API_URL=http://127.0.0.1:8788
 FRONTAL_CODE_API_TIMEOUT=30000
 
+# OpenChannel Protocol event store (required)
+OCP_DATABASE_URL=postgres://user:password@localhost:5432/frontal_code_slack
+OCP_EVENTS_TABLE=ocp_events          # optional
+OCP_RUN_MIGRATIONS=true              # optional: set false when a deploy step runs `node dist/migrate.js`
+OCP_AGENT_ID=agent:frontal-code      # optional
+
 # App
 NODE_ENV=development
 LOG_LEVEL=info
@@ -84,7 +97,8 @@ HEALTH_CHECK_INTERVAL=30000
 
 Prerequisites:
 
-- Node.js 20+
+- Node.js 22.18+ (required by `ocp-sdk`)
+- Postgres for the OCP event store, e.g. `docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev postgres:17-alpine`
 - a running Frontal Code server with hosted task APIs enabled
 - Slack app configured for Socket Mode
 
@@ -101,7 +115,9 @@ Useful commands:
 ```bash
 bun run sync:code-events
 bun run build
-bun test
+bun run typecheck
+bun run test
+bun run migrate
 bun run lint
 bun run format
 ```
@@ -143,12 +159,16 @@ Use selectors to preview the exact effective policy Frontal Code would apply:
 
 ### Resolve orphan approvals
 
-When Frontal Code emits `approval.requested` for an orphaned hosted agent, the connector renders `Retry Lane` and `Cancel Task` buttons in the Slack thread. Those actions resolve the server-side approval directly.
+When Frontal Code emits `approval.requested` for an orphaned hosted agent, the connector renders `Retry Lane` and `Cancel Task` buttons in the Slack thread. A click is recorded as an OCP `message.received` from the Slack user and resolved through the policy-checked `frontal-code.task.approval.resolve` action, which calls the server-side approval API.
 
 ## Verification
 
 ```bash
+bun run typecheck
+bun run test
 bun run build
 ```
+
+`tests/ocp/postgres.integration.test.ts` also runs against a real database when `OCP_TEST_DATABASE_URL` points at a disposable Postgres.
 
 For an end-to-end operator runbook covering hosted task inspection, orphan recovery, approvals, and policy tuning, see `docs/hosted-task-operations.md`.

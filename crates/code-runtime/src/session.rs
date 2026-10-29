@@ -18,8 +18,9 @@ const SESSION_VERSION: u32 = 2;
 const MIN_SUPPORTED_SESSION_VERSION: u32 = 1;
 const ROTATE_AFTER_BYTES: u64 = 256 * 1024;
 const MAX_ROTATED_FILES: usize = 3;
-/// Rotated copies that have not been uploaded are kept until this many bytes accumulate.
-const MAX_UNUPLOADED_ROTATED_BYTES: u64 = 64 * 1024 * 1024;
+/// Rotated copies the uploader has not confirmed are kept until this many bytes accumulate.
+/// Only applies once an export cursor exists; before that, [`MAX_ROTATED_FILES`] applies.
+const MAX_UNUPLOADED_ROTATED_BYTES: u64 = 16 * 1024 * 1024;
 const ARCHIVE_DIR_NAME: &str = "archive";
 const EXPORT_CURSOR_EXTENSION: &str = "export-cursor";
 static SESSION_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -93,13 +94,30 @@ impl SessionMetadata {
     /// never stored, because it can contain credentials or private host names.
     #[must_use]
     pub fn repo_id_for_remote(remote_url: &str) -> String {
-        let normalized = remote_url
-            .trim()
+        let normalized = strip_remote_userinfo(remote_url.trim())
             .trim_end_matches('/')
             .trim_end_matches(".git")
             .to_ascii_lowercase();
         let digest = Sha256::digest(normalized.as_bytes());
         format!("sha256:{}", hex_encode(&digest))
+    }
+}
+
+/// Removes `user:token@` credentials from a remote URL. Credentials must never reach the hash
+/// input, and the hash itself must not depend on them.
+fn strip_remote_userinfo(remote: &str) -> String {
+    let (scheme, rest) = match remote.split_once("://") {
+        Some((scheme, rest)) => (Some(scheme), rest),
+        None => (None, remote),
+    };
+    let authority_end = rest.find('/').unwrap_or(rest.len());
+    let (authority, path) = rest.split_at(authority_end);
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    match scheme {
+        Some(scheme) => format!("{scheme}://{host}{path}"),
+        None => format!("{host}{path}"),
     }
 }
 
@@ -1201,7 +1219,7 @@ fn append_archived_messages(
     }
     let parent = session_path.parent().unwrap_or_else(|| Path::new("."));
     let archive_dir = parent.join(ARCHIVE_DIR_NAME);
-    fs::create_dir_all(&archive_dir)?;
+    create_private_dir(&archive_dir)?;
     let archive_path = archive_dir.join(format!("{}.jsonl", file_stem_or_default(session_path)));
     repair_torn_tail(&archive_path)?;
     let mut lines = String::new();
@@ -1219,10 +1237,15 @@ fn append_archived_messages(
         lines.push_str(&JsonValue::Object(object).render());
         lines.push('\n');
     }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&archive_path)?;
+    let mut file = if archive_path.exists() {
+        OpenOptions::new().append(true).open(&archive_path)?
+    } else {
+        let mut options = OpenOptions::new();
+        options.create(true).append(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options.open(&archive_path)?
+    };
     file.write_all(lines.as_bytes())?;
     file.sync_data()?;
     Ok(())
@@ -1287,12 +1310,30 @@ fn write_temp_then_rename(
     path: &Path,
     contents: &str,
 ) -> Result<(), SessionError> {
-    let mut file = fs::File::create(temp_path)?;
+    let mut file = create_private(temp_path)?;
     file.write_all(contents.as_bytes())?;
     file.sync_all()?;
     drop(file);
     fs::rename(temp_path, path)?;
     sync_parent_dir(path)
+}
+
+/// Creates a file readable only by its owner. Session files hold conversation text, so the
+/// default umask-based mode is too permissive.
+fn create_private(path: &Path) -> std::io::Result<fs::File> {
+    let mut options = OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path)
+}
+
+fn create_private_dir(path: &Path) -> std::io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(path)
 }
 
 fn sync_parent_dir(path: &Path) -> Result<(), SessionError> {
@@ -1325,6 +1366,13 @@ fn rotate_session_file_if_needed(path: &Path) -> Result<(), SessionError> {
     };
     if metadata.len() < ROTATE_AFTER_BYTES {
         return Ok(());
+    }
+    // Every save rewrites the whole file, so rotating on each save would copy it every turn.
+    // Rotate again only after the file has grown by another threshold past the newest copy.
+    if let Some(newest) = list_rotated_logs(path)?.last() {
+        if metadata.len() < newest.bytes.saturating_add(ROTATE_AFTER_BYTES) {
+            return Ok(());
+        }
     }
     let contents = fs::read_to_string(path)?;
     let rotated_path = rotated_log_path(path, last_message_seq(&contents));
@@ -1407,7 +1455,16 @@ fn list_rotated_logs(path: &Path) -> Result<Vec<RotatedLog>, SessionError> {
 /// copies beyond the newest [`MAX_ROTATED_FILES`] are deleted. Un-uploaded copies are deleted
 /// oldest first, but only once they exceed [`MAX_UNUPLOADED_ROTATED_BYTES`].
 fn cleanup_rotated_logs(path: &Path) -> Result<(), SessionError> {
-    let uploaded_through = read_export_cursor(path).unwrap_or(0);
+    // Without an uploader there is nothing to wait for, so keep only the newest copies.
+    // Rotated copies hold sensitive conversation text, so they are not kept longer than needed.
+    let Some(uploaded_through) = read_export_cursor(path) else {
+        let logs = list_rotated_logs(path)?;
+        let excess = logs.len().saturating_sub(MAX_ROTATED_FILES);
+        for stale in logs.iter().take(excess) {
+            fs::remove_file(&stale.path)?;
+        }
+        return Ok(());
+    };
     let (uploaded, mut pending): (Vec<_>, Vec<_>) = list_rotated_logs(path)?
         .into_iter()
         .partition(|log| log.through_seq <= uploaded_through);
@@ -1612,9 +1669,9 @@ mod tests {
             let rotated = super::rotated_log_path(&path, seq);
             fs::write(&rotated, "old").expect("rotated file should write");
         }
-        // Nothing has been uploaded yet, so every copy is kept within the byte cap.
+        // With no uploader configured, only the newest copies are kept.
         cleanup_rotated_logs(&path).expect("cleanup should succeed");
-        assert_eq!(rotation_files(&path).len(), 6);
+        assert_eq!(rotation_files(&path).len(), super::MAX_ROTATED_FILES);
 
         // Once the uploader has confirmed everything, only the newest copies are kept.
         super::write_export_cursor(&path, 5).expect("cursor should write");
@@ -1625,6 +1682,40 @@ mod tests {
             fs::remove_file(rotated).expect("rotated file should be removable");
         }
         let _ = fs::remove_file(super::export_cursor_path(&path));
+    }
+
+    #[test]
+    fn unuploaded_rotated_copies_are_kept_while_under_the_byte_cap() {
+        let path = temp_session_path("pending-cap");
+        for seq in 1..=5 {
+            fs::write(super::rotated_log_path(&path, seq), "old")
+                .expect("rotated file should write");
+        }
+        // A cursor exists but has not reached any copy, so all five stay.
+        super::write_export_cursor(&path, 0).expect("cursor should write");
+        cleanup_rotated_logs(&path).expect("cleanup should succeed");
+        assert_eq!(rotation_files(&path).len(), 5);
+
+        for rotated in rotation_files(&path) {
+            fs::remove_file(rotated).expect("rotated file should be removable");
+        }
+        let _ = fs::remove_file(super::export_cursor_path(&path));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn session_and_rotated_files_are_private_to_the_owner() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = temp_session_path("private-mode");
+        let mut session = Session::new();
+        session
+            .push_user_text("secret text")
+            .expect("in-memory push should succeed");
+        session.save_to_path(&path).expect("save should succeed");
+
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        fs::remove_file(&path).expect("temp file should be removable");
+        assert_eq!(mode, 0o600);
     }
 
     #[test]
@@ -1920,6 +2011,18 @@ mod tests {
         assert_eq!(restored.metadata.client.as_deref(), Some("cli"));
         assert_eq!(restored.metadata.repo_id.as_deref(), Some("sha256:abc"));
         assert_eq!(restored.metadata.user_id, None);
+    }
+
+    #[test]
+    fn repo_id_ignores_embedded_credentials() {
+        let with_token = super::SessionMetadata::repo_id_for_remote(
+            "https://x-access-token:ghp_secret123@github.com/frontal-labs/code.git",
+        );
+        let plain =
+            super::SessionMetadata::repo_id_for_remote("https://github.com/frontal-labs/code.git");
+
+        assert_eq!(with_token, plain);
+        assert!(!with_token.contains("ghp_secret123"));
     }
 
     #[test]

@@ -62,8 +62,8 @@ use code_runtime::{
     resolve_sandbox_status, ApiClient, ApiRequest, AssistantEvent, CompactionConfig, ConfigLoader,
     ConfigSource, ConfigurationManager, ContentBlock, ConversationMessage, ConversationRuntime,
     McpServerManager, McpTool, MessageRole, ModelPricing, PermissionMode, PermissionPolicy,
-    ProjectContext, PromptCacheEvent, ResolvedPermissionMode, RuntimeError, Session, TokenUsage,
-    ToolError, ToolExecutor, UsageTracker,
+    ProjectContext, PromptCacheEvent, ResolvedPermissionMode, RuntimeError, Session,
+    SessionMetadata, TokenUsage, ToolError, ToolExecutor, UsageTracker,
 };
 use code_tools::{GlobalToolRegistry, RuntimeToolDefinition, ToolExecutionScope, ToolSearchOutput};
 use init::initialize_repo;
@@ -5140,9 +5140,14 @@ fn run_resume_command(
             let removed = result.removed_message_count;
             let kept = result.compacted_session.messages.len();
             let skipped = removed == 0;
-            result.compacted_session.save_to_path(session_path)?;
+            let mut compacted = session.clone();
+            compacted.apply_compaction(
+                result.compacted_session,
+                &result.removed_messages,
+                Some(session_path),
+            )?;
             Ok(ResumeCommandOutcome {
-                session: result.compacted_session,
+                session: compacted,
                 message: Some(format_compact_report(removed, kept, skipped)),
                 json: None,
             })
@@ -5159,7 +5164,8 @@ fn run_resume_command(
             }
             let backup_path = write_session_clear_backup(session, session_path)?;
             let previous_session_id = session.session_id.clone();
-            let cleared = Session::new();
+            let mut cleared = Session::new();
+            cleared.set_metadata(session.metadata.clone());
             let new_session_id = cleared.session_id.clone();
             cleared.save_to_path(session_path)?;
             Ok(ResumeCommandOutcome {
@@ -6168,7 +6174,11 @@ impl LiveCli {
             }
         }
 
-        let session_state = Session::new();
+        let mut session_state = Session::new();
+        session_state.set_metadata(session_metadata_for_new_session(
+            &effective_model,
+            effective_provider.as_deref(),
+        ));
         let session = create_managed_session_handle(&session_state.session_id)?;
         let runtime = build_runtime_with_provider(
             session_state.with_persistence_path(session.path.clone()),
@@ -6677,7 +6687,11 @@ impl LiveCli {
             return Ok(false);
         }
 
-        let session_state = Session::new();
+        let mut session_state = Session::new();
+        session_state.set_metadata(session_metadata_for_new_session(
+            &self.model,
+            self.provider.as_deref(),
+        ));
         self.session = create_managed_session_handle(&session_state.session_id)?;
         let runtime = build_runtime_with_provider(
             session_state.with_persistence_path(self.session.path.clone()),
@@ -6949,8 +6963,14 @@ impl LiveCli {
 
     fn compact(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let result = self.runtime.compact(CompactionConfig::default());
-        let runtime = build_runtime_with_provider(
+        let mut compacted = self.runtime.session().clone();
+        compacted.apply_compaction(
             result.compacted_session,
+            &result.removed_messages,
+            Some(&self.session.path),
+        )?;
+        let runtime = build_runtime_with_provider(
+            compacted,
             &self.session.id,
             self.model.clone(),
             self.system_prompt.clone(),
@@ -6962,7 +6982,6 @@ impl LiveCli {
             None,
         )?;
         self.replace_runtime(runtime)?;
-        self.persist_session()?;
         println!("Compaction completed; session details are redacted.");
         Ok(())
     }
@@ -8407,6 +8426,29 @@ fn format_issue_report(context: Option<&str>) -> String {
   Output           title and markdown body suitable for GitHub",
         context.unwrap_or("none")
     )
+}
+
+/// Metadata for a session started by this process. The repository is identified by a hash of
+/// its remote, and the branch is read when the session starts. A resumed session keeps the
+/// values it was created with.
+fn session_metadata_for_new_session(model: &str, provider: Option<&str>) -> SessionMetadata {
+    let repo_id = git_output(&["config", "--get", "remote.origin.url"])
+        .ok()
+        .map(|remote| SessionMetadata::repo_id_for_remote(remote.trim()))
+        .filter(|id| !id.is_empty());
+    let branch = git_output(&["rev-parse", "--abbrev-ref", "HEAD"])
+        .ok()
+        .map(|branch| branch.trim().to_string())
+        .filter(|branch| !branch.is_empty());
+    SessionMetadata {
+        client: Some("cli".to_string()),
+        client_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        repo_id,
+        branch,
+        model: Some(model.to_string()),
+        provider: provider.map(str::to_owned),
+        ..SessionMetadata::default()
+    }
 }
 
 fn git_output(args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
@@ -14158,16 +14200,16 @@ UU conflicted.rs",
                 name: "bash".to_string(),
                 input: "{\"command\":\"pwd\"}".to_string(),
             }]),
-            ConversationMessage {
-                role: MessageRole::Tool,
-                blocks: vec![ContentBlock::ToolResult {
+            ConversationMessage::new(
+                MessageRole::Tool,
+                vec![ContentBlock::ToolResult {
                     tool_use_id: "tool-1".to_string(),
                     tool_name: "bash".to_string(),
                     output: "ok".to_string(),
                     is_error: false,
                 }],
-                usage: None,
-            },
+                None,
+            ),
         ];
 
         let converted = super::convert_messages(&messages);

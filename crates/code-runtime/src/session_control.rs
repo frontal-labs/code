@@ -164,11 +164,18 @@ pub fn resolve_managed_session_path_for(
 
 #[must_use]
 pub fn is_managed_session_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|extension| {
-            extension == PRIMARY_SESSION_EXTENSION || extension == LEGACY_SESSION_EXTENSION
-        })
+    // Rotated backups share the session extension but are not sessions in their own right.
+    let is_rotated_backup = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.contains(".rot-"));
+    !is_rotated_backup
+        && path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|extension| {
+                extension == PRIMARY_SESSION_EXTENSION || extension == LEGACY_SESSION_EXTENSION
+            })
 }
 
 pub fn list_managed_sessions() -> Result<Vec<ManagedSessionSummary>, SessionControlError> {
@@ -330,6 +337,21 @@ fn format_no_managed_sessions() -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rotated_backups_and_sidecars_are_not_listed_as_sessions() {
+        use super::is_managed_session_file;
+        use std::path::Path;
+
+        assert!(is_managed_session_file(Path::new("session-1-0.jsonl")));
+        assert!(!is_managed_session_file(Path::new(
+            "session-1-0.rot-99-s12.jsonl"
+        )));
+        assert!(!is_managed_session_file(Path::new(
+            "session-1-0.export-cursor"
+        )));
+        assert!(!is_managed_session_file(Path::new("archive")));
+    }
+
     use super::{
         create_managed_session_handle_for, fork_managed_session_for, is_session_reference_alias,
         list_managed_sessions_for, load_managed_session_for, resolve_session_reference_for,

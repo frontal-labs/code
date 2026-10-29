@@ -10,6 +10,7 @@ code-core = { path = "../code-core" }
 sha2 = "0.10"
 glob = "0.3"
 getrandom = "0.2"
+uuid = { version = "1", features = ["v7"] }
 code-plugins = { path = "../code-plugins" }
 code-integrations = { path = "../code-integrations" }
 code-sandbox = { path = "../code-sandbox" }

@@ -149,8 +149,8 @@ pub use sandbox::{
     LinuxSandboxCommand, SandboxConfig, SandboxDetectionInputs, SandboxRequest, SandboxStatus,
 };
 pub use session::{
-    ContentBlock, ConversationMessage, MessageRole, Session, SessionCompaction, SessionError,
-    SessionFork,
+    read_export_cursor, write_export_cursor, ContentBlock, ConversationMessage, MessageRole,
+    Session, SessionCompaction, SessionError, SessionFork, SessionMetadata,
 };
 pub use sse::{IncrementalSseParser, SseEvent};
 pub use stale_branch::{

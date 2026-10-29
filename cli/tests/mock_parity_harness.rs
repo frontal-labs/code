@@ -13,7 +13,6 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[test]
 #[allow(clippy::too_many_lines)]
-#[ignore = "mock service connection not routing: FRONTAL_BASE_URL being bypassed"]
 fn clean_env_cli_reaches_mock_gateway_across_scripted_parity_scenarios() {
     let manifest_entries = load_scenario_manifest();
     let manifest = manifest_entries
@@ -190,10 +189,17 @@ fn clean_env_cli_reaches_mock_gateway_across_scripted_parity_scenarios() {
         21,
         "twelve scenarios should produce twenty-one requests (messages only; no count_tokens endpoint in the OpenAI-compatible gateway)"
     );
-    assert!(captured
+    let offenders: Vec<_> = captured
         .iter()
-        .all(|request| request.path == "/v1/chat/completions"));
-    assert!(captured.iter().all(|request| request.stream));
+        .filter(|request| request.path != "/chat/completions" || !request.stream)
+        .map(|request| {
+            format!(
+                "{} stream={} scenario={}",
+                request.path, request.stream, request.scenario
+            )
+        })
+        .collect();
+    assert!(offenders.is_empty(), "unexpected requests: {offenders:?}");
 
     let mut request_counts = BTreeMap::new();
     for request in &captured {
@@ -735,23 +741,14 @@ fn parse_json_output(stdout: &str) -> Value {
         });
     }
 
-    // `--output-format json` prints one pretty-printed document. Older output was a single
-    // line, so fall back to scanning lines for it.
-    if let Ok(value) = serde_json::from_str::<Value>(stdout.trim()) {
-        return value;
-    }
+    // `--output-format json` prints one pretty-printed document, sometimes after prompt text
+    // on the same line (for example a permission prompt). The document is the first `{` whose
+    // remainder parses as a whole, so an inline `{...}` in the prompt does not match.
     stdout
-        .lines()
-        .rev()
-        .find_map(|line| {
-            let trimmed = line.trim();
-            if trimmed.starts_with('{') && trimmed.ends_with('}') {
-                serde_json::from_str(trimmed).ok()
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| panic!("no JSON response line found in stdout:\n{stdout}"))
+        .char_indices()
+        .filter(|(_, character)| *character == '{')
+        .find_map(|(index, _)| serde_json::from_str::<Value>(stdout[index..].trim()).ok())
+        .unwrap_or_else(|| panic!("no JSON response found in stdout:\n{stdout}"))
 }
 
 fn build_scenario_report(

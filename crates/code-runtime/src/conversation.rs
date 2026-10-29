@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
+use std::path::Path;
 
 use code_telemetry::SessionTracer;
 use serde_json::{Map, Value};
@@ -533,7 +534,16 @@ where
             return None;
         }
 
-        self.session = result.compacted_session;
+        // If the archive or the snapshot cannot be written, keep the full history and skip
+        // this compaction. It is retried on a later turn.
+        let path = self.session.persistence_path().map(Path::to_path_buf);
+        self.session
+            .apply_compaction(
+                result.compacted_session,
+                &result.removed_messages,
+                path.as_deref(),
+            )
+            .ok()?;
         Some(AutoCompactionEvent {
             removed_message_count: result.removed_message_count,
         })

@@ -355,7 +355,7 @@ fn prepare_auto_compact_fixture(workspace: &HarnessWorkspace) {
 
     // Write a pre-seeded session with 6 messages so auto-compact can remove them
     let session_id = "parity-auto-compact-seed";
-    let session_jsonl = r#"{"type":"session_meta","version":3,"session_id":"parity-auto-compact-seed","created_at_ms":1743724800000,"updated_at_ms":1743724800000}
+    let session_jsonl = r#"{"type":"session_meta","version":2,"session_id":"parity-auto-compact-seed","created_at_ms":1743724800000,"updated_at_ms":1743724800000}
 {"type":"message","message":{"role":"user","blocks":[{"type":"text","text":"step one of the parity scenario"}]}}
 {"type":"message","message":{"role":"assistant","blocks":[{"type":"text","text":"acknowledged step one"}]}}
 {"type":"message","message":{"role":"user","blocks":[{"type":"text","text":"step two of the parity scenario"}]}}
@@ -735,6 +735,11 @@ fn parse_json_output(stdout: &str) -> Value {
         });
     }
 
+    // `--output-format json` prints one pretty-printed document. Older output was a single
+    // line, so fall back to scanning lines for it.
+    if let Ok(value) = serde_json::from_str::<Value>(stdout.trim()) {
+        return value;
+    }
     stdout
         .lines()
         .rev()
@@ -800,8 +805,7 @@ fn maybe_write_report(reports: &[ScenarioReport]) {
 }
 
 fn load_scenario_manifest() -> Vec<ScenarioManifestEntry> {
-    let manifest_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock_parity_scenarios.json");
+    let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../mock_parity_scenarios.json");
     let manifest = fs::read_to_string(&manifest_path).expect("scenario manifest should exist");
     serde_json::from_str::<Vec<Value>>(&manifest)
         .expect("scenario manifest should parse")

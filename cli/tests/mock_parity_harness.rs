@@ -11,6 +11,8 @@ use serde_json::{json, Value};
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+// The harness runs the CLI with a Unix PATH and shell plugin scripts, so it is Unix-only.
+#[cfg(unix)]
 #[test]
 #[allow(clippy::too_many_lines)]
 fn clean_env_cli_reaches_mock_gateway_across_scripted_parity_scenarios() {

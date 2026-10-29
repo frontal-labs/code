@@ -358,3 +358,26 @@ Not in Phase 0 scope. Tracked here.
 9. **Tool-output policy.** Store full redacted outputs, or head and tail only? Which tools go on the embedding allowlist?
 10. **Deletion semantics.** For `forget <session>`: a lightweight DELETE, or a tombstone plus TTL? Where does the audit log live?
 11. **Export opt-in scope.** Allow opt-in from user-level settings only, or also from a trusted workspace's project settings?
+
+## Decisions taken
+
+The recommended option was chosen for each open question. Phase 1 (PR #119) implements the parts that do not depend on identity.
+
+| # | Question | Decision | Status |
+|---|----------|----------|--------|
+| 1 | Identity source for per-user isolation | Add per-user auth in code-server, backed by a Frontal identity endpoint. Until that endpoint exists, Slack and hosted-task rows cannot satisfy rule 6. | **Open.** Blocks Phase 4. |
+| 2 | Ingest host | code-server, with per-user auth added. Reconsider only if identity cannot be added there. | Decided |
+| 3 | ClickHouse deployment | Self-hosted for development and CI. Hosting and retention defaults are for Phase 3. | Partly open |
+| 4 | In-memory transcripts (tools-agent, sub-agents) | Persist server-side for hosted tasks. Sub-agent capture is for Phase 8. | Decided, scope deferred |
+| 5 | Session ID migration | Keep `session-{ms}-{n}` for existing sessions. New messages get UUIDv7. | Implemented in Phase 1 |
+| 6 | Mock parity gate | Restore it before Phase 1. | Done in PR #119 (`b5fb35f`) |
+| 7 | Existing `/history` command | Keep `/history`. The new recall command is `/recall`. | Decided, implemented in Phase 7 |
+| 8 | Embeddings gateway | Verify `FRONTAL_BASE_URL` serves `/embeddings` before Phase 6. | Open |
+| 9 | Tool-output policy | Store head and tail of tool outputs, with `original_bytes`. Embedding allowlist is decided in Phase 6. | Decided |
+| 10 | Deletion semantics | Lightweight DELETE, with each deletion audit-logged. | Decided, implemented in Phase 8 |
+| 11 | Export opt-in scope | User-level settings, or a trusted workspace. A per-repo opt-out is always honored. | Decided |
+
+Further decisions from Phase 1 review:
+
+- **Archive retention:** kept until an explicit `code history forget` (Phase 5). Automatic deletion would silently lose compacted history. A size or time limit still needs a policy decision.
+- **Repo ID:** unkeyed SHA-256 of the normalized remote, with userinfo stripped. A keyed HMAC needs a tenant-wide key the server distributes. That is open.

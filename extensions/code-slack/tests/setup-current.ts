@@ -8,6 +8,7 @@ process.env.SLACK_SIGNING_SECRET = "test-signing-secret-with-at-least-32-chars";
 process.env.FRONTAL_CODE_API_URL = "http://localhost:8787";
 process.env.FRONTAL_CODE_API_TIMEOUT = "30000";
 process.env.PORT = "3000";
+process.env.OCP_DATABASE_URL = "postgres://ocp:ocp@localhost:5432/ocp_test";
 process.env.MAX_CONCURRENT_TASKS = "10";
 process.env.TASK_TIMEOUT = "3600000";
 process.env.HEALTH_CHECK_INTERVAL = "30000";

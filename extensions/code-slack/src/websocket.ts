@@ -1,4 +1,7 @@
+// Frontal Code hosted events over WebSocket. Owns the connection, reconnection, and message parsing;
+// each parsed event is handed to a `FrontalCodeEventRouter` (`events.ts`) for routing.
 import WebSocket from "ws";
+import { FrontalCodeEventRouter, type TrackedTaskHandler } from "./events";
 import { logger } from "./log";
 import type {
   FrontalCodeEventEnvelope,
@@ -6,25 +9,15 @@ import type {
   FrontalCodeTrackedTask,
 } from "./types";
 
-type TrackedTaskHandler = (
-  event: FrontalCodeEventEnvelope,
-  task?: FrontalCodeTrackedTask,
-) => Promise<void> | void;
 type FrontalCodeEventsUrlBuilder = (query?: FrontalCodeEventStreamQuery) => string;
 type FrontalCodeEventsHeadersBuilder = () => Record<string, string> | undefined;
 
-const RECENT_EVENTS_PER_TASK = 12;
-const MAX_SEEN_EVENT_KEYS = 512;
 const RECONNECT_DELAY_MS = 2_000;
 
 export class FrontalCodeEventsClient {
   private readonly urlBuilder: FrontalCodeEventsUrlBuilder;
   private readonly headersBuilder: FrontalCodeEventsHeadersBuilder;
-  private readonly taskHints = new Map<string, FrontalCodeTrackedTask>();
-  private readonly handlers = new Set<TrackedTaskHandler>();
-  private readonly recentEvents = new Map<string, FrontalCodeEventEnvelope[]>();
-  private readonly seenEventKeys = new Set<string>();
-  private readonly seenEventOrder: string[] = [];
+  private readonly router = new FrontalCodeEventRouter();
   private socket?: WebSocket;
   private reconnectTimer?: NodeJS.Timeout;
   private shouldReconnect = false;
@@ -64,23 +57,15 @@ export class FrontalCodeEventsClient {
   }
 
   onTrackedTaskEvent(handler: TrackedTaskHandler): () => void {
-    this.handlers.add(handler);
-    return () => {
-      this.handlers.delete(handler);
-    };
+    return this.router.onTrackedTaskEvent(handler);
   }
 
   trackTask(task: FrontalCodeTrackedTask): void {
-    this.taskHints.set(task.taskId, task);
-    const recentEvents = this.recentEvents.get(task.taskId) ?? [];
-    for (const event of recentEvents) {
-      this.dispatchEvent(event, task);
-    }
+    this.router.trackTask(task);
   }
 
   untrackTask(taskId: string): void {
-    this.taskHints.delete(taskId);
-    this.recentEvents.delete(taskId);
+    this.router.untrackTask(taskId);
   }
 
   private async openSocket(): Promise<void> {
@@ -158,77 +143,7 @@ export class FrontalCodeEventsClient {
       return;
     }
 
-    if (!event.task_id) {
-      return;
-    }
-
-    const recent = this.recentEvents.get(event.task_id) ?? [];
-    recent.push(event);
-    if (recent.length > RECENT_EVENTS_PER_TASK) {
-      recent.shift();
-    }
-    this.recentEvents.set(event.task_id, recent);
-
-    this.dispatchEvent(event);
-  }
-
-  private dispatchEvent(
-    event: FrontalCodeEventEnvelope,
-    hintedTask?: FrontalCodeTrackedTask,
-  ): void {
-    const taskId = event.task_id;
-    if (!taskId) {
-      return;
-    }
-
-    const task = hintedTask || this.taskHints.get(taskId) || this.readTrackedTaskFromEvent(event);
-    if (task && !this.taskHints.has(taskId)) {
-      this.taskHints.set(taskId, task);
-    }
-
-    const eventKey = `${event.event}:${event.status}:${event.emittedAt}:${event.task_id ?? ""}:${event.lane_id ?? ""}`;
-    if (this.seenEventKeys.has(eventKey)) {
-      return;
-    }
-
-    this.seenEventKeys.add(eventKey);
-    this.seenEventOrder.push(eventKey);
-    if (this.seenEventOrder.length > MAX_SEEN_EVENT_KEYS) {
-      const oldest = this.seenEventOrder.shift();
-      if (oldest) {
-        this.seenEventKeys.delete(oldest);
-      }
-    }
-
-    for (const handler of this.handlers) {
-      void Promise.resolve(handler(event, task)).catch((error) => {
-        logger.error("Frontal Code hosted event handler failed", error as Error, {
-          event: event.event,
-          taskId,
-        });
-      });
-    }
-  }
-
-  private readTrackedTaskFromEvent(
-    event: FrontalCodeEventEnvelope,
-  ): FrontalCodeTrackedTask | undefined {
-    const payload = event.payload;
-    if (!payload) {
-      return undefined;
-    }
-
-    const channelId = payload.channel_id;
-    if (!channelId || !event.task_id) {
-      return undefined;
-    }
-
-    return {
-      taskId: event.task_id,
-      channelId,
-      threadTs: payload.thread_ts,
-      userId: payload.user_id,
-    };
+    this.router.receive(event);
   }
 }
 

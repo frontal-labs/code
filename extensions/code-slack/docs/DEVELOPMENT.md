@@ -87,7 +87,8 @@ src/
   index.ts              # Application entry point
   slack.ts              # Slack client and command handling
   api-client.ts         # Frontal Code API client
-  code-events.ts       # WebSocket event client
+  websocket.ts         # WebSocket event client
+  events.ts            # Task event routing
   config.ts             # Configuration management
   env.ts                # Environment validation
   log.ts                # Logging configuration
@@ -145,7 +146,7 @@ export class FrontalCodeAPIClient {
 }
 ```
 
-#### Event Client (`src/code-events.ts`)
+#### Event Client (`src/websocket.ts`, routing in `src/events.ts`)
 
 Handles real-time WebSocket events:
 - Connection management

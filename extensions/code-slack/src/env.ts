@@ -81,6 +81,27 @@ export const env = createEnv({
       .optional()
       .describe("Frontal Code API key for protected hosted control-plane routes"),
 
+    // OpenChannel Protocol (@openchannelprotocol/sdk) Configuration
+    OCP_DATABASE_URL: z
+      .string()
+      .regex(/^postgres(ql)?:\/\//, "OCP database URL must be a postgres:// connection string")
+      .describe("Postgres connection string for the OCP event store (required)"),
+    OCP_EVENTS_TABLE: z
+      .string()
+      .regex(/^[a-z_][a-z0-9_]*$/, "OCP events table must be a plain lowercase identifier")
+      .default("ocp_events")
+      .describe("Table that stores OCP events"),
+    OCP_RUN_MIGRATIONS: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true")
+      .describe("Run the idempotent OCP schema migration on startup"),
+    OCP_AGENT_ID: z
+      .string()
+      .min(1)
+      .default("agent:frontal-code")
+      .describe("OCP actor ID of the Frontal Code agent"),
+
     // Application Configuration
     NODE_ENV: z
       .enum(["development", "production", "test"])
@@ -153,6 +174,10 @@ export const env = createEnv({
       ? Number(process.env.FRONTAL_CODE_API_TIMEOUT)
       : undefined,
     FRONTAL_SERVER_API_KEY: process.env.FRONTAL_SERVER_API_KEY,
+    OCP_DATABASE_URL: process.env.OCP_DATABASE_URL,
+    OCP_EVENTS_TABLE: process.env.OCP_EVENTS_TABLE,
+    OCP_RUN_MIGRATIONS: process.env.OCP_RUN_MIGRATIONS,
+    OCP_AGENT_ID: process.env.OCP_AGENT_ID,
     NODE_ENV: process.env.NODE_ENV,
     LOG_LEVEL: process.env.LOG_LEVEL,
     PORT: process.env.PORT ? Number(process.env.PORT) : undefined,
@@ -236,6 +261,12 @@ export function getEnvConfig() {
       apiUrl: env.FRONTAL_CODE_API_URL,
       timeout: env.FRONTAL_CODE_API_TIMEOUT,
       apiKey: env.FRONTAL_SERVER_API_KEY,
+    },
+    ocp: {
+      databaseUrl: env.OCP_DATABASE_URL,
+      eventsTable: env.OCP_EVENTS_TABLE,
+      runMigrations: env.OCP_RUN_MIGRATIONS,
+      agentId: env.OCP_AGENT_ID,
     },
     app: {
       nodeEnv: env.NODE_ENV,

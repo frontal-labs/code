@@ -29,6 +29,7 @@ frontal-code_server_api_key = "replace-with-a-long-random-api-key"
 slack_bot_token = "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx-xxxxxxxxxxxx"
 slack_app_token = "xapp-xxxxxxxxxxxx-xxxxxxxxxxxx-xxxxxxxxxxxx"
 slack_signing_secret = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+slack_ocp_database_url = "postgres://frontal_code_slack:change-me@postgres.internal:5432/frontal_code_slack"
 
 # Optional Integrations
 github_token = ""  # GitHub token for Slack integration

@@ -54,17 +54,19 @@ vi.mock("ws", () => ({
   default: MockWebSocket,
 }));
 
-import { FrontalCodeEventsClient } from "../src/code-events";
+import { readTrackedTaskFromEvent } from "../src/events";
 import { logger } from "../src/log";
 import type { FrontalCodeEventEnvelope, FrontalCodeTrackedTask } from "../src/types";
+import { FrontalCodeEventsClient } from "../src/websocket";
 
 type TestableFrontalCodeEventsClient = FrontalCodeEventsClient & {
   buildSocketUrl(): string;
   handleMessage(payload: string): void;
-  dispatchEvent(event: FrontalCodeEventEnvelope, hintedTask?: FrontalCodeTrackedTask): void;
-  readTrackedTaskFromEvent(event: FrontalCodeEventEnvelope): FrontalCodeTrackedTask | undefined;
   scheduleReconnect(): void;
-  recentEvents: Map<string, FrontalCodeEventEnvelope[]>;
+  router: {
+    dispatchEvent(event: FrontalCodeEventEnvelope, hintedTask?: FrontalCodeTrackedTask): void;
+    recentEvents: Map<string, FrontalCodeEventEnvelope[]>;
+  };
   reconnectTimer?: NodeJS.Timeout;
   shouldReconnect: boolean;
   restartRequested: boolean;
@@ -161,7 +163,7 @@ describe("FrontalCodeEventsClient", () => {
       );
     }
 
-    const bufferedEvents = client.recentEvents.get("task-123");
+    const bufferedEvents = client.router.recentEvents.get("task-123");
 
     expect(bufferedEvents).toHaveLength(12);
     expect(bufferedEvents?.[0]).toEqual(
@@ -218,8 +220,8 @@ describe("FrontalCodeEventsClient", () => {
   });
 
   it("replays buffered events immediately when a task is tracked later", () => {
-    const dispatchSpy = vi.spyOn(client, "dispatchEvent");
-    client.recentEvents.set("task-123", [createEventEnvelope()]);
+    const dispatchSpy = vi.spyOn(client.router, "dispatchEvent");
+    client.router.recentEvents.set("task-123", [createEventEnvelope()]);
 
     client.trackTask({
       taskId: "task-123",
@@ -244,8 +246,8 @@ describe("FrontalCodeEventsClient", () => {
     const event = createEventEnvelope();
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(event);
-    client.dispatchEvent(event);
+    client.router.dispatchEvent(event);
+    client.router.dispatchEvent(event);
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -257,8 +259,8 @@ describe("FrontalCodeEventsClient", () => {
     });
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(event);
-    client.dispatchEvent(event);
+    client.router.dispatchEvent(event);
+    client.router.dispatchEvent(event);
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -270,8 +272,8 @@ describe("FrontalCodeEventsClient", () => {
     });
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(event);
-    client.dispatchEvent(event);
+    client.router.dispatchEvent(event);
+    client.router.dispatchEvent(event);
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -280,13 +282,13 @@ describe("FrontalCodeEventsClient", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         emittedAt: "2026-04-09T10:00:00Z",
         lane_id: "lane-1",
       }),
     );
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         event_id: "evt-124",
         emittedAt: "2026-04-09T10:00:00Z",
@@ -301,14 +303,14 @@ describe("FrontalCodeEventsClient", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         emittedAt: "2026-04-09T10:00:00Z",
         lane_id: "lane-123",
         status: "running",
       }),
     );
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         event_id: "evt-125",
         emittedAt: "2026-04-09T10:00:00Z",
@@ -324,7 +326,7 @@ describe("FrontalCodeEventsClient", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         event: "lane.started",
         status: "running",
@@ -332,7 +334,7 @@ describe("FrontalCodeEventsClient", () => {
         lane_id: "lane-123",
       }),
     );
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         event_id: "evt-126",
         event: "lane.failed",
@@ -350,7 +352,7 @@ describe("FrontalCodeEventsClient", () => {
     const dispose = client.onTrackedTaskEvent(handler);
 
     dispose();
-    client.dispatchEvent(createEventEnvelope());
+    client.router.dispatchEvent(createEventEnvelope());
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -365,7 +367,7 @@ describe("FrontalCodeEventsClient", () => {
     };
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         event_id: "evt-456",
         emittedAt: "2026-04-09T10:00:01Z",
@@ -383,7 +385,7 @@ describe("FrontalCodeEventsClient", () => {
     client.onTrackedTaskEvent(failingHandler);
     client.onTrackedTaskEvent(nextHandler);
 
-    client.dispatchEvent(createEventEnvelope());
+    client.router.dispatchEvent(createEventEnvelope());
 
     expect(nextHandler).toHaveBeenCalled();
     return Promise.resolve()
@@ -437,13 +439,13 @@ describe("FrontalCodeEventsClient", () => {
     });
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(event);
+    client.router.dispatchEvent(event);
 
     expect(handler).toHaveBeenCalledWith(event, undefined);
   });
 
   it("reads a sparse tracked task from an event payload when only channel routing is present", () => {
-    const task = client.readTrackedTaskFromEvent(
+    const task = readTrackedTaskFromEvent(
       createEventEnvelope({
         payload: {
           channel_id: "C999",
@@ -461,7 +463,7 @@ describe("FrontalCodeEventsClient", () => {
 
   it("returns no tracked task from events without payload routing details", () => {
     expect(
-      client.readTrackedTaskFromEvent(
+      readTrackedTaskFromEvent(
         createEventEnvelope({
           payload: undefined,
         }),
@@ -469,7 +471,7 @@ describe("FrontalCodeEventsClient", () => {
     ).toBeUndefined();
 
     expect(
-      client.readTrackedTaskFromEvent(
+      readTrackedTaskFromEvent(
         createEventEnvelope({
           task_id: undefined,
           payload: {
@@ -487,7 +489,7 @@ describe("FrontalCodeEventsClient", () => {
     });
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(event);
+    client.router.dispatchEvent(event);
 
     expect(handler).toHaveBeenCalledWith(event, undefined);
   });
@@ -496,7 +498,7 @@ describe("FrontalCodeEventsClient", () => {
     const handler = vi.fn();
     client.onTrackedTaskEvent(handler);
 
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         task_id: undefined,
       }),
@@ -526,7 +528,7 @@ describe("FrontalCodeEventsClient", () => {
     client.onTrackedTaskEvent(handler);
 
     for (let index = 0; index < 513; index += 1) {
-      client.dispatchEvent(
+      client.router.dispatchEvent(
         createEventEnvelope({
           event_id: `evt-${index}`,
           emittedAt: `2026-04-09T10:${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}Z`,
@@ -537,7 +539,7 @@ describe("FrontalCodeEventsClient", () => {
 
     expect(handler).toHaveBeenCalledTimes(513);
 
-    client.dispatchEvent(
+    client.router.dispatchEvent(
       createEventEnvelope({
         event_id: "evt-0-replay",
         emittedAt: "2026-04-09T10:00:00Z",

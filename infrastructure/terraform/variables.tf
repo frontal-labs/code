@@ -89,6 +89,12 @@ variable "slack_signing_secret" {
   sensitive   = true
 }
 
+variable "slack_ocp_database_url" {
+  description = "Postgres connection string for the frontal-code-slack OpenChannel Protocol event store"
+  type        = string
+  sensitive   = true
+}
+
 variable "github_token" {
   description = "GitHub token for Slack integration"
   type        = string

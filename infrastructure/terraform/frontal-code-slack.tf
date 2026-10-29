@@ -11,14 +11,17 @@ resource "kubernetes_config_map" "frontal-code_slack_config" {
   }
 
   data = {
-    "FRONTAL_CODE_API_URL"         = "http://code-server:8788"
-    "FRONTAL_CODE_API_TIMEOUT"     = "30000"
-    "NODE_ENV"              = var.environment
-    "LOG_LEVEL"             = "info"
-    "PORT"                  = "3000"
-    "MAX_CONCURRENT_TASKS"  = "10"
-    "TASK_TIMEOUT"          = "3600000"
-    "HEALTH_CHECK_INTERVAL" = "30000"
+    "FRONTAL_CODE_API_URL"     = "http://code-server:8788"
+    "FRONTAL_CODE_API_TIMEOUT" = "30000"
+    "NODE_ENV"                 = var.environment
+    "LOG_LEVEL"                = "info"
+    "PORT"                     = "3000"
+    "MAX_CONCURRENT_TASKS"     = "10"
+    "TASK_TIMEOUT"             = "3600000"
+    "HEALTH_CHECK_INTERVAL"    = "30000"
+    # The init container migrates the OCP event store, so the app skips it on startup.
+    "OCP_RUN_MIGRATIONS" = "false"
+    "OCP_EVENTS_TABLE"   = "ocp_events"
   }
 
   depends_on = [kubernetes_namespace.frontal-code]
@@ -37,12 +40,13 @@ resource "kubernetes_secret" "frontal-code_slack_secrets" {
   }
 
   data = {
-     "FRONTAL_SERVER_API_KEY"      = var.frontal-code_server_api_key
-    "SLACK_BOT_TOKEN"      = var.slack_bot_token
-    "SLACK_APP_TOKEN"      = var.slack_app_token
-    "SLACK_SIGNING_SECRET" = var.slack_signing_secret
-    "GITHUB_TOKEN"         = var.github_token
-    "SENTRY_DSN"           = var.sentry_dsn
+    "FRONTAL_SERVER_API_KEY" = var.frontal-code_server_api_key
+    "SLACK_BOT_TOKEN"        = var.slack_bot_token
+    "SLACK_APP_TOKEN"        = var.slack_app_token
+    "SLACK_SIGNING_SECRET"   = var.slack_signing_secret
+    "GITHUB_TOKEN"           = var.github_token
+    "SENTRY_DSN"             = var.sentry_dsn
+    "OCP_DATABASE_URL"       = var.slack_ocp_database_url
   }
 
   type = "Opaque"
@@ -63,7 +67,13 @@ resource "kubernetes_deployment" "frontal-code_slack" {
   }
 
   spec {
-    replicas = 2
+    # Exactly one replica: pending OCP approvals live in process memory, so a button click
+    # routed to another replica cannot find its approval. Recreate avoids two live pods overlapping.
+    replicas = 1
+
+    strategy {
+      type = "Recreate"
+    }
 
     selector {
       match_labels = {
@@ -81,6 +91,35 @@ resource "kubernetes_deployment" "frontal-code_slack" {
 
       spec {
         automount_service_account_token = false
+
+        # Idempotent OCP event store migration. Concurrent first runs can race on CREATE; a failed
+        # init container is retried by the kubelet and succeeds once the schema exists.
+        init_container {
+          name              = "ocp-migrate"
+          image             = var.frontal-code_slack_image
+          image_pull_policy = "IfNotPresent"
+          command           = ["node", "dist/migrate.js"]
+
+          security_context {
+            allow_privilege_escalation = false
+            read_only_root_filesystem  = true
+            run_as_group               = 1001
+            run_as_non_root            = true
+            run_as_user                = 1001
+          }
+
+          env_from {
+            config_map_ref {
+              name = "frontal-code-slack-config"
+            }
+          }
+
+          env_from {
+            secret_ref {
+              name = "frontal-code-slack-secrets"
+            }
+          }
+        }
 
         container {
           name              = "frontal-code-slack"
@@ -128,10 +167,11 @@ resource "kubernetes_deployment" "frontal-code_slack" {
             }
           }
 
-          # Note: frontal-code-slack doesn't have HTTP health endpoint, using process check
+          # /health is liveness only; /ready also requires the Slack socket and the OCP event store.
           liveness_probe {
-            exec {
-              command = ["/bin/sh", "-c", "pidof node >/dev/null"]
+            http_get {
+              path = "/health"
+              port = 3000
             }
             initial_delay_seconds = 30
             period_seconds        = 10
@@ -140,8 +180,9 @@ resource "kubernetes_deployment" "frontal-code_slack" {
           }
 
           readiness_probe {
-            exec {
-              command = ["/bin/sh", "-c", "pidof node >/dev/null"]
+            http_get {
+              path = "/ready"
+              port = 3000
             }
             initial_delay_seconds = 10
             period_seconds        = 5

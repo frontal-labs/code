@@ -6,8 +6,23 @@ import { SlackInterface } from "./slack";
 async function main(): Promise<void> {
   const slackInterface = new SlackInterface();
 
-  // Start health check HTTP server (Fly.io requires it)
-  const healthServer = http.createServer((_req, res) => {
+  // Liveness (/health) only proves the process serves HTTP. Readiness (/ready) also requires the
+  // Slack socket and the OCP event store, which is mandatory for handling any request.
+  const healthServer = http.createServer((req, res) => {
+    if (req.url === "/ready") {
+      slackInterface
+        .healthCheck()
+        .then((health) => {
+          const ready = health.slack && health.ocp;
+          res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: ready, ...health }));
+        })
+        .catch(() => {
+          res.writeHead(503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false }));
+        });
+      return;
+    }
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
   });
@@ -58,13 +73,6 @@ async function main(): Promise<void> {
   }
 }
 
-// Run the application
-if (require.main === module) {
-  main().catch((error) => {
-    console.error("Failed to start application:", error);
-    process.exit(1);
-  });
-}
-
+// The process entrypoint is src/main.ts; this module only exports the app for embedding and tests.
 export { SlackInterface };
 export default main;

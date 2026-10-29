@@ -28,6 +28,8 @@ pub struct CompactionResult {
     pub formatted_summary: String,
     pub compacted_session: Session,
     pub removed_message_count: usize,
+    /// Messages dropped from the live history. Archive them before applying the compaction.
+    pub removed_messages: Vec<ConversationMessage>,
 }
 
 /// Roughly estimates the token footprint of the current session transcript.
@@ -100,6 +102,7 @@ pub fn compact_session(session: &Session, config: CompactionConfig) -> Compactio
             formatted_summary: String::new(),
             compacted_session: session.clone(),
             removed_message_count: 0,
+            removed_messages: Vec::new(),
         };
     }
 
@@ -119,15 +122,16 @@ pub fn compact_session(session: &Session, config: CompactionConfig) -> Compactio
     let formatted_summary = format_compact_summary(&summary);
     let continuation = get_compact_continuation_message(&summary, true, !preserved.is_empty());
 
-    let mut compacted_messages = vec![ConversationMessage {
-        role: MessageRole::System,
-        blocks: vec![ContentBlock::Text { text: continuation }],
-        usage: None,
-    }];
+    let mut compacted_messages = vec![ConversationMessage::new(
+        MessageRole::System,
+        vec![ContentBlock::Text { text: continuation }],
+        None,
+    )];
     compacted_messages.extend(preserved);
 
     let mut compacted_session = session.clone();
     compacted_session.messages = compacted_messages;
+    compacted_session.assign_missing_identity();
     compacted_session.record_compaction(summary.clone(), removed.len());
 
     CompactionResult {
@@ -135,6 +139,7 @@ pub fn compact_session(session: &Session, config: CompactionConfig) -> Compactio
         formatted_summary,
         compacted_session,
         removed_message_count: removed.len(),
+        removed_messages: removed.to_vec(),
     }
 }
 
@@ -542,13 +547,13 @@ mod tests {
                 text: "two ".repeat(200),
             }]),
             ConversationMessage::tool_result("1", "bash", "ok ".repeat(200), false),
-            ConversationMessage {
-                role: MessageRole::Assistant,
-                blocks: vec![ContentBlock::Text {
+            ConversationMessage::new(
+                MessageRole::Assistant,
+                vec![ContentBlock::Text {
                     text: "recent".to_string(),
                 }],
-                usage: None,
-            },
+                None,
+            ),
         ];
 
         let result = compact_session(
@@ -642,13 +647,13 @@ mod tests {
         let summary = "<summary>Conversation summary:\n- Scope: earlier work preserved.\n- Key timeline:\n  - user: large preserved context\n</summary>";
         let mut session = Session::new();
         session.messages = vec![
-            ConversationMessage {
-                role: MessageRole::System,
-                blocks: vec![ContentBlock::Text {
+            ConversationMessage::new(
+                MessageRole::System,
+                vec![ContentBlock::Text {
                     text: get_compact_continuation_message(summary, true, true),
                 }],
-                usage: None,
-            },
+                None,
+            ),
             ConversationMessage::user_text("tiny"),
             ConversationMessage::assistant(vec![ContentBlock::Text {
                 text: "recent".to_string(),

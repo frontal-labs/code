@@ -378,7 +378,7 @@ fn tool_results_by_name(request: &ChatRequest) -> HashMap<String, (String, bool)
 fn build_http_response(request: &ChatRequest, scenario: Scenario) -> String {
     let model = request.model.clone();
     if request.stream {
-        let body = build_stream_body(&model, scenario);
+        let body = build_stream_body(request, scenario);
         return http_response(
             "200 OK",
             "text/event-stream",
@@ -566,8 +566,22 @@ fn multi_tool_roundtrip(request: &ChatRequest) -> (Value, &'static str) {
 }
 
 #[allow(clippy::too_many_lines)]
-fn build_stream_body(model: &str, scenario: Scenario) -> String {
+fn build_stream_body(request: &ChatRequest, scenario: Scenario) -> String {
+    let model = request.model.as_str();
     let mut body = String::new();
+    // Once a tool result is in the request, the streamed reply must be the final answer.
+    // Repeating the tool call would make the client run the tool again, forever.
+    if latest_tool_result(request).is_some() {
+        let (message, _) = scenario_message(scenario, request);
+        if let Some(text) = message.get("content").and_then(Value::as_str) {
+            append_sse(
+                &mut body,
+                chat_chunk(model, &message_id_for(scenario), text, Some("stop"), None),
+            );
+            body.push_str("data: [DONE]\n\n");
+            return body;
+        }
+    }
     match scenario {
         Scenario::AutoCompactTriggered => {
             append_sse(
@@ -612,22 +626,26 @@ fn build_stream_body(model: &str, scenario: Scenario) -> String {
         Scenario::MultiToolTurnRoundtrip => {
             append_sse(
                 &mut body,
-                chat_tool_call(
+                chat_tool_call_at(
                     model,
                     "msg_multi_tool",
+                    0,
                     "toolu_multi_read",
                     "read_file",
                     r#"{"path":"fixture.txt"}"#,
+                    false,
                 ),
             );
             append_sse(
                 &mut body,
-                chat_tool_call(
+                chat_tool_call_at(
                     model,
                     "msg_multi_tool",
+                    1,
                     "toolu_multi_grep",
                     "grep_search",
                     r#"{"pattern":"parity","path":"fixture.txt","output_mode":"count"}"#,
+                    true,
                 ),
             );
         }
@@ -722,6 +740,25 @@ fn chat_chunk(
 
 /// Build an `OpenAI` SSE `data:` chunk requesting a tool call.
 fn chat_tool_call(model: &str, id: &str, tool_id: &str, name: &str, arguments: &str) -> String {
+    chat_tool_call_at(model, id, 0, tool_id, name, arguments, true)
+}
+
+/// One streamed tool call at a given `tool_calls` index. Only the final call in a turn carries
+/// `finish_reason`, so a client does not end the turn after the first call.
+fn chat_tool_call_at(
+    model: &str,
+    id: &str,
+    index: u32,
+    tool_id: &str,
+    name: &str,
+    arguments: &str,
+    last_in_turn: bool,
+) -> String {
+    let finish_reason = if last_in_turn {
+        json!("tool_calls")
+    } else {
+        Value::Null
+    };
     let payload = json!({
         "id": id,
         "object": "chat.completion.chunk",
@@ -730,13 +767,13 @@ fn chat_tool_call(model: &str, id: &str, tool_id: &str, name: &str, arguments: &
             "index": 0,
             "delta": {
                 "tool_calls": [{
-                    "index": 0,
+                    "index": index,
                     "id": tool_id,
                     "type": "function",
                     "function": { "name": name, "arguments": arguments }
                 }]
             },
-            "finish_reason": "tool_calls"
+            "finish_reason": finish_reason
         }]
     });
     format!("data: {payload}\n\n")

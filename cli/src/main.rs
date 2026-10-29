@@ -10486,6 +10486,22 @@ fn push_output_block(
             } else {
                 input.to_string()
             };
+            // A streamed response can start a second tool call before the first one stops.
+            // Emit the earlier call now, or it is silently replaced.
+            if let Some((previous_id, previous_name, previous_input)) = pending_tool.take() {
+                writeln!(
+                    out,
+                    "\n{}",
+                    format_tool_call_start(&previous_name, &previous_input)
+                )
+                .and_then(|()| out.flush())
+                .map_err(|error| RuntimeError::new(error.to_string()))?;
+                events.push(AssistantEvent::ToolUse {
+                    id: previous_id,
+                    name: previous_name,
+                    input: previous_input,
+                });
+            }
             *pending_tool = Some((id, name, initial_input));
         }
         OutputContentBlock::Thinking { thinking, .. } => {
@@ -14415,6 +14431,47 @@ UU conflicted.rs",
     }
 
     #[test]
+    fn push_output_block_keeps_an_earlier_tool_call_when_a_second_one_starts() {
+        let mut out = Vec::new();
+        let mut events = Vec::new();
+        let mut pending_tool = None;
+        let mut block_has_thinking_summary = false;
+
+        for (id, name) in [("tool-1", "read_file"), ("tool-2", "grep_search")] {
+            push_output_block(
+                OutputContentBlock::ToolUse {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    input: json!({}),
+                },
+                &mut out,
+                &mut events,
+                &mut pending_tool,
+                true,
+                &mut block_has_thinking_summary,
+            )
+            .expect("tool block should accumulate");
+        }
+
+        // The first call is emitted when the second starts, and the second stays pending.
+        assert_eq!(
+            events,
+            vec![code_runtime::AssistantEvent::ToolUse {
+                id: "tool-1".to_string(),
+                name: "read_file".to_string(),
+                input: String::new(),
+            }]
+        );
+        assert_eq!(
+            pending_tool,
+            Some((
+                "tool-2".to_string(),
+                "grep_search".to_string(),
+                String::new()
+            ))
+        );
+    }
+
     fn push_output_block_skips_empty_object_prefix_for_tool_streams() {
         let mut out = Vec::new();
         let mut events = Vec::new();

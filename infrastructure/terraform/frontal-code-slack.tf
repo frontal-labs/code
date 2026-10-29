@@ -67,7 +67,13 @@ resource "kubernetes_deployment" "frontal-code_slack" {
   }
 
   spec {
-    replicas = 2
+    # Exactly one replica: pending OCP approvals live in process memory, so a button click
+    # routed to another replica cannot find its approval. Recreate avoids two live pods overlapping.
+    replicas = 1
+
+    strategy {
+      type = "Recreate"
+    }
 
     selector {
       match_labels = {

@@ -3,7 +3,10 @@ kind: Deployment
 metadata:
   name: frontal-code-slack
 spec:
+  # Exactly one replica: pending OCP approvals live in process memory (see docs/OCP.md).
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: frontal-code-slack

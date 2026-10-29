@@ -82,7 +82,7 @@ From code, `OcpBridge.app.store` exposes the same data, e.g. `app.store.query({ 
 
 ## Scaling
 
-The bot keeps no OCP state in process memory that another replica would need. Approvals are resolved when they are clicked, and their state lives in the Frontal Code control plane. Duplicate suppression is enforced by the shared event store. Running several replicas is safe as far as OCP is concerned.
+The bot must run as a single replica. The SDK keeps pending approvals in an in-memory table inside the runtime. Postgres restores them only when the process starts, so a button click handled by a second replica fails with `NotFoundError` in `decideApproval`. The shipped Kubernetes and Terraform manifests use `replicas: 1` with a `Recreate` strategy, so a rollout never overlaps two pods. Duplicate suppression is enforced by the shared event store, so a restart does not re-run an action. Multi-replica operation needs cross-process approval routing in the SDK first.
 
 ## Testing
 

@@ -4,6 +4,7 @@ exports_files([
     "MODULE.bazel",
     ".gitignore",
     "biome.json",
+    "mock_parity_scenarios.json",
     "ultracite.json",
 ])
 
@@ -25,6 +26,7 @@ filegroup(
         "//:Cargo.lock",
         "//:Cargo.toml",
         "//:config_project",
+        "//:mock_parity_scenarios.json",
         "//:.cargo/config.toml",
         "//:rust-toolchain.toml",
         "//crates:all_crates",

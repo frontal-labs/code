@@ -428,7 +428,7 @@ fn doctor_and_resume_status_emit_json_when_requested() {
     let session_path = root.join("session.jsonl");
     fs::write(
         &session_path,
-        "{\"type\":\"session_meta\",\"version\":3,\"session_id\":\"resume-json\",\"created_at_ms\":0,\"updated_at_ms\":0}\n{\"type\":\"message\",\"message\":{\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"hello\"}]}}\n",
+        "{\"type\":\"session_meta\",\"version\":2,\"session_id\":\"resume-json\",\"created_at_ms\":0,\"updated_at_ms\":0}\n{\"type\":\"message\",\"message\":{\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"hello\"}]}}\n",
     )
     .expect("session should write");
     let resumed = assert_json_command(
@@ -459,7 +459,7 @@ fn resumed_inventory_commands_emit_structured_json_when_requested() {
     let session_path = root.join("session.jsonl");
     fs::write(
         &session_path,
-        "{\"type\":\"session_meta\",\"version\":3,\"session_id\":\"resume-inventory-json\",\"created_at_ms\":0,\"updated_at_ms\":0}\n{\"type\":\"message\",\"message\":{\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"inventory\"}]}}\n",
+        "{\"type\":\"session_meta\",\"version\":2,\"session_id\":\"resume-inventory-json\",\"created_at_ms\":0,\"updated_at_ms\":0}\n{\"type\":\"message\",\"message\":{\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"inventory\"}]}}\n",
     )
     .expect("session should write");
 
@@ -541,7 +541,7 @@ fn resumed_version_and_init_emit_structured_json_when_requested() {
     let session_path = root.join("session.jsonl");
     fs::write(
         &session_path,
-        "{\"type\":\"session_meta\",\"version\":3,\"session_id\":\"resume-version-init-json\",\"created_at_ms\":0,\"updated_at_ms\":0}\n",
+        "{\"type\":\"session_meta\",\"version\":2,\"session_id\":\"resume-version-init-json\",\"created_at_ms\":0,\"updated_at_ms\":0}\n",
     )
     .expect("session should write");
 

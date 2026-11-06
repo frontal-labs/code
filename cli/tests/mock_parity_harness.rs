@@ -1,3 +1,6 @@
+// The harness runs the CLI with a Unix PATH and shell plugin scripts, so the whole file is Unix-only.
+#![cfg(unix)]
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -13,7 +16,6 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[test]
 #[allow(clippy::too_many_lines)]
-#[ignore = "mock service connection not routing: FRONTAL_BASE_URL being bypassed"]
 fn clean_env_cli_reaches_mock_gateway_across_scripted_parity_scenarios() {
     let manifest_entries = load_scenario_manifest();
     let manifest = manifest_entries
@@ -190,10 +192,17 @@ fn clean_env_cli_reaches_mock_gateway_across_scripted_parity_scenarios() {
         21,
         "twelve scenarios should produce twenty-one requests (messages only; no count_tokens endpoint in the OpenAI-compatible gateway)"
     );
-    assert!(captured
+    let offenders: Vec<_> = captured
         .iter()
-        .all(|request| request.path == "/v1/chat/completions"));
-    assert!(captured.iter().all(|request| request.stream));
+        .filter(|request| request.path != "/chat/completions" || !request.stream)
+        .map(|request| {
+            format!(
+                "{} stream={} scenario={}",
+                request.path, request.stream, request.scenario
+            )
+        })
+        .collect();
+    assert!(offenders.is_empty(), "unexpected requests: {offenders:?}");
 
     let mut request_counts = BTreeMap::new();
     for request in &captured {
@@ -355,7 +364,7 @@ fn prepare_auto_compact_fixture(workspace: &HarnessWorkspace) {
 
     // Write a pre-seeded session with 6 messages so auto-compact can remove them
     let session_id = "parity-auto-compact-seed";
-    let session_jsonl = r#"{"type":"session_meta","version":3,"session_id":"parity-auto-compact-seed","created_at_ms":1743724800000,"updated_at_ms":1743724800000}
+    let session_jsonl = r#"{"type":"session_meta","version":2,"session_id":"parity-auto-compact-seed","created_at_ms":1743724800000,"updated_at_ms":1743724800000}
 {"type":"message","message":{"role":"user","blocks":[{"type":"text","text":"step one of the parity scenario"}]}}
 {"type":"message","message":{"role":"assistant","blocks":[{"type":"text","text":"acknowledged step one"}]}}
 {"type":"message","message":{"role":"user","blocks":[{"type":"text","text":"step two of the parity scenario"}]}}
@@ -735,18 +744,14 @@ fn parse_json_output(stdout: &str) -> Value {
         });
     }
 
+    // `--output-format json` prints one pretty-printed document, sometimes after prompt text
+    // on the same line (for example a permission prompt). The document is the first `{` whose
+    // remainder parses as a whole, so an inline `{...}` in the prompt does not match.
     stdout
-        .lines()
-        .rev()
-        .find_map(|line| {
-            let trimmed = line.trim();
-            if trimmed.starts_with('{') && trimmed.ends_with('}') {
-                serde_json::from_str(trimmed).ok()
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| panic!("no JSON response line found in stdout:\n{stdout}"))
+        .char_indices()
+        .filter(|(_, character)| *character == '{')
+        .find_map(|(index, _)| serde_json::from_str::<Value>(stdout[index..].trim()).ok())
+        .unwrap_or_else(|| panic!("no JSON response found in stdout:\n{stdout}"))
 }
 
 fn build_scenario_report(
@@ -800,8 +805,7 @@ fn maybe_write_report(reports: &[ScenarioReport]) {
 }
 
 fn load_scenario_manifest() -> Vec<ScenarioManifestEntry> {
-    let manifest_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock_parity_scenarios.json");
+    let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../mock_parity_scenarios.json");
     let manifest = fs::read_to_string(&manifest_path).expect("scenario manifest should exist");
     serde_json::from_str::<Vec<Value>>(&manifest)
         .expect("scenario manifest should parse")

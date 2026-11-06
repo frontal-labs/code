@@ -1,0 +1,27 @@
+# Local and CI ClickHouse for the conversation store (Phase 3).
+# Start: docker compose -f infrastructure/compose/docker-compose.clickhouse.yml up -d
+# Pinned to the 26.3 LTS line; bump deliberately, after checking the release notes.
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.3.62.3
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-frontal}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in your environment or .env}
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "${CLICKHOUSE_PUBLISH_ADDR:-127.0.0.1}:8123:8123"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  clickhouse_data:

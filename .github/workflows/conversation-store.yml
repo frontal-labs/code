@@ -1,0 +1,61 @@
+name: Conversation Store
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/conversation-store.yml
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - crates/code-conversation-store/**
+      - infrastructure/compose/docker-compose.clickhouse.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/conversation-store.yml
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - crates/code-conversation-store/**
+      - infrastructure/compose/docker-compose.clickhouse.yml
+  workflow_dispatch:
+
+jobs:
+  clickhouse-migrations:
+    name: ClickHouse migrations (26.3 LTS)
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Throwaway credentials for this job's own container; nothing outside the job uses them.
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.3.62.3
+        env:
+          CLICKHOUSE_USER: frontal
+          CLICKHOUSE_PASSWORD: ci-only-password
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "wget --spider -q http://127.0.0.1:8123/ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      FRONTAL_TEST_CLICKHOUSE_URL: http://127.0.0.1:8123
+      FRONTAL_TEST_CLICKHOUSE_USER: frontal
+      FRONTAL_TEST_CLICKHOUSE_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+      - name: Unit tests
+        run: cargo test -p code-conversation-store
+      - name: Migrations against a live ClickHouse
+        run: cargo test -p code-conversation-store -- --ignored

@@ -1,0 +1,18 @@
+[package]
+name = "code-conversation-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clickhouse = { version = "0.15", default-features = false, features = ["lz4", "chrono", "uuid", "inserter", "rustls-tls-ring", "rustls-tls-webpki-roots"] }
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

@@ -2,6 +2,12 @@
 -- Every statement is idempotent (IF NOT EXISTS). Statements are separated by
 -- semicolons, and `--` starts a comment everywhere. Do not put semicolons or
 -- `--` inside string literals.
+--
+-- Read-path contract (not enforced by the schema):
+-- * messages and tool_calls keep duplicate keys until a merge. Every query must
+--   read them with FINAL (or argMax), or duplicates will show.
+-- * Dedupe happens only inside one partition. An event must carry the same
+--   created_at on every delivery of its key, so that it lands in the same partition.
 
 CREATE TABLE IF NOT EXISTS sessions
 (

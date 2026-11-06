@@ -3,7 +3,7 @@
 # Pinned to the 26.3 LTS line; bump deliberately, after checking the release notes.
 services:
   clickhouse:
-    image: clickhouse/clickhouse-server:26.3
+    image: clickhouse/clickhouse-server:26.3.62.3
     restart: unless-stopped
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-frontal}

@@ -315,6 +315,7 @@ Redaction runs twice: once in the client exporter, once in the server ingest pat
 Phase 3 writes the real migrations: `crates/code-conversation-store/migrations/clickhouse/0001_conversation_store.sql`. It was verified against ClickHouse 26.3 LTS. Two deviations from this sketch:
 
 - `messages` and `tool_calls` partition by `toYYYYMM(ifNull(created_at, toDateTime64(0, 3, 'UTC')))`. ClickHouse rejects a `Nullable` partition key, and legacy rows have a NULL `created_at`, so they land in the epoch partition.
+- Read path: `messages` and `tool_calls` keep duplicate keys until a merge, so every query must use `FINAL` or `argMax`. Dedupe only happens within one partition, so each delivery of a key must carry the same `created_at`. Phase 4 ingest must enforce both.
 - `embeddings_<model>` tables and their HNSW index are not in Phase 3. They are created when a model is registered, which is Phase 6. TTLs and the ClickHouse row policy are also deferred.
 
 The shape they take:

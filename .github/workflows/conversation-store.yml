@@ -9,7 +9,9 @@ on:
       - main
     paths:
       - .github/workflows/conversation-store.yml
+      - Cargo.toml
       - Cargo.lock
+      - rust-toolchain.toml
       - crates/code-conversation-store/**
       - infrastructure/compose/docker-compose.clickhouse.yml
   pull_request:
@@ -17,7 +19,9 @@ on:
       - main
     paths:
       - .github/workflows/conversation-store.yml
+      - Cargo.toml
       - Cargo.lock
+      - rust-toolchain.toml
       - crates/code-conversation-store/**
       - infrastructure/compose/docker-compose.clickhouse.yml
   workflow_dispatch:
@@ -29,7 +33,7 @@ jobs:
     # Throwaway credentials for this job's own container; nothing outside the job uses them.
     services:
       clickhouse:
-        image: clickhouse/clickhouse-server:26.3
+        image: clickhouse/clickhouse-server:26.3.62.3
         env:
           CLICKHOUSE_USER: frontal
           CLICKHOUSE_PASSWORD: ci-only-password

@@ -166,3 +166,29 @@ async fn refuses_to_run_against_a_newer_schema() {
 
     drop_database(&settings).await;
 }
+
+#[tokio::test]
+#[ignore = "needs a ClickHouse server; see module docs"]
+async fn refuses_to_run_when_an_applied_migration_was_renamed() {
+    let settings = settings_for_fresh_database();
+    let client = settings.connect().await.expect("connect");
+    apply(&client, MIGRATIONS).await.expect("apply");
+
+    let correct_checksum = code_conversation_store::checksum(MIGRATIONS[0].sql);
+    client
+        .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (1, 'renamed', ?)")
+        .bind(correct_checksum)
+        .execute()
+        .await
+        .expect("rename");
+
+    let err = apply(&client, MIGRATIONS)
+        .await
+        .expect_err("renamed migration must fail");
+    assert!(
+        matches!(err, MigrationError::NameMismatch { version: 1, .. }),
+        "unexpected error: {err}"
+    );
+
+    drop_database(&settings).await;
+}

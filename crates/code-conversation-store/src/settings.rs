@@ -17,6 +17,8 @@ pub struct ClickHouseSettings {
 pub enum SettingsError {
     /// The database name must be a plain identifier because it is interpolated into DDL.
     InvalidDatabaseName(String),
+    /// The password would travel in cleartext to a non-loopback host.
+    InsecureUrl(String),
 }
 
 impl fmt::Display for SettingsError {
@@ -25,6 +27,10 @@ impl fmt::Display for SettingsError {
             Self::InvalidDatabaseName(name) => write!(
                 f,
                 "invalid ClickHouse database name {name:?}: use only ASCII letters, digits and underscores"
+            ),
+            Self::InsecureUrl(url) => write!(
+                f,
+                "refusing to send the ClickHouse password over plaintext {url:?}: use https, or http only for a loopback host"
             ),
         }
     }
@@ -56,8 +62,12 @@ impl ClickHouseSettings {
     /// Ensures the configured database exists and returns a client scoped to it.
     pub async fn connect(&self) -> Result<Client, MigrationError> {
         validate_database_name(&self.database)?;
+        validate_url_security(&self.url)?;
         self.admin_client()
-            .query(&format!("CREATE DATABASE IF NOT EXISTS {}", self.database))
+            .query(&format!(
+                "CREATE DATABASE IF NOT EXISTS `{}`",
+                self.database
+            ))
             .execute()
             .await?;
         Ok(self.admin_client().with_database(&self.database))
@@ -72,6 +82,30 @@ fn validate_database_name(name: &str) -> Result<(), MigrationError> {
         Err(MigrationError::Settings(
             SettingsError::InvalidDatabaseName(name.to_owned()),
         ))
+    }
+}
+
+/// `https` is always accepted. Plain `http` is accepted only for a loopback host,
+/// so a password is never sent in cleartext across a network.
+fn validate_url_security(url: &str) -> Result<(), MigrationError> {
+    let insecure = || MigrationError::Settings(SettingsError::InsecureUrl(url.to_owned()));
+    if url.starts_with("https://") {
+        return Ok(());
+    }
+    let Some(rest) = url.strip_prefix("http://") else {
+        return Err(insecure());
+    };
+    let authority = rest.split('/').next().unwrap_or_default();
+    // Drop any `user:pass@` prefix before taking the host.
+    let host_port = authority.rsplit('@').next().unwrap_or_default();
+    let host = match host_port.strip_prefix('[') {
+        Some(bracketed) => bracketed.split(']').next().unwrap_or_default(),
+        None => host_port.split(':').next().unwrap_or_default(),
+    };
+    if matches!(host, "localhost" | "127.0.0.1" | "::1") {
+        Ok(())
+    } else {
+        Err(insecure())
     }
 }
 
@@ -98,5 +132,17 @@ mod tests {
         assert!(validate_database_name("").is_err());
         assert!(validate_database_name("x; DROP DATABASE y").is_err());
         assert!(validate_database_name("with-dash").is_err());
+    }
+
+    #[test]
+    fn plaintext_http_is_only_allowed_for_loopback() {
+        assert!(validate_url_security("https://ch.example.com:8443").is_ok());
+        assert!(validate_url_security("http://localhost:8123").is_ok());
+        assert!(validate_url_security("http://127.0.0.1:8123/path").is_ok());
+        assert!(validate_url_security("http://[::1]:8123").is_ok());
+        assert!(validate_url_security("http://user:pw@127.0.0.1:8123").is_ok());
+        assert!(validate_url_security("http://ch.example.com:8123").is_err());
+        assert!(validate_url_security("http://127.0.0.1.evil.example:8123").is_err());
+        assert!(validate_url_security("ftp://localhost").is_err());
     }
 }

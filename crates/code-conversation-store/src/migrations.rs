@@ -46,6 +46,12 @@ pub enum MigrationError {
         version: u32,
     },
     /// An applied migration's SQL no longer matches what was recorded.
+    /// The migration at this version now has a different name, so it is not the same migration.
+    NameMismatch {
+        version: u32,
+        recorded: String,
+        expected: String,
+    },
     ChecksumMismatch {
         version: u32,
         recorded: String,
@@ -62,6 +68,10 @@ impl fmt::Display for MigrationError {
             Self::UnknownApplied { version } => write!(
                 f,
                 "database has migration {version}, which this build does not know; refusing to run"
+            ),
+            Self::NameMismatch { version, recorded, expected } => write!(
+                f,
+                "migration {version} was recorded as {recorded:?} but the source is {expected:?}"
             ),
             Self::ChecksumMismatch { version, recorded, expected } => write!(
                 f,
@@ -90,6 +100,7 @@ impl From<clickhouse::error::Error> for MigrationError {
 #[derive(Row, Deserialize)]
 struct AppliedRow {
     version: u32,
+    name: String,
     checksum: String,
 }
 
@@ -146,7 +157,7 @@ pub async fn apply(
     client.query(CREATE_MIGRATIONS_TABLE).execute().await?;
 
     let recorded: Vec<AppliedRow> = client
-        .query("SELECT version, checksum FROM schema_migrations FINAL")
+        .query("SELECT version, name, checksum FROM schema_migrations FINAL")
         .fetch_all()
         .await?;
 
@@ -156,6 +167,13 @@ pub async fn apply(
                 version: row.version,
             });
         };
+        if row.name != migration.name {
+            return Err(MigrationError::NameMismatch {
+                version: row.version,
+                recorded: row.name.clone(),
+                expected: migration.name.to_owned(),
+            });
+        }
         let expected = checksum(migration.sql);
         if row.checksum != expected {
             return Err(MigrationError::ChecksumMismatch {

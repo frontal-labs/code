@@ -312,7 +312,12 @@ Redaction runs twice: once in the client exporter, once in the server ingest pat
 
 ## Schema sketch
 
-Phase 3 writes the real migrations. This is the shape they will take.
+Phase 3 writes the real migrations: `crates/code-conversation-store/migrations/clickhouse/0001_conversation_store.sql`. It was verified against ClickHouse 26.3 LTS. Two deviations from this sketch:
+
+- `messages` and `tool_calls` partition by `toYYYYMM(ifNull(created_at, toDateTime64(0, 3, 'UTC')))`. ClickHouse rejects a `Nullable` partition key, and legacy rows have a NULL `created_at`, so they land in the epoch partition.
+- `embeddings_<model>` tables and their HNSW index are not in Phase 3. They are created when a model is registered, which is Phase 6. TTLs and the ClickHouse row policy are also deferred.
+
+The shape they take:
 
 - `sessions`: `ReplacingMergeTree(version)`, keyed by `(user_id, session_id)`. Holds repo ID, branch, client, model, provider and fork info.
 - `messages`: `PARTITION BY toYYYYMM(created_at)`, `ORDER BY (user_id, session_id, seq, block_idx)`. Holds role, block kind, text, and per-message usage.

@@ -17,7 +17,10 @@ jobs:
     name: Update Dependencies
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'schedule'
-    
+    permissions:
+      contents: write        # push the chore/update-dependencies branch
+      pull-requests: write   # open or update the PR
+
     steps:
       - uses: actions/checkout@v4
         with:

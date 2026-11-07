@@ -1,84 +1,69 @@
-# Native Buildkite pipeline for frontal-labs/code.
-#
-# Runs the Linux checks explicitly on the `default` queue. The Windows job is
-# intentionally absent: GitHub Actions still runs `cargo test (windows)`, and
-# this pipeline does not depend on a Windows queue existing in the cluster.
-#
-# Agents need: rustup (honours rust-toolchain.toml), bun, bazel/bazelisk,
-# docker (for the ClickHouse step), and git.
-
 agents:
   queue: "default"
 
 steps:
-  - group: ":rust: Rust"
-    steps:
-      - label: ":lint-roller: cargo fmt"
-        key: "fmt"
-        command: "rustup show && cargo fmt --all --check"
-        timeout_in_minutes: 15
+  - label: ":lint-roller: Lint"
+    key: "lint"
+    command: ".buildkite/scripts/lint.sh"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
 
-      - label: ":clippy: cargo clippy"
-        key: "clippy"
-        command: "rustup show && cargo clippy --workspace --locked -- -D warnings"
-        timeout_in_minutes: 45
+  - label: ":hammer: Build"
+    key: "build"
+    command: ".buildkite/scripts/build.sh"
+    depends_on: "lint"
+    timeout_in_minutes: 60
+    artifact_paths:
+      - "target/release/**"
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
 
-      - label: ":test_tube: cargo test --workspace"
-        key: "test-workspace"
-        command: "rustup show && cargo test --workspace --locked --no-fail-fast"
-        timeout_in_minutes: 60
+  - label: ":test_tube: Test"
+    key: "test"
+    command: ".buildkite/scripts/test.sh"
+    depends_on: "build"
+    timeout_in_minutes: 60
+    artifact_paths:
+      - "target/nextest/**"
+    junit: "target/nextest/junit.xml"
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
 
-  - group: ":database: Conversation store"
-    steps:
-      - label: ":test_tube: ClickHouse migrations"
-        key: "clickhouse-migrations"
-        # Starts a throwaway ClickHouse container on this agent, runs the
-        # ignored integration tests against it, and always removes it.
-        command: |
-          set -euo pipefail
-          rustup show
-          NAME="ch-ci-$${BUILDKITE_JOB_ID}"
-          trap 'docker rm -f "$$NAME" >/dev/null 2>&1 || true' EXIT
-          docker run -d --name "$$NAME" -p 127.0.0.1:18123:8123 \
-            -e CLICKHOUSE_USER=frontal -e CLICKHOUSE_PASSWORD=ci-only-password \
-            clickhouse/clickhouse-server:26.3.62.3
-          for _ in $(seq 1 60); do
-            curl -fsS http://127.0.0.1:18123/ping >/dev/null 2>&1 && break
-            sleep 2
-          done
-          FRONTAL_TEST_CLICKHOUSE_URL=http://127.0.0.1:18123 \
-          FRONTAL_TEST_CLICKHOUSE_USER=frontal \
-          FRONTAL_TEST_CLICKHOUSE_PASSWORD=ci-only-password \
-            cargo test -p code-conversation-store --locked -- --include-ignored
-        timeout_in_minutes: 30
+  - wait
 
-  - group: ":bazel: Bazel"
-    steps:
-      - label: ":bazel: bazel test //..."
-        key: "bazel"
-        command: "bazel test //... --test_output=errors"
-        timeout_in_minutes: 120
+  - block: ":rocket: Deploy to production?"
 
-  - group: ":nodejs: Extensions and checks"
-    steps:
-      - label: ":nodejs: code-slack ci"
-        key: "code-slack"
-        working_directory: "extensions/code-slack"
-        command: "npm ci && npm run ci"
-        timeout_in_minutes: 30
+  - label: ":rocket: Deploy staging"
+    key: "deploy-staging"
+    command: ".buildkite/scripts/deploy-staging.sh"
+    if: "build.branch == pipeline.default_branch"
+    agents:
+      queue: "deploy"
+    concurrency: 1
+    concurrency_group: "deploy/staging"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
 
-      - label: ":shield: npm audit (code-slack, prod)"
-        key: "npm-audit"
-        working_directory: "extensions/code-slack"
-        command: "npm audit --omit=dev --audit-level=high"
-        timeout_in_minutes: 10
-
-      - label: ":books: docs source-of-truth"
-        key: "docs-check"
-        command: "python3 .github/scripts/check_doc_source_of_truth.py"
-        timeout_in_minutes: 5
-
-      - label: ":shield: cargo deny"
-        key: "cargo-deny"
-        command: "cargo deny check"
-        timeout_in_minutes: 15
+  - label: ":rocket: Deploy production"
+    key: "deploy-prod"
+    command: ".buildkite/scripts/deploy-prod.sh"
+    depends_on: "deploy-staging"
+    agents:
+      queue: "deploy"
+    concurrency: 1
+    concurrency_group: "deploy/prod"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2

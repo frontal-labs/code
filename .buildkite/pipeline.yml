@@ -1,0 +1,69 @@
+agents:
+  queue: "default"
+
+steps:
+  - label: ":lint-roller: Lint"
+    key: "lint"
+    command: ".buildkite/scripts/lint.sh"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
+
+  - label: ":hammer: Build"
+    key: "build"
+    command: ".buildkite/scripts/build.sh"
+    depends_on: "lint"
+    timeout_in_minutes: 60
+    artifact_paths:
+      - "target/release/**"
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
+
+  - label: ":test_tube: Test"
+    key: "test"
+    command: ".buildkite/scripts/test.sh"
+    depends_on: "build"
+    timeout_in_minutes: 60
+    artifact_paths:
+      - "target/nextest/**"
+    junit: "target/nextest/junit.xml"
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
+
+  - wait
+
+  - block: ":rocket: Deploy to production?"
+
+  - label: ":rocket: Deploy staging"
+    key: "deploy-staging"
+    command: ".buildkite/scripts/deploy-staging.sh"
+    if: "build.branch == pipeline.default_branch"
+    agents:
+      queue: "deploy"
+    concurrency: 1
+    concurrency_group: "deploy/staging"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2
+
+  - label: ":rocket: Deploy production"
+    key: "deploy-prod"
+    command: ".buildkite/scripts/deploy-prod.sh"
+    depends_on: "deploy-staging"
+    agents:
+      queue: "deploy"
+    concurrency: 1
+    concurrency_group: "deploy/prod"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 2

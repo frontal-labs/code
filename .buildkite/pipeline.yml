@@ -1,0 +1,84 @@
+# Native Buildkite pipeline for frontal-labs/code.
+#
+# Runs the Linux checks explicitly on the `default` queue. The Windows job is
+# intentionally absent: GitHub Actions still runs `cargo test (windows)`, and
+# this pipeline does not depend on a Windows queue existing in the cluster.
+#
+# Agents need: rustup (honours rust-toolchain.toml), bun, bazel/bazelisk,
+# docker (for the ClickHouse step), and git.
+
+agents:
+  queue: "default"
+
+steps:
+  - group: ":rust: Rust"
+    steps:
+      - label: ":lint-roller: cargo fmt"
+        key: "fmt"
+        command: "rustup show && cargo fmt --all --check"
+        timeout_in_minutes: 15
+
+      - label: ":clippy: cargo clippy"
+        key: "clippy"
+        command: "rustup show && cargo clippy --workspace --locked -- -D warnings"
+        timeout_in_minutes: 45
+
+      - label: ":test_tube: cargo test --workspace"
+        key: "test-workspace"
+        command: "rustup show && cargo test --workspace --locked --no-fail-fast"
+        timeout_in_minutes: 60
+
+  - group: ":database: Conversation store"
+    steps:
+      - label: ":test_tube: ClickHouse migrations"
+        key: "clickhouse-migrations"
+        # Starts a throwaway ClickHouse container on this agent, runs the
+        # ignored integration tests against it, and always removes it.
+        command: |
+          set -euo pipefail
+          rustup show
+          NAME="ch-ci-$${BUILDKITE_JOB_ID}"
+          trap 'docker rm -f "$$NAME" >/dev/null 2>&1 || true' EXIT
+          docker run -d --name "$$NAME" -p 127.0.0.1:18123:8123 \
+            -e CLICKHOUSE_USER=frontal -e CLICKHOUSE_PASSWORD=ci-only-password \
+            clickhouse/clickhouse-server:26.3.62.3
+          for _ in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:18123/ping >/dev/null 2>&1 && break
+            sleep 2
+          done
+          FRONTAL_TEST_CLICKHOUSE_URL=http://127.0.0.1:18123 \
+          FRONTAL_TEST_CLICKHOUSE_USER=frontal \
+          FRONTAL_TEST_CLICKHOUSE_PASSWORD=ci-only-password \
+            cargo test -p code-conversation-store --locked -- --include-ignored
+        timeout_in_minutes: 30
+
+  - group: ":bazel: Bazel"
+    steps:
+      - label: ":bazel: bazel test //..."
+        key: "bazel"
+        command: "bazel test //... --test_output=errors"
+        timeout_in_minutes: 120
+
+  - group: ":nodejs: Extensions and checks"
+    steps:
+      - label: ":nodejs: code-slack ci"
+        key: "code-slack"
+        working_directory: "extensions/code-slack"
+        command: "npm ci && npm run ci"
+        timeout_in_minutes: 30
+
+      - label: ":shield: npm audit (code-slack, prod)"
+        key: "npm-audit"
+        working_directory: "extensions/code-slack"
+        command: "npm audit --omit=dev --audit-level=high"
+        timeout_in_minutes: 10
+
+      - label: ":books: docs source-of-truth"
+        key: "docs-check"
+        command: "python3 .github/scripts/check_doc_source_of_truth.py"
+        timeout_in_minutes: 5
+
+      - label: ":shield: cargo deny"
+        key: "cargo-deny"
+        command: "cargo deny check"
+        timeout_in_minutes: 15

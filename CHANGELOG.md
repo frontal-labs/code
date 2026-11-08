@@ -16,7 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ollama works as a provider. It is served through the OpenAI-compatible client at `OLLAMA_BASE_URL` (default `http://localhost:11434`), including tool calls and streamed usage. Hosted Ollama tasks reach the host's Ollama through the model proxy, so the worker never needs a key.
 
 ### Fixed
-- Hosted Ollama tasks run end to end. The Ollama client sent a fixed placeholder key, so the model proxy refused every call from the worker. The client now sends `OLLAMA_API_KEY` when it is set, and the server sets it to the task token in worker containers.
+- `npm install` no longer fails when the release binary is unavailable. The postinstall passed its root as an argument instead of an environment variable, so it crashed before its own error handling.
+- A plugin hook that exits without reading its input is no longer reported as failed. The write to its stdin ignored `BrokenPipe` only when the hook had already exited.
+- Commands are found on the current `PATH` directly, not through a login shell that can reset it.
+- A worker's task network is removed as soon as its worker exits. Each server port has its own relay container, so two servers can share a Docker host.
+- A model that returns an empty reply is asked again, up to two times, before the turn fails.
+- `code-server` refuses to start if `FRONTAL_CODE_SERVER_CALLBACK_URL` has no port or a different one from the port it listens on.
+- Hosted Ollama tasks run end to end. The Ollama client sent a fixed placeholder key, so the model proxy refused every call from the worker. The client now sends `OLLAMA_API_KEY` when it is set, and the server sets it to the task token in worker containers. The Ollama client sent a fixed placeholder key, so the model proxy refused every call from the worker. The client now sends `OLLAMA_API_KEY` when it is set, and the server sets it to the task token in worker containers.
 - Unknown `--flags` in prompt text are rejected instead of being sent to the model.
 - `:free` OpenRouter models are priced at zero.
 - `.changeset/config.json` is valid, `@changesets/changelog-github` is installed, and `baseBranch` is `main`.

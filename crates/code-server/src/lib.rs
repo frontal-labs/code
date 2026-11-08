@@ -1801,6 +1801,31 @@ fn check_auth_posture(config: &ServerConfig) -> Result<(), String> {
     Ok(())
 }
 
+/// Local Docker workers reach this server through the relay, which forwards to the port in
+/// `docker_server_url`. That port must be the one the server listens on. A URL without a
+/// port, or with another one, would send every worker to the wrong place, so refuse to start.
+fn check_callback_port(config: &ServerConfig) -> Result<(), String> {
+    if config.lane_transport_kind != LaneTransportKind::LocalDocker {
+        return Ok(());
+    }
+    let url = &config.docker_server_url;
+    let authority = url.rsplit("//").next().unwrap_or(url);
+    let explicit = authority
+        .rsplit_once(':')
+        .and_then(|(_, port)| port.parse::<u16>().ok());
+    match explicit {
+        Some(port) if port == config.bind_addr.port() => Ok(()),
+        Some(port) => Err(format!(
+            "FRONTAL_CODE_SERVER_CALLBACK_URL ({url}) names port {port}, but the server listens on {}. Workers would reach the wrong port.",
+            config.bind_addr.port()
+        )),
+        None => Err(format!(
+            "FRONTAL_CODE_SERVER_CALLBACK_URL ({url}) must include the port the server listens on ({}).",
+            config.bind_addr.port()
+        )),
+    }
+}
+
 pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     check_auth_posture(&config)?;
 
@@ -1865,6 +1890,7 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
         }
     }
     let app = app(state);
+    check_callback_port(&config)?;
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     println!("code-server listening on http://{}", config.bind_addr);
     axum::serve(listener, app).await?;
@@ -10782,5 +10808,47 @@ mod tests {
             Some(&json!("https://github.com/acme/payments/pull/42"))
         );
         assert_eq!(payload.get("pr_number"), Some(&json!(42)));
+    }
+}
+
+#[cfg(test)]
+mod callback_port_tests {
+    use super::*;
+
+    fn config(url: &str, bind_port: u16) -> ServerConfig {
+        ServerConfig {
+            lane_transport_kind: LaneTransportKind::LocalDocker,
+            docker_server_url: url.to_string(),
+            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), bind_port),
+            ..ServerConfig::default()
+        }
+    }
+
+    #[test]
+    fn a_callback_url_on_the_listening_port_is_accepted() {
+        assert!(check_callback_port(&config("http://host.docker.internal:8790", 8790)).is_ok());
+    }
+
+    #[test]
+    fn a_callback_url_without_a_port_is_refused() {
+        let error =
+            check_callback_port(&config("http://host.docker.internal", 8790)).expect_err("no port");
+        assert!(error.contains("must include the port"));
+    }
+
+    #[test]
+    fn a_callback_url_on_another_port_is_refused() {
+        let error = check_callback_port(&config("http://host.docker.internal:9000", 8790))
+            .expect_err("wrong port");
+        assert!(error.contains("names port 9000"));
+    }
+
+    #[test]
+    fn the_check_does_not_apply_to_other_transports() {
+        let config = ServerConfig {
+            lane_transport_kind: LaneTransportKind::ToolsAgent,
+            ..config("http://elsewhere", 8790)
+        };
+        assert!(check_callback_port(&config).is_ok());
     }
 }

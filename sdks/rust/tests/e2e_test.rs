@@ -1,7 +1,9 @@
 //! End-to-end checks against the real `code` binary and a live model.
 //!
-//! Skipped unless both variables are set, so normal test runs stay offline:
-//!   `FRONTAL_CODE_E2E_BIN`=/path/to/code  `OPENAI_API_KEY`=...  [`OPENAI_BASE_URL`=...]
+//! Skipped unless `FRONTAL_CODE_E2E_BIN` is set, so normal test runs stay offline. The default
+//! provider is a local Ollama server (`OLLAMA_BASE_URL`, default `http://localhost:11434`) and
+//! model `qwen2.5:1.5b`. For a cloud OpenAI-compatible provider set
+//! `FRONTAL_CODE_E2E_PROVIDER=openai` with `OPENAI_API_KEY` (and `OPENAI_BASE_URL`).
 //! The mock-based tests cover protocol handling; these prove the wire contract.
 
 use std::collections::HashMap;
@@ -11,17 +13,21 @@ use frontal_code_sdk::{
   FrontalCode, FrontalCodeEvent, FrontalCodeOptions, ThreadInput, ThreadOptions, ThreadRunOptions,
 };
 
-const DEFAULT_MODEL: &str = "nvidia/nemotron-3-ultra-550b-a55b:free";
+const DEFAULT_MODEL: &str = "qwen2.5:1.5b";
+const DEFAULT_PROVIDER: &str = "ollama";
 
 fn e2e_bin() -> Option<String> {
   let bin = std::env::var("FRONTAL_CODE_E2E_BIN").ok()?;
-  std::env::var("OPENAI_API_KEY").ok()?;
+  let provider = std::env::var("FRONTAL_CODE_E2E_PROVIDER").unwrap_or_else(|_| DEFAULT_PROVIDER.into());
+  if provider == "openai" {
+    std::env::var("OPENAI_API_KEY").ok()?;
+  }
   Some(bin)
 }
 
 fn client(bin: String) -> FrontalCode {
   let mut env = HashMap::new();
-  for key in ["OPENAI_API_KEY", "OPENAI_BASE_URL"] {
+  for key in ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OLLAMA_BASE_URL"] {
     if let Ok(value) = std::env::var(key) {
       env.insert(key.to_string(), value);
     }
@@ -40,7 +46,7 @@ fn client(bin: String) -> FrontalCode {
 fn options(workdir: PathBuf) -> ThreadOptions {
   ThreadOptions {
     working_directory: Some(workdir),
-    provider: Some("openai".to_string()),
+    provider: Some(std::env::var("FRONTAL_CODE_E2E_PROVIDER").unwrap_or_else(|_| DEFAULT_PROVIDER.into())),
     model: Some(std::env::var("FRONTAL_CODE_E2E_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.into())),
     permission_mode: Some("read-only".to_string()),
     ..Default::default()

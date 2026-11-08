@@ -6,21 +6,27 @@ import { FrontalCode } from "../src/frontal-code.js";
 import type { FrontalCodeEvent } from "../src/protocol.js";
 
 // Runs against the real `frontal-code` binary and a live model, so it is skipped
-// unless both are provided:
-//   FRONTAL_CODE_E2E_BIN=/path/to/code  OPENAI_API_KEY=...  OPENAI_BASE_URL=...
+// unless the binary is provided. The default provider is a local Ollama server:
+//   FRONTAL_CODE_E2E_BIN=/path/to/code
+//   OLLAMA_BASE_URL=http://127.0.0.1:11434     (default: http://localhost:11434)
+//   FRONTAL_CODE_E2E_MODEL=qwen2.5:1.5b        (default)
+// For a cloud OpenAI-compatible provider set FRONTAL_CODE_E2E_PROVIDER=openai and
+// OPENAI_API_KEY (and OPENAI_BASE_URL for a non-OpenAI endpoint).
 // The mock-based tests cover protocol handling; this proves the wire contract.
 const bin = process.env.FRONTAL_CODE_E2E_BIN;
+const provider = process.env.FRONTAL_CODE_E2E_PROVIDER ?? "ollama";
 const apiKey = process.env.OPENAI_API_KEY;
-const enabled = Boolean(bin && apiKey);
+const enabled = Boolean(bin) && (provider !== "openai" || Boolean(apiKey));
 
-const MODEL = process.env.FRONTAL_CODE_E2E_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b:free";
+const MODEL = process.env.FRONTAL_CODE_E2E_MODEL ?? "qwen2.5:1.5b";
 
 function client(): FrontalCode {
   return new FrontalCode({
     command: bin,
     env: {
-      OPENAI_API_KEY: apiKey ?? "",
+      ...(apiKey ? { OPENAI_API_KEY: apiKey } : {}),
       ...(process.env.OPENAI_BASE_URL ? { OPENAI_BASE_URL: process.env.OPENAI_BASE_URL } : {}),
+      ...(process.env.OLLAMA_BASE_URL ? { OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL } : {}),
       FRONTAL_CODE_MAX_OUTPUT_TOKENS: process.env.FRONTAL_CODE_E2E_MAX_TOKENS ?? "1024",
     },
   });
@@ -28,7 +34,7 @@ function client(): FrontalCode {
 
 // Sessions are written under the working directory, so keep them out of the package.
 const threadOptions = {
-  provider: "openai",
+  provider,
   model: MODEL,
   permissionMode: "read-only",
   workingDirectory: mkdtempSync(join(tmpdir(), "frontal-code-e2e-")),

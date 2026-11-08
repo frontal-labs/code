@@ -1,0 +1,20 @@
+# Build context for the hosted worker image (docker/worker.Dockerfile).
+# Only the Rust workspace is needed; everything else is excluded to keep the
+# context small and to avoid leaking local state into the image.
+.git
+**/target
+**/node_modules
+bazel-*
+.bazelrc
+sdks/typescript
+extensions
+infrastructure
+homebrew
+npm
+docker
+deploy
+.frontal-code
+.buildkite
+.github
+.env
+.env.*

@@ -15,8 +15,9 @@ RUN apt-get update \
 
 WORKDIR /src
 
-COPY Cargo.toml Cargo.lock ./
-COPY crates ./crates
+# The workspace manifest lists every member, so the whole tree is needed to resolve it.
+# .dockerignore keeps the context to the Rust workspace.
+COPY . .
 
 RUN cargo build --locked --release -p cli
 
@@ -42,9 +43,12 @@ RUN useradd --create-home --shell /bin/bash frontal-code
 
 WORKDIR /workspace
 
-COPY --from=builder /src/target/release/frontal-code /usr/local/bin/frontal-code
+# The CLI binary is named `code`. The server launches `frontal-code hosted task run`,
+# so both names are installed.
+COPY --from=builder /src/target/release/code /usr/local/bin/code
 
-RUN chmod +x /usr/local/bin/frontal-code \
+RUN chmod +x /usr/local/bin/code \
+    && ln -s /usr/local/bin/code /usr/local/bin/frontal-code \
     && mkdir -p /workspace/.frontal-code /workspace/.sandbox-home \
     && chown -R frontal-code:frontal-code /workspace
 
@@ -54,4 +58,4 @@ ENV CARGO_TERM_COLOR=always
 ENV FRONTAL_CODE_HOME=/workspace/.frontal-code
 ENV SANDBOX_HOME=/workspace/.sandbox-home
 
-CMD ["frontal-code", "--version"]
+CMD ["code", "--version"]

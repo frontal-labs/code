@@ -212,8 +212,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             output_format,
             allowed_tools,
             permission_mode,
-        } => LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?
-            .run_turn_with_output(&prompt, output_format)?,
+            options,
+        } => run_prompt_action(
+            &prompt,
+            model,
+            provider,
+            output_format,
+            allowed_tools,
+            permission_mode,
+            &options,
+        )?,
         CliAction::Doctor { output_format } => run_doctor(output_format)?,
         CliAction::Init { output_format } => run_init(output_format)?,
         CliAction::Hosted {
@@ -324,6 +332,16 @@ fn attach_session_tracer(
     }
 }
 
+/// Flags accepted by the `prompt` subcommand. The SDKs drive the CLI through
+/// these: `--stream` emits JSONL turn events, `--resume` continues a session,
+/// and `--config` carries run-scoped overrides.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct PromptOptions {
+    stream: bool,
+    resume: Option<String>,
+    config: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CliAction {
     Login {
@@ -397,6 +415,7 @@ enum CliAction {
         output_format: CliOutputFormat,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
+        options: PromptOptions,
     },
     Doctor {
         output_format: CliOutputFormat,
@@ -759,6 +778,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let mut wants_version = false;
     let mut allowed_tool_values = Vec::new();
     let mut rest = Vec::new();
+    let mut dash_p_prompt: Option<String> = None;
     let mut index = 0;
 
     while index < args.len() {
@@ -820,21 +840,19 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 index += 1;
             }
             "-p" => {
-                // FrontalCode compat: -p "prompt" = one-shot prompt
-                reject_flags_in_prompt_text(&args[index + 1..])?;
-                let prompt = args[index + 1..].join(" ");
-                if prompt.trim().is_empty() {
+                // FrontalCode compat: -p "prompt" = one-shot prompt. The words run
+                // until the next `--flag`, so `prompt -p hi --stream` still parses
+                // its flags instead of treating them as prompt text.
+                index += 1;
+                let mut words = Vec::new();
+                while index < args.len() && !args[index].starts_with("--") {
+                    words.push(args[index].clone());
+                    index += 1;
+                }
+                if words.iter().all(|word| word.trim().is_empty()) {
                     return Err("-p requires a prompt string".to_string());
                 }
-                return Ok(CliAction::Prompt {
-                    prompt,
-                    model: resolve_model_alias(&model).to_string(),
-                    provider: provider.clone(),
-                    output_format,
-                    allowed_tools: normalize_allowed_tools(&allowed_tool_values)?,
-                    permission_mode: permission_mode_override
-                        .unwrap_or_else(default_permission_mode),
-                });
+                dash_p_prompt = Some(words.join(" "));
             }
             "--print" => {
                 // FrontalCode compat: --print makes output non-interactive
@@ -884,6 +902,10 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     }
 
     let allowed_tools = normalize_allowed_tools(&allowed_tool_values)?;
+
+    if dash_p_prompt.is_some() && rest.first().map(String::as_str) != Some("prompt") {
+        rest.insert(0, "prompt".to_string());
+    }
 
     if rest.is_empty() {
         let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
@@ -969,6 +991,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                     output_format,
                     allowed_tools,
                     permission_mode,
+                    options: PromptOptions::default(),
                 }),
                 SkillSlashDispatch::Local => Ok(CliAction::Skills {
                     args,
@@ -980,11 +1003,11 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
         "system-prompt" => parse_system_prompt_args(&rest[1..], output_format),
         "init" => Ok(CliAction::Init { output_format }),
         "prompt" => {
-            reject_flags_in_prompt_text(&rest[1..])?;
-            let prompt = rest[1..].join(" ");
-            if prompt.trim().is_empty() {
-                return Err("prompt subcommand requires a prompt string".to_string());
-            }
+            let (prompt, options) = parse_prompt_subcommand_args(
+                dash_p_prompt.as_deref(),
+                &rest[1..],
+                output_format,
+            )?;
             Ok(CliAction::Prompt {
                 prompt,
                 model,
@@ -992,6 +1015,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 output_format,
                 allowed_tools,
                 permission_mode,
+                options,
             })
         }
         other if other.starts_with('/') => parse_direct_slash_cli_action(
@@ -1011,6 +1035,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 output_format,
                 allowed_tools,
                 permission_mode,
+                options: PromptOptions::default(),
             })
         }
     }
@@ -1735,6 +1760,7 @@ fn parse_direct_slash_cli_action(
                     output_format,
                     allowed_tools,
                     permission_mode,
+                    options: PromptOptions::default(),
                 }),
                 SkillSlashDispatch::Local => Ok(CliAction::Skills {
                     args,
@@ -1765,6 +1791,74 @@ fn reject_flags_in_prompt_text(tokens: &[String]) -> Result<(), String> {
         Some(flag) => Err(format_unknown_option(flag)),
         None => Ok(()),
     }
+}
+
+/// Config keys a `prompt --config KEY=VALUE` run may override. Anything else is
+/// rejected up front rather than silently ignored.
+const PROMPT_CONFIG_KEYS: &[&str] = &["frontal_base_url", "skip_git_repo_check"];
+
+/// Parses `prompt [-p TEXT] [--stream] [--resume REF] [--config KEY=VALUE] [TEXT...]`.
+fn parse_prompt_subcommand_args(
+    dash_p_prompt: Option<&str>,
+    args: &[String],
+    output_format: CliOutputFormat,
+) -> Result<(String, PromptOptions), String> {
+    let mut options = PromptOptions::default();
+    let mut words = Vec::new();
+    if let Some(text) = dash_p_prompt {
+        words.push(text.to_string());
+    }
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--stream" => {
+                options.stream = true;
+                index += 1;
+            }
+            "--resume" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --resume".to_string())?;
+                options.resume = Some(value.clone());
+                index += 2;
+            }
+            "--config" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --config".to_string())?;
+                let (key, literal) = value
+                    .split_once('=')
+                    .ok_or_else(|| format!("--config expects KEY=VALUE, got `{value}`"))?;
+                if !PROMPT_CONFIG_KEYS.contains(&key) {
+                    return Err(format!(
+                        "unsupported --config key `{key}`; supported keys: {}",
+                        PROMPT_CONFIG_KEYS.join(", ")
+                    ));
+                }
+                options.config.push((key.to_string(), literal.to_string()));
+                index += 2;
+            }
+            "--image" => {
+                return Err(
+                    "--image is not supported: image input is not wired to any provider yet"
+                        .to_string(),
+                )
+            }
+            flag if flag.starts_with("--") => return Err(format_unknown_option(flag)),
+            word => {
+                words.push(word.to_string());
+                index += 1;
+            }
+        }
+    }
+    let prompt = words.join(" ");
+    if prompt.trim().is_empty() {
+        return Err("prompt subcommand requires a prompt string".to_string());
+    }
+    if options.stream && output_format != CliOutputFormat::Json {
+        return Err("--stream requires --output-format json".to_string());
+    }
+    Ok((prompt, options))
 }
 
 fn format_unknown_option(option: &str) -> String {
@@ -4734,6 +4828,43 @@ fn version_json_value() -> serde_json::Value {
     })
 }
 
+fn run_prompt_action(
+    prompt: &str,
+    model: String,
+    provider: Option<String>,
+    output_format: CliOutputFormat,
+    allowed_tools: Option<AllowedToolSet>,
+    permission_mode: PermissionMode,
+    options: &PromptOptions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (key, literal) in &options.config {
+        if key == "frontal_base_url" {
+            env::set_var("FRONTAL_BASE_URL", literal);
+        }
+    }
+    let mut cli = match options.resume.as_deref() {
+        Some(reference) => LiveCli::resume_with_provider(
+            reference,
+            model,
+            provider,
+            true,
+            allowed_tools,
+            permission_mode,
+        )?,
+        None => LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?,
+    };
+    if options.stream {
+        cli.run_turn_jsonl_stream(prompt)
+    } else {
+        cli.run_turn_with_output(prompt, output_format)
+    }
+}
+
+fn print_jsonl_event(event: &Value) -> Result<(), Box<dyn std::error::Error>> {
+    println!("{}", serde_json::to_string(event)?);
+    Ok(())
+}
+
 fn resume_session(session_path: &Path, commands: &[String], output_format: CliOutputFormat) {
     let resolved_path = if session_path.exists() {
         session_path.to_path_buf()
@@ -6183,26 +6314,8 @@ impl LiveCli {
         permission_mode: PermissionMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let system_prompt = build_system_prompt()?;
-        let mut effective_model = model;
-        let effective_provider = if let Some(provider_name) = provider.as_deref() {
-            Some(provider_name.to_string())
-        } else if code_api::model_requires_responses(&effective_model) {
-            // Codex models are only served by OpenAI, whatever the configured default is.
-            Some("openai".to_string())
-        } else {
-            // No explicit provider: honor the configured default provider so that
-            // `runtime.default_provider` is authoritative for the no-flag path.
-            match ConfigurationManager::load() {
-                Ok(config_manager) => Some(config_manager.default_provider().to_string()),
-                Err(_) => None,
-            }
-        };
-
-        if let Some(provider_name) = effective_provider.as_deref() {
-            if provider_name.eq_ignore_ascii_case("ollama") && effective_model == DEFAULT_MODEL {
-                effective_model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
-            }
-        }
+        let (effective_model, effective_provider) =
+            resolve_effective_model_and_provider(model, provider);
 
         let mut session_state = Session::new();
         session_state.set_metadata(session_metadata_for_new_session(
@@ -6210,21 +6323,71 @@ impl LiveCli {
             effective_provider.as_deref(),
         ));
         let session = create_managed_session_handle(&session_state.session_id)?;
+        Self::assemble(
+            session_state,
+            session,
+            effective_model,
+            effective_provider,
+            system_prompt,
+            enable_tools,
+            allowed_tools,
+            permission_mode,
+        )
+    }
+
+    /// Continues a stored session. The caller's model and provider apply to the
+    /// next turn, and the stored transcript is kept as is.
+    fn resume_with_provider(
+        reference: &str,
+        model: String,
+        provider: Option<String>,
+        enable_tools: bool,
+        allowed_tools: Option<AllowedToolSet>,
+        permission_mode: PermissionMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let system_prompt = build_system_prompt()?;
+        let (effective_model, effective_provider) =
+            resolve_effective_model_and_provider(model, provider);
+        let session = resolve_session_reference(reference)?;
+        let session_state = Session::load_from_path(&session.path)?;
+        Self::assemble(
+            session_state,
+            session,
+            effective_model,
+            effective_provider,
+            system_prompt,
+            enable_tools,
+            allowed_tools,
+            permission_mode,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn assemble(
+        session_state: Session,
+        session: SessionHandle,
+        model: String,
+        provider: Option<String>,
+        system_prompt: Vec<String>,
+        enable_tools: bool,
+        allowed_tools: Option<AllowedToolSet>,
+        permission_mode: PermissionMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let runtime = build_runtime_with_provider(
             session_state.with_persistence_path(session.path.clone()),
             &session.id,
-            effective_model.clone(),
+            model.clone(),
             system_prompt.clone(),
             enable_tools,
             true,
             allowed_tools.clone(),
             permission_mode,
-            effective_provider.clone(),
+            provider.clone(),
             None,
         )?;
         let cli = Self {
-            model: effective_model,
-            provider: effective_provider,
+            model,
+            provider,
             allowed_tools,
             permission_mode,
             system_prompt,
@@ -6337,6 +6500,57 @@ impl LiveCli {
         Ok(())
     }
 
+    /// Runs one turn and prints it as JSONL events, the protocol the SDKs parse:
+    /// `turn.started`, one `item.completed` per tool call, tool result, and text,
+    /// then `turn.completed` (or `turn.failed`). Events are emitted once the turn
+    /// finishes, not token by token.
+    fn run_turn_jsonl_stream(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        print_jsonl_event(&json!({ "type": "turn.started" }))?;
+        let summary = match self.run_prompt_json_value(input) {
+            Ok(summary) => summary,
+            Err(error) => {
+                print_jsonl_event(&json!({
+                    "type": "turn.failed",
+                    "error": error.to_string(),
+                }))?;
+                return Err(error);
+            }
+        };
+
+        for tool_use in summary["tool_uses"].as_array().into_iter().flatten() {
+            print_jsonl_event(&json!({
+                "type": "item.completed",
+                "item": {
+                    "type": "tool_use",
+                    "name": tool_use["name"],
+                    "input": tool_use["input"],
+                },
+            }))?;
+        }
+        for tool_result in summary["tool_results"].as_array().into_iter().flatten() {
+            print_jsonl_event(&json!({
+                "type": "item.completed",
+                "item": {
+                    "type": "tool_result",
+                    "content": tool_result["output"],
+                },
+            }))?;
+        }
+
+        let message = summary["message"].clone();
+        print_jsonl_event(&json!({
+            "type": "item.completed",
+            "item": { "type": "text", "text": message },
+        }))?;
+        print_jsonl_event(&json!({
+            "type": "turn.completed",
+            "finalResponse": message,
+            "usage": summary["usage"],
+            "sessionId": summary["session_id"],
+        }))?;
+        Ok(())
+    }
+
     fn run_prompt_json_value(&mut self, input: &str) -> Result<Value, Box<dyn std::error::Error>> {
         let (mut runtime, hook_abort_monitor) = self.prepare_turn_runtime(false)?;
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
@@ -6347,6 +6561,7 @@ impl LiveCli {
         self.persist_session()?;
         Ok(json!({
             "message": final_assistant_text(&summary),
+            "session_id": self.session.id,
             "model": self.model,
             "iterations": summary.iterations,
             "auto_compaction": summary.auto_compaction.map(|event| json!({
@@ -7111,6 +7326,35 @@ fn sessions_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let path = cwd.join(".frontal-code").join("sessions");
     fs::create_dir_all(&path)?;
     Ok(path)
+}
+
+/// Picks the model and provider a session should run with. Explicit flags win;
+/// otherwise the configured default provider applies.
+fn resolve_effective_model_and_provider(
+    model: String,
+    provider: Option<String>,
+) -> (String, Option<String>) {
+    let mut effective_model = model;
+    let effective_provider = if let Some(provider_name) = provider.as_deref() {
+        Some(provider_name.to_string())
+    } else if code_api::model_requires_responses(&effective_model) {
+        // Codex models are only served by OpenAI, whatever the configured default is.
+        Some("openai".to_string())
+    } else {
+        // No explicit provider: honor the configured default provider so that
+        // `runtime.default_provider` is authoritative for the no-flag path.
+        match ConfigurationManager::load() {
+            Ok(config_manager) => Some(config_manager.default_provider().to_string()),
+            Err(_) => None,
+        }
+    };
+
+    if let Some(provider_name) = effective_provider.as_deref() {
+        if provider_name.eq_ignore_ascii_case("ollama") && effective_model == DEFAULT_MODEL {
+            effective_model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
+        }
+    }
+    (effective_model, effective_provider)
 }
 
 fn create_managed_session_handle(
@@ -11129,8 +11373,8 @@ mod tests {
         EventEnvelope, GitWorkspaceSummary, HostedApprovalAction, HostedCommand, HostedEventName,
         HostedEventStatus, HostedEventTopic, HostedEventWatchQuery, HostedTaskGithubResponse,
         HostedTaskListQuery, HostedTaskWorkerPayload, InternalPromptProgressEvent,
-        InternalPromptProgressState, LiveCli, LocalHelpTopic, SlashCommand, StatusUsage,
-        DEFAULT_MODEL, FRONTAL_CODE_TELEMETRY_PATH,
+        InternalPromptProgressState, LiveCli, LocalHelpTopic, PromptOptions, SlashCommand,
+        StatusUsage, DEFAULT_MODEL, FRONTAL_CODE_TELEMETRY_PATH,
     };
     use code_api::{ApiError, MessageResponse, OutputContentBlock, Usage};
     use code_events::EventIdentifiers;
@@ -11618,6 +11862,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11645,6 +11890,7 @@ mod tests {
                 output_format: CliOutputFormat::Json,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11671,6 +11917,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11701,6 +11948,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11726,6 +11974,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11905,6 +12154,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
         assert_eq!(
@@ -12697,6 +12947,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -12770,6 +13021,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
         assert_eq!(
@@ -12794,6 +13046,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
         let error = parse_args(&["/status".to_string()])
@@ -12919,6 +13172,81 @@ mod tests {
         assert!(error.contains("unknown option: --resum"));
         assert!(error.contains("Did you mean --resume?"));
         assert!(error.contains("frontal-code --help"));
+    }
+
+    fn sdk_style_args(extra: &[&str]) -> Vec<String> {
+        let mut args = vec![
+            "prompt".to_string(),
+            "-p".to_string(),
+            "Say hi".to_string(),
+            "--provider".to_string(),
+            "openai".to_string(),
+            "--model".to_string(),
+            "google/gemma-4-26b-a4b-it".to_string(),
+            "--output-format".to_string(),
+            "json".to_string(),
+        ];
+        args.extend(extra.iter().map(|value| (*value).to_string()));
+        args
+    }
+
+    #[test]
+    fn parses_sdk_style_prompt_with_stream_and_resume() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let action = parse_args(&sdk_style_args(&[
+            "--stream",
+            "--resume",
+            "session-123",
+            "--config",
+            "frontal_base_url=https://example.test",
+        ]))
+        .expect("sdk-style prompt should parse");
+        let CliAction::Prompt {
+            prompt,
+            provider,
+            output_format,
+            options,
+            ..
+        } = action
+        else {
+            panic!("expected a prompt action");
+        };
+        assert_eq!(prompt, "Say hi");
+        assert_eq!(provider.as_deref(), Some("openai"));
+        assert_eq!(output_format, CliOutputFormat::Json);
+        assert!(options.stream);
+        assert_eq!(options.resume.as_deref(), Some("session-123"));
+        assert_eq!(
+            options.config,
+            vec![(
+                "frontal_base_url".to_string(),
+                "https://example.test".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn prompt_flags_fail_clearly_when_unsupported() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let stream_in_text = parse_args(&[
+            "prompt".to_string(),
+            "--stream".to_string(),
+            "hi".to_string(),
+        ])
+        .expect_err("--stream needs json output");
+        assert!(stream_in_text.contains("--stream requires --output-format json"));
+
+        let image = parse_args(&sdk_style_args(&["--image", "pic.png"]))
+            .expect_err("images are not supported");
+        assert!(image.contains("--image is not supported"));
+
+        let unknown_key = parse_args(&sdk_style_args(&["--config", "bogus=1"]))
+            .expect_err("unknown config keys should fail");
+        assert!(unknown_key.contains("unsupported --config key `bogus`"));
     }
 
     #[test]

@@ -6551,12 +6551,26 @@ fn detect_powershell_shell() -> std::io::Result<&'static str> {
     }
 }
 
+/// Whether `command` is an executable file on the current `PATH`. This is the same search the
+/// shell does when it runs the command. A login shell would re-read the profile, which can
+/// reset `PATH` (Debian's `/etc/profile` does), so the check and the run would disagree.
 fn command_exists(command: &str) -> bool {
-    std::process::Command::new("sh")
-        .arg("-lc")
-        .arg(format!("command -v {command} >/dev/null 2>&1"))
-        .status()
-        .is_ok_and(|status| status.success())
+    let Some(paths) = env::var_os("PATH") else {
+        return false;
+    };
+    env::split_paths(&paths).any(|dir| is_executable_file(&dir.join(command)))
+}
+
+#[cfg(unix)]
+fn is_executable_file(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_executable_file(path: &std::path::Path) -> bool {
+    path.is_file()
 }
 
 #[allow(clippy::too_many_lines)]
@@ -6824,6 +6838,30 @@ mod tests {
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    /// Memory and knowledge-graph tools read their backend from the environment. The
+    /// neo4j and Pinecone tests point those variables at their own servers, so every test
+    /// that uses the local backend holds the env lock and clears them first.
+    const MEMORY_BACKEND_VARS: &[&str] = &[
+        "FRONTAL_CODE_MEMORY_PINECONE_URL",
+        "FRONTAL_CODE_MEMORY_PINECONE_NAMESPACE",
+        "FRONTAL_CODE_MEMORY_PINECONE_API_KEY",
+        "FRONTAL_CODE_MEMORY_NEO4J_URL",
+        "FRONTAL_CODE_MEMORY_NEO4J_DATABASE",
+        "FRONTAL_CODE_MEMORY_NEO4J_USERNAME",
+        "FRONTAL_CODE_MEMORY_NEO4J_PASSWORD",
+    ];
+
+    fn local_memory_backends() -> (std::sync::MutexGuard<'static, ()>, EnvRestoreGuard) {
+        let guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let restore = EnvRestoreGuard::capture(MEMORY_BACKEND_VARS);
+        for name in MEMORY_BACKEND_VARS {
+            std::env::remove_var(name);
+        }
+        (guard, restore)
     }
 
     fn loopback_bind_available() -> bool {
@@ -7151,6 +7189,7 @@ mod tests {
 
     #[test]
     fn given_read_only_enforcer_when_memory_upsert_then_denied() {
+        let _backends = local_memory_backends();
         let registry = read_only_registry();
         let error = registry
             .execute_scoped(
@@ -7186,6 +7225,7 @@ mod tests {
 
     #[test]
     fn given_read_only_enforcer_when_knowledge_graph_add_relation_then_denied() {
+        let _backends = local_memory_backends();
         let registry = read_only_registry();
         let error = registry
             .execute_scoped(
@@ -7576,7 +7616,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn web_search_extracts_and_filters_results() {
         if !loopback_bind_available() {
             return;
@@ -7625,7 +7664,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn web_search_handles_generic_links_and_invalid_base_url() {
         if !loopback_bind_available() {
             return;
@@ -7838,9 +7876,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn skill_loads_local_skill_prompt() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let home = temp_path("skills-home");
         let skill_dir = home.join(".agents").join("skills").join("help");
         fs::create_dir_all(&skill_dir).expect("skill dir should exist");
@@ -7896,9 +7935,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn skill_resolves_project_local_skills_and_legacy_commands() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = temp_path("project-skills");
         let skill_dir = root.join(".frontal-code").join("skills").join("plan");
         let command_dir = root.join(".frontal-code").join("commands");
@@ -7941,9 +7981,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn skill_loads_project_local_claude_skill_prompt() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = temp_path("project-skills");
         let home = root.join("home");
         let workspace = root.join("workspace");
@@ -7993,9 +8034,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn skill_loads_project_local_omc_and_agents_skill_prompts() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = temp_path("project-omc-skills");
         let home = root.join("home");
         let workspace = root.join("workspace");
@@ -8064,9 +8106,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn skill_loads_learned_skill_from_claude_config_dir() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = temp_path("claude-config-learned-skill");
         let home = root.join("home");
         let claude_config_dir = root.join("claude-config");
@@ -8120,9 +8163,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn skill_loads_direct_skill_and_legacy_command_from_claude_config_dir() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = temp_path("claude-config-direct-skill");
         let home = root.join("home");
         let claude_config_dir = root.join("claude-config");
@@ -8193,9 +8237,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     fn skill_loads_project_local_legacy_command_markdown() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = temp_path("project-legacy-command");
         let home = root.join("home");
         let workspace = root.join("workspace");
@@ -9428,7 +9473,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn file_tools_refuse_paths_outside_the_workspace() {
-        let _guard = env_lock().lock().expect("env lock should acquire");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let base = temp_path("file-tools-boundary");
         let root = base.join("workspace");
         let outside = base.join("outside");
@@ -9958,7 +10005,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment because python runtime is not available"]
     fn repl_executes_python_code() {
         let result = execute_tool(
             "REPL",
@@ -10215,6 +10261,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn memory_tools_store_and_find_entries() {
+        let _backends = local_memory_backends();
         execute_tool(
             "MemoryUpsert",
             &json!({
@@ -10246,6 +10293,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn memory_upsert_supports_delete_action() {
+        let _backends = local_memory_backends();
         let registry = GlobalToolRegistry::builtin();
         let scope = ToolExecutionScope::for_session("memory-delete-session");
 
@@ -10292,6 +10340,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn knowledge_graph_tool_supports_entity_and_relation_flows() {
+        let _backends = local_memory_backends();
         execute_tool(
             "KnowledgeGraph",
             &json!({
@@ -10339,6 +10388,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn knowledge_graph_tool_supports_delete_flows() {
+        let _backends = local_memory_backends();
         let registry = GlobalToolRegistry::builtin();
         let scope = ToolExecutionScope::for_session("kg-delete-session");
 
@@ -10428,6 +10478,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn knowledge_graph_inspect_lists_entities_and_relations() {
+        let _backends = local_memory_backends();
         let registry = GlobalToolRegistry::builtin();
         let scope = ToolExecutionScope::for_session("kg-inspect-session");
         registry
@@ -10528,6 +10579,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn memory_tools_are_isolated_by_session_scope() {
+        let _backends = local_memory_backends();
         let registry = GlobalToolRegistry::builtin();
         registry
             .execute_scoped(
@@ -10571,6 +10623,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn memory_search_min_score_can_return_empty_results() {
+        let _backends = local_memory_backends();
         let registry = GlobalToolRegistry::builtin();
         registry
             .execute_scoped(
@@ -10603,6 +10656,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn memory_search_supports_source_filter_and_preferred_source() {
+        let _backends = local_memory_backends();
         let registry = GlobalToolRegistry::builtin();
         let scope = ToolExecutionScope::for_session("memory-source-search");
         registry
@@ -10662,6 +10716,7 @@ printf 'pwsh:%s' "$1"
 
     #[test]
     fn memory_inspect_lists_scoped_entries() {
+        let _backends = local_memory_backends();
         let registry = GlobalToolRegistry::builtin();
         let scope = ToolExecutionScope::for_session("memory-inspect-session");
         registry
@@ -10759,7 +10814,6 @@ printf 'pwsh:%s' "$1"
     }
 
     #[test]
-    #[ignore = "pre-existing: fails in CI environment"]
     #[allow(clippy::too_many_lines)]
     fn env_backed_memory_tools_route_requests_to_pinecone_and_neo4j() {
         if !loopback_bind_available() {

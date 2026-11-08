@@ -12,19 +12,34 @@ predefined JSONL events over stdout.
 
 ## Running Tests
 
+CI installs with Bun from the repository root. Run the same commands locally:
+
 ```bash
-# Run all tests
-npm test
+# From the repository root
+bun install
+bun run --filter @frontal-labs/code-sdk test
 
-# Run with coverage
-npm run test:coverage
+# One file (from sdks/typescript)
+bunx vitest run tests/thread.test.ts
 
-# Run specific test file
-npm test -- tests/thread.test.ts
-
-# Watch mode
-npm run test:watch
+# Watch mode (from sdks/typescript)
+bunx vitest
 ```
+
+`npm ci` inside `sdks/typescript` does not work: the root `package.json` declares the workspace, and the lockfile that CI uses is `bun.lock`.
+
+### End-to-end suite (real CLI)
+
+`tests/e2e.test.ts` runs the real `code` binary against a live model. It is skipped unless both variables are set:
+
+```bash
+cargo build -p cli
+FRONTAL_CODE_E2E_BIN="$PWD/target/debug/code" \
+OPENAI_API_KEY="sk-or-v1-..." OPENAI_BASE_URL="https://openrouter.ai/api/v1" \
+  bunx vitest run tests/e2e.test.ts
+```
+
+Optional: `FRONTAL_CODE_E2E_MODEL` (default `nvidia/nemotron-3-ultra-550b-a55b:free`) and `FRONTAL_CODE_E2E_MAX_TOKENS` (default `1024`). A skipped run reports as passing, so check that the variables are set before you read a green result.
 
 ## Test Structure
 

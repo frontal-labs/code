@@ -128,3 +128,16 @@ Tests run in GitHub Actions on every PR:
 ```bash
 cargo llvm-cov --package frontal-code-sdk --html
 ```
+
+## End-to-end suite (real CLI)
+
+`tests/e2e_test.rs` runs the real `code` binary against a live model. It is skipped unless both variables are set:
+
+```bash
+cargo build -p cli
+FRONTAL_CODE_E2E_BIN="$PWD/target/debug/code" \
+OPENAI_API_KEY="sk-or-v1-..." OPENAI_BASE_URL="https://openrouter.ai/api/v1" \
+  cargo test -p frontal-code-sdk --test e2e_test
+```
+
+A skipped run reports as passing, so check that the variables are set before you read a green result.

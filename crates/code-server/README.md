@@ -93,7 +93,13 @@ curl "http://127.0.0.1:8788/v1/policies/orphans?repository=repo-prod&priority=hi
 
 ## Local Docker Worker Mode
 
-The server can run hosted lanes in sibling Docker containers by setting:
+`FRONTAL_CODE_SERVER_LANE_TRANSPORT` selects how lanes run:
+
+- `in-memory` (default): simulated. It records a fake worker and never runs an agent. The server warns at startup.
+- `tools-agent`: runs a real agent loop inside the server process. Verified against OpenRouter on 2026-11-08: a task completed with the model's answer. Agents have the server's host privileges, so use this only for trusted tasks.
+- `local-docker`: runs each lane in an isolated worker container. Needs Docker.
+
+For `local-docker`, set:
 
 - `FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`
 - `FRONTAL_CODE_SERVER_WORKSPACE_ROOT=/path/to/server/workspaces`

@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `prompt --stream` emits the JSONL turn protocol the SDKs parse (`turn.started`, `item.completed`, `turn.completed`, `turn.failed`). `prompt --resume <id>` continues a session, and `prompt -p` and `prompt --config` are accepted. `--json` output includes `session_id`.
+- End-to-end suites for the TypeScript and Rust SDKs against the real CLI. They are gated on `FRONTAL_CODE_E2E_BIN` and `OPENAI_API_KEY`.
+- `FRONTAL_CODE_MAX_OUTPUT_TOKENS` caps output tokens per request.
+- `frontal-code repl` and `frontal-code plugins` subcommands.
+- `version changeset` runs `bun changeset version` and syncs the workspace version to the npm CLI package.
+
+### Fixed
+- Unknown `--flags` in prompt text are rejected instead of being sent to the model.
+- `:free` OpenRouter models are priced at zero.
+- `.changeset/config.json` is valid, `@changesets/changelog-github` is installed, and `baseBranch` is `main`.
+- The npm CLI baseline is `0.1.1`, aligned with the Rust workspace.
+- `.gitignore` no longer receives an orphan `# FrontalCode local artifacts` header.
+- `code-server` warns at startup when lanes use the simulated in-memory transport.
+
+### Known issues
+- The hosted server's default lane transport is simulated. See TROUBLESHOOTING.md.
+- The REPL needs credentials to start.
+- `--image` is not supported.
+
+### Added
 - Project policy: a `policy` object in `.frontal-code/settings.json` (or the user or local settings) limits `allowedProviders`, `allowedModels` (with `*` globs), per-provider `authMethods`, a `permissionCeiling`, and `deny` tools. Each source only adds restrictions. Enforced by the CLI on client construction and permission setup, and by the hosted server before a worker starts. See CONFIGURATION.md#project-policy.
 - `code login [anthropic|openai]`, `logout`, and `auth status`: OAuth (authorization code + PKCE) sign-in as an alternative to API keys. Providers are configured per name under `settings.oauth`, and no vendor client ID is bundled.
 - OpenAI accepts a saved OAuth login in place of `OPENAI_API_KEY`, and the Anthropic provider uses saved logins as well as env keys.

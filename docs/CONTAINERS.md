@@ -213,7 +213,7 @@ The server starts each worker with a small, deliberate environment:
 
 ### How the worker reaches the server
 
-Each task gets its own internal Docker network. The worker is attached to it, and so is the relay (`frontal-code-relay`, under the alias `frontal-relay`). The relay forwards one TCP port to the server and nothing else. The task network has no route to the internet and no route to the host, so the worker reaches the server and nothing else.
+Each task gets its own internal Docker network. The worker is attached to it, and so is the relay (`frontal-code-relay-<port>`, one per server port, under the alias `frontal-relay`). The relay forwards one TCP port to the server and nothing else. The task network has no route to the internet and no route to the host, so the worker reaches the server and nothing else.
 
 ### How changes are published
 

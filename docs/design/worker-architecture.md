@@ -11,7 +11,7 @@ This document describes how a hosted task runs an agent, where each credential l
 | `code-server` (control plane) | Host process | Provider keys, `GITHUB_TOKEN`, control-plane API key, Postgres credentials. Publishes branches. |
 | Postgres | Host or private network | Worker tokens (hashed), with expiry and revocation. |
 | ClickHouse | Host or private network | Reserved for analytics and audit events. Not used by worker tokens. |
-| Relay container `frontal-code-relay` | Docker, on the host bridge and on each task network | Nothing. It forwards one TCP port to the server. |
+| Relay container `frontal-code-relay-<port>` | Docker, on the host bridge and on each task network | Nothing. It forwards one TCP port to the server. One per server port. |
 | Task network `frontal-task-<id>` | Docker, `--internal` | Only the task's worker and the relay. No internet, no host. |
 | Worker container | Docker, one per task | A per-task token and a proxy URL. The checkout, mounted at `/workspace`. |
 
@@ -119,8 +119,7 @@ Still open:
 
 - **Model access.** All live runs (worker, SDK, and CLI) use a local Ollama server with `qwen2.5:1.5b`, so they have no quota. Cloud gateways are optional and were checked separately.
 - **Linux hosts.** The code-server and CLI test suites pass on `linux/amd64` (Rosetta, `rust:1.95-bookworm`), including the Postgres tests over verified TLS. code-server also ran inside that container, driving the host Docker daemon through the socket, and two Ollama tasks completed and published. That run used Docker Desktop, so a native Linux Docker host (where `host-gateway` is the real host bridge) is still unverified.
-- **One server per Docker host.** The relay is one container, and a second server on the same host would replace it.
-- **Finished-task networks.** A finished task's network is removed by the next launch's sweep, not immediately.
+- **Crash leftovers.** A task network whose server died is removed by the next sweep of the same server port, once it is older than two minutes. A finished task's network is removed as soon as its worker exits.
 - **Parity harness.** The `mock_parity_harness` bash-approval scenario failed once under full workspace load and has not been reproduced since, including a full run on `linux/amd64`. Stderr is now reported on failure.
 
 ## Operating it

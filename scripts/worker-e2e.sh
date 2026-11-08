@@ -2,29 +2,34 @@
 # End-to-end check for hosted worker lanes.
 #
 # Builds the worker image, starts code-server with the local-docker transport, and runs
-# one task against a local bare repository. The task writes a file and tries to reach the
-# internet. While it runs, the script checks the worker container's isolation settings
-# and environment names (never values). When it finishes, the script checks that the
-# server published the branch to the remote.
+# TASKS tasks at once against a local bare repository. Each task writes a file with an
+# allowed command and tries a denied one. While the first task runs, the script checks the
+# worker container's isolation settings and environment names (never values). When the tasks
+# finish, the script checks that each branch reached the remote.
+#
+# One server per Docker host: the relay is a single container, so a second server on the
+# same host would replace it. Run concurrent tasks through one server, as this script does.
 #
 # Requirements: a running Docker daemon, a Postgres database for worker tokens, and a
 # provider key in the environment.
 #
 #   OPENAI_API_KEY=... OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
-#   FRONTAL_CODE_SERVER_DATABASE_URL=postgres://user:pass@127.0.0.1:5432/db \
+#   FRONTAL_CODE_SERVER_DATABASE_URL='postgres://user:pass@127.0.0.1:55433/db?sslmode=verify-full' \
+#   FRONTAL_CODE_SERVER_DATABASE_CA_FILE=/path/to/ca.crt \
 #     scripts/worker-e2e.sh [model] [provider]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="${FRONTAL_CODE_SERVER_DOCKER_IMAGE:-frontal-code-worker:local}"
 PORT="${FRONTAL_CODE_E2E_PORT:-8790}"
+TASKS="${TASKS:-2}"
 MODEL="${1:-nvidia/nemotron-3-ultra-550b-a55b:free}"
 PROVIDER="${2:-openai}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/frontal-worker-e2e.XXXXXX")"
 SERVER_LOG="$WORK/server.log"
 API_KEY="e2e-$(date +%s)-$RANDOM"
-BRANCH="frontal-code/e2e-$(date +%s)"
-PROMPT="${PROMPT:-Create a file named published.txt in the current directory containing exactly: from the worker. Then run: curl -m 5 -sS https://example.com -o /dev/null; echo CURL_EXIT=\$?  Reply with the exit code line and the word DONE.}"
+STAMP="$(date +%s)"
+PROMPT="${PROMPT:-Create a file named published.txt in the current directory containing exactly: from the worker. Then run: python3 -c 'print(1)'. Then run: curl -m 5 -sS https://example.com -o /dev/null; echo CURL_EXIT=\$?. Then run: rm -rf /tmp/anything; echo RM_EXIT=\$?. Reply with the exit code lines and the word DONE.}"
 
 : "${FRONTAL_CODE_SERVER_DATABASE_URL:?set FRONTAL_CODE_SERVER_DATABASE_URL to a Postgres database}"
 
@@ -71,7 +76,10 @@ for _ in $(seq 1 30); do
 done
 curl -sf -H "authorization: Bearer $API_KEY" "http://127.0.0.1:$PORT/v1/version" >/dev/null || { cat "$SERVER_LOG"; exit 1; }
 
-BODY=$(python3 - "$PROVIDER" "$MODEL" "$PROMPT" "$WORK/remote.git" "$BRANCH" "${PERMISSION_MODE-}" <<'PY'
+submit() {
+  local branch="$1"
+  local body
+  body=$(python3 - "$PROVIDER" "$MODEL" "$PROMPT" "$WORK/remote.git" "$branch" "${PERMISSION_MODE-}" <<'PY'
 import json, sys
 provider, model, prompt, repo, branch, permission = sys.argv[1:7]
 body = {
@@ -89,16 +97,26 @@ if permission:
 print(json.dumps(body))
 PY
 )
-RESP=$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/tasks" -H "authorization: Bearer $API_KEY" -H 'content-type: application/json' -d "$BODY")
-TASK_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['task_id'])" "$RESP")
-echo "submitted $TASK_ID on $BRANCH"
+  curl -sf -X POST "http://127.0.0.1:$PORT/v1/tasks" -H "authorization: Bearer $API_KEY" -H 'content-type: application/json' -d "$body" \
+    | python3 -c "import json,sys; print(json.loads(sys.stdin.read())['task_id'])"
+}
 
-# While the worker runs, check its container: isolation settings and environment names.
-# Values never leave Python.
+TASK_IDS=()
+BRANCHES=()
+for n in $(seq 1 "$TASKS"); do
+  branch="frontal-code/e2e-$STAMP-$n"
+  id="$(submit "$branch")"
+  TASK_IDS+=("$id")
+  BRANCHES+=("$branch")
+  echo "submitted $id on $branch"
+done
+
+# While the first worker runs, check its container: isolation settings and environment
+# names. Values never leave Python.
 CHECKED=0
 check_worker() {
   local cid
-  cid=$(docker ps -q --filter "label=frontal-code.task_id=$TASK_ID" | head -1)
+  cid=$(docker ps -q --filter "label=frontal-code.task_id=${TASK_IDS[0]}" | head -1)
   [ -n "$cid" ] || return 0
   docker inspect "$cid" | python3 -c '
 import json, sys
@@ -121,25 +139,36 @@ print("RESULT: no GitHub or upstream provider credential in worker" if not bad e
   CHECKED=1
 }
 
-STATUS=""
-DETAIL=""
-for _ in $(seq 1 180); do
-  DETAIL=$(curl -sf "http://127.0.0.1:$PORT/v1/tasks/$TASK_ID" -H "authorization: Bearer $API_KEY")
-  [ "$CHECKED" = "0" ] && check_worker
-  STATUS=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['status'])" "$DETAIL")
-  case "$STATUS" in completed|failed|cancelled) break ;; esac
+# Wait for every task to finish.
+for _ in $(seq 1 240); do
+  pending=0
+  for id in "${TASK_IDS[@]}"; do
+    detail=$(curl -sf "http://127.0.0.1:$PORT/v1/tasks/$id" -H "authorization: Bearer $API_KEY")
+    [ "$CHECKED" = "0" ] && check_worker
+    status=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['status'])" "$detail")
+    case "$status" in completed|failed|cancelled) ;; *) pending=1 ;; esac
+  done
+  [ "$pending" = "0" ] && break
   sleep 2
 done
 
-echo "status: $STATUS"
-python3 -c "import json,sys; d=json.loads(sys.argv[1]); print('result:', d.get('result')); print('error:', d.get('error'))" "$DETAIL"
+failures=0
+for n in "${!TASK_IDS[@]}"; do
+  id="${TASK_IDS[$n]}"
+  branch="${BRANCHES[$n]}"
+  detail=$(curl -sf "http://127.0.0.1:$PORT/v1/tasks/$id" -H "authorization: Bearer $API_KEY")
+  status=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['status'])" "$detail")
+  echo "--- $id: $status"
+  python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d.get('result') or ''); print('error:', d.get('error'))" "$detail"
+  if [ "$status" != "completed" ]; then failures=$((failures+1)); continue; fi
+  if git -C "$WORK/remote.git" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null; then
+    echo "published: $branch at $(git -C "$WORK/remote.git" rev-parse --short "refs/heads/$branch")"
+    echo "published.txt: $(git -C "$WORK/remote.git" show "refs/heads/$branch:published.txt" 2>/dev/null || echo MISSING)"
+  else
+    echo "published: NO ($branch is not on the remote)"
+    failures=$((failures+1))
+  fi
+done
 
-# The branch must exist on the remote, with the worker's file in it.
-if git -C "$WORK/remote.git" rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null; then
-  echo "published: $BRANCH at $(git -C "$WORK/remote.git" rev-parse --short "refs/heads/$BRANCH")"
-  echo "published.txt: $(git -C "$WORK/remote.git" show "refs/heads/$BRANCH:published.txt" 2>/dev/null || echo MISSING)"
-else
-  echo "published: NO (branch $BRANCH is not on the remote)"
-  exit 1
-fi
-[ "$STATUS" = "completed" ]
+echo
+if [ "$failures" = "0" ]; then echo "E2E PASS: $TASKS task(s) completed and published"; else echo "E2E FAIL: $failures failure(s)"; exit 1; fi

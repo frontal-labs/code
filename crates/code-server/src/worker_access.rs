@@ -12,11 +12,73 @@
 //!   hashed in Postgres (see `worker_tokens.rs`), so they survive a server restart and
 //!   are never held in server memory.
 
+use crate::audit::AuditSink;
 use crate::worker_tokens::WorkerTokenStore;
 use axum::body::Body;
 use axum::extract::Request;
 use axum::http::{header, HeaderName, HeaderValue, Method, StatusCode};
 use axum::response::Response;
+
+/// Permission mode for a worker. File edits are confined to the checkout. Shell commands are
+/// refused unless an allow rule below grants them. A task must ask for another mode.
+pub(crate) const WORKER_DEFAULT_PERMISSION_MODE: &str = "workspace-write";
+
+/// Shell commands a worker may run without asking. Each entry is a prefix. Chained or
+/// partial commands are not covered by a prefix, so `git status && curl ...` is refused.
+/// The list is for building, testing, and reading code, and it has no network tools.
+pub(crate) const WORKER_BASH_ALLOW: &[&str] = &[
+    "bash(ls:*)",
+    "bash(cat:*)",
+    "bash(head:*)",
+    "bash(tail:*)",
+    "bash(wc:*)",
+    "bash(grep:*)",
+    "bash(rg:*)",
+    "bash(find:*)",
+    "bash(sort:*)",
+    "bash(diff:*)",
+    "bash(pwd:*)",
+    "bash(echo:*)",
+    "bash(git status:*)",
+    "bash(git diff:*)",
+    "bash(git log:*)",
+    "bash(git show:*)",
+    "bash(git add:*)",
+    "bash(python3:*)",
+    "bash(cargo:*)",
+    "bash(make:*)",
+    "bash(npm test:*)",
+    "bash(npm run:*)",
+];
+
+/// Commands a worker may never run, even if an allow rule or the task would grant them.
+/// The container already has no route to the network. These rules are a second layer, so
+/// the agent cannot use `env`, `curl`, or `git push` to reach anything.
+pub(crate) const WORKER_BASH_DENY: &[&str] = &[
+    "bash(rm -rf:*)",
+    "bash(sudo:*)",
+    "bash(su:*)",
+    "bash(curl:*)",
+    "bash(wget:*)",
+    "bash(ssh:*)",
+    "bash(scp:*)",
+    "bash(nc:*)",
+    "bash(telnet:*)",
+    "bash(docker:*)",
+    "bash(chmod:*)",
+    "bash(chown:*)",
+    "bash(mount:*)",
+    "bash(kill:*)",
+    "bash(env)",
+    "bash(printenv:*)",
+    "bash(export:*)",
+    "bash(cat /proc:*)",
+    "bash(git push:*)",
+    "bash(git remote:*)",
+    "bash(git config:*)",
+    "bash(git clone:*)",
+    "bash(git -c:*)",
+];
 
 /// Largest request body the proxy forwards. Prompts with large context fit well below this.
 pub(crate) const MODEL_PROXY_MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
@@ -36,11 +98,33 @@ const FORWARDED_REQUEST_HEADERS: &[&str] = &[
 pub(crate) struct WorkerAccess {
     store: Option<WorkerTokenStore>,
     ttl_secs: u64,
+    audit: Option<AuditSink>,
 }
 
 impl WorkerAccess {
     pub(crate) fn new(store: Option<WorkerTokenStore>, ttl_secs: u64) -> Self {
-        Self { store, ttl_secs }
+        Self {
+            store,
+            ttl_secs,
+            audit: None,
+        }
+    }
+
+    /// Adds the audit sink that token issue and revocation are written to.
+    pub(crate) fn with_audit(mut self, audit: Option<AuditSink>) -> Self {
+        self.audit = audit;
+        self
+    }
+
+    /// The audit sink, for other parts of the server that record worker activity.
+    pub(crate) fn audit(&self) -> Option<&AuditSink> {
+        self.audit.as_ref()
+    }
+
+    fn record(&self, event: &'static str, task_id: &str, detail: &str) {
+        if let Some(audit) = &self.audit {
+            audit.emit(event, task_id, detail);
+        }
     }
 
     /// Issues a token for `task_id`, replacing the task's earlier token. Synchronous,
@@ -50,7 +134,13 @@ impl WorkerAccess {
             .store
             .as_ref()
             .ok_or_else(|| "no worker token store is configured".to_string())?;
-        store.issue_blocking(task_id, self.ttl_secs)
+        let token = store.issue_blocking(task_id, self.ttl_secs)?;
+        self.record(
+            "token.issued",
+            task_id,
+            &format!("ttl_secs={}", self.ttl_secs),
+        );
+        Ok(token)
     }
 
     /// Returns the task a live token belongs to. A store error counts as "no access".
@@ -68,8 +158,9 @@ impl WorkerAccess {
     /// Revokes the task's token from synchronous code.
     pub(crate) fn revoke(&self, task_id: &str) {
         if let Some(store) = &self.store {
-            if let Err(error) = store.revoke_blocking(task_id) {
-                eprintln!("worker token revoke failed for {task_id}: {error}");
+            match store.revoke_blocking(task_id) {
+                Ok(count) => self.record("token.revoked", task_id, &format!("tokens={count}")),
+                Err(error) => eprintln!("worker token revoke failed for {task_id}: {error}"),
             }
         }
     }
@@ -77,8 +168,9 @@ impl WorkerAccess {
     /// Revokes the task's token from async code.
     pub(crate) async fn revoke_async(&self, task_id: &str) {
         if let Some(store) = &self.store {
-            if let Err(error) = store.revoke(task_id).await {
-                eprintln!("worker token revoke failed for {task_id}: {error}");
+            match store.revoke(task_id).await {
+                Ok(count) => self.record("token.revoked", task_id, &format!("tokens={count}")),
+                Err(error) => eprintln!("worker token revoke failed for {task_id}: {error}"),
             }
         }
     }

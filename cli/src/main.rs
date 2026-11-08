@@ -668,6 +668,12 @@ struct HostedTaskWorkerPayload {
     prompt: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     base_commit: Option<String>,
+    /// Shell commands allowed without asking, from the server. Repository settings cannot widen them.
+    #[serde(default)]
+    bash_allow: Vec<String>,
+    /// Shell commands never allowed, from the server.
+    #[serde(default)]
+    bash_deny: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3739,6 +3745,11 @@ fn run_hosted_task_worker(
         .transpose()?
         .unwrap_or_else(default_permission_mode);
     let allowed_tools = normalize_allowed_tools(&payload.allowed_tools)?;
+    let _ = WORKER_PERMISSION_RULES.set(code_runtime::RuntimePermissionRuleConfig::new(
+        payload.bash_allow.clone(),
+        payload.bash_deny.clone(),
+        Vec::new(),
+    ));
     let mut cli = LiveCli::new_with_provider(
         model,
         payload.provider.clone(),
@@ -10872,6 +10883,27 @@ impl ToolExecutor for CliToolExecutor {
     }
 }
 
+/// Permission rules the server sent with a hosted task. Set once, before the worker's
+/// session starts. A worker's own repository settings cannot add allow rules.
+static WORKER_PERMISSION_RULES: std::sync::OnceLock<code_runtime::RuntimePermissionRuleConfig> =
+    std::sync::OnceLock::new();
+
+/// The worker's allow rules replace the repository's, so a checkout cannot grant itself
+/// commands. Deny and ask rules from both sources apply.
+fn merge_worker_permission_rules(
+    worker: Option<&code_runtime::RuntimePermissionRuleConfig>,
+    repository: code_runtime::RuntimePermissionRuleConfig,
+) -> code_runtime::RuntimePermissionRuleConfig {
+    match worker {
+        None => repository,
+        Some(worker) => code_runtime::RuntimePermissionRuleConfig::new(
+            worker.allow().to_vec(),
+            [worker.deny(), repository.deny()].concat(),
+            [worker.ask(), repository.ask()].concat(),
+        ),
+    }
+}
+
 fn permission_policy(
     mode: PermissionMode,
     feature_config: &code_runtime::RuntimeFeatureConfig,
@@ -10879,9 +10911,12 @@ fn permission_policy(
 ) -> Result<PermissionPolicy, String> {
     let project_policy = feature_config.policy();
     let mode = cap_permission_mode_for_policy(mode, project_policy);
-    let rules = feature_config
-        .permission_rules()
-        .with_extra_deny(&project_policy.deny_tools());
+    let rules = merge_worker_permission_rules(
+        WORKER_PERMISSION_RULES.get(),
+        feature_config
+            .permission_rules()
+            .with_extra_deny(&project_policy.deny_tools()),
+    );
     Ok(tool_registry.permission_specs(None)?.into_iter().fold(
         PermissionPolicy::new(mode).with_permission_rules(&rules),
         |policy, (name, required_permission)| {
@@ -11250,13 +11285,13 @@ mod tests {
         format_ultraplan_report, format_unknown_slash_command,
         format_unknown_slash_command_message, format_user_visible_api_error, hosted_events_ws_url,
         hosted_server_url, hosted_task_snapshot_from_event, load_hosted_task_worker_payload,
-        normalize_permission_mode, parse_args, parse_git_status_branch,
-        parse_git_status_metadata_for, parse_git_workspace_summary, permission_policy,
-        print_help_to, publish_hosted_repo_changes, push_output_block, render_config_report,
-        render_diff_report, render_diff_report_for, render_memory_report, render_repl_help,
-        render_resume_usage, render_telemetry_report, report_row, resolve_model_alias,
-        resolve_session_reference, resolve_telemetry_config, response_to_events,
-        resume_supported_slash_commands, run_resume_command,
+        merge_worker_permission_rules, normalize_permission_mode, parse_args,
+        parse_git_status_branch, parse_git_status_metadata_for, parse_git_workspace_summary,
+        permission_policy, print_help_to, publish_hosted_repo_changes, push_output_block,
+        render_config_report, render_diff_report, render_diff_report_for, render_memory_report,
+        render_repl_help, render_resume_usage, render_telemetry_report, report_row,
+        resolve_model_alias, resolve_session_reference, resolve_telemetry_config,
+        response_to_events, resume_supported_slash_commands, run_resume_command,
         slash_command_completion_candidates_with_sessions, status_context,
         telemetry_status_json_value, update_project_telemetry_settings, validate_hosted_server_url,
         validate_no_args, worker_patch, write_mcp_server_fixture, CliAction, CliOutputFormat,
@@ -12535,6 +12570,8 @@ mod tests {
                 permission_mode: Some("workspace-write".to_string()),
                 allowed_tools: vec!["git".to_string()],
                 base_commit: None,
+                bash_allow: Vec::new(),
+                bash_deny: Vec::new(),
             })
             .unwrap(),
         )
@@ -12559,6 +12596,35 @@ mod tests {
 
         std::env::remove_var("FRONTAL_CODE_HOSTED_TASK_FILE");
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn worker_rules_replace_repository_allow_rules_but_keep_every_deny() {
+        let worker = code_runtime::RuntimePermissionRuleConfig::new(
+            vec!["bash(cargo:*)".to_string()],
+            vec!["bash(curl:*)".to_string()],
+            Vec::new(),
+        );
+        let repository = code_runtime::RuntimePermissionRuleConfig::new(
+            vec!["bash(curl:*)".to_string(), "bash(rm -rf:*)".to_string()],
+            vec!["bash(make clean:*)".to_string()],
+            vec!["bash(git push:*)".to_string()],
+        );
+        let merged = merge_worker_permission_rules(Some(&worker), repository);
+        assert_eq!(merged.allow(), ["bash(cargo:*)".to_string()]);
+        assert!(merged.deny().contains(&"bash(curl:*)".to_string()));
+        assert!(merged.deny().contains(&"bash(make clean:*)".to_string()));
+        assert!(merged.ask().contains(&"bash(git push:*)".to_string()));
+        // Without worker rules, the repository's own configuration is used unchanged.
+        let untouched = merge_worker_permission_rules(
+            None,
+            code_runtime::RuntimePermissionRuleConfig::new(
+                vec!["bash(ls:*)".to_string()],
+                Vec::new(),
+                Vec::new(),
+            ),
+        );
+        assert_eq!(untouched.allow(), ["bash(ls:*)".to_string()]);
     }
 
     #[test]

@@ -13,6 +13,7 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+mod audit;
 mod docker_worker;
 mod publish;
 mod worker_access;
@@ -143,10 +144,13 @@ pub struct ServerConfig {
     pub reconcile_interval: Option<Duration>,
     /// Postgres holds worker tokens. Required for the `local-docker` lane transport.
     pub database_url: Option<String>,
-    /// Allows a plaintext connection to a non-local Postgres host. Only for private networks.
-    pub database_allow_plaintext: bool,
-    /// `ClickHouse` is for analytics and audit events. Worker tokens do not use it.
+    /// CA file that signed the database certificate, for a private CA. Optional.
+    pub database_ca_file: Option<PathBuf>,
+    /// `ClickHouse` receives audit events for worker activity. Optional; when set, an
+    /// unreachable or refusing `ClickHouse` fails start-up.
     pub clickhouse_url: Option<String>,
+    pub clickhouse_user: String,
+    pub clickhouse_password: String,
     /// How long a worker token stays valid, in seconds.
     pub worker_token_ttl_secs: u64,
     pub state_file: Option<PathBuf>,
@@ -188,8 +192,10 @@ impl Default for ServerConfig {
             docker_server_url: default_server_docker_server_url(),
             reconcile_interval: Some(Duration::from_secs(15)),
             database_url: None,
-            database_allow_plaintext: false,
+            database_ca_file: None,
             clickhouse_url: None,
+            clickhouse_user: "frontal".to_string(),
+            clickhouse_password: String::new(),
             worker_token_ttl_secs: 7200,
             state_file: default_server_state_file(),
             orphan_approval_delay: DEFAULT_ORPHAN_APPROVAL_DELAY,
@@ -259,10 +265,19 @@ impl ServerConfig {
         if let Ok(url) = env::var("FRONTAL_CODE_SERVER_DATABASE_URL") {
             config.database_url = (!url.trim().is_empty()).then(|| url.trim().to_string());
         }
-        config.database_allow_plaintext = env::var("FRONTAL_CODE_SERVER_DATABASE_ALLOW_PLAINTEXT")
-            .is_ok_and(|value| is_truthy(&value));
+        if let Ok(path) = env::var("FRONTAL_CODE_SERVER_DATABASE_CA_FILE") {
+            config.database_ca_file = (!path.trim().is_empty()).then(|| PathBuf::from(path.trim()));
+        }
         if let Ok(url) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_URL") {
             config.clickhouse_url = (!url.trim().is_empty()).then(|| url.trim().to_string());
+        }
+        if let Ok(user) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_USER") {
+            if !user.trim().is_empty() {
+                config.clickhouse_user = user.trim().to_string();
+            }
+        }
+        if let Ok(password) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_PASSWORD") {
+            config.clickhouse_password = password;
         }
         if let Ok(ttl) = env::var("FRONTAL_CODE_WORKER_TOKEN_TTL_SECS") {
             config.worker_token_ttl_secs = ttl.trim().parse()?;
@@ -1795,14 +1810,23 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
         let url = config.database_url.as_deref().ok_or(
             "FRONTAL_CODE_SERVER_DATABASE_URL is required for worker lanes (worker tokens are stored in Postgres)",
         )?;
-        Some(worker_tokens::WorkerTokenStore::connect(
-            url,
-            config.database_allow_plaintext,
-        )?)
+        let tls = worker_tokens::tls_mode_for(url, config.database_ca_file.clone())?;
+        Some(worker_tokens::WorkerTokenStore::connect(url, tls)?)
     } else {
         None
     };
-    let worker_access = WorkerAccess::new(worker_store, config.worker_token_ttl_secs);
+    // Audit events go to ClickHouse when it is configured. A configured but unusable
+    // ClickHouse fails start-up, because the operator asked for an audit trail.
+    let audit = match config.clickhouse_url.clone() {
+        Some(url) => Some(audit::AuditSink::connect(audit::ClickHouseSettings {
+            url,
+            user: config.clickhouse_user.clone(),
+            password: config.clickhouse_password.clone(),
+        })?),
+        None => None,
+    };
+    let worker_access =
+        WorkerAccess::new(worker_store, config.worker_token_ttl_secs).with_audit(audit);
 
     let state = Arc::new(
         ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
@@ -2301,9 +2325,11 @@ struct PublishTaskRequest {
     patch: String,
 }
 
-/// Publishes a worker's changes. The worker sends a patch; the server applies it to a
-/// fresh clone and pushes the branch with its own GitHub token. A repeated call returns
-/// the existing publication.
+/// Publishes a worker's changes. The worker sends a patch; the server applies it to a fresh
+/// clone and pushes the branch with its own GitHub token. A repeated call returns the existing
+/// publication. Repositories on GitHub are refused unless `FRONTAL_CODE_GITHUB_ALLOWED_REPOS`
+/// names them.
+#[allow(clippy::too_many_lines)] // The publish sequence reads best as one function: checks, publish, audit, PR.
 async fn publish_task_changes(
     Path(task_id): Path<String>,
     State(state): State<Arc<ServerState>>,
@@ -2337,34 +2363,85 @@ async fn publish_task_changes(
     let github_token = env::var("GITHUB_TOKEN")
         .ok()
         .filter(|value| !value.trim().is_empty());
-    let task = task_id.clone();
+    let allowed_repos = publish::parse_allowed_repos(
+        &env::var("FRONTAL_CODE_GITHUB_ALLOWED_REPOS").unwrap_or_default(),
+    );
+    // The allowlist is checked before any clone, so the token is never used on a repository
+    // that was not named.
+    if let Err(error) = publish::check_github_publication_allowed(
+        &repo_url,
+        github_token.as_deref(),
+        &allowed_repos,
+    ) {
+        if let Some(audit) = state.worker_access.audit() {
+            audit.emit("publish.refused", &task_id, &error);
+        }
+        return Err(AppError::bad_request(error));
+    }
 
-    let (outcome, pull_request) = tokio::task::spawn_blocking(move || {
-        let outcome = publish::publish_changes(&publish::PublishRequest {
+    let task = task_id.clone();
+    let publish_repo_url = repo_url.clone();
+    let publish_branch = branch.clone();
+    let publish_base = base_ref.clone();
+    let publish_token = github_token.clone();
+    let outcome = tokio::task::spawn_blocking(move || {
+        publish::publish_changes(&publish::PublishRequest {
             task_id: &task,
             prompt: &prompt,
-            repo_url: &repo_url,
-            base_ref: base_ref.as_deref(),
-            branch: &branch,
+            repo_url: &publish_repo_url,
+            base_ref: publish_base.as_deref(),
+            branch: &publish_branch,
             patch: &request.patch,
             workspace_root: &workspace_root,
-            github_token: github_token.as_deref(),
+            github_token: publish_token.as_deref(),
             author_name: &hosted_publish_author_name(),
             author_email: &hosted_publish_author_email(),
-        })?;
-        // Opening a PR is best effort. The branch is already published.
-        let pull_request = publish::open_pull_request_best_effort(
-            &repo_url,
-            &outcome.branch,
-            base_ref.as_deref(),
-            &format!("Hosted task {task}"),
-            &format!("Changes published by Frontal Code for hosted task `{task}`."),
-        );
-        Ok::<_, String>((outcome, pull_request))
+        })
     })
     .await
     .map_err(|error| AppError::internal(error.to_string()))?
-    .map_err(AppError::bad_request)?;
+    .map_err(|error| {
+        if let Some(audit) = state.worker_access.audit() {
+            audit.emit("publish.failed", &task_id, &error);
+        }
+        AppError::bad_request(error)
+    })?;
+    if let Some(audit) = state.worker_access.audit() {
+        audit.emit(
+            "publish.succeeded",
+            &task_id,
+            &format!("branch={} commit={}", outcome.branch, outcome.commit_sha),
+        );
+    }
+
+    // Opening the PR is best effort: the branch is already published. A failure is returned to
+    // the caller, not hidden.
+    let (pull_request, pull_request_error) = match github_token.as_deref() {
+        Some(token) if publish::github_owner_repo(&repo_url).is_some() => {
+            let api_base = env::var("FRONTAL_CODE_GITHUB_API_BASE")
+                .unwrap_or_else(|_| "https://api.github.com".to_string());
+            match publish::open_pull_request(
+                &state.model_proxy_client,
+                &publish::PullRequest {
+                    api_base: &api_base,
+                    token,
+                    repo_url: &repo_url,
+                    head: &outcome.branch,
+                    base: base_ref.as_deref(),
+                    title: &format!("Hosted task {task_id}"),
+                    body: &format!(
+                        "Changes published by Frontal Code for hosted task `{task_id}`."
+                    ),
+                },
+            )
+            .await
+            {
+                Ok(value) => (Some(value), None),
+                Err(error) => (None, Some(error)),
+            }
+        }
+        _ => (None, None),
+    };
 
     context.published_branch = Some(outcome.branch.clone());
     context.published_commit_sha = Some(outcome.commit_sha.clone());
@@ -2383,6 +2460,7 @@ async fn publish_task_changes(
         "published_commit_sha": outcome.commit_sha,
         "published_remote": outcome.remote,
         "pr_url": pull_request.as_ref().and_then(|pr| pr.get("html_url").cloned()),
+        "pr_error": pull_request_error,
         "already_published": false,
     })))
 }
@@ -3588,6 +3666,10 @@ struct DockerLaunchSpec {
 struct HostedDockerTaskPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     base_commit: Option<String>,
+    /// Shell commands the worker may run without asking, as permission rules.
+    bash_allow: Vec<String>,
+    /// Shell commands the worker may never run.
+    bash_deny: Vec<String>,
     task_id: String,
     prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3878,7 +3960,8 @@ impl DockerRunner for CliDockerRunner {
             return;
         };
         for name in names.lines().filter(|name| !name.is_empty()) {
-            // The relay is the only container an idle task network has attached.
+            // An idle task network has nothing attached (a crash before the relay joined) or
+            // only the relay. A worker still attached means its task is running.
             let attached = Self::docker_str(&[
                 "network",
                 "inspect",
@@ -3886,7 +3969,7 @@ impl DockerRunner for CliDockerRunner {
                 "{{len .Containers}}",
                 name,
             ]);
-            if attached.as_deref() == Ok("1") {
+            if matches!(attached.as_deref(), Ok("0" | "1")) {
                 self.remove_task_network(name);
             }
         }
@@ -4109,11 +4192,16 @@ fn port_from_server_url(url: &str) -> u16 {
         .unwrap_or(8788)
 }
 
+/// The relay image, pinned by digest. A tag can move; a digest cannot. Override it with
+/// `FRONTAL_CODE_WORKER_RELAY_IMAGE` after reviewing the image you choose.
+pub(crate) const DEFAULT_RELAY_IMAGE: &str =
+    "alpine/socat@sha256:e8a6e8868a8e6e01d9c2c321a8f8d4474d2d741d962462e5c5a124a8e66a0055";
+
 fn relay_image_from_env() -> String {
     env::var("FRONTAL_CODE_WORKER_RELAY_IMAGE")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "alpine/socat:latest".to_string())
+        .unwrap_or_else(|| DEFAULT_RELAY_IMAGE.to_string())
 }
 
 impl LocalDockerLaneWorkerTransport {
@@ -4232,6 +4320,13 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             env: container_env,
         })?;
 
+        if let Some(audit) = self.worker_access.audit() {
+            audit.emit(
+                "worker.launched",
+                &request.task_id,
+                &format!("container={}", launch.container_id),
+            );
+        }
         Ok(LaneBootstrapResult {
             worker_id: launch.container_id.clone(),
             worker_status: WorkerStatus::Running,
@@ -4308,11 +4403,6 @@ fn lane_repo_source(request: &LaneExecutionRequest) -> Option<RepoSource> {
         .then_some(RepoSource::LocalPath(repo_path))
 }
 
-/// Permission mode for a headless worker. A prompt-mode worker would deny every
-/// shell command and write, since nothing can answer. The container is the isolation
-/// boundary, so the default is full access inside it. A task can request another mode.
-const WORKER_DEFAULT_PERMISSION_MODE: &str = "danger-full-access";
-
 /// Creates an empty workspace for a task that has no repository. It is not a git
 /// checkout, so no branch is published.
 fn prepare_scratch_workspace(
@@ -4379,9 +4469,17 @@ fn write_local_docker_task_payload(
                 request
                     .permission_mode
                     .clone()
-                    .unwrap_or_else(|| WORKER_DEFAULT_PERMISSION_MODE.to_string()),
+                    .unwrap_or_else(|| worker_access::WORKER_DEFAULT_PERMISSION_MODE.to_string()),
             ),
             allowed_tools: request.allowed_tools.clone(),
+            bash_allow: worker_access::WORKER_BASH_ALLOW
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
+            bash_deny: worker_access::WORKER_BASH_DENY
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
             base_commit,
         })
         .map_err(std::io::Error::other)?,
@@ -4933,7 +5031,13 @@ mod tests {
         let payload: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
                 .expect("payload json");
-        assert_eq!(payload["permission_mode"], "danger-full-access");
+        assert_eq!(payload["permission_mode"], "workspace-write");
+        assert!(payload["bash_allow"]
+            .as_array()
+            .is_some_and(|rules| rules.iter().any(|rule| rule == "bash(cargo:*)")));
+        assert!(payload["bash_deny"]
+            .as_array()
+            .is_some_and(|rules| rules.iter().any(|rule| rule == "bash(curl:*)")));
 
         let explicit = LaneExecutionRequest {
             permission_mode: Some("read-only".to_string()),
@@ -6479,6 +6583,122 @@ mod tests {
                 .and_then(|value| value.as_str()),
             Some("trust prompt detected")
         );
+    }
+
+    /// Publishes a patch through the real route to a local bare repository, then checks the
+    /// branch on the remote. Covers the protected-branch refusal and the idempotent repeat.
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)] // One scenario, read top to bottom: publish, repeat, refuse.
+    async fn publish_route_pushes_the_patch_to_the_branch_and_refuses_protected_branches() {
+        use std::process::Command;
+        fn git(cwd: &std::path::Path, args: &[&str]) -> String {
+            let output = Command::new("git")
+                .current_dir(cwd)
+                .args(args)
+                .output()
+                .expect("git");
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).into_owned()
+        }
+        let root = temp_test_dir("publish-route");
+        let remote = root.join("remote.git");
+        let source = root.join("source");
+        fs::create_dir_all(&source).expect("source");
+        git(
+            &root,
+            &["init", "--bare", "--quiet", remote.to_str().unwrap()],
+        );
+        git(&source, &["init", "--quiet", "-b", "main"]);
+        fs::write(source.join("README.md"), "hello\n").expect("readme");
+        git(&source, &["add", "."]);
+        git(
+            &source,
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "--quiet",
+                "-m",
+                "init",
+            ],
+        );
+        git(
+            &source,
+            &["push", "--quiet", remote.to_str().unwrap(), "main"],
+        );
+
+        let mut state = ServerState::with_lane_transport(
+            DEFAULT_EVENT_REPLAY_LIMIT,
+            Arc::new(FakeLaneWorkerTransport::new()),
+        )
+        .with_control_plane_api_key(Some("admin-key".to_string()))
+        .with_publish_workspace_root(root.join("workspaces"));
+        let state_arc = Arc::new(std::mem::take(&mut state));
+        state_arc.record_context(
+            "task-publish-route",
+            HostedTaskContext {
+                repo_url: Some(remote.display().to_string()),
+                base_ref: Some("main".to_string()),
+                branch: Some("frontal-code/publish-route".to_string()),
+                ..HostedTaskContext::default()
+            },
+        );
+        let router = app(state_arc.clone());
+        let patch = "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-hello\n+hello from the route\n";
+        let post = |patch: &str| {
+            let body = serde_json::to_vec(&json!({ "patch": patch })).expect("json");
+            Request::builder()
+                .method("POST")
+                .uri("/v1/tasks/task-publish-route/publish")
+                .header("authorization", "Bearer admin-key")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("request")
+        };
+
+        let first = router.clone().oneshot(post(patch)).await.expect("route");
+        assert_eq!(first.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(first.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+        assert_eq!(value["published_branch"], "frontal-code/publish-route");
+        assert_eq!(value["already_published"], false);
+        let content = git(
+            &remote,
+            &["show", "refs/heads/frontal-code/publish-route:README.md"],
+        );
+        assert_eq!(content, "hello from the route\n");
+
+        // A repeat returns the existing publication and pushes nothing new.
+        let repeat = router.clone().oneshot(post(patch)).await.expect("route");
+        let bytes = axum::body::to_bytes(repeat.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+        assert_eq!(value["already_published"], true);
+
+        // A task cannot publish to a protected branch: its branch is replaced in the context.
+        state_arc.record_context(
+            "task-publish-route",
+            HostedTaskContext {
+                repo_url: Some(remote.display().to_string()),
+                base_ref: Some("main".to_string()),
+                branch: Some("main".to_string()),
+                ..HostedTaskContext::default()
+            },
+        );
+        let refused = router.clone().oneshot(post(patch)).await.expect("route");
+        assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
+        // The protected branch is unchanged.
+        assert!(git(&remote, &["rev-parse", "refs/heads/main"]).len() >= 40);
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]

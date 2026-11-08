@@ -203,6 +203,12 @@ mod tests {
     }
 
     #[test]
+    fn default_relay_image_is_pinned_by_digest() {
+        assert!(crate::DEFAULT_RELAY_IMAGE.contains("@sha256:"));
+        assert!(!crate::DEFAULT_RELAY_IMAGE.ends_with(":latest"));
+    }
+
+    #[test]
     fn relay_forwards_one_port_and_is_hardened() {
         let args = relay_run_args("alpine/socat", 8788);
         assert!(args.contains(&"TCP-LISTEN:8788,fork,reuseaddr".to_string()));

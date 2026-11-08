@@ -4,16 +4,24 @@
 //! restart and must be revocable. It is kept in the `hosted_worker_tokens` table as a
 //! SHA-256 hash, never in plaintext, and never in server memory.
 //!
+//! The Postgres connection is verified TLS. The server checks the database certificate
+//! against the system roots, plus an optional CA file for private deployments. A plaintext
+//! connection is allowed only to a loopback database, and only when the URL asks for
+//! `sslmode=disable`.
+//!
 //! The Postgres client lives on a dedicated thread with its own runtime. That lets the
 //! synchronous lane transport and the asynchronous HTTP handlers use one store without
 //! blocking a runtime. Sync callers wait on a std channel. Async callers await a oneshot.
 
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc as std_mpsc;
 
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::CertificateDer;
 use sha2::{Digest, Sha256};
 use tokio::sync::{mpsc, oneshot};
-use tokio_postgres::{Client, NoTls};
+use tokio_postgres::{Client, NoTls, Socket};
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS hosted_worker_tokens (
@@ -26,6 +34,154 @@ CREATE TABLE IF NOT EXISTS hosted_worker_tokens (
 CREATE INDEX IF NOT EXISTS hosted_worker_tokens_task_idx
     ON hosted_worker_tokens (task_id) WHERE revoked_at IS NULL;
 ";
+
+/// How the store connects to Postgres.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DatabaseTls {
+    /// TLS with the database certificate verified against the system roots and, when
+    /// given, an extra CA file.
+    Verified { extra_ca_file: Option<PathBuf> },
+    /// No TLS. Only for a loopback database whose URL says `sslmode=disable`.
+    Plaintext,
+}
+
+/// Decides how to connect from the URL and the configured CA file. Refuses plaintext to
+/// anything that is not loopback, and refuses an unrecognized `sslmode`.
+pub(crate) fn tls_mode_for(
+    url: &str,
+    extra_ca_file: Option<PathBuf>,
+) -> Result<DatabaseTls, String> {
+    let sslmode = sslmode_of(url);
+    let config = tokio_postgres::Config::from_str(&strip_sslmode(url))
+        .map_err(|error| format!("invalid database URL: {error}"))?;
+    let loopback = config.get_hosts().iter().all(|host| match host {
+        tokio_postgres::config::Host::Tcp(name) => {
+            matches!(name.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]")
+        }
+        tokio_postgres::config::Host::Unix(_) => true,
+    });
+    match sslmode.as_deref() {
+        Some("disable") if loopback => Ok(DatabaseTls::Plaintext),
+        Some("disable") => Err(
+            "refusing a plaintext connection to a non-local Postgres host; remove sslmode=disable"
+                .to_string(),
+        ),
+        None | Some("verify-full" | "verify-ca" | "require" | "prefer") => {
+            Ok(DatabaseTls::Verified { extra_ca_file })
+        }
+        Some(other) => Err(format!("unsupported sslmode `{other}` for the token store")),
+    }
+}
+
+/// The `sslmode` query parameter. `tokio_postgres` rejects the verification modes, so the
+/// server reads the mode itself.
+fn sslmode_of(url: &str) -> Option<String> {
+    let (_, query) = url.split_once('?')?;
+    query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("sslmode="))
+        .map(str::to_string)
+}
+
+/// The URL without its `sslmode` parameter, for the driver.
+fn strip_sslmode(url: &str) -> String {
+    match url.split_once('?') {
+        None => url.to_string(),
+        Some((base, query)) => {
+            let rest: Vec<&str> = query
+                .split('&')
+                .filter(|pair| !pair.starts_with("sslmode="))
+                .collect();
+            if rest.is_empty() {
+                base.to_string()
+            } else {
+                format!("{base}?{}", rest.join("&"))
+            }
+        }
+    }
+}
+
+/// A rustls client configuration that verifies the server against the system roots and an
+/// optional extra CA file.
+fn rustls_client_config(extra_ca_file: Option<&Path>) -> Result<rustls::ClientConfig, String> {
+    let mut roots = rustls::RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    if let Some(path) = extra_ca_file {
+        let certificates = CertificateDer::pem_file_iter(path)
+            .map_err(|error| format!("reading the database CA file: {error}"))?;
+        for certificate in certificates {
+            let certificate =
+                certificate.map_err(|error| format!("parsing the database CA file: {error}"))?;
+            roots
+                .add(certificate)
+                .map_err(|error| format!("adding the database CA: {error}"))?;
+        }
+    }
+    let builder = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .map_err(|error| format!("TLS setup: {error}"))?;
+    Ok(builder.with_root_certificates(roots).with_no_client_auth())
+}
+
+/// Opens one connection and drives it on a background task.
+pub(crate) async fn connect_client(url: &str, tls: &DatabaseTls) -> Result<Client, String> {
+    let config = tokio_postgres::Config::from_str(&strip_sslmode(url))
+        .map_err(|error| format!("invalid database URL: {error}"))?;
+    match tls {
+        DatabaseTls::Plaintext => {
+            let (client, connection) = config
+                .connect(NoTls)
+                .await
+                .map_err(|error| format!("failed to connect to Postgres: {error}"))?;
+            spawn_connection(connection);
+            Ok(client)
+        }
+        DatabaseTls::Verified { extra_ca_file } => {
+            let mut config = config;
+            config.ssl_mode(tokio_postgres::config::SslMode::Require);
+            let connector = tokio_postgres_rustls::MakeRustlsConnect::new(rustls_client_config(
+                extra_ca_file.as_deref(),
+            )?);
+            let (client, connection) = config.connect(connector).await.map_err(|error| {
+                format!(
+                    "failed to connect to Postgres over TLS: {}",
+                    error_chain(&error)
+                )
+            })?;
+            spawn_connection(connection);
+            Ok(client)
+        }
+    }
+}
+
+fn spawn_connection<S>(connection: tokio_postgres::Connection<Socket, S>)
+where
+    S: tokio_postgres::tls::TlsStream + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        // The task ends when the client is dropped or the socket fails.
+        let _ = connection.await;
+    });
+}
+
+/// The error and everything beneath it. The driver's top-level message says only that the
+/// handshake failed, and the cause is in the source chain.
+fn error_chain(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        message.push_str(": ");
+        message.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    message
+}
+
+pub(crate) fn hash_token(token: &str) -> String {
+    hex::encode(Sha256::digest(token.as_bytes()))
+}
 
 /// A reply channel for either a blocking or an async caller.
 enum Responder<T> {
@@ -74,44 +230,16 @@ impl std::fmt::Debug for WorkerTokenStore {
     }
 }
 
-/// Refuses a plaintext connection to a non-local database. Tokens and the database
-/// password would cross the network unencrypted otherwise. The client has no TLS
-/// connector yet, so a remote database needs an explicit opt-in on a private network.
-pub(crate) fn check_database_url(url: &str, allow_plaintext: bool) -> Result<(), String> {
-    let config = tokio_postgres::Config::from_str(url)
-        .map_err(|error| format!("invalid database URL: {error}"))?;
-    let local = config.get_hosts().iter().all(|host| match host {
-        tokio_postgres::config::Host::Tcp(name) => {
-            matches!(name.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]")
-        }
-        tokio_postgres::config::Host::Unix(_) => true,
-    });
-    if local || allow_plaintext {
-        Ok(())
-    } else {
-        Err(
-            "refusing a plaintext connection to a non-local Postgres host; \
-             set FRONTAL_CODE_SERVER_DATABASE_ALLOW_PLAINTEXT=1 only on a private network"
-                .to_string(),
-        )
-    }
-}
-
-pub(crate) fn hash_token(token: &str) -> String {
-    hex::encode(Sha256::digest(token.as_bytes()))
-}
-
 impl WorkerTokenStore {
-    /// Connects, creates the schema if needed, and starts the store thread.
-    /// Returns once the first connection and migration have succeeded.
-    pub(crate) fn connect(url: &str, allow_plaintext: bool) -> Result<Self, String> {
-        check_database_url(url, allow_plaintext)?;
+    /// Connects, creates the schema if needed, and starts the store thread. Returns once the
+    /// first connection and migration have succeeded.
+    pub(crate) fn connect(url: &str, tls: DatabaseTls) -> Result<Self, String> {
         let (commands_tx, commands_rx) = mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = std_mpsc::channel();
         let url = url.to_string();
         std::thread::Builder::new()
             .name("worker-token-store".to_string())
-            .spawn(move || run_store(url, commands_rx, ready_tx))
+            .spawn(move || run_store(url, tls, commands_rx, ready_tx))
             .map_err(|error| format!("failed to start the token store thread: {error}"))?;
         ready_rx
             .recv()
@@ -183,6 +311,7 @@ impl WorkerTokenStore {
 
 fn run_store(
     url: String,
+    tls: DatabaseTls,
     mut commands: mpsc::UnboundedReceiver<Command>,
     ready: std_mpsc::Sender<Result<(), String>>,
 ) {
@@ -197,7 +326,7 @@ fn run_store(
         }
     };
     runtime.block_on(async move {
-        let mut client = match connect(&url).await {
+        let mut client = match connect(&url, &tls).await {
             Ok(client) => {
                 let _ = ready.send(Ok(()));
                 Some(client)
@@ -210,7 +339,7 @@ fn run_store(
         while let Some(command) = commands.recv().await {
             // Reconnect when the connection dropped (database restart, network blip).
             if client.as_ref().is_none_or(Client::is_closed) {
-                client = connect(&url).await.ok();
+                client = connect(&url, &tls).await.ok();
             }
             let Some(db) = client.as_mut() else {
                 reply_unavailable(command);
@@ -229,14 +358,8 @@ fn run_store(
     });
 }
 
-async fn connect(url: &str) -> Result<Client, String> {
-    let (client, connection) = tokio_postgres::connect(url, NoTls)
-        .await
-        .map_err(|error| format!("failed to connect to Postgres: {error}"))?;
-    tokio::spawn(async move {
-        // The connection task ends when the client is dropped or the socket fails.
-        let _ = connection.await;
-    });
+async fn connect(url: &str, tls: &DatabaseTls) -> Result<Client, String> {
+    let client = connect_client(url, tls).await?;
     client
         .batch_execute(SCHEMA)
         .await
@@ -314,12 +437,33 @@ pub(crate) mod tests {
     use super::*;
 
     #[test]
-    fn plaintext_is_allowed_only_for_local_databases_or_with_opt_in() {
-        assert!(check_database_url("postgres://u:p@127.0.0.1:5432/db", false).is_ok());
-        assert!(check_database_url("postgres://u:p@localhost/db", false).is_ok());
-        assert!(check_database_url("postgres://u:p@db.internal/db", false).is_err());
-        assert!(check_database_url("postgres://u:p@db.internal/db", true).is_ok());
-        assert!(check_database_url("not a url", false).is_err());
+    fn plaintext_is_allowed_only_for_loopback_and_only_when_asked() {
+        assert_eq!(
+            tls_mode_for("postgres://u:p@127.0.0.1:5432/db?sslmode=disable", None),
+            Ok(DatabaseTls::Plaintext)
+        );
+        assert!(tls_mode_for("postgres://u:p@db.internal/db?sslmode=disable", None).is_err());
+        // Without an explicit disable, a database is reached over verified TLS, loopback or not.
+        assert_eq!(
+            tls_mode_for("postgres://u:p@127.0.0.1:5432/db", None),
+            Ok(DatabaseTls::Verified {
+                extra_ca_file: None
+            })
+        );
+        assert!(tls_mode_for("postgres://u:p@db/db?sslmode=bogus", None).is_err());
+        assert!(tls_mode_for("not a url", None).is_err());
+    }
+
+    #[test]
+    fn sslmode_is_read_and_removed_before_the_driver_sees_the_url() {
+        assert_eq!(
+            strip_sslmode("postgres://u@h/db?sslmode=verify-full&application_name=x"),
+            "postgres://u@h/db?application_name=x"
+        );
+        assert_eq!(
+            strip_sslmode("postgres://u@h/db?sslmode=verify-full"),
+            "postgres://u@h/db"
+        );
     }
 
     #[test]
@@ -330,11 +474,24 @@ pub(crate) mod tests {
         assert_eq!(hash.len(), 64);
     }
 
-    /// A store on the database named by `FRONTAL_TEST_POSTGRES_URL`. Without that
-    /// variable the database-backed tests return early, as the other live-service tests do.
-    pub(crate) fn test_store() -> Option<WorkerTokenStore> {
+    /// The database for tests, over verified TLS. `FRONTAL_TEST_POSTGRES_URL` names it, and
+    /// `FRONTAL_TEST_POSTGRES_CA_FILE` names the CA that signed its certificate. Without the
+    /// URL the database-backed tests return early, as the other live-service tests do.
+    pub(crate) fn test_database() -> Option<(String, DatabaseTls)> {
         let url = std::env::var("FRONTAL_TEST_POSTGRES_URL").ok()?;
-        WorkerTokenStore::connect(&url, true).ok()
+        let ca = std::env::var("FRONTAL_TEST_POSTGRES_CA_FILE")
+            .ok()
+            .map(PathBuf::from);
+        // A URL that is set but unusable is a failed test, not a skipped one.
+        let tls = tls_mode_for(&url, ca).expect("FRONTAL_TEST_POSTGRES_URL must be a usable URL");
+        Some((url, tls))
+    }
+
+    pub(crate) fn test_store() -> Option<WorkerTokenStore> {
+        let (url, tls) = test_database()?;
+        Some(WorkerTokenStore::connect(&url, tls).expect(
+            "FRONTAL_TEST_POSTGRES_URL is set but the database did not accept the connection",
+        ))
     }
 
     /// Task ids are unique per test, so tests that share one database do not revoke each
@@ -385,13 +542,14 @@ pub(crate) mod tests {
 
     #[test]
     fn tokens_are_stored_as_hashes_only() {
-        let Some(store) = test_store() else { return };
+        let Some((url, tls)) = test_database() else {
+            return;
+        };
+        let store = WorkerTokenStore::connect(&url, tls.clone()).expect("store");
         let task = unique_task("hash");
         let token = store.issue_blocking(&task, 3600).expect("token");
-        let url = std::env::var("FRONTAL_TEST_POSTGRES_URL").expect("url");
         let stored = futures_block(async {
-            let (client, connection) = tokio_postgres::connect(&url, NoTls).await.expect("connect");
-            tokio::spawn(connection);
+            let client = connect_client(&url, &tls).await.expect("connect");
             client
                 .query(
                     "SELECT token_hash FROM hosted_worker_tokens WHERE task_id = $1",
@@ -405,6 +563,24 @@ pub(crate) mod tests {
         });
         assert_eq!(stored, vec![hash_token(&token)]);
         assert!(!stored.iter().any(|value| value == &token));
+    }
+
+    #[test]
+    fn a_private_ca_is_refused_without_the_ca_file() {
+        // Only meaningful when the test database uses a certificate from a private CA.
+        let Some((url, _)) = test_database() else {
+            return;
+        };
+        if std::env::var("FRONTAL_TEST_POSTGRES_CA_FILE").is_err() {
+            return;
+        }
+        let refused = futures_block(connect_client(
+            &url,
+            &DatabaseTls::Verified {
+                extra_ca_file: None,
+            },
+        ));
+        assert!(refused.is_err(), "system roots must not trust a private CA");
     }
 
     fn futures_block<F: std::future::Future>(future: F) -> F::Output {

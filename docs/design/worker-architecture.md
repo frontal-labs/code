@@ -105,16 +105,23 @@ Decision still open: whether `danger-full-access` should remain the default, or 
 | Token replayed after completion | Revoked on completion, cancel, and expiry. |
 | Server restart mid-task | Tokens persist. The task continues. |
 
-## Open items
+## Decisions and remaining limits
 
-1. **Permission default.** Decide between `danger-full-access` inside the network-isolated container (current), and per-task opt-in with `workspace-write` as the default.
-2. **`GITHUB_TOKEN` on the server.** It can push to any branch under `frontal-code/` in any repository the token reaches. Scope it to a GitHub App with per-repository installation, or accept the current scope.
-3. **Postgres TLS.** The Postgres client has no TLS connector. A remote database needs `FRONTAL_CODE_SERVER_DATABASE_ALLOW_PLAINTEXT=1` on a private network. Add TLS before exposing it.
-4. **ClickHouse.** Configured but unused. Audit events for token issue, use, and revocation are the first candidate.
-5. **Relay image pin.** The relay uses `alpine/socat:latest` by default. Pin a digest in production with `FRONTAL_CODE_WORKER_RELAY_IMAGE`.
-6. **Stale task networks.** Networks of cancelled or completed tasks are removed on cancel, and swept on the next launch when no worker is attached. A crash between launch and cleanup can leave one until then.
-7. **Docker prerequisites.** Linux hosts need `host.docker.internal` mapped to the host gateway, and the server must listen on an address the relay can reach (`0.0.0.0`).
-8. **Parity harness flake.** The `mock_parity_harness` bash-approval scenario failed once under full workspace load and passed on 18 parallel reruns and two full reruns. The harness now reports stderr on failure, so the next occurrence will show the cause.
+Resolved:
+
+1. **Permission default.** Workers run in `workspace-write`. Shell commands run only when an allow rule grants them: a list of read and build commands (`WORKER_BASH_ALLOW` in `worker_access.rs`). Network tools, `git push`, `env`, and `rm -rf` are denied (`WORKER_BASH_DENY`). A task can request `danger-full-access` explicitly. The worker's allow rules replace any the repository would set, and deny rules from both sources apply.
+2. **GitHub token scope.** Publishing with a token is refused for any repository not named in `FRONTAL_CODE_GITHUB_ALLOWED_REPOS` (`owner/repo` or `owner/*`), and the check runs before any clone. An empty allowlist with a token set means no GitHub publication. Pull requests use the REST API directly. Use a fine-grained token with only Contents and Pull requests write access on the named repositories.
+3. **Postgres TLS.** Verified TLS by default, against system roots plus `FRONTAL_CODE_SERVER_DATABASE_CA_FILE` for a private CA. Plaintext only to loopback with `sslmode=disable`. Verified against a private-CA Postgres 17 on 2026-11-08.
+4. **Relay image.** Pinned by digest (`DEFAULT_RELAY_IMAGE`). Override with `FRONTAL_CODE_WORKER_RELAY_IMAGE` after reviewing the image.
+5. **ClickHouse audit.** Token issue and revocation, worker launches, refused and failed publications, and publications are written to `frontal_audit_events_v2` as epoch milliseconds. Writes are best effort and never block a request. Verified against a live ClickHouse 26.3.
+
+Still open:
+
+- **Model quota.** The live model run was blocked by OpenRouter's free-tier daily limit (50 requests). Wait for the reset, or add credits, before the next live run.
+- **Linux hosts.** Docker's `host-gateway` alias and the relay were verified only on Docker Desktop for macOS.
+- **One server per Docker host.** The relay is one container, and a second server on the same host would replace it.
+- **Finished-task networks.** A finished task's network is removed by the next launch's sweep, not immediately.
+- **Parity harness.** The `mock_parity_harness` bash-approval scenario failed once under full workspace load and has not been reproduced since. Stderr is now reported on failure.
 
 ## Operating it
 
@@ -126,10 +133,13 @@ Required for `local-docker` lanes:
 
 Optional:
 
+- `FRONTAL_CODE_SERVER_DATABASE_CA_FILE` — CA for a private Postgres certificate
+- `FRONTAL_CODE_SERVER_CLICKHOUSE_URL`, `FRONTAL_CODE_SERVER_CLICKHOUSE_USER`, `FRONTAL_CODE_SERVER_CLICKHOUSE_PASSWORD` — audit events (HTTPS, or loopback)
+- `FRONTAL_CODE_GITHUB_ALLOWED_REPOS` — required when `GITHUB_TOKEN` is set
+- `FRONTAL_CODE_GITHUB_API_BASE` — default `https://api.github.com`
 - `FRONTAL_CODE_WORKER_TOKEN_TTL_SECS` (default 7200)
 - `FRONTAL_CODE_WORKER_RELAY_IMAGE` (default `alpine/socat:latest`)
 - `FRONTAL_CODE_GIT_AUTHOR_NAME`, `FRONTAL_CODE_GIT_AUTHOR_EMAIL` — author of published commits
 - `GITHUB_TOKEN` — server-side only, used to push and open pull requests
-- `FRONTAL_CODE_SERVER_DATABASE_ALLOW_PLAINTEXT=1` — only for a private Postgres network
 
 Verification: `scripts/worker-e2e.sh` runs one task end to end, checks the worker's isolation settings and environment names while it runs, and checks that the branch reached the remote.

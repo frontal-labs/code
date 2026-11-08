@@ -327,27 +327,148 @@ fn commit_message(task_id: &str, prompt: &str) -> String {
     }
 }
 
-/// Opens a pull request from the published branch, when a GitHub integration is
-/// configured. Failure is not an error for the publication itself.
-pub(crate) fn open_pull_request_best_effort(
+/// Refuses a GitHub repository the token may not write to. The allowlist is the only
+/// way the token is used: an empty allowlist means no GitHub publication at all. Local
+/// repositories never use the token, so they are not checked.
+pub(crate) fn check_github_publication_allowed(
     repo_url: &str,
-    branch: &str,
-    base_ref: Option<&str>,
-    title: &str,
-    body: &str,
-) -> Option<serde_json::Value> {
-    let (owner, repo) = github_owner_repo(repo_url)?;
-    code_integrations::global_integration_registry()
-        .call_github_create_pr(
-            &owner,
-            &repo,
-            title,
-            body,
-            branch,
-            base_ref.unwrap_or("main"),
-            true,
+    token: Option<&str>,
+    allowed_repos: &[String],
+) -> Result<(), String> {
+    let Some((owner, repo)) = github_owner_repo(repo_url) else {
+        return Ok(());
+    };
+    if token.is_none() {
+        return Ok(());
+    }
+    if allowed_repos.is_empty() {
+        return Err(
+            "GITHUB_TOKEN is set but FRONTAL_CODE_GITHUB_ALLOWED_REPOS is empty; name the \
+             repositories the token may write to (for example acme/widgets)"
+                .to_string(),
+        );
+    }
+    let target = format!("{owner}/{repo}");
+    let allowed = allowed_repos.iter().any(|entry| {
+        entry == &target
+            || entry
+                .strip_suffix("/*")
+                .is_some_and(|prefix| prefix == owner)
+    });
+    if allowed {
+        Ok(())
+    } else {
+        Err(format!(
+            "{target} is not in FRONTAL_CODE_GITHUB_ALLOWED_REPOS"
+        ))
+    }
+}
+
+/// Parses `FRONTAL_CODE_GITHUB_ALLOWED_REPOS`: comma-separated `owner/repo` or `owner/*`.
+pub(crate) fn parse_allowed_repos(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// What to open a pull request for. `base` is the target branch; when it is `None`, the
+/// repository's default branch is used.
+pub(crate) struct PullRequest<'a> {
+    pub api_base: &'a str,
+    pub token: &'a str,
+    pub repo_url: &'a str,
+    pub head: &'a str,
+    pub base: Option<&'a str>,
+    pub title: &'a str,
+    pub body: &'a str,
+}
+
+/// Opens a pull request for a published branch through the GitHub REST API.
+pub(crate) async fn open_pull_request(
+    client: &reqwest::Client,
+    request: &PullRequest<'_>,
+) -> Result<serde_json::Value, String> {
+    let PullRequest {
+        api_base,
+        token,
+        repo_url,
+        head,
+        base,
+        title,
+        body,
+    } = *request;
+    let (owner, repo) = github_owner_repo(repo_url)
+        .ok_or_else(|| "pull requests are only opened for github.com repositories".to_string())?;
+    let api = api_base.trim_end_matches('/');
+    let base = if let Some(base) = base {
+        base.to_string()
+    } else {
+        let info: serde_json::Value = github_request(
+            client,
+            reqwest::Method::GET,
+            token,
+            &format!("{api}/repos/{owner}/{repo}"),
         )
-        .ok()
+        .send()
+        .await
+        .map_err(|error| format!("GitHub repository lookup failed: {}", error.without_url()))?
+        .json()
+        .await
+        .map_err(|error| format!("GitHub repository lookup failed: {}", error.without_url()))?;
+        info.get("default_branch")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("main")
+            .to_string()
+    };
+    let response = github_request(
+        client,
+        reqwest::Method::POST,
+        token,
+        &format!("{api}/repos/{owner}/{repo}/pulls"),
+    )
+    .json(&serde_json::json!({
+        "title": title,
+        "head": head,
+        "base": base,
+        "body": body,
+    }))
+    .send()
+    .await
+    .map_err(|error| format!("GitHub pull request failed: {}", error.without_url()))?;
+    let status = response.status();
+    let value: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|error| format!("GitHub pull request failed: {}", error.without_url()))?;
+    if status.is_success() {
+        Ok(value)
+    } else {
+        let message = value
+            .get("message")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("request refused");
+        Err(format!(
+            "GitHub refused the pull request ({status}): {message}"
+        ))
+    }
+}
+
+fn github_request(
+    client: &reqwest::Client,
+    method: reqwest::Method,
+    token: &str,
+    url: &str,
+) -> reqwest::RequestBuilder {
+    // The token is sent to the API only. Its value never reaches an error message: errors
+    // above use `without_url`, and GitHub's message field carries no credentials.
+    client
+        .request(method, url)
+        .bearer_auth(token)
+        .header("accept", "application/vnd.github+json")
+        .header("x-github-api-version", "2022-11-28")
+        .header("user-agent", "frontal-code")
 }
 
 /// Parses `https://github.com/<owner>/<repo>(.git)` into its parts.
@@ -455,6 +576,109 @@ index 1111111..2222222 100644
     fn oversized_and_empty_patches_are_refused() {
         assert!(validate_patch("").is_err());
         assert!(validate_patch(&"x".repeat(MAX_PATCH_BYTES + 1)).is_err());
+    }
+
+    #[test]
+    fn publication_needs_an_explicit_repository_allowlist_when_a_token_is_set() {
+        let repo = "https://github.com/acme/widgets.git";
+        assert!(check_github_publication_allowed(repo, None, &[]).is_ok());
+        assert!(check_github_publication_allowed(repo, Some("t"), &[]).is_err());
+        assert!(
+            check_github_publication_allowed(repo, Some("t"), &["acme/widgets".to_string()])
+                .is_ok()
+        );
+        assert!(check_github_publication_allowed(repo, Some("t"), &["acme/*".to_string()]).is_ok());
+        assert!(
+            check_github_publication_allowed(repo, Some("t"), &["acme/other".to_string()]).is_err()
+        );
+        assert!(
+            check_github_publication_allowed(repo, Some("t"), &["evil/*".to_string()]).is_err()
+        );
+        // Local repositories never see the token, so the allowlist does not apply.
+        assert!(check_github_publication_allowed("/local/repo", Some("t"), &[]).is_ok());
+        assert_eq!(
+            parse_allowed_repos(" acme/widgets, acme/* ,"),
+            vec!["acme/widgets", "acme/*"]
+        );
+    }
+
+    /// A one-shot HTTP server that records the request head and answers with `status` and
+    /// `body`.
+    fn github_stub(status: u16, body: &'static str) -> (String, std::sync::mpsc::Receiver<String>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let address = listener.local_addr().expect("addr");
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut head = Vec::new();
+            let mut buffer = [0_u8; 2048];
+            loop {
+                let read = stream.read(&mut buffer).expect("read");
+                head.extend_from_slice(&buffer[..read]);
+                if head.windows(4).any(|window| window == b"\r\n\r\n") || read == 0 {
+                    break;
+                }
+            }
+            let _ = sender.send(String::from_utf8_lossy(&head).into_owned());
+            let response = format!(
+                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).expect("write");
+        });
+        (format!("http://{address}"), receiver)
+    }
+
+    #[tokio::test]
+    async fn pull_request_is_opened_through_the_rest_api_with_the_token_in_a_header_only() {
+        let (base, received) = github_stub(
+            201,
+            r#"{"number":7,"html_url":"https://github.com/acme/widgets/pull/7"}"#,
+        );
+        let value = open_pull_request(
+            &reqwest::Client::new(),
+            &PullRequest {
+                api_base: &base,
+                token: "ghp_secret",
+                repo_url: "https://github.com/acme/widgets.git",
+                head: "frontal-code/task-1",
+                base: Some("main"),
+                title: "Hosted task task-1",
+                body: "body",
+            },
+        )
+        .await
+        .expect("PR opened");
+        assert_eq!(value["number"], 7);
+        let head = received.recv().expect("request seen");
+        assert!(
+            head.starts_with("POST /repos/acme/widgets/pulls "),
+            "{head}"
+        );
+        assert!(head
+            .to_ascii_lowercase()
+            .contains("authorization: bearer ghp_secret"));
+    }
+
+    #[tokio::test]
+    async fn pull_request_refusal_is_reported_with_github_message() {
+        let (base, _received) = github_stub(422, r#"{"message":"Validation Failed"}"#);
+        let error = open_pull_request(
+            &reqwest::Client::new(),
+            &PullRequest {
+                api_base: &base,
+                token: "t",
+                repo_url: "https://github.com/acme/widgets",
+                head: "frontal-code/x",
+                base: Some("main"),
+                title: "t",
+                body: "b",
+            },
+        )
+        .await
+        .expect_err("refused");
+        assert!(error.contains("Validation Failed"), "{error}");
     }
 
     #[test]

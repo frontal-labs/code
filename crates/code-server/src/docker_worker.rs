@@ -235,6 +235,8 @@ mod tests {
         assert_eq!(relay_container_name(8788), "frontal-code-relay-8788");
         assert_ne!(relay_container_name(8788), relay_container_name(8789));
         let args = relay_run_args("alpine/socat", 8789);
-        assert!(args.windows(2).any(|pair| pair == ["--name", "frontal-code-relay-8789"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--name", "frontal-code-relay-8789"]));
     }
 }

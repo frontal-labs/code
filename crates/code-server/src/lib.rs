@@ -5,6 +5,7 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
 use std::fmt;
+use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path as FsPath;
 use std::path::PathBuf;
@@ -35,11 +36,11 @@ use code_integrations::mcp::integration::{
 use code_orchestrator::{
     plan_work_item, LaneRole, WorkItem, WorkItemContext, WorkItemPriority, WorkItemSource,
 };
-use code_repo::{prepare_checkout, RepoCheckoutRequest, RepoSource};
+use code_repo::{prepare_checkout, PreparedRepo, RepoCheckoutRequest, RepoSource};
 use code_runtime::task_registry::{Task, TaskRegistry, TaskRegistrySnapshot, TaskStatus};
-use code_runtime::worker_boot::{
-    WorkerEventKind, WorkerEventPayload, WorkerRegistry, WorkerStatus,
-};
+use code_runtime::worker_boot::WorkerStatus;
+#[cfg(test)]
+use code_runtime::worker_boot::{WorkerEventKind, WorkerEventPayload, WorkerRegistry};
 use code_runtime::{
     generate_state, parse_permission_mode_label, save_oauth_credentials_for, ConfigLoader,
     OAuthTokenSet, ResolvedPermissionMode,
@@ -143,9 +144,26 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaneTransportKind {
+    /// Test-only simulator. It records fake workers and never runs an agent, so
+    /// production builds cannot select it.
+    #[cfg(test)]
     InMemory,
+    /// Each lane runs in a worker container (`docker/worker.Dockerfile`).
     LocalDocker,
+    /// Each lane runs an agent loop inside the server process.
     ToolsAgent,
+}
+
+/// Parses `FRONTAL_CODE_SERVER_LANE_TRANSPORT`. The simulator is not an option:
+/// an unknown value is an error, so a typo cannot silently fake lane execution.
+fn parse_lane_transport_kind(raw: &str) -> Result<LaneTransportKind, String> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "" | "docker" | "local-docker" | "local_docker" => Ok(LaneTransportKind::LocalDocker),
+        "tools-agent" | "tools_agent" | "agent" => Ok(LaneTransportKind::ToolsAgent),
+        other => Err(format!(
+            "unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT `{other}`; use `local-docker` (worker containers) or `tools-agent`"
+        )),
+    }
 }
 
 impl Default for ServerConfig {
@@ -153,7 +171,7 @@ impl Default for ServerConfig {
         Self {
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8788),
             event_replay_limit: DEFAULT_EVENT_REPLAY_LIMIT,
-            lane_transport_kind: LaneTransportKind::InMemory,
+            lane_transport_kind: LaneTransportKind::LocalDocker,
             api_key: None,
             workspace_root: default_server_workspace_root(),
             docker_image: default_server_docker_image(),
@@ -188,11 +206,7 @@ impl ServerConfig {
         }
 
         if let Ok(kind) = env::var("FRONTAL_CODE_SERVER_LANE_TRANSPORT") {
-            config.lane_transport_kind = match kind.trim().to_ascii_lowercase().as_str() {
-                "docker" | "local-docker" | "local_docker" => LaneTransportKind::LocalDocker,
-                "tools-agent" | "tools_agent" | "agent" => LaneTransportKind::ToolsAgent,
-                _ => LaneTransportKind::InMemory,
-            };
+            config.lane_transport_kind = parse_lane_transport_kind(&kind)?;
         }
 
         if let Ok(api_key) = env::var("FRONTAL_CODE_SERVER_API_KEY") {
@@ -313,6 +327,7 @@ pub struct ServerState {
     pending_oauth_states: Arc<Mutex<HashMap<String, LinearOAuthPendingState>>>,
 }
 
+#[cfg(test)]
 impl Default for ServerState {
     fn default() -> Self {
         Self::new(DEFAULT_EVENT_REPLAY_LIMIT)
@@ -320,6 +335,7 @@ impl Default for ServerState {
 }
 
 impl ServerState {
+    #[cfg(test)]
     #[must_use]
     pub fn new(event_replay_limit: usize) -> Self {
         Self::new_with_transport_kind_and_state_file(
@@ -374,6 +390,7 @@ impl ServerState {
         docker_server_url: String,
     ) -> Self {
         let lane_transport: Arc<dyn LaneWorkerTransport> = match lane_transport_kind {
+            #[cfg(test)]
             LaneTransportKind::InMemory => Arc::new(InMemoryLaneWorkerTransport::new()),
             LaneTransportKind::LocalDocker => Arc::new(LocalDockerLaneWorkerTransport::new(
                 workspace_root,
@@ -3309,6 +3326,7 @@ struct LaneTransportSignal {
     payload: Option<serde_json::Value>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // Blocked/Failed are built by the test simulator only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LaneTransportSignalKind {
     Running,
@@ -3475,11 +3493,14 @@ trait LaneWorkerTransport: Send + Sync + fmt::Debug {
     ) -> Result<LaneCompletionResult, String>;
 }
 
+/// Test double. It never runs an agent, so it must not be reachable from production.
+#[cfg(test)]
 #[derive(Debug, Default)]
 struct InMemoryLaneWorkerTransport {
     workers: WorkerRegistry,
 }
 
+#[cfg(test)]
 impl InMemoryLaneWorkerTransport {
     fn new() -> Self {
         Self {
@@ -3488,6 +3509,7 @@ impl InMemoryLaneWorkerTransport {
     }
 }
 
+#[cfg(test)]
 impl LaneWorkerTransport for InMemoryLaneWorkerTransport {
     fn bootstrap(&self, request: &LaneExecutionRequest) -> Result<LaneBootstrapResult, String> {
         let cwd = request
@@ -3694,18 +3716,20 @@ impl LocalDockerLaneWorkerTransport {
 
 impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
     fn bootstrap(&self, request: &LaneExecutionRequest) -> Result<LaneBootstrapResult, String> {
-        let source = lane_repo_source(request).ok_or_else(|| {
-            "local docker transport requires repo_url or a local repository path".to_string()
-        })?;
-        let prepared = prepare_checkout(&RepoCheckoutRequest {
-            workspace_root: self.workspace_root.clone(),
-            checkout_id: request.task_id.clone(),
-            source,
-            repository: request.repository.clone(),
-            base_ref: request.base_ref.clone(),
-            branch: request.branch.clone(),
-        })
-        .map_err(|error| format!("failed to prepare repo checkout: {error}"))?;
+        // A task with a repository gets a checkout on its own branch. A task without one
+        // gets an empty scratch workspace, so a plain prompt can still run in a worker.
+        let prepared = match lane_repo_source(request) {
+            Some(source) => prepare_checkout(&RepoCheckoutRequest {
+                workspace_root: self.workspace_root.clone(),
+                checkout_id: request.task_id.clone(),
+                source,
+                repository: request.repository.clone(),
+                base_ref: request.base_ref.clone(),
+                branch: request.branch.clone(),
+            })
+            .map_err(|error| format!("failed to prepare repo checkout: {error}"))?,
+            None => prepare_scratch_workspace(&self.workspace_root, &request.task_id)?,
+        };
         check_hosted_task_policy(&prepared.checkout_root, request)?;
         let task_file = write_local_docker_task_payload(&prepared.checkout_root, request)
             .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
@@ -3722,6 +3746,14 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
         ]);
         if let Some(api_key) = &self.server_api_key {
             container_env.insert("FRONTAL_CODE_SERVER_API_KEY".to_string(), api_key.clone());
+        }
+        // The worker is headless, so it needs the same model credentials the server has.
+        for key in WORKER_PROVIDER_ENV {
+            if let Ok(value) = env::var(key) {
+                if !value.trim().is_empty() {
+                    container_env.insert((*key).to_string(), worker_container_value(key, &value));
+                }
+            }
         }
         for key in ["GITHUB_TOKEN", "FRONTAL_CODE_GITHUB_API_BASE"] {
             if let Ok(value) = env::var(key) {
@@ -3820,6 +3852,69 @@ fn lane_repo_source(request: &LaneExecutionRequest) -> Option<RepoSource> {
         .then_some(RepoSource::LocalPath(repo_path))
 }
 
+/// Provider settings forwarded to worker containers. Credentials go only to the
+/// container of the task that needs them, never into the checkout.
+const WORKER_PROVIDER_ENV: &[&str] = &[
+    "FRONTAL_API_KEY",
+    "FRONTAL_AUTH_TOKEN",
+    "FRONTAL_BASE_URL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "XAI_API_KEY",
+    "XAI_BASE_URL",
+    "OLLAMA_BASE_URL",
+    "OLLAMA_MODEL",
+    "AZURE_OPENAI_API_KEY",
+    "AZURE_OPENAI_BASE_URL",
+    "BEDROCK_API_KEY",
+    "BEDROCK_BASE_URL",
+    "FRONTAL_CODE_MAX_OUTPUT_TOKENS",
+];
+
+/// Permission mode for a headless worker. A prompt-mode worker would deny every
+/// shell command and write, since nothing can answer. The container is the isolation
+/// boundary, so the default is full access inside it. A task can request another mode.
+const WORKER_DEFAULT_PERMISSION_MODE: &str = "danger-full-access";
+
+/// Base URLs that point at this machine are unreachable from a container. Rewrite
+/// loopback hosts to the Docker host alias that the launcher adds.
+fn worker_container_value(key: &str, value: &str) -> String {
+    if !key.ends_with("_BASE_URL") {
+        return value.to_string();
+    }
+    value
+        .replace("://127.0.0.1", "://host.docker.internal")
+        .replace("://localhost", "://host.docker.internal")
+}
+
+/// Creates an empty workspace for a task that has no repository. It is not a git
+/// checkout, so no branch is published.
+fn prepare_scratch_workspace(
+    workspace_root: &FsPath,
+    task_id: &str,
+) -> Result<PreparedRepo, String> {
+    let name: String = task_id
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let checkout_root = workspace_root.join(format!("scratch-{name}"));
+    fs::create_dir_all(&checkout_root)
+        .map_err(|error| format!("failed to create scratch workspace: {error}"))?;
+    Ok(PreparedRepo {
+        checkout_root,
+        source: RepoSource::LocalPath(PathBuf::from(".")),
+        repository: None,
+        active_ref: "scratch".to_string(),
+        branch: None,
+    })
+}
+
 fn write_local_docker_task_payload(
     checkout_root: &FsPath,
     request: &LaneExecutionRequest,
@@ -3838,7 +3933,12 @@ fn write_local_docker_task_payload(
             branch: request.branch.clone(),
             model: request.model.clone(),
             provider: request.provider.clone(),
-            permission_mode: request.permission_mode.clone(),
+            permission_mode: Some(
+                request
+                    .permission_mode
+                    .clone()
+                    .unwrap_or_else(|| WORKER_DEFAULT_PERMISSION_MODE.to_string()),
+            ),
             allowed_tools: request.allowed_tools.clone(),
         })
         .map_err(std::io::Error::other)?,
@@ -4093,6 +4193,7 @@ fn bootstrap_task_lane(
     }
 }
 
+#[cfg(test)]
 fn signal_from_worker_event(
     event: &code_runtime::worker_boot::WorkerEvent,
 ) -> Option<LaneTransportSignal> {
@@ -4120,6 +4221,7 @@ fn signal_from_worker_event(
     })
 }
 
+#[cfg(test)]
 fn worker_payload_to_json(
     payload: &WorkerEventPayload,
 ) -> Result<serde_json::Value, serde_json::Error> {
@@ -4278,6 +4380,7 @@ fn lane_role_label(role: LaneRole) -> &'static str {
 
 fn lane_transport_kind_label(kind: LaneTransportKind) -> &'static str {
     match kind {
+        #[cfg(test)]
         LaneTransportKind::InMemory => "in_memory",
         LaneTransportKind::LocalDocker => "local_docker",
         LaneTransportKind::ToolsAgent => "tools_agent",
@@ -4356,6 +4459,96 @@ impl IntoResponse for AppError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn worker_container_value_rewrites_only_loopback_base_urls() {
+        use super::worker_container_value;
+        assert_eq!(
+            worker_container_value("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+            "http://host.docker.internal:11434"
+        );
+        assert_eq!(
+            worker_container_value("OPENAI_BASE_URL", "http://localhost:8080/v1"),
+            "http://host.docker.internal:8080/v1"
+        );
+        assert_eq!(
+            worker_container_value("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),
+            "https://openrouter.ai/api/v1"
+        );
+        // Keys are not URLs and must pass through untouched.
+        assert_eq!(
+            worker_container_value("OPENAI_API_KEY", "http://127.0.0.1-looking-key"),
+            "http://127.0.0.1-looking-key"
+        );
+    }
+
+    #[test]
+    fn scratch_workspace_is_created_for_tasks_without_a_repository() {
+        use super::prepare_scratch_workspace;
+        let root = temp_test_dir("scratch-workspace");
+        let prepared =
+            prepare_scratch_workspace(&root, "task/with spaces").expect("scratch should prepare");
+        assert!(prepared.checkout_root.is_dir());
+        assert!(prepared.checkout_root.ends_with("scratch-task-with-spaces"));
+        assert!(prepared.branch.is_none());
+        assert!(prepared.repository.is_none());
+    }
+
+    #[test]
+    fn worker_payload_defaults_to_full_access_inside_the_container() {
+        use super::{write_local_docker_task_payload, LaneExecutionRequest};
+        let root = temp_test_dir("worker-payload");
+        let request = LaneExecutionRequest {
+            task_id: "task-1".to_string(),
+            prompt: "hello".to_string(),
+            repository: None,
+            repo_url: None,
+            base_ref: None,
+            branch: None,
+            lane_role: None,
+            model: None,
+            provider: None,
+            permission_mode: None,
+            allowed_tools: Vec::new(),
+        };
+        let path = write_local_docker_task_payload(&root, &request).expect("payload written");
+        let payload: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
+                .expect("payload json");
+        assert_eq!(payload["permission_mode"], "danger-full-access");
+
+        let explicit = LaneExecutionRequest {
+            permission_mode: Some("read-only".to_string()),
+            ..request
+        };
+        let path = write_local_docker_task_payload(&root, &explicit).expect("payload written");
+        let payload: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
+                .expect("payload json");
+        assert_eq!(payload["permission_mode"], "read-only");
+    }
+
+    #[test]
+    fn lane_transport_parser_accepts_workers_and_refuses_the_simulator() {
+        use super::{parse_lane_transport_kind, LaneTransportKind};
+        assert_eq!(
+            parse_lane_transport_kind("").unwrap(),
+            LaneTransportKind::LocalDocker
+        );
+        assert_eq!(
+            parse_lane_transport_kind(" Local-Docker ").unwrap(),
+            LaneTransportKind::LocalDocker
+        );
+        assert_eq!(
+            parse_lane_transport_kind("tools-agent").unwrap(),
+            LaneTransportKind::ToolsAgent
+        );
+        for simulated in ["in-memory", "in_memory", "memory", "bogus"] {
+            let error = parse_lane_transport_kind(simulated)
+                .expect_err("simulated or unknown transports must be refused");
+            assert!(error.contains("unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT"));
+        }
+    }
+
     use super::*;
     use axum::body::to_bytes;
     use axum::body::Body;

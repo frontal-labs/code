@@ -9,6 +9,9 @@
 #
 #   scripts/linux-amd64-tests.sh            # full run
 #   TEST_FILTER=worker_ scripts/linux-amd64-tests.sh   # only tests whose names match
+#
+# The run is bounded by TEST_TIMEOUT seconds (default 5400). A hung test binary otherwise blocks
+# the run indefinitely, which happened under Rosetta; see docs/TROUBLESHOOTING.md.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -49,4 +52,4 @@ docker run --rm --platform linux/amd64 --network "container:$CH_NAME" \
   -e FRONTAL_TEST_CLICKHOUSE_USER=frontal \
   -e FRONTAL_TEST_CLICKHOUSE_PASSWORD="$CH_PASSWORD" \
   "$IMAGE" bash -c "apt-get update -qq && apt-get install -y -qq pkg-config libssl-dev libpq-dev git python3 >/dev/null 2>&1; \
-    CARGO_TARGET_DIR=/src/target-linux cargo test --workspace --no-fail-fast -- --include-ignored ${TEST_FILTER:-}"
+    CARGO_TARGET_DIR=/src/target-linux timeout -k 30 ${TEST_TIMEOUT:-5400} cargo test --workspace --no-fail-fast -- --include-ignored ${TEST_FILTER:-}"

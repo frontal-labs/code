@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod worker_access;
+mod worker_tokens;
 use worker_access::WorkerAccess;
 
 use crate::tracker_reporting::{maybe_spawn_tracker_report, TrackerEvent};
@@ -138,6 +139,14 @@ pub struct ServerConfig {
     pub docker_image: String,
     pub docker_server_url: String,
     pub reconcile_interval: Option<Duration>,
+    /// Postgres holds worker tokens. Required for the `local-docker` lane transport.
+    pub database_url: Option<String>,
+    /// Allows a plaintext connection to a non-local Postgres host. Only for private networks.
+    pub database_allow_plaintext: bool,
+    /// ClickHouse is for analytics and audit events. Worker tokens do not use it.
+    pub clickhouse_url: Option<String>,
+    /// How long a worker token stays valid, in seconds.
+    pub worker_token_ttl_secs: u64,
     pub state_file: Option<PathBuf>,
     pub orphan_approval_delay: Duration,
     pub orphan_auto_retry_after: Option<Duration>,
@@ -176,6 +185,10 @@ impl Default for ServerConfig {
             docker_image: default_server_docker_image(),
             docker_server_url: default_server_docker_server_url(),
             reconcile_interval: Some(Duration::from_secs(15)),
+            database_url: None,
+            database_allow_plaintext: false,
+            clickhouse_url: None,
+            worker_token_ttl_secs: 7200,
             state_file: default_server_state_file(),
             orphan_approval_delay: DEFAULT_ORPHAN_APPROVAL_DELAY,
             orphan_auto_retry_after: None,
@@ -241,6 +254,17 @@ impl ServerConfig {
             config.reconcile_interval = (interval > 0).then(|| Duration::from_secs(interval));
         }
 
+        if let Ok(url) = env::var("FRONTAL_CODE_SERVER_DATABASE_URL") {
+            config.database_url = (!url.trim().is_empty()).then(|| url.trim().to_string());
+        }
+        config.database_allow_plaintext = env::var("FRONTAL_CODE_SERVER_DATABASE_ALLOW_PLAINTEXT")
+            .is_ok_and(|value| is_truthy(&value));
+        if let Ok(url) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_URL") {
+            config.clickhouse_url = (!url.trim().is_empty()).then(|| url.trim().to_string());
+        }
+        if let Ok(ttl) = env::var("FRONTAL_CODE_WORKER_TOKEN_TTL_SECS") {
+            config.worker_token_ttl_secs = ttl.trim().parse()?;
+        }
         if let Ok(path) = env::var("FRONTAL_CODE_SERVER_STATE_FILE") {
             let path = path.trim();
             config.state_file = (!path.is_empty()).then(|| PathBuf::from(path));
@@ -368,6 +392,7 @@ impl ServerState {
             default_server_workspace_root(),
             default_server_docker_image(),
             default_server_docker_server_url(),
+            WorkerAccess::new(None, 7200),
         )
     }
 
@@ -385,8 +410,9 @@ impl ServerState {
         workspace_root: PathBuf,
         docker_image: String,
         docker_server_url: String,
+        worker_access: WorkerAccess,
     ) -> Self {
-        let worker_access = Arc::new(WorkerAccess::default());
+        let worker_access = Arc::new(worker_access);
         let lane_transport: Arc<dyn LaneWorkerTransport> = match lane_transport_kind {
             LaneTransportKind::LocalDocker => Arc::new(LocalDockerLaneWorkerTransport::new(
                 workspace_root,
@@ -495,7 +521,7 @@ impl ServerState {
             event_replay_limit,
             lane_transport_kind,
             lane_transport,
-            Arc::new(WorkerAccess::default()),
+            Arc::new(WorkerAccess::new(None, 3600)),
         )
     }
 
@@ -540,7 +566,7 @@ impl ServerState {
             None,
             None,
             Vec::new(),
-            Arc::new(WorkerAccess::default()),
+            Arc::new(WorkerAccess::new(None, 3600)),
         )
     }
 
@@ -563,7 +589,7 @@ impl ServerState {
             orphan_auto_retry_after,
             orphan_auto_cancel_after,
             Vec::new(),
-            Arc::new(WorkerAccess::default()),
+            Arc::new(WorkerAccess::new(None, 3600)),
         )
     }
 
@@ -587,7 +613,7 @@ impl ServerState {
             orphan_auto_retry_after,
             orphan_auto_cancel_after,
             orphan_policy_rules,
-            Arc::new(WorkerAccess::default()),
+            Arc::new(WorkerAccess::new(None, 3600)),
         )
     }
 
@@ -1600,9 +1626,17 @@ async fn require_control_plane_auth(
     request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    if is_control_plane_authorized(state.as_ref(), request.headers())
-        || worker_token_may_access(state.as_ref(), &request)
-    {
+    if is_control_plane_authorized(state.as_ref(), request.headers()) {
+        return Ok(next.run(request).await);
+    }
+    let worker_allowed = worker_token_may_access(
+        state.as_ref(),
+        request.headers().clone(),
+        request.method().clone(),
+        request.uri().path().to_string(),
+    )
+    .await;
+    if worker_allowed {
         Ok(next.run(request).await)
     } else {
         Err(AppError::unauthorized("missing or invalid API key"))
@@ -1610,15 +1644,25 @@ async fn require_control_plane_auth(
 }
 
 /// A worker's task token opens only the endpoints that worker calls for its own task.
-fn worker_token_may_access(state: &ServerState, request: &Request) -> bool {
-    let Some(token) = worker_access::token_from_headers(request.headers()) else {
+async fn worker_token_may_access(
+    state: &ServerState,
+    headers: HeaderMap,
+    method: axum::http::Method,
+    path: String,
+) -> bool {
+    // Owned copies only: the request body is not Sync, so the request itself must not be
+    // borrowed across the await below.
+    let Some(token) = worker_access::token_from_headers(&headers) else {
         return false;
     };
-    let Some(token_task) = state.worker_access.task_for_token(&token) else {
+    let Some(requested_task) = worker_access::worker_endpoint_task_id(&method, &path) else {
         return false;
     };
-    worker_access::worker_endpoint_task_id(request.method(), request.uri().path())
-        .is_some_and(|task_id| task_id == token_task)
+    state
+        .worker_access
+        .task_for_token(&token)
+        .await
+        .is_some_and(|token_task| token_task == requested_task)
 }
 
 /// Forwards a worker's model call to the provider with the server's own key.
@@ -1733,6 +1777,21 @@ fn check_auth_posture(config: &ServerConfig) -> Result<(), String> {
 pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     check_auth_posture(&config)?;
 
+    // Worker tokens live in Postgres. Start-up fails if it is unreachable, rather than
+    // running workers that cannot authenticate.
+    let worker_store = if config.lane_transport_kind == LaneTransportKind::LocalDocker {
+        let url = config.database_url.as_deref().ok_or(
+            "FRONTAL_CODE_SERVER_DATABASE_URL is required for worker lanes (worker tokens are stored in Postgres)",
+        )?;
+        Some(worker_tokens::WorkerTokenStore::connect(
+            url,
+            config.database_allow_plaintext,
+        )?)
+    } else {
+        None
+    };
+    let worker_access = WorkerAccess::new(worker_store, config.worker_token_ttl_secs);
+
     let state = Arc::new(
         ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
             config.event_replay_limit,
@@ -1746,6 +1805,7 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
             config.workspace_root.clone(),
             config.docker_image.clone(),
             config.docker_server_url.clone(),
+            worker_access,
         ),
     );
     if let Some(interval) = config.reconcile_interval {
@@ -2923,7 +2983,7 @@ async fn complete_task(
         .lane_transport
         .observe_completion(&worker_id, &request.finish_reason, request.tokens_output)
         .map_err(AppError::internal)?;
-    state.worker_access.revoke(&task_id);
+    state.worker_access.revoke_async(&task_id).await;
 
     if let Some(result) = request
         .result
@@ -5259,6 +5319,9 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn local_docker_transport_prepares_checkout_workspace_for_task() {
+        let Some(store) = worker_tokens::tests::test_store() else {
+            return;
+        };
         let dir = temp_test_dir("code-server-local-docker");
         let source_repo = init_git_repo(dir.join("source"));
         commit_file(
@@ -5269,7 +5332,7 @@ mod tests {
         );
         let workspace_root = dir.join("workspaces");
         let docker = Arc::new(MockDockerRunner::default());
-        let access = Arc::new(WorkerAccess::default());
+        let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
         let state = Arc::new(ServerState::with_lane_transport_kind_and_access(
             DEFAULT_EVENT_REPLAY_LIMIT,
             LaneTransportKind::LocalDocker,
@@ -5469,6 +5532,9 @@ mod tests {
 
     #[tokio::test]
     async fn local_docker_transport_launch_failure_marks_task_failed() {
+        let Some(store) = worker_tokens::tests::test_store() else {
+            return;
+        };
         let dir = temp_test_dir("code-server-local-docker-fail");
         let source_repo = init_git_repo(dir.join("source"));
         commit_file(
@@ -5482,7 +5548,7 @@ mod tests {
             fail_launch: Some("docker launch spec rejected".to_string()),
             ..MockDockerRunner::default()
         });
-        let access = Arc::new(WorkerAccess::default());
+        let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
         let state = Arc::new(ServerState::with_lane_transport_kind_and_access(
             DEFAULT_EVENT_REPLAY_LIMIT,
             LaneTransportKind::LocalDocker,
@@ -6127,16 +6193,28 @@ mod tests {
 
     #[tokio::test]
     async fn worker_token_reaches_only_its_own_task_endpoints_and_is_revoked_on_completion() {
+        let Some(store) = worker_tokens::tests::test_store() else {
+            return;
+        };
+        let task = worker_tokens::tests::unique_task("router");
         let state = Arc::new(
-            ServerState::with_lane_transport(
+            ServerState::with_lane_transport_kind_and_access(
                 DEFAULT_EVENT_REPLAY_LIMIT,
+                LaneTransportKind::LocalDocker,
                 Arc::new(FakeLaneWorkerTransport::new()),
+                Arc::new(WorkerAccess::new(Some(store), 3600)),
             )
             .with_control_plane_api_key(Some("admin-key".to_string())),
         );
-        let token = state.worker_access.issue("task-x").expect("token");
+        let token = state.worker_access.issue(&task).expect("token");
         let router = app(state.clone());
-        let call = |method: &str, uri: &str, bearer: Option<&str>| {
+
+        async fn send(
+            router: &Router,
+            method: &str,
+            uri: &str,
+            bearer: Option<&str>,
+        ) -> StatusCode {
             let mut builder = Request::builder().method(method).uri(uri);
             if let Some(bearer) = bearer {
                 builder = builder.header("authorization", format!("Bearer {bearer}"));
@@ -6145,52 +6223,45 @@ mod tests {
                 .header("content-type", "application/json")
                 .body(Body::from("{}"))
                 .expect("request");
-            router.clone().oneshot(request)
-        };
+            router
+                .clone()
+                .oneshot(request)
+                .await
+                .expect("router responds")
+                .status()
+        }
 
-        // Its own task: authorized (the task does not exist, so the answer is 404, not 401).
-        let own = call("GET", "/v1/tasks/task-x", Some(&token)).await.unwrap();
-        assert_eq!(own.status(), StatusCode::NOT_FOUND);
+        let own_uri = format!("/v1/tasks/{task}");
+        let other_uri = "/v1/tasks/some-other-task";
+        let cancel_uri = format!("/v1/tasks/{task}/cancel");
 
+        // Its own task: authorized, so the answer is 404 (the task does not exist), not 401.
+        assert_eq!(
+            send(&router, "GET", &own_uri, Some(&token)).await,
+            StatusCode::NOT_FOUND
+        );
         // Another task, the task list, and cancel are outside the worker's reach.
         assert_eq!(
-            call("GET", "/v1/tasks/task-y", Some(&token))
-                .await
-                .unwrap()
-                .status(),
+            send(&router, "GET", other_uri, Some(&token)).await,
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(
-            call("GET", "/v1/tasks", Some(&token))
-                .await
-                .unwrap()
-                .status(),
+            send(&router, "GET", "/v1/tasks", Some(&token)).await,
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(
-            call("POST", "/v1/tasks/task-x/cancel", Some(&token))
-                .await
-                .unwrap()
-                .status(),
+            send(&router, "POST", &cancel_uri, Some(&token)).await,
             StatusCode::UNAUTHORIZED
         );
-
         // The control-plane key still works everywhere.
         assert_eq!(
-            call("GET", "/v1/tasks", Some("admin-key"))
-                .await
-                .unwrap()
-                .status(),
+            send(&router, "GET", "/v1/tasks", Some("admin-key")).await,
             StatusCode::OK
         );
-
-        // After the worker reports completion, its token stops working.
-        state.worker_access.revoke("task-x");
+        // Once the worker's task is finished, its token stops working.
+        state.worker_access.revoke(&task);
         assert_eq!(
-            call("GET", "/v1/tasks/task-x", Some(&token))
-                .await
-                .unwrap()
-                .status(),
+            send(&router, "GET", &own_uri, Some(&token)).await,
             StatusCode::UNAUTHORIZED
         );
     }
@@ -8382,6 +8453,7 @@ mod tests {
                 default_server_workspace_root(),
                 default_server_docker_image(),
                 default_server_docker_server_url(),
+                WorkerAccess::new(None, 7200),
             ),
         );
 
@@ -8424,6 +8496,7 @@ mod tests {
                 default_server_workspace_root(),
                 default_server_docker_image(),
                 default_server_docker_server_url(),
+                WorkerAccess::new(None, 7200),
             ),
         );
 

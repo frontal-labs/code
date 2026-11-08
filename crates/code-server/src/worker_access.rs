@@ -8,17 +8,15 @@
 //! - Model calls go through `/v1/model-proxy/{provider}`. The proxy checks the
 //!   token, drops the caller's auth headers, adds the real provider key from the
 //!   server's environment, and streams the upstream response back.
-//! - The token is revoked when the task completes or is cancelled. Tokens are kept
-//!   in memory only, so a server restart invalidates running workers.
+//! - The token is revoked when the task completes or is cancelled. Tokens are stored
+//!   hashed in Postgres (see `worker_tokens.rs`), so they survive a server restart and
+//!   are never held in server memory.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
+use crate::worker_tokens::WorkerTokenStore;
 use axum::body::Body;
 use axum::extract::Request;
 use axum::http::{header, HeaderName, HeaderValue, Method, StatusCode};
 use axum::response::Response;
-use sha2::{Digest, Sha256};
 
 /// Largest request body the proxy forwards. Prompts with large context fit well below this.
 pub(crate) const MODEL_PROXY_MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
@@ -33,56 +31,57 @@ const FORWARDED_REQUEST_HEADERS: &[&str] = &[
     "user-agent",
 ];
 
-/// Task-scoped tokens, keyed by a SHA-256 hash of the token.
-#[derive(Debug, Default)]
+/// Task-scoped worker tokens, backed by Postgres.
+#[derive(Debug, Clone)]
 pub(crate) struct WorkerAccess {
-    inner: Mutex<WorkerAccessInner>,
-}
-
-#[derive(Debug, Default)]
-struct WorkerAccessInner {
-    task_by_hash: HashMap<String, String>,
-    hash_by_task: HashMap<String, String>,
+    store: Option<WorkerTokenStore>,
+    ttl_secs: u64,
 }
 
 impl WorkerAccess {
-    /// Issues a fresh token for `task_id`, replacing any earlier one for that task.
+    pub(crate) fn new(store: Option<WorkerTokenStore>, ttl_secs: u64) -> Self {
+        Self { store, ttl_secs }
+    }
+
+    /// Issues a token for `task_id`, replacing the task's earlier token. Synchronous,
+    /// because the lane transport is synchronous.
     pub(crate) fn issue(&self, task_id: &str) -> Result<String, String> {
-        let mut bytes = [0_u8; 32];
-        getrandom::getrandom(&mut bytes).map_err(|error| format!("random source: {error}"))?;
-        let token = hex::encode(bytes);
-        let hash = hash_token(&token);
+        let store = self
+            .store
+            .as_ref()
+            .ok_or_else(|| "no worker token store is configured".to_string())?;
+        store.issue_blocking(task_id, self.ttl_secs)
+    }
 
-        let mut inner = self.lock();
-        if let Some(previous) = inner.hash_by_task.insert(task_id.to_string(), hash.clone()) {
-            inner.task_by_hash.remove(&previous);
+    /// Returns the task a live token belongs to. A store error counts as "no access".
+    pub(crate) async fn task_for_token(&self, token: &str) -> Option<String> {
+        let store = self.store.as_ref()?;
+        match store.validate(token).await {
+            Ok(task) => task,
+            Err(error) => {
+                eprintln!("worker token check failed: {error}");
+                None
+            }
         }
-        inner.task_by_hash.insert(hash, task_id.to_string());
-        Ok(token)
     }
 
-    /// Returns the task a token belongs to, if the token is still live.
-    pub(crate) fn task_for_token(&self, token: &str) -> Option<String> {
-        self.lock().task_by_hash.get(&hash_token(token)).cloned()
-    }
-
-    /// Revokes the token of `task_id`. Called on completion and cancellation.
+    /// Revokes the task's token from synchronous code.
     pub(crate) fn revoke(&self, task_id: &str) {
-        let mut inner = self.lock();
-        if let Some(hash) = inner.hash_by_task.remove(task_id) {
-            inner.task_by_hash.remove(&hash);
+        if let Some(store) = &self.store {
+            if let Err(error) = store.revoke_blocking(task_id) {
+                eprintln!("worker token revoke failed for {task_id}: {error}");
+            }
         }
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, WorkerAccessInner> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    /// Revokes the task's token from async code.
+    pub(crate) async fn revoke_async(&self, task_id: &str) {
+        if let Some(store) = &self.store {
+            if let Err(error) = store.revoke(task_id).await {
+                eprintln!("worker token revoke failed for {task_id}: {error}");
+            }
+        }
     }
-}
-
-fn hash_token(token: &str) -> String {
-    hex::encode(Sha256::digest(token.as_bytes()))
 }
 
 /// Returns the task id when `method` and `path` are one of the endpoints a worker
@@ -289,7 +288,7 @@ pub(crate) async fn proxy_model_request(
     let Some(token) = token_from_headers(request.headers()) else {
         return error_response(StatusCode::UNAUTHORIZED, "missing worker token");
     };
-    if access.task_for_token(&token).is_none() {
+    if access.task_for_token(&token).await.is_none() {
         return error_response(StatusCode::UNAUTHORIZED, "invalid or revoked worker token");
     }
 
@@ -396,26 +395,6 @@ fn error_response(status: StatusCode, message: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn issued_tokens_resolve_to_their_task_until_revoked() {
-        let access = WorkerAccess::default();
-        let token = access.issue("task-1").expect("token");
-        assert_eq!(access.task_for_token(&token).as_deref(), Some("task-1"));
-        assert!(access.task_for_token("not-a-token").is_none());
-
-        access.revoke("task-1");
-        assert!(access.task_for_token(&token).is_none());
-    }
-
-    #[test]
-    fn reissuing_a_task_token_invalidates_the_previous_one() {
-        let access = WorkerAccess::default();
-        let first = access.issue("task-1").expect("first");
-        let second = access.issue("task-1").expect("second");
-        assert!(access.task_for_token(&first).is_none());
-        assert_eq!(access.task_for_token(&second).as_deref(), Some("task-1"));
-    }
 
     #[test]
     fn worker_token_reaches_only_its_own_task_endpoints() {
@@ -553,8 +532,13 @@ mod proxy_tests {
 
     #[tokio::test]
     async fn proxy_injects_the_server_key_and_strips_the_worker_token() {
-        let access = WorkerAccess::default();
-        let token = access.issue("task-1").expect("token");
+        let Some(store) = crate::worker_tokens::tests::test_store() else {
+            return;
+        };
+        let access = WorkerAccess::new(Some(store), 3600);
+        let token = access
+            .issue(&crate::worker_tokens::tests::unique_task("proxy"))
+            .expect("token");
         let (base, received) = upstream_once();
         let client = reqwest::Client::new();
 
@@ -588,7 +572,11 @@ mod proxy_tests {
 
     #[tokio::test]
     async fn proxy_refuses_missing_or_revoked_tokens_without_contacting_the_provider() {
-        let access = WorkerAccess::default();
+        let Some(store) = crate::worker_tokens::tests::test_store() else {
+            return;
+        };
+        let access = WorkerAccess::new(Some(store), 3600);
+        let task = crate::worker_tokens::tests::unique_task("revoked");
         let client = reqwest::Client::new();
         let server_env =
             |name: &str| (name == "OPENAI_API_KEY").then(|| "sk-server-only".to_string());
@@ -604,8 +592,8 @@ mod proxy_tests {
         .await;
         assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
 
-        let token = access.issue("task-1").expect("token");
-        access.revoke("task-1");
+        let token = access.issue(&task).expect("token");
+        access.revoke(&task);
         let revoked = proxy_model_request(
             &access,
             &client,
@@ -620,8 +608,13 @@ mod proxy_tests {
 
     #[tokio::test]
     async fn proxy_reports_a_missing_server_key_as_unavailable() {
-        let access = WorkerAccess::default();
-        let token = access.issue("task-1").expect("token");
+        let Some(store) = crate::worker_tokens::tests::test_store() else {
+            return;
+        };
+        let access = WorkerAccess::new(Some(store), 3600);
+        let token = access
+            .issue(&crate::worker_tokens::tests::unique_task("nokey"))
+            .expect("token");
         let response = proxy_model_request(
             &access,
             &reqwest::Client::new(),

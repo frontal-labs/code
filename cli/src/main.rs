@@ -9406,7 +9406,7 @@ fn build_runtime_with_plugin_state_and_provider(
                     .with_prompt_cache(PromptCache::new(session_id)),
             )
         } else {
-            create_provider_client(&provider_name, effective_model.clone())?
+            create_provider_client(&provider_name, &effective_model)?
         }
     } else {
         ProviderClient::from_model(&effective_model)?

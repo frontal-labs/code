@@ -12,7 +12,7 @@ use crate::types::{
     ToolChoice, ToolDefinition, ToolResultContentBlock, Usage,
 };
 
-use super::{preflight_message_request, Provider, ProviderFuture};
+use super::preflight_message_request;
 
 pub const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 const REQUEST_ID_HEADER: &str = "request-id";
@@ -134,6 +134,11 @@ impl OpenAiCompatClient {
             // Nothing saved either: report the usual missing-credentials error.
             None => Self::from_env(config),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn base_url_for_tests(&self) -> &str {
+        &self.base_url
     }
 
     #[must_use]
@@ -283,24 +288,6 @@ impl OpenAiCompatClient {
             .initial_backoff
             .checked_mul(multiplier)
             .map_or(self.max_backoff, |delay| delay.min(self.max_backoff)))
-    }
-}
-
-impl Provider for OpenAiCompatClient {
-    type Stream = MessageStream;
-
-    fn send_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, MessageResponse> {
-        Box::pin(async move { self.send_message(request).await })
-    }
-
-    fn stream_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, Self::Stream> {
-        Box::pin(async move { self.stream_message(request).await })
     }
 }
 
@@ -841,7 +828,7 @@ fn openai_tool_choice(tool_choice: &ToolChoice) -> Value {
 }
 
 fn should_request_stream_usage(config: OpenAiCompatConfig) -> bool {
-    matches!(config.provider_name, "OpenAI")
+    matches!(config.provider_name, "OpenAI" | "Ollama")
 }
 
 fn normalize_response(
@@ -1370,10 +1357,7 @@ mod tests {
             )
             .expect("save anthropic credentials");
 
-            assert!(crate::providers::create_provider_client(
-                "anthropic",
-                "claude-sonnet-4-6".to_string()
-            )
+            assert!(crate::providers::create_provider_client("anthropic", "claude-sonnet-4-6")
             .is_ok());
         });
     }

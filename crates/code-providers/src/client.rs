@@ -7,7 +7,7 @@ use crate::providers::frontal;
 use crate::providers::ollama;
 use crate::providers::openai::{self, OpenAiCompatClient};
 use crate::providers::xai;
-use crate::providers::{Provider, ProviderKind};
+use crate::providers::ProviderKind;
 use crate::types::{MessageRequest, MessageResponse, StreamEvent};
 use code_telemetry::SessionTracer;
 
@@ -20,7 +20,7 @@ pub enum ProviderClient {
     Frontal(OpenAiCompatClient),
     Bedrock(OpenAiCompatClient),
     Azure(OpenAiCompatClient),
-    Ollama(ollama::OllamaClient),
+    Ollama(OpenAiCompatClient),
 }
 
 impl ProviderClient {
@@ -59,11 +59,9 @@ impl ProviderClient {
             crate::providers::ProviderKind::Azure => {
                 Ok(Self::Azure(OpenAiCompatClient::from_env(azure::config())?))
             }
-            crate::providers::ProviderKind::Ollama => Ok(Self::Ollama(ollama::OllamaClient::new(
-                std::env::var("OLLAMA_BASE_URL")
-                    .unwrap_or_else(|_| "http://localhost:11434".to_string()),
-                resolved_model,
-            ))),
+            crate::providers::ProviderKind::Ollama => {
+                Ok(Self::Ollama(ollama::client_from_env()))
+            }
         }
     }
 
@@ -132,8 +130,8 @@ impl ProviderClient {
             | Self::OpenAi(client)
             | Self::Frontal(client)
             | Self::Bedrock(client)
-            | Self::Azure(client) => client.send_message(request).await,
-            Self::Ollama(client) => client.send_message(request).await,
+            | Self::Azure(client)
+            | Self::Ollama(client) => client.send_message(request).await,
         }
     }
 
@@ -150,14 +148,11 @@ impl ProviderClient {
             | Self::OpenAi(client)
             | Self::Frontal(client)
             | Self::Bedrock(client)
-            | Self::Azure(client) => client
+            | Self::Azure(client)
+            | Self::Ollama(client) => client
                 .stream_message(request)
                 .await
                 .map(MessageStream::OpenAiCompat),
-            Self::Ollama(client) => client
-                .stream_message(request)
-                .await
-                .map(MessageStream::Ollama),
         }
     }
 }
@@ -166,7 +161,6 @@ impl ProviderClient {
 pub enum MessageStream {
     Anthropic(anthropic::MessageStream),
     OpenAiCompat(openai::MessageStream),
-    Ollama(ollama::MessageStream),
 }
 
 impl MessageStream {
@@ -175,7 +169,6 @@ impl MessageStream {
         match self {
             Self::Anthropic(stream) => stream.request_id(),
             Self::OpenAiCompat(stream) => stream.request_id(),
-            Self::Ollama(stream) => stream.request_id(),
         }
     }
 
@@ -183,7 +176,6 @@ impl MessageStream {
         match self {
             Self::Anthropic(stream) => stream.next_event().await,
             Self::OpenAiCompat(stream) => stream.next_event().await,
-            Self::Ollama(stream) => Ok(stream.next_event()),
         }
     }
 }

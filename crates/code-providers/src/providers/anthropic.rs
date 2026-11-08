@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 use crate::error::ApiError;
 use crate::prompt_cache::{PromptCache, PromptCacheRecord, PromptCacheStats};
 
-use super::{model_token_limit, resolve_model_alias, Provider, ProviderFuture};
+use super::{model_token_limit, resolve_model_alias};
 use crate::sse::SseParser;
 use crate::types::{MessageDeltaEvent, MessageRequest, MessageResponse, StreamEvent, Usage};
 
@@ -742,24 +742,6 @@ fn request_id_from_headers(headers: &reqwest::header::HeaderMap) -> Option<Strin
         .or_else(|| headers.get(ALT_REQUEST_ID_HEADER))
         .and_then(|value| value.to_str().ok())
         .map(ToOwned::to_owned)
-}
-
-impl Provider for AnthropicClient {
-    type Stream = MessageStream;
-
-    fn send_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, MessageResponse> {
-        Box::pin(async move { self.send_message(request).await })
-    }
-
-    fn stream_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, Self::Stream> {
-        Box::pin(async move { self.stream_message(request).await })
-    }
 }
 
 #[derive(Debug)]

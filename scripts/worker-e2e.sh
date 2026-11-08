@@ -170,5 +170,22 @@ for n in "${!TASK_IDS[@]}"; do
   fi
 done
 
+# A finished task's network is removed when its worker exits. Poll briefly, then fail if any
+# remain. The name follows docker_worker::task_network_name: lowercase, safe characters, 48 max.
+for id in "${TASK_IDS[@]}"; do
+  net="frontal-task-$(printf %s "$id" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_-' '-' | cut -c1-48)"
+  gone=0
+  for _ in $(seq 1 15); do
+    if ! docker network inspect "$net" >/dev/null 2>&1; then gone=1; break; fi
+    sleep 2
+  done
+  if [ "$gone" = "1" ]; then
+    echo "network: $net removed"
+  else
+    echo "network: $net still present after the task finished"
+    failures=$((failures+1))
+  fi
+done
+
 echo
 if [ "$failures" = "0" ]; then echo "E2E PASS: $TASKS task(s) completed and published"; else echo "E2E FAIL: $failures failure(s)"; exit 1; fi

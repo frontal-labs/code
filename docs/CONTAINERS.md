@@ -199,14 +199,25 @@ The server starts each worker with a small, deliberate environment:
 
 | Variable | Value | Why |
 |---|---|---|
-| `FRONTAL_CODE_SERVER_API_KEY` | A random token for this task only | Authenticates the worker's own calls: read the task, read its runtime, read and write its GitHub integration, and post completion. |
+| `FRONTAL_CODE_SERVER_API_KEY` | A random token for this task only | Authenticates the worker's own calls: read the task and its runtime, read and write its GitHub integration, publish, and complete. |
 | `OPENAI_API_KEY` (or `FRONTAL_API_KEY`, `XAI_API_KEY`, `AZURE_OPENAI_API_KEY`) | The same task token | The CLI's provider client needs a value. Model calls use it to reach the proxy, not the provider. |
-| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `http://host.docker.internal:<port>/v1/model-proxy/<provider>` | Sends model traffic through the server. |
+| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `http://frontal-relay:<port>/v1/model-proxy/<provider>` | Sends model traffic through the server. |
 | `FRONTAL_CODE_SERVER_URL`, `FRONTAL_CODE_HOSTED_WORKER`, `FRONTAL_CODE_HOSTED_TASK_FILE` | Fixed values | Locate the server and the task file. |
 | `FRONTAL_CODE_MAX_OUTPUT_TOKENS` | Copied from the server, if set | Non-secret tuning. |
-| `GITHUB_TOKEN`, `FRONTAL_CODE_GITHUB_API_BASE` | Copied from the server | **Only for tasks with a repository**, so the worker can push its branch. This is a real credential inside the container. See the README for the open decision. |
 
-**Not present:** upstream provider keys (`OPENAI_API_KEY`, `FRONTAL_API_KEY`, and the rest of the server's own values) and the server's control-plane key.
+**Not present, for any task:** upstream provider keys, `GITHUB_TOKEN`, the server's control-plane key, and Postgres credentials.
+
+### How the worker reaches the server
+
+Each task gets its own internal Docker network. The worker is attached to it, and so is the relay (`frontal-code-relay`, under the alias `frontal-relay`). The relay forwards one TCP port to the server and nothing else. The task network has no route to the internet and no route to the host, so the worker reaches the server and nothing else.
+
+### How changes are published
+
+The worker does not push. At the end of a run it sends its changes as a patch to `/v1/tasks/<id>/publish`. The server applies the patch to a fresh clone, commits it, and pushes to a branch under `frontal-code/`. The server opens a pull request when a GitHub integration is configured. See [design/worker-architecture.md](design/worker-architecture.md#publication).
+
+### Container hardening
+
+Every worker runs with `--cap-drop ALL`, `--security-opt no-new-privileges:true`, a read-only root filesystem, `--pids-limit 512`, `--memory 4g`, and `--cpus 2`. Its only writable mounts are the task checkout and two tmpfs directories. It is never privileged, and it never gets the Docker socket.
 
 ### How model calls reach the provider
 

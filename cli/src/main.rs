@@ -56,7 +56,6 @@ use code_integrations::mcp::integration::{
     global_integration_registry, CheckRunOutput, IntegrationConfig, IntegrationTools,
 };
 use code_plugins::{PluginHooks, PluginManager, PluginManagerConfig, PluginRegistry};
-use code_repo::{push_branch, repo_status, stage_and_commit, RepoCommitRequest};
 use code_runtime::{
     format_usd, load_system_prompt, permission_enforcer::PermissionEnforcer, pricing_for_model,
     resolve_sandbox_status, ApiClient, ApiRequest, AssistantEvent, CompactionConfig, ConfigLoader,
@@ -667,6 +666,8 @@ struct HostedTaskRuntimeResponse {
 struct HostedTaskWorkerPayload {
     task_id: String,
     prompt: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    base_commit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3291,7 +3292,7 @@ fn validate_hosted_server_url(raw: &str) -> Result<reqwest::Url, Box<dyn std::er
     // A worker container reaches the server that launched it through the Docker host
     // alias. The server sets FRONTAL_CODE_HOSTED_WORKER only in containers it starts,
     // so this exception does not apply to a user's own shell.
-    let is_worker_host_alias = host == "host.docker.internal"
+    let is_worker_host_alias = matches!(host, "host.docker.internal" | "frontal-relay")
         && env::var("FRONTAL_CODE_HOSTED_WORKER").is_ok_and(|value| value == "1");
     match url.scheme() {
         "https" | "wss" => Ok(url),
@@ -3549,14 +3550,6 @@ fn update_hosted_task_github(
     Ok(response.json()?)
 }
 
-fn hosted_git_author_name() -> String {
-    code_runtime::GIT_AUTHOR_NAME.to_string()
-}
-
-fn hosted_git_author_email() -> String {
-    code_runtime::GIT_AUTHOR_EMAIL.to_string()
-}
-
 #[derive(Debug, Clone)]
 struct GitHubRepoRef {
     owner: String,
@@ -3606,46 +3599,6 @@ fn summarize_hosted_prompt(prompt: &str) -> String {
     summary
 }
 
-fn default_hosted_commit_message(task_id: &str, prompt: &str) -> String {
-    format!(
-        "frontal-code: {} ({task_id})",
-        summarize_hosted_prompt(prompt)
-    )
-}
-
-fn default_hosted_pr_draft(
-    payload: &HostedTaskWorkerPayload,
-    published_branch: &str,
-    commit_sha: &str,
-) -> Option<PrDraft> {
-    let repo_url = payload.repo_url.as_deref()?;
-    let repo = parse_github_repo_url(repo_url).ok()?;
-    let base = payload.base_ref.as_deref()?.trim();
-    if base.is_empty() || base == published_branch {
-        return None;
-    }
-
-    Some(PrDraft {
-        title: summarize_hosted_prompt(&payload.prompt),
-        body: format!(
-            "Automated by FrontalCode hosted task `{}`.\n\nRepository: {}\nBranch: {}\nCommit: {}\n\nPrompt:\n{}\n",
-            payload.task_id,
-            payload
-                .repository
-                .as_deref()
-                .or(payload.repo_url.as_deref())
-                .unwrap_or("unknown"),
-            published_branch,
-            commit_sha,
-            payload.prompt.trim()
-        ),
-        head: published_branch.to_string(),
-        base: base.to_string(),
-        draft: true,
-        repo,
-    })
-}
-
 #[derive(Debug, Clone)]
 struct PrDraft {
     title: String,
@@ -3656,95 +3609,80 @@ struct PrDraft {
     repo: GitHubRepoRef,
 }
 
+/// The worker's changes as a patch against the commit the server recorded. Paths the
+/// server's own state lives in are excluded, so they never reach the patch.
+fn worker_patch(
+    checkout_root: &Path,
+    base_commit: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    git_stdout(
+        checkout_root,
+        &[
+            "add",
+            "-A",
+            "--",
+            ".",
+            ":(exclude).frontal-code-hosted",
+            ":(exclude).frontal-code",
+        ],
+    )?;
+    git_stdout(
+        checkout_root,
+        &["diff", "--cached", "--binary", "--no-ext-diff", base_commit],
+    )
+}
+
+fn git_stdout(cwd: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
+    let output = Command::new("git").current_dir(cwd).args(args).output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "git {} failed: {}",
+            args.first().copied().unwrap_or(""),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Sends the worker's changes to the server, which applies them to a fresh clone and
+/// pushes the branch. The worker holds no GitHub credentials.
 fn publish_hosted_repo_changes(
+    client: &HttpClient,
+    server_url: &str,
     checkout_root: &Path,
     payload: &HostedTaskWorkerPayload,
 ) -> Result<Option<HostedTaskGithubResponse>, Box<dyn std::error::Error>> {
-    let status = match repo_status(checkout_root) {
-        Ok(status) => status,
-        Err(error) => {
-            let message = error.to_string();
-            if message.contains("not a git repository") {
-                return Ok(None);
-            }
-            return Err(error.into());
-        }
+    // A scratch workspace has no repository, so there is nothing to publish.
+    let Some(base_commit) = payload.base_commit.as_deref() else {
+        return Ok(None);
     };
-    if !status.dirty {
+    let patch = worker_patch(checkout_root, base_commit)?;
+    if patch.trim().is_empty() {
         return Ok(None);
     }
 
-    let published_branch = payload
-        .branch
-        .clone()
-        .or(status.branch.clone())
-        .ok_or_else(|| {
-            format!(
-                "cannot publish hosted task {} from detached HEAD without a target branch",
-                payload.task_id
-            )
-        })?;
-    let commit = stage_and_commit(
-        checkout_root,
-        &RepoCommitRequest {
-            message: default_hosted_commit_message(&payload.task_id, &payload.prompt),
-            author_name: Some(hosted_git_author_name()),
-            author_email: Some(hosted_git_author_email()),
-        },
-    )?;
-    push_branch(checkout_root, "origin", &published_branch)?;
-
-    let mut github = HostedTaskGithubResponse {
-        published_remote: Some("origin".to_string()),
-        published_branch: Some(published_branch.clone()),
-        published_commit_sha: Some(commit.commit_sha.clone()),
-        ..HostedTaskGithubResponse::default()
-    };
-
-    if let (Some(repo_url), Some(draft)) = (
-        payload.repo_url.as_deref(),
-        default_hosted_pr_draft(payload, &published_branch, &commit.commit_sha),
-    ) {
-        let repo = &draft.repo;
-        let result = global_integration_registry().call_github_create_pr(
-            &repo.owner,
-            &repo.repo,
-            &draft.title,
-            &draft.body,
-            &draft.head,
-            &draft.base,
-            draft.draft,
-        );
-        if let Ok(pr_result) = result {
-            github.owner = Some(repo.owner.clone());
-            github.repo = Some(repo.repo.clone());
-            if let Some(number) = pr_result.get("number").and_then(Value::as_u64) {
-                github.pr_number = Some(number);
-            }
-            if let Some(url) = pr_result.get("html_url").and_then(|v| v.as_str()) {
-                github.pr_url = Some(url.to_string());
-            }
-            if let Some(url) = pr_result.get("url").and_then(|v| v.as_str()) {
-                github.pr_api_url = Some(url.to_string());
-            }
-            if let Some(head) = pr_result
-                .get("head")
-                .and_then(|v| v.get("ref"))
-                .and_then(|v| v.as_str())
-            {
-                github.pr_head_ref = Some(head.to_string());
-            }
-            if let Some(base) = pr_result
-                .get("base")
-                .and_then(|v| v.get("ref"))
-                .and_then(|v| v.as_str())
-            {
-                github.pr_base_ref = Some(base.to_string());
-            }
-        }
+    let url = format!("{server_url}/v1/tasks/{}/publish", payload.task_id);
+    let response = authorize_hosted_request(client.post(url))
+        .json(&json!({ "patch": patch }))
+        .send()?;
+    let status = response.status();
+    let body: Value = response.json().unwrap_or(Value::Null);
+    if !status.is_success() {
+        let message = body
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("the server refused the publication");
+        return Err(format!("could not publish the changes: {message}").into());
     }
-
-    Ok(Some(github))
+    let text = |key: &str| body.get(key).and_then(Value::as_str).map(str::to_string);
+    Ok(Some(HostedTaskGithubResponse {
+        published_remote: text("published_remote"),
+        published_branch: text("published_branch"),
+        published_commit_sha: text("published_commit_sha"),
+        pr_url: text("pr_url"),
+        ..HostedTaskGithubResponse::default()
+    }))
 }
 
 fn augment_hosted_result_with_publication(
@@ -3782,68 +3720,6 @@ fn summarize_hosted_result(value: Option<&str>, fallback: &str) -> String {
         )
 }
 
-fn report_hosted_task_to_github(
-    task_id: &str,
-    server_url: &str,
-    github: &HostedTaskGithubResponse,
-    result: Option<&str>,
-    error: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let (Some(owner), Some(repo)) = (github.owner.as_deref(), github.repo.as_deref()) else {
-        return Ok(());
-    };
-    let details_url = format!("{server_url}/v1/tasks/{task_id}");
-
-    if let Some(head_sha) = github.published_commit_sha.as_deref() {
-        let success = error.is_none();
-        let summary = if success {
-            summarize_hosted_result(result, "Hosted task completed successfully.")
-        } else {
-            summarize_hosted_result(error, "Hosted task failed.")
-        };
-        let text = result
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .or(error.map(str::trim).filter(|value| !value.is_empty()))
-            .map(str::to_string);
-        let _ = global_integration_registry().call_github_create_check_run(
-            owner,
-            repo,
-            "frontal-code/hosted-task",
-            head_sha,
-            "completed",
-            Some(if success { "success" } else { "failure" }),
-            Some(&details_url),
-            Some(&CheckRunOutput {
-                title: if success {
-                    format!("FrontalCode task {task_id} completed")
-                } else {
-                    format!("FrontalCode task {task_id} failed")
-                },
-                summary,
-                text,
-            }),
-        );
-    }
-
-    if let Some(pr_number) = github.pr_number {
-        let body = if let Some(error) = error.filter(|value| !value.trim().is_empty()) {
-            format!(
-                "FrontalCode hosted task `{task_id}` failed.\n\nTask: {details_url}\n\nError:\n{error}\n"
-            )
-        } else {
-            format!(
-                "FrontalCode hosted task `{task_id}` completed.\n\nTask: {details_url}\n\nSummary:\n{}\n",
-                summarize_hosted_result(result, "Hosted task completed successfully.")
-            )
-        };
-        let _ = global_integration_registry()
-            .call_github_create_issue_comment(owner, repo, pr_number, &body);
-    }
-
-    Ok(())
-}
-
 fn run_hosted_task_worker(
     client: &HttpClient,
     server_url: &str,
@@ -3851,7 +3727,7 @@ fn run_hosted_task_worker(
     output_format: CliOutputFormat,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let payload = load_hosted_task_worker_payload(task_id)?;
-    let mut github = get_hosted_task_github(client, server_url, task_id).unwrap_or_default();
+    let github = get_hosted_task_github(client, server_url, task_id).unwrap_or_default();
     let model = payload
         .model
         .clone()
@@ -3882,12 +3758,20 @@ fn run_hosted_task_worker(
                 .get("message")
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            if let Some(github_update) = publish_hosted_repo_changes(Path::new("."), &payload)? {
-                github = update_hosted_task_github(client, server_url, task_id, &github_update)?;
-                result = augment_hosted_result_with_publication(result, &github);
+            match publish_hosted_repo_changes(client, server_url, Path::new("."), &payload) {
+                Ok(Some(publication)) => {
+                    result = augment_hosted_result_with_publication(result, &publication);
+                }
+                Ok(None) => {}
+                // The run itself succeeded. The publication failure is recorded in the result.
+                Err(error) => {
+                    let note = format!("Publication failed: {error}");
+                    result = Some(match result {
+                        Some(value) if !value.trim().is_empty() => format!("{value}\n\n{note}"),
+                        _ => note,
+                    });
+                }
             }
-            let _ =
-                report_hosted_task_to_github(task_id, server_url, &github, result.as_deref(), None);
             let response = complete_hosted_task(
                 client,
                 server_url,
@@ -3908,13 +3792,6 @@ fn run_hosted_task_worker(
         }
         Err(error) => {
             let error_message = error.to_string();
-            let _ = report_hosted_task_to_github(
-                task_id,
-                server_url,
-                &github,
-                None,
-                Some(&error_message),
-            );
             let _ = complete_hosted_task(
                 client,
                 server_url,
@@ -11364,13 +11241,13 @@ mod tests {
     use super::{
         augment_hosted_result_with_publication, build_runtime_plugin_state_with_loader,
         build_runtime_with_plugin_state, cap_permission_mode_for_policy, config_json_value,
-        create_managed_session_handle, default_hosted_pr_draft, describe_tool_progress,
-        filter_tool_specs, format_bughunter_report, format_commit_preflight_report,
-        format_commit_skipped_report, format_compact_report, format_cost_report,
-        format_internal_prompt_progress_line, format_issue_report, format_model_report,
-        format_model_switch_report, format_permissions_report, format_permissions_switch_report,
-        format_pr_report, format_resume_report, format_status_report, format_tool_call_start,
-        format_tool_result, format_ultraplan_report, format_unknown_slash_command,
+        create_managed_session_handle, describe_tool_progress, filter_tool_specs,
+        format_bughunter_report, format_commit_preflight_report, format_commit_skipped_report,
+        format_compact_report, format_cost_report, format_internal_prompt_progress_line,
+        format_issue_report, format_model_report, format_model_switch_report,
+        format_permissions_report, format_permissions_switch_report, format_pr_report,
+        format_resume_report, format_status_report, format_tool_call_start, format_tool_result,
+        format_ultraplan_report, format_unknown_slash_command,
         format_unknown_slash_command_message, format_user_visible_api_error, hosted_events_ws_url,
         hosted_server_url, hosted_task_snapshot_from_event, load_hosted_task_worker_payload,
         normalize_permission_mode, parse_args, parse_git_status_branch,
@@ -11382,12 +11259,12 @@ mod tests {
         resume_supported_slash_commands, run_resume_command,
         slash_command_completion_candidates_with_sessions, status_context,
         telemetry_status_json_value, update_project_telemetry_settings, validate_hosted_server_url,
-        validate_no_args, write_mcp_server_fixture, CliAction, CliOutputFormat, CliToolExecutor,
-        EventEnvelope, GitWorkspaceSummary, HostedApprovalAction, HostedCommand, HostedEventName,
-        HostedEventStatus, HostedEventTopic, HostedEventWatchQuery, HostedTaskGithubResponse,
-        HostedTaskListQuery, HostedTaskWorkerPayload, InternalPromptProgressEvent,
-        InternalPromptProgressState, LiveCli, LocalHelpTopic, PromptOptions, SlashCommand,
-        StatusUsage, DEFAULT_MODEL, FRONTAL_CODE_TELEMETRY_PATH,
+        validate_no_args, worker_patch, write_mcp_server_fixture, CliAction, CliOutputFormat,
+        CliToolExecutor, EventEnvelope, GitWorkspaceSummary, HostedApprovalAction, HostedCommand,
+        HostedEventName, HostedEventStatus, HostedEventTopic, HostedEventWatchQuery,
+        HostedTaskGithubResponse, HostedTaskListQuery, HostedTaskWorkerPayload,
+        InternalPromptProgressEvent, InternalPromptProgressState, LiveCli, LocalHelpTopic,
+        PromptOptions, SlashCommand, StatusUsage, DEFAULT_MODEL, FRONTAL_CODE_TELEMETRY_PATH,
     };
     use code_api::{ApiError, MessageResponse, OutputContentBlock, Usage};
     use code_events::EventIdentifiers;
@@ -12576,9 +12453,7 @@ mod tests {
         std::env::set_var("FRONTAL_CODE_SERVER_URL", "http://hosted.frontal-code.test");
         let error = hosted_server_url().expect_err("cleartext remote host must be rejected");
         assert!(error.to_string().contains("cleartext http"));
-        assert!(error
-            .to_string()
-            .contains("localhost, 127.0.0.1, [::1]"));
+        assert!(error.to_string().contains("localhost, 127.0.0.1, [::1]"));
         std::env::remove_var("FRONTAL_CODE_SERVER_URL");
     }
 
@@ -12659,6 +12534,7 @@ mod tests {
                 provider: Some("openai".to_string()),
                 permission_mode: Some("workspace-write".to_string()),
                 allowed_tools: vec!["git".to_string()],
+                base_commit: None,
             })
             .unwrap(),
         )
@@ -12686,121 +12562,47 @@ mod tests {
     }
 
     #[test]
-    fn default_hosted_pr_draft_uses_repo_and_prompt_context() {
-        let payload = HostedTaskWorkerPayload {
-            task_id: "task_123".to_string(),
-            prompt: "Fix the flaky release workflow by pinning the Docker image".to_string(),
-            repository: Some("acme/payments".to_string()),
-            repo_url: Some("https://github.com/acme/payments.git".to_string()),
-            base_ref: Some("main".to_string()),
-            branch: Some("frontal-code/fix-release".to_string()),
-            model: None,
-            provider: None,
-            permission_mode: None,
-            allowed_tools: Vec::new(),
-        };
-
-        let draft = default_hosted_pr_draft(&payload, "frontal-code/fix-release", "abc123def456")
-            .expect("github payload should produce a PR draft");
-
-        assert_eq!(
-            draft.title,
-            "Fix the flaky release workflow by pinning the Docker image"
-        );
-        assert_eq!(draft.head, "frontal-code/fix-release");
-        assert_eq!(draft.base, "main");
-        assert!(draft.draft);
-        assert!(draft.body.contains("task_123"));
-        assert!(draft.body.contains("acme/payments"));
-        assert!(draft.body.contains("abc123def456"));
-    }
-
-    #[test]
-    fn publish_hosted_repo_changes_commits_and_pushes_branch() {
-        let _guard = env_lock();
-        let previous_token = std::env::var_os("GITHUB_TOKEN");
-        let previous_api_base = std::env::var_os("FRONTAL_CODE_GITHUB_API_BASE");
-        std::env::remove_var("GITHUB_TOKEN");
-        std::env::remove_var("FRONTAL_CODE_GITHUB_API_BASE");
-
-        let remote = temp_dir();
-        let repo = temp_dir();
-        fs::create_dir_all(&remote).expect("remote dir should exist");
-        fs::create_dir_all(&repo).expect("repo dir should exist");
-
+    fn worker_patch_carries_the_worker_changes_and_not_server_state() {
+        let root = temp_dir();
+        let repo = root.join("checkout");
+        fs::create_dir_all(&repo).expect("repo dir");
+        git(&["init", "--quiet", "-b", "main"], &repo);
+        fs::write(repo.join("README.md"), "hello\n").expect("readme");
+        git(&["add", "."], &repo);
         git(
-            &["init", "--bare", remote.to_str().unwrap()],
-            Path::new("."),
-        );
-        git(&["init", "-b", "main"], &repo);
-        git(&["config", "user.name", "FrontalCode Test"], &repo);
-        git(&["config", "user.email", "frontal-code@test.dev"], &repo);
-        fs::write(repo.join("README.md"), "hello\n").expect("seed file");
-        git(&["add", "README.md"], &repo);
-        git(&["commit", "-m", "initial"], &repo);
-        git(
-            &["remote", "add", "origin", remote.to_str().unwrap()],
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "--quiet",
+                "-m",
+                "init",
+            ],
             &repo,
         );
-        git(&["push", "-u", "origin", "main"], &repo);
-        git(&["checkout", "-b", "frontal-code/task-publish"], &repo);
-        fs::write(repo.join("README.md"), "hello\nworld\n").expect("updated file");
+        let base = git_output(&["rev-parse", "HEAD"], &repo);
 
-        let payload = HostedTaskWorkerPayload {
-            task_id: "task_123".to_string(),
-            prompt: "Update the README for the hosted task".to_string(),
-            repository: Some("acme/payments".to_string()),
-            repo_url: Some(remote.display().to_string()),
-            base_ref: Some("main".to_string()),
-            branch: Some("frontal-code/task-publish".to_string()),
-            model: None,
-            provider: None,
-            permission_mode: None,
-            allowed_tools: Vec::new(),
-        };
+        fs::write(repo.join("README.md"), "hello from the worker\n").expect("edit");
+        fs::write(repo.join("new.txt"), "added\n").expect("new file");
+        fs::create_dir_all(repo.join(".frontal-code-hosted")).expect("state dir");
+        fs::write(repo.join(".frontal-code-hosted").join("task.json"), "{}\n").expect("task file");
 
-        let publication = with_current_dir(&repo, || {
-            publish_hosted_repo_changes(Path::new("."), &payload)
-                .expect("publish helper should succeed")
-                .expect("dirty repo should produce publication metadata")
-        });
+        let patch = worker_patch(&repo, base.trim()).expect("patch should build");
+        assert!(patch.contains("+hello from the worker"), "{patch}");
+        assert!(patch.contains("new.txt"), "{patch}");
+        assert!(!patch.contains(".frontal-code-hosted"), "{patch}");
+    }
 
-        assert_eq!(publication.published_remote.as_deref(), Some("origin"));
-        assert_eq!(
-            publication.published_branch.as_deref(),
-            Some("frontal-code/task-publish")
-        );
-        assert!(publication
-            .published_commit_sha
-            .as_deref()
-            .is_some_and(|value| !value.is_empty()));
-        assert_eq!(publication.pr_url, None);
-
-        let branch_ref = Command::new("git")
-            .args([
-                "--git-dir",
-                remote.to_str().unwrap(),
-                "show-ref",
-                "--verify",
-                "refs/heads/frontal-code/task-publish",
-            ])
+    fn git_output(args: &[&str], cwd: &Path) -> String {
+        let output = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
             .output()
-            .expect("show-ref should run");
-        assert!(
-            branch_ref.status.success(),
-            "expected pushed branch to exist in remote"
-        );
-
-        match previous_token {
-            Some(value) => std::env::set_var("GITHUB_TOKEN", value),
-            None => std::env::remove_var("GITHUB_TOKEN"),
-        }
-        match previous_api_base {
-            Some(value) => std::env::set_var("FRONTAL_CODE_GITHUB_API_BASE", value),
-            None => std::env::remove_var("FRONTAL_CODE_GITHUB_API_BASE"),
-        }
-        let _ = fs::remove_dir_all(remote);
-        let _ = fs::remove_dir_all(repo);
+            .expect("git");
+        assert!(output.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
     #[test]

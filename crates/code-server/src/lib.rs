@@ -13,6 +13,8 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+mod docker_worker;
+mod publish;
 mod worker_access;
 mod worker_tokens;
 use worker_access::WorkerAccess;
@@ -143,7 +145,7 @@ pub struct ServerConfig {
     pub database_url: Option<String>,
     /// Allows a plaintext connection to a non-local Postgres host. Only for private networks.
     pub database_allow_plaintext: bool,
-    /// ClickHouse is for analytics and audit events. Worker tokens do not use it.
+    /// `ClickHouse` is for analytics and audit events. Worker tokens do not use it.
     pub clickhouse_url: Option<String>,
     /// How long a worker token stays valid, in seconds.
     pub worker_token_ttl_secs: u64,
@@ -350,6 +352,7 @@ pub struct ServerState {
     pending_oauth_states: Arc<Mutex<HashMap<String, LinearOAuthPendingState>>>,
     worker_access: Arc<WorkerAccess>,
     model_proxy_client: reqwest::Client,
+    publish_workspace_root: PathBuf,
 }
 
 #[cfg(test)]
@@ -412,6 +415,7 @@ impl ServerState {
         docker_server_url: String,
         worker_access: WorkerAccess,
     ) -> Self {
+        let publish_workspace_root = workspace_root.clone();
         let worker_access = Arc::new(worker_access);
         let lane_transport: Arc<dyn LaneWorkerTransport> = match lane_transport_kind {
             LaneTransportKind::LocalDocker => Arc::new(LocalDockerLaneWorkerTransport::new(
@@ -434,6 +438,7 @@ impl ServerState {
             orphan_policy_rules,
             worker_access,
         )
+        .with_publish_workspace_root(publish_workspace_root)
     }
 
     #[must_use]
@@ -492,6 +497,7 @@ impl ServerState {
                 .connect_timeout(Duration::from_secs(10))
                 .build()
                 .unwrap_or_default(),
+            publish_workspace_root: default_server_workspace_root(),
         };
         state.recover_loaded_state();
         state
@@ -508,6 +514,11 @@ impl ServerState {
             LaneTransportKind::LocalDocker,
             lane_transport,
         )
+    }
+
+    fn with_publish_workspace_root(mut self, root: PathBuf) -> Self {
+        self.publish_workspace_root = root;
+        self
     }
 
     #[cfg(test)]
@@ -1700,6 +1711,7 @@ pub fn app(state: Arc<ServerState>) -> Router {
         .route("/v1/tasks/:task_id/approval", post(resolve_approval))
         .route("/v1/tasks/:task_id/reconcile", post(reconcile_task))
         .route("/v1/tasks/:task_id/complete", post(complete_task))
+        .route("/v1/tasks/:task_id/publish", post(publish_task_changes))
         .route("/v1/events/ws", get(events_ws))
         .route(
             "/v1/connectors/:connector/interactions",
@@ -2282,6 +2294,111 @@ async fn update_task_integration(
         .get(&task_id)
         .ok_or_else(|| AppError::not_found(format!("task not found: {task_id}")))?;
     Ok(Json(state.task_snapshot(task)))
+}
+
+#[derive(Debug, Deserialize)]
+struct PublishTaskRequest {
+    patch: String,
+}
+
+/// Publishes a worker's changes. The worker sends a patch; the server applies it to a
+/// fresh clone and pushes the branch with its own GitHub token. A repeated call returns
+/// the existing publication.
+async fn publish_task_changes(
+    Path(task_id): Path<String>,
+    State(state): State<Arc<ServerState>>,
+    Json(request): Json<PublishTaskRequest>,
+) -> Result<Json<Value>, AppError> {
+    let mut context = state
+        .context_for(&task_id)
+        .ok_or_else(|| AppError::not_found(format!("task not found: {task_id}")))?;
+    if let Some(commit) = context.published_commit_sha.clone() {
+        return Ok(Json(json!({
+            "published_branch": context.published_branch,
+            "published_commit_sha": commit,
+            "already_published": true,
+        })));
+    }
+    let repo_url = context
+        .repo_url
+        .clone()
+        .ok_or_else(|| AppError::bad_request("task has no repository to publish to"))?;
+    let branch = context
+        .branch
+        .clone()
+        .ok_or_else(|| AppError::bad_request("task has no branch to publish to"))?;
+    let prompt = state
+        .tasks
+        .get(&task_id)
+        .map(|task| task.prompt)
+        .unwrap_or_default();
+    let base_ref = context.base_ref.clone();
+    let workspace_root = state.publish_workspace_root.clone();
+    let github_token = env::var("GITHUB_TOKEN")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let task = task_id.clone();
+
+    let (outcome, pull_request) = tokio::task::spawn_blocking(move || {
+        let outcome = publish::publish_changes(&publish::PublishRequest {
+            task_id: &task,
+            prompt: &prompt,
+            repo_url: &repo_url,
+            base_ref: base_ref.as_deref(),
+            branch: &branch,
+            patch: &request.patch,
+            workspace_root: &workspace_root,
+            github_token: github_token.as_deref(),
+            author_name: &hosted_publish_author_name(),
+            author_email: &hosted_publish_author_email(),
+        })?;
+        // Opening a PR is best effort. The branch is already published.
+        let pull_request = publish::open_pull_request_best_effort(
+            &repo_url,
+            &outcome.branch,
+            base_ref.as_deref(),
+            &format!("Hosted task {task}"),
+            &format!("Changes published by Frontal Code for hosted task `{task}`."),
+        );
+        Ok::<_, String>((outcome, pull_request))
+    })
+    .await
+    .map_err(|error| AppError::internal(error.to_string()))?
+    .map_err(AppError::bad_request)?;
+
+    context.published_branch = Some(outcome.branch.clone());
+    context.published_commit_sha = Some(outcome.commit_sha.clone());
+    context.published_remote = Some(outcome.remote.clone());
+    if let Some(pr) = pull_request.as_ref() {
+        context.pr_number = pr.get("number").and_then(Value::as_u64);
+        context.pr_url = pr
+            .get("html_url")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+    }
+    state.record_context(&task_id, context);
+    state.persist_state().map_err(AppError::internal)?;
+    Ok(Json(json!({
+        "published_branch": outcome.branch,
+        "published_commit_sha": outcome.commit_sha,
+        "published_remote": outcome.remote,
+        "pr_url": pull_request.as_ref().and_then(|pr| pr.get("html_url").cloned()),
+        "already_published": false,
+    })))
+}
+
+fn hosted_publish_author_name() -> String {
+    env::var("FRONTAL_CODE_GIT_AUTHOR_NAME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "Frontal Code Worker".to_string())
+}
+
+fn hosted_publish_author_email() -> String {
+    env::var("FRONTAL_CODE_GIT_AUTHOR_EMAIL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "worker@frontal.invalid".to_string())
 }
 
 async fn reconcile_task(
@@ -3461,12 +3578,16 @@ struct DockerLaunchSpec {
     image: String,
     checkout_root: PathBuf,
     task_id: String,
+    /// The task's internal network. The worker can reach only the relay on it.
+    network: String,
     command: Vec<String>,
     env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct HostedDockerTaskPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_commit: Option<String>,
     task_id: String,
     prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3544,6 +3665,22 @@ trait DockerRunner: Send + Sync + fmt::Debug {
     fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String>;
 
     fn stop(&self, container_id: &str) -> Result<(), String>;
+
+    /// Starts the relay that workers use to reach the server. Test runners need nothing.
+    fn ensure_relay(&self, _image: &str, _port: u16) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Creates a task's internal network and attaches the relay to it.
+    fn prepare_task_network(&self, _network: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Removes a task network. Best effort: the network may still be in use.
+    fn remove_task_network(&self, _network: &str) {}
+
+    /// Removes task networks that no worker is using.
+    fn sweep_idle_task_networks(&self) {}
 }
 
 #[derive(Debug)]
@@ -3592,55 +3729,167 @@ fn write_worker_env_file(env: &BTreeMap<String, String>) -> Result<PathBuf, Stri
     Ok(path)
 }
 
+impl CliDockerRunner {
+    fn docker(args: &[String]) -> Result<String, String> {
+        let output = Command::new("docker")
+            .args(args)
+            .output()
+            .map_err(|error| format!("failed to run docker: {error}"))?;
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+
+    fn docker_str(args: &[&str]) -> Result<String, String> {
+        Self::docker(
+            &args
+                .iter()
+                .map(|arg| (*arg).to_string())
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn relay_port(port: u16) -> String {
+        port.to_string()
+    }
+}
+
 impl DockerRunner for CliDockerRunner {
     fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String> {
         let env_file = write_worker_env_file(&spec.env)?;
         let env_dir = env_file.parent().map(PathBuf::from);
-        let mut command = Command::new("docker");
-        command
-            .args(["run", "-d", "--rm", "--workdir", "/workspace", "--volume"])
-            .arg(format!("{}:/workspace", spec.checkout_root.display()))
-            .args(["--add-host", "host.docker.internal:host-gateway"])
-            .args(["--label", &format!("frontal-code.task_id={}", spec.task_id)])
-            .arg("--env-file")
-            .arg(&env_file);
-        command.arg(&spec.image).args(&spec.command);
-
-        let output = command.output();
+        let args = docker_worker::worker_run_args(
+            &spec.network,
+            &spec.checkout_root.display().to_string(),
+            &env_file.display().to_string(),
+            &spec.task_id,
+            &spec.image,
+            &spec.command,
+        );
+        let output = Self::docker(&args);
         if let Some(dir) = env_dir {
             let _ = fs::remove_dir_all(dir);
         }
-        let output = output.map_err(|error| format!("failed to spawn docker: {error}"))?;
-
-        if !output.status.success() {
-            return Err(format!(
-                "docker run failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            ));
-        }
-
-        let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let container_id = output.map_err(|error| format!("docker run failed: {error}"))?;
         if container_id.is_empty() {
             return Err("docker run returned an empty container id".to_string());
         }
-
         Ok(DockerLaunchResult { container_id })
     }
 
     fn stop(&self, container_id: &str) -> Result<(), String> {
-        let output = Command::new("docker")
-            .args(["stop", container_id])
-            .output()
-            .map_err(|error| format!("failed to stop docker container: {error}"))?;
+        // Read the task network first: the container's labels are gone once it is removed.
+        let network = Self::docker_str(&[
+            "inspect",
+            "--format",
+            &format!(
+                "{{{{index .Config.Labels \"{}\"}}}}",
+                docker_worker::TASK_NETWORK_CONTAINER_LABEL
+            ),
+            container_id,
+        ])
+        .ok()
+        .filter(|name| !name.is_empty() && name != "<no value>");
+        Self::docker_str(&["stop", container_id])
+            .map_err(|error| format!("docker stop failed: {error}"))?;
+        if let Some(network) = network {
+            self.remove_task_network(&network);
+        }
+        Ok(())
+    }
 
-        if output.status.success() {
+    fn ensure_relay(&self, image: &str, port: u16) -> Result<(), String> {
+        let wanted = Self::relay_port(port);
+        let running = Self::docker_str(&[
+            "inspect",
+            "--format",
+            "{{.State.Running}}",
+            docker_worker::RELAY_CONTAINER,
+        ]);
+        let current_port = Self::docker_str(&[
+            "inspect",
+            "--format",
+            &format!(
+                "{{{{index .Config.Labels \"{}\"}}}}",
+                docker_worker::RELAY_PORT_LABEL
+            ),
+            docker_worker::RELAY_CONTAINER,
+        ]);
+        if running.as_deref() == Ok("true") && current_port.as_deref() == Ok(wanted.as_str()) {
             return Ok(());
         }
+        // Not running, or forwarding a different port: replace it.
+        let _ = Self::docker_str(&["rm", "-f", docker_worker::RELAY_CONTAINER]);
+        Self::docker(&docker_worker::relay_run_args(image, port))
+            .map(|_| ())
+            .map_err(|error| format!("failed to start the worker relay: {error}"))
+    }
 
-        Err(format!(
-            "docker stop failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ))
+    fn prepare_task_network(&self, network: &str) -> Result<(), String> {
+        let label = format!("{}={network}", docker_worker::TASK_NETWORK_LABEL);
+        match Self::docker_str(&[
+            "network",
+            "create",
+            "--internal",
+            "--label",
+            &label,
+            network,
+        ]) {
+            Ok(_) => {}
+            Err(error) if error.contains("already exists") => {}
+            Err(error) => return Err(format!("failed to create the task network: {error}")),
+        }
+        match Self::docker_str(&[
+            "network",
+            "connect",
+            "--alias",
+            docker_worker::RELAY_ALIAS,
+            network,
+            docker_worker::RELAY_CONTAINER,
+        ]) {
+            Ok(_) => Ok(()),
+            Err(error) if error.contains("already exists") => Ok(()),
+            Err(error) => Err(format!("failed to attach the relay: {error}")),
+        }
+    }
+
+    fn remove_task_network(&self, network: &str) {
+        let _ = Self::docker_str(&[
+            "network",
+            "disconnect",
+            "-f",
+            network,
+            docker_worker::RELAY_CONTAINER,
+        ]);
+        let _ = Self::docker_str(&["network", "rm", network]);
+    }
+
+    fn sweep_idle_task_networks(&self) {
+        let filter = format!("label={}", docker_worker::TASK_NETWORK_LABEL);
+        let Ok(names) = Self::docker_str(&[
+            "network",
+            "ls",
+            "--filter",
+            &filter,
+            "--format",
+            "{{.Name}}",
+        ]) else {
+            return;
+        };
+        for name in names.lines().filter(|name| !name.is_empty()) {
+            // The relay is the only container an idle task network has attached.
+            let attached = Self::docker_str(&[
+                "network",
+                "inspect",
+                "--format",
+                "{{len .Containers}}",
+                name,
+            ]);
+            if attached.as_deref() == Ok("1") {
+                self.remove_task_network(name);
+            }
+        }
     }
 }
 
@@ -3843,9 +4092,28 @@ impl LaneWorkerTransport for HostedAgentLaneWorkerTransport {
 struct LocalDockerLaneWorkerTransport {
     workspace_root: PathBuf,
     image: String,
+    /// The worker's view of the server: the relay, by its alias on the task network.
     server_url: String,
+    relay_image: String,
+    relay_port: u16,
     worker_access: Arc<WorkerAccess>,
     docker: Arc<dyn DockerRunner>,
+}
+
+/// Port a server URL points at, or the default server port.
+fn port_from_server_url(url: &str) -> u16 {
+    url.trim_end_matches('/')
+        .rsplit(':')
+        .next()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(8788)
+}
+
+fn relay_image_from_env() -> String {
+    env::var("FRONTAL_CODE_WORKER_RELAY_IMAGE")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "alpine/socat:latest".to_string())
 }
 
 impl LocalDockerLaneWorkerTransport {
@@ -3855,27 +4123,29 @@ impl LocalDockerLaneWorkerTransport {
         server_url: String,
         worker_access: Arc<WorkerAccess>,
     ) -> Self {
-        Self {
+        Self::with_runner(
             workspace_root,
             image,
             server_url,
             worker_access,
-            docker: Arc::new(CliDockerRunner),
-        }
+            Arc::new(CliDockerRunner),
+        )
     }
 
-    #[cfg(test)]
     fn with_runner(
         workspace_root: PathBuf,
         image: String,
-        server_url: String,
+        server_url: impl AsRef<str>,
         worker_access: Arc<WorkerAccess>,
         docker: Arc<dyn DockerRunner>,
     ) -> Self {
+        let relay_port = port_from_server_url(server_url.as_ref());
         Self {
             workspace_root,
             image,
-            server_url,
+            server_url: format!("http://{}:{relay_port}", docker_worker::RELAY_ALIAS),
+            relay_image: relay_image_from_env(),
+            relay_port,
             worker_access,
             docker,
         }
@@ -3899,8 +4169,12 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             None => prepare_scratch_workspace(&self.workspace_root, &request.task_id)?,
         };
         check_hosted_task_policy(&prepared.checkout_root, request)?;
-        let task_file = write_local_docker_task_payload(&prepared.checkout_root, request)
-            .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
+        // The commit the worker's changes are measured against. The server records it, so the
+        // worker cannot pick its own baseline.
+        let base_commit = git_head_commit(&prepared.checkout_root);
+        let task_file =
+            write_local_docker_task_payload(&prepared.checkout_root, request, base_commit)
+                .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
         let image = self.image.clone();
         // The worker gets a token that works only for this task, plus a proxy URL for
         // the model provider. No provider key and no control-plane key enter the
@@ -3935,21 +4209,19 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
                 container_env.insert("FRONTAL_CODE_MAX_OUTPUT_TOKENS".to_string(), value);
             }
         }
-        // GitHub publishing needs the token inside the container, so it is passed only to
-        // tasks that have a repository to publish. Scoped, not global; see the README.
-        if request.repository.is_some() || request.repo_url.is_some() {
-            for key in ["GITHUB_TOKEN", "FRONTAL_CODE_GITHUB_API_BASE"] {
-                if let Ok(value) = env::var(key) {
-                    if !value.trim().is_empty() {
-                        container_env.insert(key.to_string(), value);
-                    }
-                }
-            }
-        }
+        // No GitHub credentials enter the container. The server publishes the branch and
+        // opens the pull request from its own environment. See publish.rs.
+        // The relay must be up, and the task must have its own network, before the worker starts.
+        self.docker
+            .ensure_relay(&self.relay_image, self.relay_port)?;
+        self.docker.sweep_idle_task_networks();
+        let network = docker_worker::task_network_name(&request.task_id);
+        self.docker.prepare_task_network(&network)?;
         let launch = self.docker.launch(&DockerLaunchSpec {
             image: image.clone(),
             checkout_root: prepared.checkout_root.clone(),
             task_id: request.task_id.clone(),
+            network: network.clone(),
             command: vec![
                 "frontal-code".to_string(),
                 "hosted".to_string(),
@@ -4069,9 +4341,25 @@ fn prepare_scratch_workspace(
     })
 }
 
+/// The checked-out commit, or `None` for a scratch workspace without a repository.
+fn git_head_commit(checkout_root: &FsPath) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(checkout_root)
+        .args(["rev-parse", "--verify", "HEAD"])
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .filter(|sha| sha.len() == 40 && sha.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
 fn write_local_docker_task_payload(
     checkout_root: &FsPath,
     request: &LaneExecutionRequest,
+    base_commit: Option<String>,
 ) -> Result<PathBuf, std::io::Error> {
     let payload_dir = checkout_root.join(".frontal-code-hosted");
     std::fs::create_dir_all(&payload_dir)?;
@@ -4094,6 +4382,7 @@ fn write_local_docker_task_payload(
                     .unwrap_or_else(|| WORKER_DEFAULT_PERMISSION_MODE.to_string()),
             ),
             allowed_tools: request.allowed_tools.clone(),
+            base_commit,
         })
         .map_err(std::io::Error::other)?,
     )?;
@@ -4640,7 +4929,7 @@ mod tests {
             permission_mode: None,
             allowed_tools: Vec::new(),
         };
-        let path = write_local_docker_task_payload(&root, &request).expect("payload written");
+        let path = write_local_docker_task_payload(&root, &request, None).expect("payload written");
         let payload: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
                 .expect("payload json");
@@ -4650,7 +4939,8 @@ mod tests {
             permission_mode: Some("read-only".to_string()),
             ..request
         };
-        let path = write_local_docker_task_payload(&root, &explicit).expect("payload written");
+        let path =
+            write_local_docker_task_payload(&root, &explicit, None).expect("payload written");
         let payload: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
                 .expect("payload json");
@@ -5339,7 +5629,7 @@ mod tests {
             Arc::new(LocalDockerLaneWorkerTransport::with_runner(
                 workspace_root.clone(),
                 "frontal-code-worker:test".to_string(),
-                "http://host.docker.internal:8788".to_string(),
+                "http://host.docker.internal:8788",
                 access.clone(),
                 docker.clone(),
             )),
@@ -5456,7 +5746,7 @@ mod tests {
                 .env
                 .get("FRONTAL_CODE_SERVER_URL")
                 .map(String::as_str),
-            Some("http://host.docker.internal:8788")
+            Some("http://frontal-relay:8788")
         );
         assert_eq!(
             launched[0]
@@ -5482,7 +5772,7 @@ mod tests {
                 .env
                 .get("FRONTAL_CODE_SERVER_URL")
                 .map(String::as_str),
-            Some("http://host.docker.internal:8788")
+            Some("http://frontal-relay:8788")
         );
 
         let task_payload: HostedDockerTaskPayload = serde_json::from_slice(
@@ -5555,7 +5845,7 @@ mod tests {
             Arc::new(LocalDockerLaneWorkerTransport::with_runner(
                 workspace_root,
                 "frontal-code-worker:test".to_string(),
-                "http://host.docker.internal:8788".to_string(),
+                "http://host.docker.internal:8788",
                 access.clone(),
                 docker,
             )),
@@ -6193,22 +6483,6 @@ mod tests {
 
     #[tokio::test]
     async fn worker_token_reaches_only_its_own_task_endpoints_and_is_revoked_on_completion() {
-        let Some(store) = worker_tokens::tests::test_store() else {
-            return;
-        };
-        let task = worker_tokens::tests::unique_task("router");
-        let state = Arc::new(
-            ServerState::with_lane_transport_kind_and_access(
-                DEFAULT_EVENT_REPLAY_LIMIT,
-                LaneTransportKind::LocalDocker,
-                Arc::new(FakeLaneWorkerTransport::new()),
-                Arc::new(WorkerAccess::new(Some(store), 3600)),
-            )
-            .with_control_plane_api_key(Some("admin-key".to_string())),
-        );
-        let token = state.worker_access.issue(&task).expect("token");
-        let router = app(state.clone());
-
         async fn send(
             router: &Router,
             method: &str,
@@ -6230,6 +6504,21 @@ mod tests {
                 .expect("router responds")
                 .status()
         }
+        let Some(store) = worker_tokens::tests::test_store() else {
+            return;
+        };
+        let task = worker_tokens::tests::unique_task("router");
+        let state = Arc::new(
+            ServerState::with_lane_transport_kind_and_access(
+                DEFAULT_EVENT_REPLAY_LIMIT,
+                LaneTransportKind::LocalDocker,
+                Arc::new(FakeLaneWorkerTransport::new()),
+                Arc::new(WorkerAccess::new(Some(store), 3600)),
+            )
+            .with_control_plane_api_key(Some("admin-key".to_string())),
+        );
+        let token = state.worker_access.issue(&task).expect("token");
+        let router = app(state.clone());
 
         let own_uri = format!("/v1/tasks/{task}");
         let other_uri = "/v1/tasks/some-other-task";

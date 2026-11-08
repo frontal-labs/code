@@ -94,7 +94,7 @@ pub(crate) fn worker_endpoint_task_id(method: &Method, path: &str) -> Option<Str
     let allowed = match segments.as_slice() {
         [_] | [_, "runtime"] => *method == Method::GET,
         [_, "integration", "github"] => *method == Method::GET || *method == Method::POST,
-        [_, "complete"] => *method == Method::POST,
+        [_, "complete" | "publish"] => *method == Method::POST,
         _ => false,
     };
     allowed.then(|| task_id.to_string())

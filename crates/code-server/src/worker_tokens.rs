@@ -125,9 +125,11 @@ impl WorkerTokenStore {
     /// synchronous lane transport.
     pub(crate) fn issue_blocking(&self, task_id: &str, ttl_secs: u64) -> Result<String, String> {
         let (reply_tx, reply_rx) = std_mpsc::channel();
+        // Lifetimes beyond u32::MAX seconds (136 years) are clamped, not wrapped.
+        let ttl_secs = f64::from(u32::try_from(ttl_secs).unwrap_or(u32::MAX));
         self.send(Command::Issue {
             task_id: task_id.to_string(),
-            ttl_secs: ttl_secs as f64,
+            ttl_secs,
             reply: Responder::Blocking(reply_tx),
         })?;
         reply_rx

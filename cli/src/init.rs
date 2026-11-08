@@ -140,23 +140,20 @@ fn ensure_gitignore_entries(path: &Path) -> Result<InitStatus, std::io::Error> {
 
     let existing = fs::read_to_string(path)?;
     let mut lines = existing.lines().map(ToOwned::to_owned).collect::<Vec<_>>();
-    let mut changed = false;
+    let missing: Vec<&str> = GITIGNORE_ENTRIES
+        .into_iter()
+        .filter(|entry| !lines.iter().any(|line| line == entry))
+        .collect();
+    // Only write when an entry is actually missing. Adding the header on its own
+    // left an orphan comment behind when the entries were already present.
+    if missing.is_empty() {
+        return Ok(InitStatus::Skipped);
+    }
 
     if !lines.iter().any(|line| line == GITIGNORE_COMMENT) {
         lines.push(GITIGNORE_COMMENT.to_string());
-        changed = true;
     }
-
-    for entry in GITIGNORE_ENTRIES {
-        if !lines.iter().any(|line| line == entry) {
-            lines.push(entry.to_string());
-            changed = true;
-        }
-    }
-
-    if !changed {
-        return Ok(InitStatus::Skipped);
-    }
+    lines.extend(missing.into_iter().map(ToOwned::to_owned));
 
     fs::write(path, format!("{}\n", lines.join("\n")))?;
     Ok(InitStatus::Updated)
@@ -351,6 +348,34 @@ mod tests {
         let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();
         std::env::temp_dir().join(format!("frontal-code-init-{pid}-{nanos}-{counter}"))
+    }
+
+    #[test]
+    fn gitignore_is_left_alone_when_entries_already_exist() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create temp dir");
+        let path = root.join(".gitignore");
+        let original = "target/\n.frontal-code/settings.local.json\n.frontal-code/sessions/\n";
+        fs::write(&path, original).expect("write gitignore");
+
+        let status = super::ensure_gitignore_entries(&path).expect("ensure should succeed");
+        assert_eq!(status, super::InitStatus::Skipped);
+        assert_eq!(fs::read_to_string(&path).expect("read gitignore"), original);
+    }
+
+    #[test]
+    fn gitignore_adds_missing_entries_under_one_header() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create temp dir");
+        let path = root.join(".gitignore");
+        fs::write(&path, "target/\n").expect("write gitignore");
+
+        let status = super::ensure_gitignore_entries(&path).expect("ensure should succeed");
+        assert_eq!(status, super::InitStatus::Updated);
+        let contents = fs::read_to_string(&path).expect("read gitignore");
+        assert_eq!(contents.matches("# FrontalCode local artifacts").count(), 1);
+        assert!(contents.contains(".frontal-code/settings.local.json"));
+        assert!(contents.contains(".frontal-code/sessions/"));
     }
 
     #[test]

@@ -20,10 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.changeset/config.json` is valid, `@changesets/changelog-github` is installed, and `baseBranch` is `main`.
 - The npm CLI baseline is `0.1.1`, aligned with the Rust workspace.
 - `.gitignore` no longer receives an orphan `# FrontalCode local artifacts` header.
-- `code-server` warns at startup when lanes use the simulated in-memory transport.
+- Hosted lanes run in worker containers by default. The in-memory simulator is test-only, and `FRONTAL_CODE_SERVER_LANE_TRANSPORT=in-memory` is now an error.
+- Worker containers receive provider credentials and get a scratch workspace for tasks without a repository. Their default permission mode is `danger-full-access`, because the container is the isolation boundary.
+- The worker image builds from the whole workspace and ships the `code` binary, with a `frontal-code` alias.
+- The worker CLI may use cleartext to `host.docker.internal` only inside worker containers (`FRONTAL_CODE_HOSTED_WORKER=1`).
 
 ### Known issues
-- The hosted server's default lane transport is simulated. See TROUBLESHOOTING.md.
 - The REPL needs credentials to start.
 - `--image` is not supported.
 

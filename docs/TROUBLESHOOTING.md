@@ -751,6 +751,10 @@ These were found by running the CLI, SDKs, HTTP API, and hosted server against a
 
 ### Fixed
 
+- **Hosted lanes simulated work.** The default lane transport was an in-memory simulator that never ran an agent. The simulator is now test-only, and the default is `local-docker`, which runs each task in a worker container. See [CONTAINERS.md](CONTAINERS.md#hosted-worker-containers).
+- **Worker containers could not report back.** The CLI refused cleartext `http://host.docker.internal` for hosted server URLs. The exception now applies only inside worker containers, which the server marks with `FRONTAL_CODE_HOSTED_WORKER=1`.
+- **Docker Desktop storage errors (`input/output error` on blob reads).** Restarting Docker Desktop cleared them. ClickHouse and the store's integration tests (`cargo test -p code-store -- --ignored`) pass on the restarted daemon.
+
 - **`HTTP 402 Payment Required` for an unknown model.** Models the CLI does not recognize default to a 64K output budget, which a prepaid balance may not cover. Set `FRONTAL_CODE_MAX_OUTPUT_TOKENS`.
 - **`unknown option: --stream` (or any `--flag`) inside a prompt.** Flags placed where prompt text is expected are now rejected. Before, they were sent to the model as text.
 - **`frontal-code repl` sent the word "repl" to the model.** It now opens the REPL.
@@ -761,13 +765,10 @@ These were found by running the CLI, SDKs, HTTP API, and hosted server against a
 
 ### Open
 
-- **The hosted server's default lane transport is a simulator.** `FRONTAL_CODE_SERVER_LANE_TRANSPORT` defaults to `in-memory`, which records a fake worker and never runs an agent. Tasks reach `completed` with no work done. The server now prints a warning at startup. Set `tools-agent` (agents run inside the server process) or `local-docker` (isolated worker containers). Choosing the production default is a security decision and has not been made.
 - **The REPL needs credentials to start.** Without them it exits before any slash command runs, so `/doctor` cannot be reached. Use `frontal-code doctor` instead, which works without credentials.
 - **`auth status` and `mcp list` can report missing credentials in an untrusted workspace.** Reproduce with `frontal-code trust --revoke`, then `frontal-code auth status` with no API keys set. Trusted workspaces do not show the problem. The root cause is not yet isolated.
 - **`--image` is not supported.** No provider accepts image input yet. The SDKs' `local_image` input fails with a clear error.
 - **Local embeddings are a hashing function, not a model.** `LocalMlEmbeddingProvider` (model id `local-hash`) hashes tokens into a fixed-size vector. It is deterministic and cheap, but it is not semantic. The name predates this audit and is kept for compatibility.
 - **`lane_completion` is dormant.** `crates/code-tools/src/lane_completion.rs` is intentionally not wired into lane lifecycle.
-- **ClickHouse integration tests were not run here.** They need Docker. On 2026-11-08 Docker Desktop's containerd store returned `input/output error` on blob reads, so the container could not start. Restart Docker Desktop, or reset its data, then run:
-  `FRONTAL_TEST_CLICKHOUSE_URL=http://127.0.0.1:8123 FRONTAL_TEST_CLICKHOUSE_PASSWORD=... cargo test -p code-store -- --ignored`.
 - **A Postgres integration test in `extensions/code-slack` is skipped** because it needs a database.
 - **SDK end-to-end suites skip silently** when `FRONTAL_CODE_E2E_BIN` or `OPENAI_API_KEY` is unset. A skipped run reports as passing. Check the environment before reading a green result as proof.

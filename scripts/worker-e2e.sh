@@ -58,7 +58,10 @@ for _ in $(seq 1 30); do
 done
 curl -sf -H "authorization: Bearer $API_KEY" "http://127.0.0.1:$PORT/v1/version" >/dev/null || { cat "$SERVER_LOG"; exit 1; }
 
-BODY=$(python3 -c "import json,sys; print(json.dumps({'prompt': 'Reply with the single word: pong', 'provider': sys.argv[1], 'model': sys.argv[2], 'permission_mode': 'read-only', 'source': 'api'}))" "$PROVIDER" "$MODEL")
+# PROMPT and PERMISSION_MODE override the default check. Leave PERMISSION_MODE empty to
+# use the worker default (danger-full-access inside the container).
+PROMPT="${PROMPT:-Reply with the single word: pong}"
+BODY=$(python3 -c "import json,sys; b={'prompt': sys.argv[3], 'provider': sys.argv[1], 'model': sys.argv[2], 'source': 'api'}; b.update({'permission_mode': sys.argv[4]} if sys.argv[4] else {}); print(json.dumps(b))" "$PROVIDER" "$MODEL" "$PROMPT" "${PERMISSION_MODE-read-only}")
 RESP=$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/tasks" -H "authorization: Bearer $API_KEY" -H 'content-type: application/json' -d "$BODY")
 TASK_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['task_id'])" "$RESP")
 echo "submitted $TASK_ID"

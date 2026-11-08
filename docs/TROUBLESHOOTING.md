@@ -747,13 +747,20 @@ This troubleshooting guide provides comprehensive coverage of common issues and 
 
 ## Verified behavior and known issues (2026-11-08)
 
-These were found by running the CLI, SDKs, HTTP API, and hosted server against a live OpenRouter model. Each item says whether it is fixed or still open.
+These were found by running the CLI, SDKs, HTTP API, and hosted server against a live model: first a free OpenRouter model, and from the later checks on, a local Ollama model (`qwen2.5:1.5b`). Each item says whether it is fixed or still open.
 
 ### Fixed
 
 - **Hosted lanes simulated work.** The default lane transport was an in-memory simulator that never ran an agent. The simulator is now test-only, and the default is `local-docker`, which runs each task in a worker container. See [CONTAINERS.md](CONTAINERS.md#hosted-worker-containers).
 - **Worker containers could not report back.** The CLI refused cleartext `http://host.docker.internal` for hosted server URLs. The exception now applies only inside worker containers, which the server marks with `FRONTAL_CODE_HOSTED_WORKER=1`.
-- **Docker Desktop storage errors (`input/output error` on blob reads).** Restarting Docker Desktop cleared them. ClickHouse and the store's integration tests (`cargo test -p code-store -- --ignored`) pass on the restarted daemon.
+- **Docker Desktop storage errors (`input/output error` on blob reads).** Restarting Docker Desktop cleared them. The ClickHouse tests run with `FRONTAL_TEST_CLICKHOUSE_URL` set, and pass on the restarted daemon.
+- **Hosted Ollama tasks failed with `invalid or revoked worker token`.** The Ollama client sent a placeholder key, so the model proxy could not identify the task. The client now sends the task token in `OLLAMA_API_KEY`.
+- **A worker's network stayed behind after its task finished.** It is removed when the worker exits. Each server port has its own relay container.
+- **A model that returned an empty reply failed the whole task.** The runtime asks again, up to two times, first.
+- **A plugin hook that ignored its input was reported as failed.** A broken pipe on stdin is no longer an error.
+- **Tests that depend on `PATH` passed on macOS and failed on Linux.** Commands are looked up on `PATH` directly, not through a login shell.
+- **`npm install` failed without a release binary.** The postinstall script now warns and exits 0.
+- **The server started with a callback URL whose port did not match its listening port.** It now refuses to start and names the port it needs.
 
 - **`HTTP 402 Payment Required` for an unknown model.** Models the CLI does not recognize default to a 64K output budget, which a prepaid balance may not cover. Set `FRONTAL_CODE_MAX_OUTPUT_TOKENS`.
 - **`unknown option: --stream` (or any `--flag`) inside a prompt.** Flags placed where prompt text is expected are now rejected. Before, they were sent to the model as text.
@@ -771,4 +778,8 @@ These were found by running the CLI, SDKs, HTTP API, and hosted server against a
 - **Local embeddings are a hashing function, not a model.** `LocalMlEmbeddingProvider` (model id `local-hash`) hashes tokens into a fixed-size vector. It is deterministic and cheap, but it is not semantic. The name predates this audit and is kept for compatibility.
 - **`lane_completion` is dormant.** `crates/code-tools/src/lane_completion.rs` is intentionally not wired into lane lifecycle.
 - **A Postgres integration test in `extensions/code-slack` is skipped** because it needs a database.
-- **SDK end-to-end suites skip silently** when `FRONTAL_CODE_E2E_BIN` or `OPENAI_API_KEY` is unset. A skipped run reports as passing. Check the environment before reading a green result as proof.
+- **SDK end-to-end suites skip silently** when `FRONTAL_CODE_E2E_BIN` is unset (and `OPENAI_API_KEY` for the `openai` provider). A skipped run reports as passing. Check the environment before reading a green result as proof.
+- **Native Linux Docker hosts are not verified.** The Linux checks ran on `linux/amd64` under Rosetta, with Docker Desktop as the daemon. On a native Linux host, `host-gateway` resolves to the real host bridge, so the relay and callback address need a run there (`scripts/linux-amd64-worker-e2e.sh` is the starting point).
+- **Cloud OpenAI-compatible gateways are not verified in this round.** The `openai` provider path has been checked against Ollama's compatible endpoint and against an earlier free OpenRouter model. Nothing has been run against a current paid gateway.
+- **A small local model sometimes narrates a command instead of running it.** `qwen2.5:1.5b` does this with the `curl` and `rm` steps in the worker E2E prompt. The E2E checks that tasks finish and publish, not each command's exit code. Use a larger model when you need that check.
+- **Another `cargo` process can clobber a shared `target/` directory.** A second build in the same repository wrote partial fingerprints and deleted others while tests ran. Give each concurrent build its own `CARGO_TARGET_DIR`.

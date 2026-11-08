@@ -10,21 +10,24 @@
 # One server per Docker host: the relay is a single container, so a second server on the
 # same host would replace it. Run concurrent tasks through one server, as this script does.
 #
-# Requirements: a running Docker daemon, a Postgres database for worker tokens, and a
-# provider key in the environment.
+# Requirements: a running Docker daemon, a Postgres database for worker tokens, and the
+# provider. The default provider is a local Ollama server, which needs no key:
 #
-#   OPENAI_API_KEY=... OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
+#   OLLAMA_BASE_URL=http://127.0.0.1:11434 \
 #   FRONTAL_CODE_SERVER_DATABASE_URL='postgres://user:pass@127.0.0.1:55433/db?sslmode=verify-full' \
 #   FRONTAL_CODE_SERVER_DATABASE_CA_FILE=/path/to/ca.crt \
 #     scripts/worker-e2e.sh [model] [provider]
+#
+# For a cloud OpenAI-compatible provider pass `openai` and set OPENAI_API_KEY (and
+# OPENAI_BASE_URL for a non-OpenAI endpoint).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="${FRONTAL_CODE_SERVER_DOCKER_IMAGE:-frontal-code-worker:local}"
 PORT="${FRONTAL_CODE_E2E_PORT:-8790}"
 TASKS="${TASKS:-2}"
-MODEL="${1:-nvidia/nemotron-3-ultra-550b-a55b:free}"
-PROVIDER="${2:-openai}"
+MODEL="${1:-qwen2.5:1.5b}"
+PROVIDER="${2:-ollama}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/frontal-worker-e2e.XXXXXX")"
 SERVER_LOG="$WORK/server.log"
 API_KEY="e2e-$(date +%s)-$RANDOM"

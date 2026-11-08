@@ -30,16 +30,16 @@ bunx vitest
 
 ### End-to-end suite (real CLI)
 
-`tests/e2e.test.ts` runs the real `code` binary against a live model. It is skipped unless both variables are set:
+`tests/e2e.test.ts` runs the real `code` binary against a live model. It is skipped unless `FRONTAL_CODE_E2E_BIN` is set. The default provider is a local Ollama server:
 
 ```bash
 cargo build -p cli
+ollama pull qwen2.5:1.5b
 FRONTAL_CODE_E2E_BIN="$PWD/target/debug/code" \
-OPENAI_API_KEY="sk-or-v1-..." OPENAI_BASE_URL="https://openrouter.ai/api/v1" \
-  bunx vitest run tests/e2e.test.ts
+  npx vitest run tests/e2e.test.ts
 ```
 
-Optional: `FRONTAL_CODE_E2E_MODEL` (default `nvidia/nemotron-3-ultra-550b-a55b:free`) and `FRONTAL_CODE_E2E_MAX_TOKENS` (default `1024`). A skipped run reports as passing, so check that the variables are set before you read a green result.
+Optional: `FRONTAL_CODE_E2E_PROVIDER` (default `ollama`; `openai` also needs `OPENAI_API_KEY`), `FRONTAL_CODE_E2E_MODEL` (default `qwen2.5:1.5b`), `OLLAMA_BASE_URL` (default `http://localhost:11434`), and `FRONTAL_CODE_E2E_MAX_TOKENS` (default `1024`). A skipped run reports as passing, so check that the variables are set before you read a green result.
 
 ## Test Structure
 

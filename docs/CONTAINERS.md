@@ -189,8 +189,12 @@ docker manifest push frontal-code/cli:multiarch
 # Build the worker image from the workspace (the context is limited by .dockerignore)
 docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .
 
-# Check the whole path end to end: image, server, worker container, model call, result
-OPENAI_API_KEY=... OPENAI_BASE_URL=https://openrouter.ai/api/v1 scripts/worker-e2e.sh
+# Check the whole path end to end: image, server, worker containers, model calls, branches.
+# Uses a local Ollama server with qwen2.5:1.5b, so no key is needed.
+OLLAMA_BASE_URL=http://127.0.0.1:11434 \
+FRONTAL_CODE_SERVER_DATABASE_URL='postgres://frontal:...@127.0.0.1:55433/frontal?sslmode=verify-full' \
+FRONTAL_CODE_SERVER_DATABASE_CA_FILE=/path/to/ca.crt \
+  scripts/worker-e2e.sh
 ```
 
 ### What a worker can see

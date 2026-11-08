@@ -5,13 +5,13 @@
 //! docker compose -f infrastructure/compose/docker-compose.clickhouse.yml up -d
 //! FRONTAL_TEST_CLICKHOUSE_URL=http://127.0.0.1:8123 \
 //! FRONTAL_TEST_CLICKHOUSE_PASSWORD=dev \
-//!   cargo test -p code-conversation-store -- --ignored
+//!   cargo test -p code-store -- --ignored
 //! ```
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clickhouse::Row;
-use code_conversation_store::{apply, ClickHouseSettings, MigrationError, MIGRATIONS};
+use code_store::{apply, ClickHouseSettings, MigrationError, MIGRATIONS};
 use serde::Deserialize;
 
 #[derive(Row, Deserialize)]
@@ -174,7 +174,7 @@ async fn refuses_to_run_when_an_applied_migration_was_renamed() {
     let client = settings.connect().await.expect("connect");
     apply(&client, MIGRATIONS).await.expect("apply");
 
-    let correct_checksum = code_conversation_store::checksum(MIGRATIONS[0].sql);
+    let correct_checksum = code_store::checksum(MIGRATIONS[0].sql);
     client
         .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (1, 'renamed', ?)")
         .bind(correct_checksum)

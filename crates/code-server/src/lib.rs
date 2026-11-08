@@ -3747,6 +3747,8 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
         if let Some(api_key) = &self.server_api_key {
             container_env.insert("FRONTAL_CODE_SERVER_API_KEY".to_string(), api_key.clone());
         }
+        // Lets the worker CLI accept the cleartext Docker host alias. Set only here.
+        container_env.insert("FRONTAL_CODE_HOSTED_WORKER".to_string(), "1".to_string());
         // The worker is headless, so it needs the same model credentials the server has.
         for key in WORKER_PROVIDER_ENV {
             if let Ok(value) = env::var(key) {

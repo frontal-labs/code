@@ -181,6 +181,27 @@ docker manifest create frontal-code/cli:multiarch \
 docker manifest push frontal-code/cli:multiarch
 ```
 
+## Hosted Worker Containers
+
+`code-server` runs each hosted task in its own worker container, built from `docker/worker.Dockerfile`. This is the default lane transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`).
+
+```bash
+# Build the worker image from the workspace (the context is limited by .dockerignore)
+docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .
+
+# Check the whole path end to end: image, server, worker container, model call, result
+OPENAI_API_KEY=... OPENAI_BASE_URL=https://openrouter.ai/api/v1 scripts/worker-e2e.sh
+```
+
+What the server passes to a worker:
+
+- The checkout (or an empty scratch workspace) at `/workspace`, the only mounted path.
+- `FRONTAL_CODE_SERVER_URL`, the callback URL, which must be reachable from the container. Set `FRONTAL_CODE_SERVER_CALLBACK_URL` to `http://host.docker.internal:<port>` when the server runs on the host.
+- Provider settings: `OPENAI_*`, `FRONTAL_*`, `XAI_*`, `OLLAMA_*`, `AZURE_*`, `BEDROCK_*`, and `FRONTAL_CODE_MAX_OUTPUT_TOKENS`. Loopback base URLs are rewritten to `host.docker.internal`.
+- A default permission mode of `danger-full-access`, because a headless worker cannot answer prompts. The container is the isolation boundary. A task can request another mode.
+
+The worker has network access, so a model call can reach any host the provider URL allows. Mount only the checkouts you intend the agent to change.
+
 ## Docker Compose
 
 ### Development Environment

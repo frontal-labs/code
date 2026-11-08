@@ -69,6 +69,31 @@ fn current_version(manifest: &str) -> Result<Version> {
     Version::parse(v).with_context(|| format!("parsing version {v}"))
 }
 
+/// Runs `bun changeset version` at the repo root, then returns the version the
+/// npm CLI package (`npm/code-cli`) now carries. That package is the release
+/// source of truth, and Cargo.toml and MODULE.bazel follow it.
+fn apply_changesets(root: &Path) -> Result<Version> {
+    let status = std::process::Command::new("bun")
+        .args(["changeset", "version"])
+        .current_dir(root)
+        .status()
+        .context("running `bun changeset version` (is bun installed?)")?;
+    anyhow::ensure!(
+        status.success(),
+        "`bun changeset version` exited with {status}"
+    );
+
+    let manifest_path = root.join("npm/code-cli/package.json");
+    let text = std::fs::read_to_string(&manifest_path)
+        .with_context(|| format!("reading {}", manifest_path.display()))?;
+    let package: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("parsing {}", manifest_path.display()))?;
+    let raw = package["version"]
+        .as_str()
+        .context("npm/code-cli/package.json has no string `version`")?;
+    Version::parse(raw).with_context(|| format!("parsing npm CLI version {raw}"))
+}
+
 fn bump(v: &Version, part: Part) -> Version {
     let mut v = v.clone();
     match part {
@@ -133,11 +158,21 @@ fn main() -> Result<()> {
         Cmd::Set { version } => {
             Version::parse(version).with_context(|| format!("parsing {version}"))?
         }
-        Cmd::Changeset => anyhow::bail!(
-            "`version changeset` is not implemented yet.\n\
-             Run `bun changeset version` to update the npm package versions, then \
-             `version set <version>` to sync Cargo.toml and MODULE.bazel."
-        ),
+        Cmd::Changeset => {
+            if cli.dry_run {
+                anyhow::bail!("`version changeset` changes files, so it cannot run with --dry-run");
+            }
+            let root = Path::new(&cli.manifest)
+                .parent()
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let next = apply_changesets(root)?;
+            anyhow::ensure!(
+                next != cur,
+                "changesets did not bump @frontal-labs/code-cli; add a `.changeset/*.md` entry first"
+            );
+            next
+        }
     };
 
     println!("{cur} -> {next}");

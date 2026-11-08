@@ -2716,6 +2716,7 @@ dependencies = [
  "anyhow",
  "clap",
  "semver",
+ "serde_json",
 ]
 
 [[package]]

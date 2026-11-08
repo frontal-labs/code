@@ -961,6 +961,14 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             action: rest.get(1).cloned(),
             target: rest.get(2).cloned(),
         }),
+        // Without this arm `repl` fell through to the shorthand prompt path and
+        // was sent to the model as text.
+        "repl" => Ok(CliAction::Repl {
+            model,
+            provider: provider.clone(),
+            allowed_tools,
+            permission_mode,
+        }),
         "plugins" => Ok(CliAction::Plugins {
             action: rest.get(1).cloned(),
             target: rest.get(2).cloned(),
@@ -13261,6 +13269,18 @@ mod tests {
         ])
         .expect_err("flag after subcommand should fail");
         assert!(error.contains("unknown option: --bogus"));
+    }
+
+    #[test]
+    fn repl_subcommand_opens_the_repl_instead_of_prompting_the_model() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let action = parse_args(&["repl".to_string()]).expect("repl should parse");
+        assert!(
+            matches!(action, CliAction::Repl { .. }),
+            "expected Repl, got {action:?}"
+        );
     }
 
     #[test]

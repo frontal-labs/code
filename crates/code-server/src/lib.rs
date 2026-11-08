@@ -3766,7 +3766,11 @@ trait DockerRunner: Send + Sync + fmt::Debug {
 }
 
 #[derive(Debug)]
-struct CliDockerRunner;
+struct CliDockerRunner {
+    /// The server port the relay forwards to. It names this server's relay and marks its
+    /// task networks.
+    relay_port: u16,
+}
 
 /// Writes the container environment to a file only this user can read. Passing values
 /// as `--env` would expose them in the process list. Docker reads the file while
@@ -3857,6 +3861,15 @@ impl DockerRunner for CliDockerRunner {
         if container_id.is_empty() {
             return Err("docker run returned an empty container id".to_string());
         }
+        // Remove the task's network as soon as its worker exits. Without this, a finished
+        // task's network stays until the next sweep.
+        let relay = self.relay_container();
+        let network = spec.network.clone();
+        let waited = container_id.clone();
+        std::thread::spawn(move || {
+            let _ = Self::docker_str(&["wait", &waited]);
+            remove_network_when_free(&relay, &network);
+        });
         Ok(DockerLaunchResult { container_id })
     }
 
@@ -3882,13 +3895,9 @@ impl DockerRunner for CliDockerRunner {
     }
 
     fn ensure_relay(&self, image: &str, port: u16) -> Result<(), String> {
+        let relay = docker_worker::relay_container_name(port);
         let wanted = Self::relay_port(port);
-        let running = Self::docker_str(&[
-            "inspect",
-            "--format",
-            "{{.State.Running}}",
-            docker_worker::RELAY_CONTAINER,
-        ]);
+        let running = Self::docker_str(&["inspect", "--format", "{{.State.Running}}", &relay]);
         let current_port = Self::docker_str(&[
             "inspect",
             "--format",
@@ -3896,26 +3905,39 @@ impl DockerRunner for CliDockerRunner {
                 "{{{{index .Config.Labels \"{}\"}}}}",
                 docker_worker::RELAY_PORT_LABEL
             ),
-            docker_worker::RELAY_CONTAINER,
+            &relay,
         ]);
         if running.as_deref() == Ok("true") && current_port.as_deref() == Ok(wanted.as_str()) {
             return Ok(());
         }
         // Not running, or forwarding a different port: replace it.
-        let _ = Self::docker_str(&["rm", "-f", docker_worker::RELAY_CONTAINER]);
+        let _ = Self::docker_str(&["rm", "-f", &relay]);
         Self::docker(&docker_worker::relay_run_args(image, port))
             .map(|_| ())
             .map_err(|error| format!("failed to start the worker relay: {error}"))
     }
 
     fn prepare_task_network(&self, network: &str) -> Result<(), String> {
-        let label = format!("{}={network}", docker_worker::TASK_NETWORK_LABEL);
+        let created = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        let task_label = format!("{}={network}", docker_worker::TASK_NETWORK_LABEL);
+        let port_label = format!(
+            "{}={}",
+            docker_worker::NETWORK_RELAY_PORT_LABEL,
+            self.relay_port
+        );
+        let created_label = format!("{}={created}", docker_worker::NETWORK_CREATED_LABEL);
         match Self::docker_str(&[
             "network",
             "create",
             "--internal",
             "--label",
-            &label,
+            &task_label,
+            "--label",
+            &port_label,
+            "--label",
+            &created_label,
             network,
         ]) {
             Ok(_) => {}
@@ -3928,7 +3950,7 @@ impl DockerRunner for CliDockerRunner {
             "--alias",
             docker_worker::RELAY_ALIAS,
             network,
-            docker_worker::RELAY_CONTAINER,
+            &self.relay_container(),
         ]) {
             Ok(_) => Ok(()),
             Err(error) if error.contains("already exists") => Ok(()),
@@ -3937,29 +3959,48 @@ impl DockerRunner for CliDockerRunner {
     }
 
     fn remove_task_network(&self, network: &str) {
-        let _ = Self::docker_str(&[
-            "network",
-            "disconnect",
-            "-f",
-            network,
-            docker_worker::RELAY_CONTAINER,
-        ]);
-        let _ = Self::docker_str(&["network", "rm", network]);
+        remove_network_now(&self.relay_container(), network);
     }
 
     fn sweep_idle_task_networks(&self) {
-        let filter = format!("label={}", docker_worker::TASK_NETWORK_LABEL);
+        let task_filter = format!("label={}", docker_worker::TASK_NETWORK_LABEL);
+        let port_filter = format!(
+            "label={}={}",
+            docker_worker::NETWORK_RELAY_PORT_LABEL,
+            self.relay_port
+        );
         let Ok(names) = Self::docker_str(&[
             "network",
             "ls",
             "--filter",
-            &filter,
+            &task_filter,
+            "--filter",
+            &port_filter,
             "--format",
             "{{.Name}}",
         ]) else {
             return;
         };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
         for name in names.lines().filter(|name| !name.is_empty()) {
+            // A network younger than this may belong to a launch still in progress.
+            let created = Self::docker_str(&[
+                "network",
+                "inspect",
+                "--format",
+                &format!(
+                    "{{{{index .Labels \"{}\"}}}}",
+                    docker_worker::NETWORK_CREATED_LABEL
+                ),
+                name,
+            ])
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok());
+            if created.is_none_or(|created| now.saturating_sub(created) < SWEEP_MIN_AGE_SECS) {
+                continue;
+            }
             // An idle task network has nothing attached (a crash before the relay joined) or
             // only the relay. A worker still attached means its task is running.
             let attached = Self::docker_str(&[
@@ -3973,6 +4014,39 @@ impl DockerRunner for CliDockerRunner {
                 self.remove_task_network(name);
             }
         }
+    }
+}
+
+/// Minimum age before a task network without a running worker is treated as abandoned.
+const SWEEP_MIN_AGE_SECS: u64 = 120;
+
+/// Disconnects the relay from a task network and removes it. Ignores errors: a missing
+/// network is already clean, and a sweep retries anything left behind.
+fn remove_network_now(relay: &str, network: &str) {
+    let _ = CliDockerRunner::docker_str(&["network", "disconnect", "-f", network, relay]);
+    let _ = CliDockerRunner::docker_str(&["network", "rm", network]);
+}
+
+/// Removes a task network once its worker has gone. The container's `--rm` removal can
+/// lag the exit by a moment, and Docker refuses to remove a network with endpoints, so
+/// retry briefly.
+fn remove_network_when_free(relay: &str, network: &str) {
+    for _ in 0..30 {
+        remove_network_now(relay, network);
+        let gone =
+            CliDockerRunner::docker_str(&["network", "inspect", "--format", "{{.Id}}", network])
+                .is_err();
+        if gone {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
+impl CliDockerRunner {
+    /// The name of this server's relay container.
+    fn relay_container(&self) -> String {
+        docker_worker::relay_container_name(self.relay_port)
     }
 }
 
@@ -4211,12 +4285,13 @@ impl LocalDockerLaneWorkerTransport {
         server_url: String,
         worker_access: Arc<WorkerAccess>,
     ) -> Self {
+        let relay_port = port_from_server_url(&server_url);
         Self::with_runner(
             workspace_root,
             image,
             server_url,
             worker_access,
-            Arc::new(CliDockerRunner),
+            Arc::new(CliDockerRunner { relay_port }),
         )
     }
 

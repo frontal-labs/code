@@ -16,14 +16,26 @@
 //!   root filesystem, bounded memory, CPU, and process count, and writable space only in
 //!   the task checkout and two tmpfs mounts.
 
-/// Container name of the relay.
-pub(crate) const RELAY_CONTAINER: &str = "frontal-code-relay";
+/// Container name of the relay that serves `port`. One relay per server port, so two
+/// servers with different ports on one Docker host do not replace each other's relay.
+pub(crate) fn relay_container_name(port: u16) -> String {
+    format!("frontal-code-relay-{port}")
+}
 
 /// Network alias the relay answers to inside a task network. Workers use this host name.
 pub(crate) const RELAY_ALIAS: &str = "frontal-relay";
 
 /// Label that marks task networks, so idle ones can be found and removed.
 pub(crate) const TASK_NETWORK_LABEL: &str = "frontal-code.task_network";
+
+/// Label on a task network that records the server port that created it. A sweep only
+/// touches networks of its own server.
+pub(crate) const NETWORK_RELAY_PORT_LABEL: &str = "frontal-code.relay_port";
+
+/// Label on a task network with its creation time in Unix seconds. A sweep leaves young
+/// networks alone, because a launch may be between creating the network and starting its
+/// worker.
+pub(crate) const NETWORK_CREATED_LABEL: &str = "frontal-code.created_at";
 
 /// Label on worker containers that names their network, so `stop` can clean it up.
 pub(crate) const TASK_NETWORK_CONTAINER_LABEL: &str = "frontal-code.task_network";
@@ -60,7 +72,7 @@ pub(crate) fn relay_run_args(image: &str, port: u16) -> Vec<String> {
         "run".to_string(),
         "-d".to_string(),
         "--name".to_string(),
-        RELAY_CONTAINER.to_string(),
+        relay_container_name(port),
         "--restart".to_string(),
         "unless-stopped".to_string(),
         "--add-host".to_string(),
@@ -215,5 +227,14 @@ mod tests {
         assert!(args.contains(&"TCP4:host.docker.internal:8788".to_string()));
         assert!(args.windows(2).any(|pair| pair == ["--cap-drop", "ALL"]));
         assert!(args.contains(&"--read-only".to_string()));
+    }
+
+    #[test]
+    fn each_server_port_gets_its_own_relay() {
+        // Two servers on one Docker host must not replace each other's relay.
+        assert_eq!(relay_container_name(8788), "frontal-code-relay-8788");
+        assert_ne!(relay_container_name(8788), relay_container_name(8789));
+        let args = relay_run_args("alpine/socat", 8789);
+        assert!(args.windows(2).any(|pair| pair == ["--name", "frontal-code-relay-8789"]));
     }
 }

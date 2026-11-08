@@ -60,7 +60,7 @@ This crate provides unified client implementations for multiple AI providers inc
 - **OpenAiCompatClient**: OpenAI-compatible API client
 - **BedrockClient**: AWS Bedrock integration
 - **AzureClient**: Microsoft Azure OpenAI
-- **OllamaClient**: Local model integration
+- **Ollama**: a thin wrapper over `OpenAiCompatClient` pointed at `<OLLAMA_BASE_URL>/v1` (default `http://localhost:11434/v1`); the root URL gets the `/v1` suffix once
 
 ### Supporting Infrastructure
 - **PromptCache**: Intelligent caching system for prompt optimization

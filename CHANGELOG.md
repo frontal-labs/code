@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FRONTAL_CODE_MAX_OUTPUT_TOKENS` caps output tokens per request.
 - `frontal-code repl` and `frontal-code plugins` subcommands.
 - `version changeset` runs `bun changeset version` and syncs the workspace version to the npm CLI package.
+- Ollama works as a provider. It is served through the OpenAI-compatible client at `OLLAMA_BASE_URL` (default `http://localhost:11434`), including tool calls and streamed usage. Hosted Ollama tasks reach the host's Ollama through the model proxy, so the worker never needs a key.
 
 ### Fixed
 - Unknown `--flags` in prompt text are rejected instead of being sent to the model.
@@ -21,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The npm CLI baseline is `0.1.1`, aligned with the Rust workspace.
 - `.gitignore` no longer receives an orphan `# FrontalCode local artifacts` header.
 - Hosted lanes run in worker containers by default. The in-memory simulator is test-only, and `FRONTAL_CODE_SERVER_LANE_TRANSPORT=in-memory` is now an error.
-- Worker containers never receive upstream provider keys or the control-plane key. Each task gets a token scoped to its own endpoints, and model calls go through a server-side proxy that adds the provider key. Tasks without a repository get a scratch workspace. The default worker permission mode is `danger-full-access`, because the container is the isolation boundary.
+- Worker containers never receive upstream provider keys or the control-plane key. Each task gets a token scoped to its own endpoints, and model calls go through a server-side proxy that adds the provider key. Tasks without a repository get a scratch workspace. The default worker permission mode is `workspace-write`. Shell commands run only from an allowlist (read and build commands), and network tools, `git push`, `env`, and `rm -rf` are denied.
 - `FRONTAL_CODE_SERVER_LANE_TRANSPORT=in-memory` is removed. The simulator exists only in tests.
 - The worker image builds from the whole workspace and ships the `code` binary, with a `frontal-code` alias.
 - The worker CLI may use cleartext to `host.docker.internal` only inside worker containers (`FRONTAL_CODE_HOSTED_WORKER=1`).

@@ -82,9 +82,9 @@ The Docker daemon socket is never mounted. Containers are never privileged. The 
 
 ## Permission mode
 
-Workers run with `danger-full-access` unless the task asks otherwise. Inside the container that means shell commands and writes to the checkout run without prompts, which headless work requires. The container is the boundary, and the network layer removes the main exfiltration path: a compromised agent cannot reach an arbitrary host. The remaining channels are the model proxy, which the provider receives every prompt through anyway, and the relay, which reaches only the server.
+Workers run in `workspace-write` by default. Writes to the checkout are allowed. Shell commands are allowed only when an allow rule grants them: read and build commands such as `ls`, `cat`, `rg`, `git status`, `cargo`, and `npm test`. Network tools, `git push`, `env`, `rm -rf`, and `docker` are denied, and deny rules from the repository apply as well. A task can ask for `danger-full-access` explicitly. The container is the boundary, and the network layer removes the main exfiltration path: a compromised agent cannot reach an arbitrary host. The remaining channels are the model proxy, which the provider receives every prompt through anyway, and the relay, which reaches only the server.
 
-Decision still open: whether `danger-full-access` should remain the default, or whether tasks should opt in. See the open items.
+The allow list is the constant `WORKER_BASH_ALLOW` in `crates/code-server/src/worker_access.rs`, and the deny list is `WORKER_BASH_DENY`. The CLI applies them to the worker. A repository's own allow rules are replaced by the worker's, so a repository cannot widen what a worker may run.
 
 ## Threat model
 
@@ -130,6 +130,8 @@ Required for `local-docker` lanes:
 - `FRONTAL_CODE_SERVER_DATABASE_URL` — Postgres for worker tokens.
 - `FRONTAL_CODE_SERVER_API_KEY` — control-plane key (required unless anonymous mode is set).
 - `FRONTAL_CODE_SERVER_CALLBACK_URL` — the server's address as seen from the host, for example `http://host.docker.internal:8788`. Its port is the relay's port.
+
+Ollama needs no key. The server forwards `ollama` requests to `OLLAMA_BASE_URL` on the host (default `http://localhost:11434`), and the worker receives the proxy URL as its own `OLLAMA_BASE_URL`. Use a model the host has pulled, for example `qwen2.5:1.5b`. Models below about 1.5B parameters did not emit tool calls in testing.
 
 Optional:
 

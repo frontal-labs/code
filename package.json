@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^2.26.2"
   },
   "scripts": {

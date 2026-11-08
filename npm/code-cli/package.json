@@ -1,6 +1,6 @@
 {
   "name": "@frontal-labs/code-cli",
-  "version": "0.0.0-dev",
+  "version": "0.1.1",
   "description": "Frontal Code CLI is a coding agent from Frontal that runs locally on your computer.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/frontal-labs/frontal-code#readme",

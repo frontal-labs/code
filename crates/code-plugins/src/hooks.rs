@@ -336,7 +336,13 @@ impl CommandWithStdin {
         let mut child = self.command.spawn()?;
         if let Some(mut child_stdin) = child.stdin.take() {
             use std::io::Write as _;
-            child_stdin.write_all(stdin)?;
+            // A hook that exits without reading its input closes the pipe first. That is
+            // not a failure of the hook, so only other write errors are reported.
+            match child_stdin.write_all(stdin) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => {}
+                Err(error) => return Err(error),
+            }
         }
         child.wait_with_output()
     }
@@ -399,7 +405,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "hook runner shell script fails in CI with broken pipe"]
     fn collects_and_runs_hooks_from_enabled_plugins() {
         // given
         let config_home = temp_dir("config");

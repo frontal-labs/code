@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The npm CLI baseline is `0.1.1`, aligned with the Rust workspace.
 - `.gitignore` no longer receives an orphan `# FrontalCode local artifacts` header.
 - Hosted lanes run in worker containers by default. The in-memory simulator is test-only, and `FRONTAL_CODE_SERVER_LANE_TRANSPORT=in-memory` is now an error.
-- Worker containers receive provider credentials and get a scratch workspace for tasks without a repository. Their default permission mode is `danger-full-access`, because the container is the isolation boundary.
+- Worker containers never receive upstream provider keys or the control-plane key. Each task gets a token scoped to its own endpoints, and model calls go through a server-side proxy that adds the provider key. Tasks without a repository get a scratch workspace. The default worker permission mode is `danger-full-access`, because the container is the isolation boundary.
+- `FRONTAL_CODE_SERVER_LANE_TRANSPORT=in-memory` is removed. The simulator exists only in tests.
 - The worker image builds from the whole workspace and ships the `code` binary, with a `frontal-code` alias.
 - The worker CLI may use cleartext to `host.docker.internal` only inside worker containers (`FRONTAL_CODE_HOSTED_WORKER=1`).
 

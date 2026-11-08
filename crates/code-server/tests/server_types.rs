@@ -139,7 +139,7 @@ fn hosted_task_snapshot_serialize() {
         pr_head_ref: None,
         pr_base_ref: None,
         metadata: std::collections::HashMap::new(),
-        execution_backend: Some("in_memory".to_string()),
+        execution_backend: Some("local_docker".to_string()),
         priority: None,
         plan_id: Some("plan-1".to_string()),
         plan_kind: Some("implementation".to_string()),
@@ -154,7 +154,7 @@ fn hosted_task_snapshot_serialize() {
     assert_eq!(json["created_at"], 1000);
     assert_eq!(json["prompt"], "Do something");
     assert_eq!(json["source"], "api");
-    assert_eq!(json["execution_backend"], "in_memory");
+    assert_eq!(json["execution_backend"], "local_docker");
 
     let deserialized: HostedTaskSnapshot = serde_json::from_value(json).unwrap();
     assert_eq!(deserialized.task_id, "task-123");

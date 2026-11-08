@@ -193,14 +193,35 @@ docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .
 OPENAI_API_KEY=... OPENAI_BASE_URL=https://openrouter.ai/api/v1 scripts/worker-e2e.sh
 ```
 
-What the server passes to a worker:
+### What a worker can see
 
-- The checkout (or an empty scratch workspace) at `/workspace`, the only mounted path.
-- `FRONTAL_CODE_SERVER_URL`, the callback URL, which must be reachable from the container. Set `FRONTAL_CODE_SERVER_CALLBACK_URL` to `http://host.docker.internal:<port>` when the server runs on the host.
-- Provider settings: `OPENAI_*`, `FRONTAL_*`, `XAI_*`, `OLLAMA_*`, `AZURE_*`, `BEDROCK_*`, and `FRONTAL_CODE_MAX_OUTPUT_TOKENS`. Loopback base URLs are rewritten to `host.docker.internal`.
-- A default permission mode of `danger-full-access`, because a headless worker cannot answer prompts. The container is the isolation boundary. A task can request another mode.
+The server starts each worker with a small, deliberate environment:
 
-The worker has network access, so a model call can reach any host the provider URL allows. Mount only the checkouts you intend the agent to change.
+| Variable | Value | Why |
+|---|---|---|
+| `FRONTAL_CODE_SERVER_API_KEY` | A random token for this task only | Authenticates the worker's own calls: read the task, read its runtime, read and write its GitHub integration, and post completion. |
+| `OPENAI_API_KEY` (or `FRONTAL_API_KEY`, `XAI_API_KEY`, `AZURE_OPENAI_API_KEY`) | The same task token | The CLI's provider client needs a value. Model calls use it to reach the proxy, not the provider. |
+| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `http://host.docker.internal:<port>/v1/model-proxy/<provider>` | Sends model traffic through the server. |
+| `FRONTAL_CODE_SERVER_URL`, `FRONTAL_CODE_HOSTED_WORKER`, `FRONTAL_CODE_HOSTED_TASK_FILE` | Fixed values | Locate the server and the task file. |
+| `FRONTAL_CODE_MAX_OUTPUT_TOKENS` | Copied from the server, if set | Non-secret tuning. |
+| `GITHUB_TOKEN`, `FRONTAL_CODE_GITHUB_API_BASE` | Copied from the server | **Only for tasks with a repository**, so the worker can push its branch. This is a real credential inside the container. See the README for the open decision. |
+
+**Not present:** upstream provider keys (`OPENAI_API_KEY`, `FRONTAL_API_KEY`, and the rest of the server's own values) and the server's control-plane key.
+
+### How model calls reach the provider
+
+The worker sends each model request to `/v1/model-proxy/<provider>` on the server. The proxy:
+
+1. Checks the worker's token. The token must be live (issued for a task that has not completed or been cancelled).
+2. Removes the caller's authorization headers.
+3. Adds the server's key for that provider and forwards the request to the provider's base URL from the server's environment.
+4. Streams the response back to the worker.
+
+A token that is stolen from the container is useful only for model calls and for its own task's endpoints. It stops working when the task completes or is cancelled, or when the server restarts (tokens are held in memory).
+
+Bedrock is not proxied: its requests are signed per request and cannot use a static key. A task that asks for `bedrock` is refused.
+
+The worker has network access and runs with `danger-full-access` by default, so a prompt-injected agent could still read its own environment and send data out. The token limits the damage to model calls and one task's endpoints. The default permission mode is a separate decision: see the README.
 
 ## Docker Compose
 

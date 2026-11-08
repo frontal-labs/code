@@ -66,9 +66,32 @@ RESP=$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/tasks" -H "authorization: Bea
 TASK_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['task_id'])" "$RESP")
 echo "submitted $TASK_ID"
 
+# While the worker runs, list the names (never the values) of the variables in its
+# container. Only the task token and proxy URLs may appear; upstream provider keys must not.
+check_worker_env() {
+  local cid
+  cid=$(docker ps -q --filter "label=frontal-code.task_id=$TASK_ID" | head -1)
+  [ -n "$cid" ] || return 0
+  # Values stay inside Python. Only variable names are printed.
+  docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' | python3 -c '
+import sys
+env = dict(line.rstrip("\n").split("=", 1) for line in sys.stdin if "=" in line)
+print("worker env names:")
+for name in sorted(env):
+    if name.endswith(("_KEY", "_TOKEN", "_BASE_URL")) or name.startswith(("FRONTAL_", "OLLAMA")):
+        print("  " + name)
+token = env.get("FRONTAL_CODE_SERVER_API_KEY", "")
+leaks = [n for n in env if n.endswith("_API_KEY") and n != "FRONTAL_CODE_SERVER_API_KEY" and env[n] != token]
+print("RESULT: no upstream provider key in worker" if not leaks else "RESULT: UPSTREAM KEY PRESENT: " + ", ".join(leaks))
+'
+  CHECKED=1
+}
+
 STATUS=""
+CHECKED=0
 for _ in $(seq 1 120); do
   DETAIL=$(curl -sf "http://127.0.0.1:$PORT/v1/tasks/$TASK_ID" -H "authorization: Bearer $API_KEY")
+  [ "$CHECKED" = "0" ] && check_worker_env
   STATUS=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['status'])" "$DETAIL")
   case "$STATUS" in completed|failed|cancelled) break ;; esac
   sleep 3

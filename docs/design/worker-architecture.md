@@ -115,12 +115,17 @@ Resolved:
 4. **Relay image.** Pinned by digest (`DEFAULT_RELAY_IMAGE`). Override with `FRONTAL_CODE_WORKER_RELAY_IMAGE` after reviewing the image.
 5. **ClickHouse audit.** Token issue and revocation, worker launches, refused and failed publications, and publications are written to `frontal_audit_events_v2` as epoch milliseconds. Writes are best effort and never block a request. Verified against a live ClickHouse 26.3.
 
+Verified and no longer open:
+
+- **Full test suite.** The workspace passes on macOS with the live Postgres (verify-full TLS) and ClickHouse services, and on `linux/amd64` under Rosetta: 1794 tests, including the ones that were ignored before, with none ignored now.
+- **Linux container.** code-server runs inside the `linux/amd64` container and drives the host Docker daemon through the socket. Two Ollama tasks completed, both branches were published, and no task networks were left behind.
+- **Parity harness.** The `mock_parity_harness` flake did not reproduce in six parallel runs on macOS, or in the full `linux/amd64` run. The earlier failure is not explained; stderr is reported on failure.
+- **Model access.** Every live run (worker, SDK, and CLI) uses a local Ollama server with `qwen2.5:1.5b`, so there is no quota.
+
 Still open:
 
-- **Model access.** All live runs (worker, SDK, and CLI) use a local Ollama server with `qwen2.5:1.5b`, so they have no quota. Cloud gateways are optional and were checked separately.
-- **Linux hosts.** The code-server and CLI test suites pass on `linux/amd64` (Rosetta, `rust:1.95-bookworm`), including the Postgres tests over verified TLS. code-server also ran inside that container, driving the host Docker daemon through the socket, and two Ollama tasks completed and published. That run used Docker Desktop, so a native Linux Docker host (where `host-gateway` is the real host bridge) is still unverified.
-- **Crash leftovers.** A task network whose server died is removed by the next sweep of the same server port, once it is older than two minutes. A finished task's network is removed as soon as its worker exits.
-- **Parity harness.** The `mock_parity_harness` bash-approval scenario failed once under full workspace load and has not been reproduced since, including a full run on `linux/amd64`. Stderr is now reported on failure.
+- **Native Linux Docker host.** `host-gateway` is verified on Docker Desktop only. On a native Linux host it is the real host bridge, so the relay and the callback address need a check there.
+- **Cloud gateways.** The `openai` provider path through a hosted gateway has been verified only against an earlier free-tier model. Nothing in this design depends on it.
 
 ## Operating it
 

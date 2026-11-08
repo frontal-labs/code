@@ -1357,8 +1357,9 @@ mod tests {
             )
             .expect("save anthropic credentials");
 
-            assert!(crate::providers::create_provider_client("anthropic", "claude-sonnet-4-6")
-            .is_ok());
+            assert!(
+                crate::providers::create_provider_client("anthropic", "claude-sonnet-4-6").is_ok()
+            );
         });
     }
 

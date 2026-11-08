@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ollama works as a provider. It is served through the OpenAI-compatible client at `OLLAMA_BASE_URL` (default `http://localhost:11434`), including tool calls and streamed usage. Hosted Ollama tasks reach the host's Ollama through the model proxy, so the worker never needs a key.
 
 ### Fixed
+- Hosted Ollama tasks run end to end. The Ollama client sent a fixed placeholder key, so the model proxy refused every call from the worker. The client now sends `OLLAMA_API_KEY` when it is set, and the server sets it to the task token in worker containers.
 - Unknown `--flags` in prompt text are rejected instead of being sent to the model.
 - `:free` OpenRouter models are priced at zero.
 - `.changeset/config.json` is valid, `@changesets/changelog-github` is installed, and `baseBranch` is `main`.

@@ -22,21 +22,28 @@ pub const fn config() -> OpenAiCompatConfig {
     }
 }
 
-/// A client for the Ollama server at `root` (for example `http://localhost:11434`).
-#[must_use]
-pub fn client(root: &str) -> OpenAiCompatClient {
-    OpenAiCompatClient::new("ollama", config())
-        .with_base_url(format!("{}/v1", root.trim_end_matches('/')))
-}
+/// Sent when `OLLAMA_API_KEY` is unset. Ollama ignores the value.
+const PLACEHOLDER_KEY: &str = "ollama";
 
-/// A client for the server named by `OLLAMA_BASE_URL`, or the local default.
+/// A client for the server named by `OLLAMA_BASE_URL`, or the local default. It sends
+/// `OLLAMA_API_KEY` as the bearer when that is set. Hosted workers rely on this: their
+/// token travels in that variable so the server's model proxy can identify the task.
 #[must_use]
 pub fn client_from_env() -> OpenAiCompatClient {
     let root = std::env::var("OLLAMA_BASE_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
-    client(&root)
+    let key = std::env::var("OLLAMA_API_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| PLACEHOLDER_KEY.to_string());
+    with_key(&key, &root)
+}
+
+fn with_key(key: &str, root: &str) -> OpenAiCompatClient {
+    OpenAiCompatClient::new(key, config())
+        .with_base_url(format!("{}/v1", root.trim_end_matches('/')))
 }
 
 #[cfg(test)]
@@ -45,7 +52,13 @@ mod tests {
 
     #[test]
     fn the_root_gets_the_v1_suffix_once() {
-        assert_eq!(client("http://127.0.0.1:11434/").base_url_for_tests(), "http://127.0.0.1:11434/v1");
-        assert_eq!(client("http://127.0.0.1:11434").base_url_for_tests(), "http://127.0.0.1:11434/v1");
+        assert_eq!(
+            with_key(PLACEHOLDER_KEY, "http://127.0.0.1:11434/").base_url_for_tests(),
+            "http://127.0.0.1:11434/v1"
+        );
+        assert_eq!(
+            with_key(PLACEHOLDER_KEY, "http://127.0.0.1:11434").base_url_for_tests(),
+            "http://127.0.0.1:11434/v1"
+        );
     }
 }

@@ -118,10 +118,10 @@ Resolved:
 Still open:
 
 - **Model quota.** The live model run was blocked by OpenRouter's free-tier daily limit (50 requests). Wait for the reset, or add credits, before the next live run.
-- **Linux hosts.** Docker's `host-gateway` alias and the relay were verified only on Docker Desktop for macOS.
+- **Linux hosts.** The code-server and CLI test suites pass on `linux/amd64` (Rosetta, `rust:1.95-bookworm`), including the Postgres tests over verified TLS. The worker E2E has not run on a native Linux Docker host: `host-gateway` and the relay were verified only on Docker Desktop for macOS.
 - **One server per Docker host.** The relay is one container, and a second server on the same host would replace it.
 - **Finished-task networks.** A finished task's network is removed by the next launch's sweep, not immediately.
-- **Parity harness.** The `mock_parity_harness` bash-approval scenario failed once under full workspace load and has not been reproduced since. Stderr is now reported on failure.
+- **Parity harness.** The `mock_parity_harness` bash-approval scenario failed once under full workspace load and has not been reproduced since, including a full run on `linux/amd64`. Stderr is now reported on failure.
 
 ## Operating it
 
@@ -131,7 +131,7 @@ Required for `local-docker` lanes:
 - `FRONTAL_CODE_SERVER_API_KEY` — control-plane key (required unless anonymous mode is set).
 - `FRONTAL_CODE_SERVER_CALLBACK_URL` — the server's address as seen from the host, for example `http://host.docker.internal:8788`. Its port is the relay's port.
 
-Ollama needs no key. The server forwards `ollama` requests to `OLLAMA_BASE_URL` on the host (default `http://localhost:11434`), and the worker receives the proxy URL as its own `OLLAMA_BASE_URL`. Use a model the host has pulled, for example `qwen2.5:1.5b`. Models below about 1.5B parameters did not emit tool calls in testing.
+Ollama needs no key. The server forwards `ollama` requests to `OLLAMA_BASE_URL` on the host (default `http://localhost:11434`). The worker receives the proxy URL as its `OLLAMA_BASE_URL`, and its task token as `OLLAMA_API_KEY`, which the proxy reads to identify the task and never forwards. Use a model the host has pulled, for example `qwen2.5:1.5b`. Models below about 1.5B parameters did not emit tool calls in testing.
 
 Optional:
 

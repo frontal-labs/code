@@ -59,9 +59,7 @@ impl ProviderClient {
             crate::providers::ProviderKind::Azure => {
                 Ok(Self::Azure(OpenAiCompatClient::from_env(azure::config())?))
             }
-            crate::providers::ProviderKind::Ollama => {
-                Ok(Self::Ollama(ollama::client_from_env()))
-            }
+            crate::providers::ProviderKind::Ollama => Ok(Self::Ollama(ollama::client_from_env())),
         }
     }
 

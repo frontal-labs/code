@@ -284,7 +284,12 @@ pub(crate) fn worker_provider_env(
             ("AZURE_OPENAI_API_KEY".to_string(), token.to_string()),
             ("AZURE_OPENAI_BASE_URL".to_string(), base),
         ],
-        "ollama" => vec![("OLLAMA_BASE_URL".to_string(), base)],
+        // Ollama needs no key, but its client still sends a bearer token. The token goes
+        // there, so the proxy can identify the task. The proxy never forwards it.
+        "ollama" => vec![
+            ("OLLAMA_API_KEY".to_string(), token.to_string()),
+            ("OLLAMA_BASE_URL".to_string(), base),
+        ],
         _ => Vec::new(),
     }
 }
@@ -545,6 +550,23 @@ mod tests {
         assert!(env
             .iter()
             .all(|(key, _)| !key.starts_with("XAI") && !key.starts_with("FRONTAL")));
+    }
+
+    #[test]
+    fn ollama_worker_sends_the_task_token_as_its_bearer() {
+        // Ollama's client falls back to a placeholder key when none is set. Without the
+        // token here, the proxy cannot identify the task and refuses every model call.
+        let env = worker_provider_env("ollama", "http://frontal-relay:8788", "tok");
+        assert_eq!(
+            env,
+            vec![
+                ("OLLAMA_API_KEY".to_string(), "tok".to_string()),
+                (
+                    "OLLAMA_BASE_URL".to_string(),
+                    "http://frontal-relay:8788/v1/model-proxy/ollama".to_string()
+                ),
+            ]
+        );
     }
 
     #[test]

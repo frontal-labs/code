@@ -3288,13 +3288,18 @@ fn validate_hosted_server_url(raw: &str) -> Result<reqwest::Url, Box<dyn std::er
         .map_err(|error| format!("invalid hosted server URL '{raw}': {error}"))?;
     let host = url.host_str().unwrap_or_default();
     let is_loopback = matches!(host, "localhost" | "127.0.0.1" | "[::1]");
+    // A worker container reaches the server that launched it through the Docker host
+    // alias. The server sets FRONTAL_CODE_HOSTED_WORKER only in containers it starts,
+    // so this exception does not apply to a user's own shell.
+    let is_worker_host_alias = host == "host.docker.internal"
+        && env::var("FRONTAL_CODE_HOSTED_WORKER").is_ok_and(|value| value == "1");
     match url.scheme() {
         "https" | "wss" => Ok(url),
-        "http" | "ws" if is_loopback => Ok(url),
+        "http" | "ws" if is_loopback || is_worker_host_alias => Ok(url),
         "http" | "ws" => Err(format!(
             "refusing to send credentials over cleartext {} to non-loopback host '{host}'; \
              use https (or wss) for hosted server URLs. http/ws is only permitted for \
-             localhost, 127.0.0.1, and [::1]",
+             localhost, 127.0.0.1, [::1], and the Docker host alias inside hosted worker containers",
             url.scheme()
         )
         .into()),
@@ -12573,7 +12578,7 @@ mod tests {
         assert!(error.to_string().contains("cleartext http"));
         assert!(error
             .to_string()
-            .contains("localhost, 127.0.0.1, and [::1]"));
+            .contains("localhost, 127.0.0.1, [::1]"));
         std::env::remove_var("FRONTAL_CODE_SERVER_URL");
     }
 
@@ -13269,6 +13274,26 @@ mod tests {
         ])
         .expect_err("flag after subcommand should fail");
         assert!(error.contains("unknown option: --bogus"));
+    }
+
+    #[test]
+    fn hosted_server_url_allows_cleartext_only_for_loopback_or_worker_alias() {
+        let _guard = env_lock();
+        let previous = std::env::var_os("FRONTAL_CODE_HOSTED_WORKER");
+        std::env::remove_var("FRONTAL_CODE_HOSTED_WORKER");
+        assert!(validate_hosted_server_url("http://127.0.0.1:8788").is_ok());
+        assert!(validate_hosted_server_url("https://hosted.example.com").is_ok());
+        assert!(validate_hosted_server_url("http://hosted.example.com").is_err());
+        assert!(validate_hosted_server_url("http://host.docker.internal:8788").is_err());
+
+        std::env::set_var("FRONTAL_CODE_HOSTED_WORKER", "1");
+        assert!(validate_hosted_server_url("http://host.docker.internal:8788").is_ok());
+        assert!(validate_hosted_server_url("http://hosted.example.com").is_err());
+
+        match previous {
+            Some(value) => std::env::set_var("FRONTAL_CODE_HOSTED_WORKER", value),
+            None => std::env::remove_var("FRONTAL_CODE_HOSTED_WORKER"),
+        }
     }
 
     #[test]

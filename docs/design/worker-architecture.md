@@ -118,7 +118,7 @@ Resolved:
 Still open:
 
 - **Model quota.** The live model run was blocked by OpenRouter's free-tier daily limit (50 requests). Wait for the reset, or add credits, before the next live run.
-- **Linux hosts.** The code-server and CLI test suites pass on `linux/amd64` (Rosetta, `rust:1.95-bookworm`), including the Postgres tests over verified TLS. The worker E2E has not run on a native Linux Docker host: `host-gateway` and the relay were verified only on Docker Desktop for macOS.
+- **Linux hosts.** The code-server and CLI test suites pass on `linux/amd64` (Rosetta, `rust:1.95-bookworm`), including the Postgres tests over verified TLS. code-server also ran inside that container, driving the host Docker daemon through the socket, and two Ollama tasks completed and published. That run used Docker Desktop, so a native Linux Docker host (where `host-gateway` is the real host bridge) is still unverified.
 - **One server per Docker host.** The relay is one container, and a second server on the same host would replace it.
 - **Finished-task networks.** A finished task's network is removed by the next launch's sweep, not immediately.
 - **Parity harness.** The `mock_parity_harness` bash-approval scenario failed once under full workspace load and has not been reproduced since, including a full run on `linux/amd64`. Stderr is now reported on failure.

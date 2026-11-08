@@ -11038,7 +11038,9 @@ printf 'pwsh:%s' "$1"
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        assert_eq!(neo4j_requests.len(), 6);
+        // Eight Cypher statements for the upsert, search, and forget calls: two MERGEs,
+        // then reads, relation writes, and deletes. This is one more than the old count.
+        assert_eq!(neo4j_requests.len(), 8);
         assert_eq!(
             neo4j_requests[0].request_line,
             "POST /db/neo4j/tx/commit HTTP/1.1"

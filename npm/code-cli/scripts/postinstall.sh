@@ -54,13 +54,15 @@ if node -e "import('./lib/resolve-binary.mjs').then(m => process.exit(m.resolveB
 fi
 
 echo "[frontal-code:postinstall] installing native binary for $VERSION..."
-node -e "
+# The root is passed in the environment, not as a trailing argument: a trailing
+# `VAR=value` after `node -e` becomes an argv entry and leaves process.env unset.
+POSTINSTALL_ROOT="$PKG_ROOT" node -e "
 import('./lib/download.mjs').then(async (m) => {
   const { resolve } = require('node:path');
   const { readFileSync } = require('node:fs');
   const ROOT = process.env.POSTINSTALL_ROOT;
-  const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version ?? '0.0.0-dev';
   try {
+    const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version ?? '0.0.0-dev';
     const bin = await m.downloadRelease({ version, destDir: ROOT });
     console.log('[frontal-code:postinstall] installed native binary to', bin);
   } catch (e) {
@@ -73,4 +75,4 @@ import('./lib/download.mjs').then(async (m) => {
     process.exit(0);
   }
 });
-" POSTINSTALL_ROOT="$PKG_ROOT"
+"

@@ -582,8 +582,12 @@ mod tests {
     }
 
     fn read_http_request(stream: &mut TcpStream) -> TestHttpRequest {
+        // Accepted sockets inherit O_NONBLOCK from the listener on macOS. Without
+        // this, a read that runs before the client writes fails at once with
+        // WouldBlock, which made the test flaky.
+        stream.set_nonblocking(false).expect("set blocking mode");
         stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
+            .set_read_timeout(Some(Duration::from_secs(5)))
             .expect("set read timeout");
         let mut bytes = Vec::new();
         let mut buffer = [0_u8; 4096];

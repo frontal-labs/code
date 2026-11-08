@@ -77,6 +77,15 @@ const DEFAULT_MODEL: &str = "claude-opus-5-5";
 const DEFAULT_HOSTED_SERVER_URL: &str = "http://127.0.0.1:8788";
 const HOSTED_SERVER_TIMEOUT_SECS: u64 = 30;
 fn max_tokens_for_model(model: &str) -> u32 {
+    // Operators can cap output size explicitly, for example when a gateway or
+    // prepaid balance cannot cover the model's full output ceiling.
+    if let Some(value) = env::var("FRONTAL_CODE_MAX_OUTPUT_TOKENS")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u32>().ok())
+        .filter(|value| *value > 0)
+    {
+        return value;
+    }
     if model.contains("gpt-4.1") {
         32_768
     } else if model.contains("opus")
@@ -812,6 +821,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             }
             "-p" => {
                 // FrontalCode compat: -p "prompt" = one-shot prompt
+                reject_flags_in_prompt_text(&args[index + 1..])?;
                 let prompt = args[index + 1..].join(" ");
                 if prompt.trim().is_empty() {
                     return Err("-p requires a prompt string".to_string());
@@ -929,6 +939,11 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             action: rest.get(1).cloned(),
             target: rest.get(2).cloned(),
         }),
+        "plugins" => Ok(CliAction::Plugins {
+            action: rest.get(1).cloned(),
+            target: rest.get(2).cloned(),
+            output_format,
+        }),
         "agents" => Ok(CliAction::Agents {
             args: join_optional_args(&rest[1..]),
             output_format,
@@ -965,6 +980,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
         "system-prompt" => parse_system_prompt_args(&rest[1..], output_format),
         "init" => Ok(CliAction::Init { output_format }),
         "prompt" => {
+            reject_flags_in_prompt_text(&rest[1..])?;
             let prompt = rest[1..].join(" ");
             if prompt.trim().is_empty() {
                 return Err("prompt subcommand requires a prompt string".to_string());
@@ -986,14 +1002,17 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             permission_mode,
             provider.as_ref(),
         ),
-        _other => Ok(CliAction::Prompt {
-            prompt: rest.join(" "),
-            model,
-            provider: provider.clone(),
-            output_format,
-            allowed_tools,
-            permission_mode,
-        }),
+        _other => {
+            reject_flags_in_prompt_text(&rest)?;
+            Ok(CliAction::Prompt {
+                prompt: rest.join(" "),
+                model,
+                provider: provider.clone(),
+                output_format,
+                allowed_tools,
+                permission_mode,
+            })
+        }
     }
 }
 
@@ -1734,6 +1753,17 @@ fn parse_direct_slash_cli_action(
         }),
         Ok(None) => Err(format!("unknown subcommand: {}", rest[0])),
         Err(error) => Err(error.to_string()),
+    }
+}
+
+/// Free text that becomes a prompt must not carry unknown `--flags`. Without this
+/// check, a flag placed where prompt text is expected (for example `prompt --stream`)
+/// is sent to the model as if the user had typed it. Quoted text containing `--`
+/// is still a single argument and is not affected.
+fn reject_flags_in_prompt_text(tokens: &[String]) -> Result<(), String> {
+    match tokens.iter().find(|token| token.starts_with("--")) {
+        Some(flag) => Err(format_unknown_option(flag)),
+        None => Ok(()),
     }
 }
 
@@ -12889,6 +12919,35 @@ mod tests {
         assert!(error.contains("unknown option: --resum"));
         assert!(error.contains("Did you mean --resume?"));
         assert!(error.contains("frontal-code --help"));
+    }
+
+    #[test]
+    fn rejects_unknown_flags_after_a_subcommand_instead_of_sending_them_to_the_model() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let error = parse_args(&[
+            "prompt".to_string(),
+            "--bogus".to_string(),
+            "hi".to_string(),
+        ])
+        .expect_err("flag after subcommand should fail");
+        assert!(error.contains("unknown option: --bogus"));
+    }
+
+    #[test]
+    fn parses_plugins_subcommand() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(
+            parse_args(&["plugins".to_string(), "list".to_string()]).expect("plugins should parse"),
+            CliAction::Plugins {
+                action: Some("list".to_string()),
+                target: None,
+                output_format: CliOutputFormat::Text,
+            }
+        );
     }
 
     #[test]

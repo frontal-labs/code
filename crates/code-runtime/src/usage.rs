@@ -10,6 +10,16 @@ pub use code_types::{ModelPricing, TokenUsage, UsageCostEstimate};
 #[must_use]
 pub fn pricing_for_model(model: &str) -> Option<ModelPricing> {
     let normalized = model.to_ascii_lowercase();
+    // OpenRouter-style `:free` variants cost nothing. Pricing them with the
+    // default Sonnet tier would report spend that never happens.
+    if normalized.ends_with(":free") {
+        return Some(ModelPricing {
+            input_cost_per_million: 0.0,
+            output_cost_per_million: 0.0,
+            cache_creation_cost_per_million: 0.0,
+            cache_read_cost_per_million: 0.0,
+        });
+    }
     if normalized.contains("opus")
         || normalized.contains("sonnet")
         || normalized.contains("haiku")

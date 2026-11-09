@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { FrontalCodeEventSchema } from "@frontal-labs/zod-schemas";
 import { describe, expect, it } from "vitest";
 import { FrontalCode } from "../src/frontal-code.js";
 import type { FrontalCodeEvent } from "../src/protocol.js";
@@ -53,6 +54,8 @@ describe.skipIf(!enabled)("real CLI end-to-end", () => {
     const events: FrontalCodeEvent[] = [];
     const streamed = await thread.runStreamed("Reply with the single word: pong");
     for await (const event of streamed.events) {
+      // Every event the real CLI produces must match the shared schema.
+      FrontalCodeEventSchema.parse(event);
       events.push(event);
     }
     expect(events[0]?.type).toBe("turn.started");

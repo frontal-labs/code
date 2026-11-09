@@ -13,6 +13,7 @@
   },
   "workspaces": [
     "sdks/typescript",
-    "npm/code-cli"
+    "npm/code-cli",
+    "extensions/zod"
   ]
 }

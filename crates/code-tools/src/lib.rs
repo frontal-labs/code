@@ -10006,6 +10006,10 @@ mod tests {
 
     #[test]
     fn repl_executes_python_code() {
+        // Spawns with the process working directory, which other tests change under the lock.
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let result = execute_tool(
             "REPL",
             // Generous timeout: this asserts the REPL plumbing, not latency, and

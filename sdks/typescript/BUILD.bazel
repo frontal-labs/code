@@ -28,7 +28,7 @@ biome_lint(
 sh_test(
     name = "typecheck",
     srcs = ["//tools:sdk_ts.sh"],
-    data = [":typescript_sdk_srcs", "//:biome.json", "//:ultracite.json"],
+    data = [":typescript_sdk_srcs", "//extensions/zod:srcs", "//:biome.json", "//:ultracite.json"],
     args = ["sdks/typescript", "typecheck"],
     tags = ["typescript", "test"],
 )
@@ -36,7 +36,7 @@ sh_test(
 sh_test(
     name = "build",
     srcs = ["//tools:sdk_ts.sh"],
-    data = [":typescript_sdk_srcs", "//:biome.json", "//:ultracite.json"],
+    data = [":typescript_sdk_srcs", "//extensions/zod:srcs", "//:biome.json", "//:ultracite.json"],
     args = ["sdks/typescript", "build"],
     tags = ["typescript", "build"],
 )
@@ -44,7 +44,8 @@ sh_test(
 sh_test(
     name = "test",
     srcs = ["//tools:sdk_ts.sh"],
-    data = [":typescript_sdk_srcs"],
+    # The SDK depends on the zod schemas through a file: link, so the package must be in the sandbox.
+    data = [":typescript_sdk_srcs", "//extensions/zod:srcs"],
     args = ["sdks/typescript", "test"],
     tags = ["typescript", "test"],
 )

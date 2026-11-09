@@ -18,7 +18,8 @@ const DEFAULT_PROVIDER: &str = "ollama";
 
 fn e2e_bin() -> Option<String> {
   let bin = std::env::var("FRONTAL_CODE_E2E_BIN").ok()?;
-  let provider = std::env::var("FRONTAL_CODE_E2E_PROVIDER").unwrap_or_else(|_| DEFAULT_PROVIDER.into());
+  let provider =
+    std::env::var("FRONTAL_CODE_E2E_PROVIDER").unwrap_or_else(|_| DEFAULT_PROVIDER.into());
   if provider == "openai" {
     std::env::var("OPENAI_API_KEY").ok()?;
   }
@@ -46,7 +47,9 @@ fn client(bin: String) -> FrontalCode {
 fn options(workdir: PathBuf) -> ThreadOptions {
   ThreadOptions {
     working_directory: Some(workdir),
-    provider: Some(std::env::var("FRONTAL_CODE_E2E_PROVIDER").unwrap_or_else(|_| DEFAULT_PROVIDER.into())),
+    provider: Some(
+      std::env::var("FRONTAL_CODE_E2E_PROVIDER").unwrap_or_else(|_| DEFAULT_PROVIDER.into()),
+    ),
     model: Some(std::env::var("FRONTAL_CODE_E2E_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.into())),
     permission_mode: Some("read-only".to_string()),
     ..Default::default()

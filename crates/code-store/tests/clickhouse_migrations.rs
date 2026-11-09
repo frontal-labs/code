@@ -27,12 +27,12 @@ struct TableName {
 
 /// Each test gets its own database so runs cannot see each other's state.
 fn settings_for_fresh_database() -> ClickHouseSettings {
-    let url = std::env::var("FRONTAL_TEST_CLICKHOUSE_URL")
-        .expect("FRONTAL_TEST_CLICKHOUSE_URL must name the server");
     // Tests run in parallel and can read the same clock value, so the name also carries the
     // process id and a counter. Two tests sharing a database would see each other's rows, and one
     // would drop the database while the other still used it.
     static SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let url = std::env::var("FRONTAL_TEST_CLICKHOUSE_URL")
+        .expect("FRONTAL_TEST_CLICKHOUSE_URL must name the server");
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

@@ -404,6 +404,9 @@ mod tests {
         .expect("write plugin manifest");
     }
 
+    // Hooks are POSIX shell scripts, so this test needs a Unix shell. Windows CI runs the
+    // rest of the plugin tests.
+    #[cfg(unix)]
     #[test]
     fn collects_and_runs_hooks_from_enabled_plugins() {
         // given

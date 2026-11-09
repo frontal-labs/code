@@ -123,14 +123,16 @@ pub(crate) struct PublishOutcome {
 /// Applies `patch` to a fresh clone of `repo_url` on `branch`, commits it, and pushes.
 /// The clone is removed afterwards, whether or not the push succeeded.
 pub(crate) fn publish_changes(request: &PublishRequest<'_>) -> Result<PublishOutcome, String> {
+    // A repository URL that starts with `-` would be read by git as an option.
+    if request.repo_url.starts_with('-') {
+        return Err("repository URL must not start with `-`".to_string());
+    }
     validate_patch(request.patch)?;
     validate_branch(request.branch)?;
 
+    // The scratch name is random and carries no request data, so no path is built from input.
     let nonce = random_hex(6)?;
-    let scratch = request
-        .workspace_root
-        .join("publish")
-        .join(format!("{}-{nonce}", sanitize(request.task_id)));
+    let scratch = request.workspace_root.join("publish").join(nonce);
     std::fs::create_dir_all(&scratch).map_err(|error| format!("publish scratch: {error}"))?;
     let result = publish_in(&scratch, request);
     let _ = std::fs::remove_dir_all(&scratch);
@@ -154,6 +156,7 @@ fn publish_in(scratch: &Path, request: &PublishRequest<'_>) -> Result<PublishOut
             "clone",
             "--no-checkout",
             "--quiet",
+            "--",
             request.repo_url,
             repo.to_str().ok_or("scratch path is not UTF-8")?,
         ],
@@ -486,19 +489,6 @@ fn random_hex(bytes: usize) -> Result<String, String> {
     Ok(hex::encode(buffer))
 }
 
-fn sanitize(value: &str) -> String {
-    value
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect()
-}
-
 fn base64_encode(input: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
@@ -537,6 +527,29 @@ index 1111111..2222222 100644
 -old
 +new
 ";
+
+    #[test]
+    fn a_repository_url_that_looks_like_an_option_is_refused_before_git_runs() {
+        let workspace = std::env::temp_dir().join("frontal-code-publish-option-guard");
+        let request = PublishRequest {
+            workspace_root: &workspace,
+            task_id: "task-1",
+            prompt: "",
+            repo_url: "--upload-pack=touch /tmp/pwned",
+            base_ref: None,
+            branch: "frontal-code/guard",
+            patch: "",
+            github_token: None,
+            author_name: "t",
+            author_email: "t@example.com",
+        };
+        let error = publish_changes(&request).expect_err("option-like URL must be refused");
+        assert!(error.contains("must not start with `-`"), "{error}");
+        assert!(
+            !workspace.join("publish").exists(),
+            "no scratch directory before the check"
+        );
+    }
 
     #[test]
     fn ordinary_changes_pass_validation() {

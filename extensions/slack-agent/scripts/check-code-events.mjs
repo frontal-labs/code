@@ -25,7 +25,7 @@ try {
     process.stderr.write(
       [
         "Generated Frontal Code event bindings are stale.",
-        "Run `npm run sync:code-events` in extensions/code-slack and commit the updated file.",
+        "Run `npm run sync:code-events` in extensions/slack-agent and commit the updated file.",
         "",
       ].join("\n"),
     );

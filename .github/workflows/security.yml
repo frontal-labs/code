@@ -37,7 +37,7 @@ jobs:
         run: cargo deny check
 
       - name: Run npm audit for Slack extension
-        working-directory: extensions/code-slack
+        working-directory: extensions/slack-agent
         run: npm audit --omit=dev --audit-level=high
 
       - name: Run npm audit for TypeScript SDK

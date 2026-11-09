@@ -59,7 +59,7 @@ Enable these **Interactive Components**:
 
 ### Environment Variables
 
-Create a `.env` file in the `extensions/code-slack` directory:
+Create a `.env` file in the `extensions/slack-agent` directory:
 
 ```bash
 # Slack App Configuration
@@ -90,7 +90,7 @@ Set the same shared secret value as `FRONTAL_SERVER_API_KEY` on the hosted serve
 ### 4. Install Dependencies and Build
 
 ```bash
-cd extensions/code-slack
+cd extensions/slack-agent
 bun install
 bun run build
 # Creates the OCP tables; the bot also does this on startup unless OCP_RUN_MIGRATIONS=false.
@@ -207,7 +207,7 @@ For local development:
 ```bash
 # Clone the extension
 git clone <your-repo>
-cd extensions/code-slack
+cd extensions/slack-agent
 
 # Install dependencies
 bun install

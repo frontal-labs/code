@@ -17,7 +17,7 @@ Local Frontal Code integration for VS Code and Cursor.
 
 `/ide vscode`, `/ide cursor`, `/ide antigravity`, and `/ide windsurf` now:
 
-- package this extension into `.frontal-code/extensions/code-ide-<version>.vsix`
+- package this extension into `.frontal-code/extensions/vs-code-<version>.vsix`
 - install it into the target editor via editor CLI (`--install-extension ... --force`)
 - write editor integration config (`.vscode/frontal-code.json` or `.cursor/frontal-code.json`)
 - launch the editor at the current workspace root

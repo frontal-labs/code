@@ -6,11 +6,11 @@ FROM ${BUN_IMAGE} AS builder
 
 WORKDIR /app
 
-COPY extensions/code-slack/package*.json ./
-COPY extensions/code-slack/bunfig.toml ./
+COPY extensions/slack-agent/package*.json ./
+COPY extensions/slack-agent/bunfig.toml ./
 RUN bun install --frozen-lockfile
 
-COPY extensions/code-slack/ ./
+COPY extensions/slack-agent/ ./
 RUN bun run build
 
 FROM ${NODE_IMAGE}
@@ -22,7 +22,7 @@ RUN addgroup -g 1001 -S frontal-code \
 
 WORKDIR /app
 
-COPY extensions/code-slack/package*.json ./
+COPY extensions/slack-agent/package*.json ./
 ENV NODE_ENV=production
 
 RUN npm ci --omit=dev \

@@ -7,7 +7,7 @@ assets/
 docs/
 examples/
 extensions/*
-!extensions/code-slack
+!extensions/slack-agent
 homebrew/
 infrastructure/
 scripts/

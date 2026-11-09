@@ -3,7 +3,7 @@
 Frontal Code CLI is a coding agent from Frontal that runs locally on your computer.
 This npm package is a **thin launcher** that downloads and runs the native
 Rust `frontal-code` binary; the real agent logic lives in the
-[`crates/cli`](https://github.com/frontal-labs/frontal-code/tree/main/crates/cli)
+[`crates/cli`](https://github.com/frontal-labs/code/tree/main/crates/cli)
 Rust crate.
 
 ## Install
@@ -61,7 +61,7 @@ frontal-code --output-format json prompt "summarize cli/src/main.rs"
 ```
 
 For the full CLI reference (slash commands, permission modes, flags), see
-[`cli/README.md`](https://github.com/frontal-labs/frontal-code/tree/main/cli).
+[`cli/README.md`](https://github.com/frontal-labs/code/tree/main/cli).
 
 ## Configuration
 
@@ -106,7 +106,7 @@ The downloader targets one of:
 | Windows x64 | `code-cli-x86_64-pc-windows-msvc.exe` |
 
 These asset names are produced by
-[`.github/workflows/release.yml`](https://github.com/frontal-labs/frontal-code/blob/main/.github/workflows/release.yml)
+[`.github/workflows/release.yml`](https://github.com/frontal-labs/code/blob/main/.github/workflows/release.yml)
 and consumed by the Homebrew formula.
 
 ## Troubleshooting
@@ -183,7 +183,7 @@ npm/code-cli/
 
 - Registered as a workspace package in the root `package.json` `packages`.
 - Launcher tests: `bazel test //npm/code-cli:test` (also reached by `bazel run //:cli`
-  through [`scripts/cli.sh`](https://github.com/frontal-labs/frontal-code/blob/main/scripts/cli.sh)).
+  through [`scripts/cli.sh`](https://github.com/frontal-labs/code/blob/main/scripts/cli.sh)).
 - Launcher lint and native vendoring build: `bazel test //npm/code-cli:lint` and
   `bazel run //npm/code-cli:build`. These wrappers invoke Node/Biome and Cargo respectively.
 - CI: `.github/workflows/npm-cli.yml` runs on changes under `npm/code-cli/**`.

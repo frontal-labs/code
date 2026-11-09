@@ -213,7 +213,7 @@ frontal-code plugin install plugin-name
 
 ### Where can I find plugins?
 
-- Official plugin registry: https://github.com/frontal-labs/frontal-code
+- Official plugin registry: https://github.com/frontal-labs/code
 - Community plugins on GitHub
 - Built-in plugins included with Frontal Code
 
@@ -419,7 +419,7 @@ frontal-code help <command>
 frontal-code doctor
 
 # Community support
-# GitHub Issues: https://github.com/frontal-labs/frontal-code/issues
+# GitHub Issues: https://github.com/frontal-labs/code/issues
 ```
 
 ### How do I report bugs?
@@ -506,4 +506,4 @@ Frontal Code is maintained by the Frontal Code team and community contributors.
 
 ---
 
-Still have questions? Check the [documentation](./README.md) or [open an issue](https://github.com/frontal-labs/frontal-code/issues).
+Still have questions? Check the [documentation](./README.md) or [open an issue](https://github.com/frontal-labs/code/issues).

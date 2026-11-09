@@ -8,12 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `extensions/zod` (`@frontal-labs/zod-schemas`): Zod schemas for the event protocol. The TypeScript SDK's end-to-end suite validates every streamed event from the real CLI against them.
+- `scripts/verify-claude-gateway.sh` checks the Anthropic provider through any gateway that serves the Messages API, with a plain prompt and a tool call. It passes against Ollama.
 - `prompt --stream` emits the JSONL turn protocol the SDKs parse (`turn.started`, `item.completed`, `turn.completed`, `turn.failed`). `prompt --resume <id>` continues a session, and `prompt -p` and `prompt --config` are accepted. `--json` output includes `session_id`.
 - End-to-end suites for the TypeScript and Rust SDKs against the real CLI. They are gated on `FRONTAL_CODE_E2E_BIN` and `OPENAI_API_KEY`.
 - `FRONTAL_CODE_MAX_OUTPUT_TOKENS` caps output tokens per request.
 - `frontal-code repl` and `frontal-code plugins` subcommands.
 - `version changeset` runs `bun changeset version` and syncs the workspace version to the npm CLI package.
 - Ollama works as a provider. It is served through the OpenAI-compatible client at `OLLAMA_BASE_URL` (default `http://localhost:11434`), including tool calls and streamed usage. Hosted Ollama tasks reach the host's Ollama through the model proxy, so the worker never needs a key.
+
+### Changed
+- Extension directories are renamed: `extensions/code-ide` is now `extensions/vs-code`, and `extensions/code-slack` is now `extensions/slack-agent`. Package names are unchanged.
 
 ### Fixed
 - `npm install` no longer fails when the release binary is unavailable. The postinstall passed its root as an argument instead of an environment variable, so it crashed before its own error handling.

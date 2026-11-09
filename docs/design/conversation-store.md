@@ -75,7 +75,7 @@ These were checked against the code. Each one changes the design.
 
 10. **`/history` already exists** as a slash command (`crates/code-commands/src/lib.rs:697`). The brief's `/history` conflicts with it.
 
-11. **There is no JetBrains plugin.** The only IDE extension is a VS Code/Cursor JavaScript extension that spawns the CLI (`extensions/code-ide/extension.js`).
+11. **There is no JetBrains plugin.** The only IDE extension is a VS Code/Cursor JavaScript extension that spawns the CLI (`extensions/vs-code/extension.js`).
 
 ## Current behavior
 
@@ -155,7 +155,7 @@ These commits since the original brief add constraints the design must respect.
   - *Design rule:* ingest has no durable local spool. Under pressure it returns 429 with `Retry-After`, and the client holds the data.
 - **OAuth authorize is POST behind the control-plane key** (`d22c9db`; `crates/code-server/src/lib.rs:1568`). There is still no identity endpoint.
 - **code-api requires `FRONTAL_API_KEY` for non-loopback binds** (`b16be25`; `crates/code-api/src/service.rs:73`). That key is a shared secret, not a user.
-- **Slack allowlist** (`20e9634`; `extensions/code-slack/src/access.ts`). Task creation is gated on Slack user IDs, and `user_id` sent to code-server is the Slack ID (`extensions/code-slack/src/actions.ts:45`, `api-client.ts:323`).
+- **Slack allowlist** (`20e9634`; `extensions/slack-agent/src/access.ts`). Task creation is gated on Slack user IDs, and `user_id` sent to code-server is the Slack ID (`extensions/slack-agent/src/actions.ts:45`, `api-client.ts:323`).
   - *Design rule:* a Slack ID → Frontal user mapping is needed before rule 6 (per-user isolation) can hold for Slack-originated data.
 - **File tools are confined to the workspace root** (`184d064`). This is precedent only. The exporter reads `.frontal-code/sessions` directly.
 
@@ -167,13 +167,13 @@ Every place a conversation can start, and whether it persists a session today:
 |---|---|---|
 | CLI one-shot and REPL | `cli/src/main.rs:5433` (`run_repl`), `:6172` (`create_managed_session_handle`) | Yes, JSONL |
 | `/clear`, `/session new`, fork, resume | `cli/src/main.rs:6672`, `:6681`, `:6887` | Yes, JSONL |
-| IDE extensions (VS Code, Cursor) | `extensions/code-ide/extension.js` (spawns the CLI) | Yes, via the CLI |
+| IDE extensions (VS Code, Cursor) | `extensions/vs-code/extension.js` (spawns the CLI) | Yes, via the CLI |
 | Rust and TypeScript SDKs | `sdks/rust/src/spawn.rs`, `sdks/typescript/src/spawn.ts` (spawn the CLI, `--resume`) | Yes, via the CLI |
 | code-api | `crates/code-api/src/service.rs:404` (spawns the CLI) | Yes, via the CLI |
 | Hosted task, docker worker | `cli/src/main.rs:3710` (`run_hosted_task_worker`) | Yes, but inside a throwaway container |
 | Hosted task, `tools-agent` transport (Fly default) | `crates/code-server/src/lib.rs:384` → `crates/code-tools/src/lib.rs:4746-4758` (`build_agent_runtime`, `Session::new()`) | **No: in memory only** |
 | Sub-agents (Agent tool) | `crates/code-tools/src/lib.rs:4582` (`execute_agent`), same runtime | **No: in memory only** |
-| Slack bot | `extensions/code-slack/src/actions.ts:45` → `api-client.ts:323` (`createTask`) | No. It becomes a hosted task. |
+| Slack bot | `extensions/slack-agent/src/actions.ts:45` → `api-client.ts:323` (`createTask`) | No. It becomes a hosted task. |
 
 **Consequences**
 

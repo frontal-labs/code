@@ -243,6 +243,17 @@ export FRONTAL_BASE_URL="https://ai.frontal.dev/v1"
 `FRONTAL_API_KEY` is sent as a bearer token to the Frontal gateway by default. To use
 it with Anthropic or an Anthropic-compatible proxy, pass `--provider anthropic`.
 
+#### Claude gateways
+
+`--provider anthropic` speaks the Anthropic Messages API (`POST {base}/v1/messages`). Any gateway that serves that API works, with `FRONTAL_BASE_URL` set to the gateway's root and `FRONTAL_API_KEY` set to its key. Check a gateway before you rely on it:
+
+```bash
+GATEWAY_URL=https://gateway.example.com GATEWAY_KEY=... MODEL=claude-... \
+  scripts/verify-claude-gateway.sh
+```
+
+The script runs a plain prompt and a `read_file` tool call through the CLI. It passes against Ollama, which serves the same endpoint at `http://127.0.0.1:11434`, with the model `qwen2.5:1.5b`.
+
 ### Service Variables
 ```bash
 # Memory/Pinecone

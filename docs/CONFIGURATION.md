@@ -312,9 +312,9 @@ frontal-code mcp config filesystem --timeout 60 --auto-start
   "plugins": {
     "plugins_dir": "~/.frontal-code/plugins",
     "auto_load": ["plugin-name"],
-    "registry_url": "https://github.com/frontal-labs/frontal-code",
+    "registry_url": "https://github.com/frontal-labs/code",
     "update_check_interval": "24h",
-    "trusted_sources": ["https://github.com", "https://github.com/frontal-labs/frontal-code"]
+    "trusted_sources": ["https://github.com", "https://github.com/frontal-labs/code"]
   }
 }
 ```

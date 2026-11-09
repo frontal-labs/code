@@ -218,13 +218,13 @@ frontal-code prompt "Use filesystem to watch /tmp for changes"
 frontal-code prompt "Use GitHub to list my repositories"
 
 # Get repository information
-frontal-code prompt "Use GitHub to get information about frontal-labs/frontal-code"
+frontal-code prompt "Use GitHub to get information about frontal-labs/code"
 
 # List issues
-frontal-code prompt "Use GitHub to list open issues in frontal-labs/frontal-code"
+frontal-code prompt "Use GitHub to list open issues in frontal-labs/code"
 
 # Create issue
-frontal-code prompt "Use GitHub to create an issue in frontal-labs/frontal-code with title 'Bug found'"
+frontal-code prompt "Use GitHub to create an issue in frontal-labs/code with title 'Bug found'"
 ```
 
 ### Database Operations

@@ -232,7 +232,7 @@ Released: 2026-04-03
 ## Upgrade Instructions
 
 ### For New Users
-1. **Clone Repository**: `git clone https://github.com/frontal-labs/frontal-code`
+1. **Clone Repository**: `git clone https://github.com/frontal-labs/code`
 2. **Install Dependencies**: Follow setup guide in DEVELOPMENT.md
 3. **Configure**: Set up API keys and database
 4. **Verify**: Run `frontal-code doctor` to verify setup
@@ -260,8 +260,8 @@ Released: 2026-04-03
 - **PARITY.md**: Implementation status and roadmap
 
 ### Community
-- **GitHub Issues**: https://github.com/frontal-labs/frontal-code/issues
-- **Issues**: https://github.com/frontal-labs/frontal-code/issues
+- **GitHub Issues**: https://github.com/frontal-labs/code/issues
+- **Issues**: https://github.com/frontal-labs/code/issues
 
 ### Professional Support
 - **Email**: support@frontal.dev

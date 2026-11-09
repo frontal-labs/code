@@ -3,7 +3,7 @@
   "changelog": [
     "@changesets/changelog-github",
     {
-      "repo": "frontal-labs/frontal-code"
+      "repo": "frontal-labs/code"
     }
   ],
   "commit": false,

@@ -22,7 +22,7 @@ This guide covers development setup, coding standards, testing practices, and co
 1. **Clone Repository**
    ```bash
    git clone <repository-url>
-   cd extensions/code-slack
+   cd extensions/slack-agent
    ```
 
 2. **Install Dependencies**
@@ -82,7 +82,7 @@ Create `.vscode/settings.json`:
 ### Directory Layout
 
 ```
-extensions/code-slack/
+extensions/slack-agent/
 src/
   index.ts              # Application entry point
   slack.ts              # Slack client and command handling

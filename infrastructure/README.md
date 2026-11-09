@@ -106,5 +106,5 @@ Before applying:
 
 - The Slack connector serves `/health` (liveness) and `/ready` (readiness: Slack socket listening and OCP event store reachable) on port 3000.
 - If you plan to run hosted agents against actual repositories, mount or provision those repositories under `/workspace`.
-- The Slack connector requires Postgres for its OpenChannel Protocol event store. Provide `OCP_DATABASE_URL` (Terraform `slack_ocp_database_url`, the `frontal-code-slack-secrets` Secret, or `fly secrets`). An `ocp-migrate` init container creates the tables. The compose stack runs a local `ocp-postgres`. See `extensions/code-slack/docs/OCP.md`. The rest of the hosted stack does not require Postgres or Redis.
+- The Slack connector requires Postgres for its OpenChannel Protocol event store. Provide `OCP_DATABASE_URL` (Terraform `slack_ocp_database_url`, the `frontal-code-slack-secrets` Secret, or `fly secrets`). An `ocp-migrate` init container creates the tables. The compose stack runs a local `ocp-postgres`. See `extensions/slack-agent/docs/OCP.md`. The rest of the hosted stack does not require Postgres or Redis.
 - If you later add managed databases, queues, or object storage, extend from this folder rather than the older root-level compose examples, which are out of sync with the current hosted server and Slack surfaces.

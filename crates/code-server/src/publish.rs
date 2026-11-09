@@ -107,7 +107,6 @@ pub(crate) struct PublishRequest<'a> {
     pub base_ref: Option<&'a str>,
     pub branch: &'a str,
     pub patch: &'a str,
-    pub workspace_root: &'a Path,
     pub github_token: Option<&'a str>,
     pub author_name: &'a str,
     pub author_email: &'a str,
@@ -122,7 +121,13 @@ pub(crate) struct PublishOutcome {
 
 /// Applies `patch` to a fresh clone of `repo_url` on `branch`, commits it, and pushes.
 /// The clone is removed afterwards, whether or not the push succeeded.
-pub(crate) fn publish_changes(request: &PublishRequest<'_>) -> Result<PublishOutcome, String> {
+///
+/// `scratch_root` is the server's configured workspace root. It is passed separately from the
+/// request, so the request's data never reaches a path.
+pub(crate) fn publish_changes(
+    scratch_root: &Path,
+    request: &PublishRequest<'_>,
+) -> Result<PublishOutcome, String> {
     // A repository URL that starts with `-` would be read by git as an option.
     if request.repo_url.starts_with('-') {
         return Err("repository URL must not start with `-`".to_string());
@@ -132,7 +137,7 @@ pub(crate) fn publish_changes(request: &PublishRequest<'_>) -> Result<PublishOut
 
     // The scratch name is random and carries no request data, so no path is built from input.
     let nonce = random_hex(6)?;
-    let scratch = request.workspace_root.join("publish").join(nonce);
+    let scratch = scratch_root.join("publish").join(nonce);
     std::fs::create_dir_all(&scratch).map_err(|error| format!("publish scratch: {error}"))?;
     let result = publish_in(&scratch, request);
     let _ = std::fs::remove_dir_all(&scratch);
@@ -532,7 +537,6 @@ index 1111111..2222222 100644
     fn a_repository_url_that_looks_like_an_option_is_refused_before_git_runs() {
         let workspace = std::env::temp_dir().join("frontal-code-publish-option-guard");
         let request = PublishRequest {
-            workspace_root: &workspace,
             task_id: "task-1",
             prompt: "",
             repo_url: "--upload-pack=touch /tmp/pwned",
@@ -543,7 +547,8 @@ index 1111111..2222222 100644
             author_name: "t",
             author_email: "t@example.com",
         };
-        let error = publish_changes(&request).expect_err("option-like URL must be refused");
+        let error =
+            publish_changes(&workspace, &request).expect_err("option-like URL must be refused");
         assert!(error.contains("must not start with `-`"), "{error}");
         assert!(
             !workspace.join("publish").exists(),
@@ -744,18 +749,20 @@ index 1111111..2222222 100644
         );
 
         let patch = "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-hello\n+hello from the worker\n";
-        let outcome = publish_changes(&PublishRequest {
-            task_id: "task-publish",
-            prompt: "Update the readme",
-            repo_url: remote.to_str().unwrap(),
-            base_ref: Some("main"),
-            branch: "frontal-code/task-publish",
-            patch,
-            workspace_root: &root.join("workspaces"),
-            github_token: None,
-            author_name: "Frontal Code Worker",
-            author_email: "worker@frontal.invalid",
-        })
+        let outcome = publish_changes(
+            &root.join("workspaces"),
+            &PublishRequest {
+                task_id: "task-publish",
+                prompt: "Update the readme",
+                repo_url: remote.to_str().unwrap(),
+                base_ref: Some("main"),
+                branch: "frontal-code/task-publish",
+                patch,
+                github_token: None,
+                author_name: "Frontal Code Worker",
+                author_email: "worker@frontal.invalid",
+            },
+        )
         .expect("publish should succeed");
 
         assert_eq!(outcome.branch, "frontal-code/task-publish");

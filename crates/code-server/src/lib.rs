@@ -2411,18 +2411,20 @@ async fn publish_task_changes(
     let publish_base = base_ref.clone();
     let publish_token = github_token.clone();
     let outcome = tokio::task::spawn_blocking(move || {
-        publish::publish_changes(&publish::PublishRequest {
-            task_id: &task,
-            prompt: &prompt,
-            repo_url: &publish_repo_url,
-            base_ref: publish_base.as_deref(),
-            branch: &publish_branch,
-            patch: &request.patch,
-            workspace_root: &workspace_root,
-            github_token: publish_token.as_deref(),
-            author_name: &hosted_publish_author_name(),
-            author_email: &hosted_publish_author_email(),
-        })
+        publish::publish_changes(
+            &workspace_root,
+            &publish::PublishRequest {
+                task_id: &task,
+                prompt: &prompt,
+                repo_url: &publish_repo_url,
+                base_ref: publish_base.as_deref(),
+                branch: &publish_branch,
+                patch: &request.patch,
+                github_token: publish_token.as_deref(),
+                author_name: &hosted_publish_author_name(),
+                author_email: &hosted_publish_author_email(),
+            },
+        )
     })
     .await
     .map_err(|error| AppError::internal(error.to_string()))?

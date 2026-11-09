@@ -744,3 +744,45 @@ frontal-code backup schedule --daily --retain 7
 ```
 
 This troubleshooting guide provides comprehensive coverage of common issues and solutions for using Frontal Code CLI effectively.
+
+## Verified behavior and known issues (2026-11-08)
+
+These were found by running the CLI, SDKs, HTTP API, and hosted server against a live model: first a free OpenRouter model, and from the later checks on, a local Ollama model (`qwen2.5:1.5b`). Each item says whether it is fixed or still open.
+
+### Fixed
+
+- **Hosted lanes simulated work.** The default lane transport was an in-memory simulator that never ran an agent. The simulator is now test-only, and the default is `local-docker`, which runs each task in a worker container. See [CONTAINERS.md](CONTAINERS.md#hosted-worker-containers).
+- **Worker containers could not report back.** The CLI refused cleartext `http://host.docker.internal` for hosted server URLs. The exception now applies only inside worker containers, which the server marks with `FRONTAL_CODE_HOSTED_WORKER=1`.
+- **Docker Desktop storage errors (`input/output error` on blob reads).** Restarting Docker Desktop cleared them. The ClickHouse tests run with `FRONTAL_TEST_CLICKHOUSE_URL` set, and pass on the restarted daemon.
+- **Hosted Ollama tasks failed with `invalid or revoked worker token`.** The Ollama client sent a placeholder key, so the model proxy could not identify the task. The client now sends the task token in `OLLAMA_API_KEY`.
+- **A worker's network stayed behind after its task finished.** It is removed when the worker exits. Each server port has its own relay container.
+- **A model that returned an empty reply failed the whole task.** The runtime asks again, up to two times, first.
+- **A plugin hook that ignored its input was reported as failed.** A broken pipe on stdin is no longer an error.
+- **Tests that depend on `PATH` passed on macOS and failed on Linux.** Commands are looked up on `PATH` directly, not through a login shell.
+- **`npm install` failed without a release binary.** The postinstall script now warns and exits 0.
+- **The server started with a callback URL whose port did not match its listening port.** It now refuses to start and names the port it needs.
+
+- **`HTTP 402 Payment Required` for an unknown model.** Models the CLI does not recognize default to a 64K output budget, which a prepaid balance may not cover. Set `FRONTAL_CODE_MAX_OUTPUT_TOKENS`.
+- **`unknown option: --stream` (or any `--flag`) inside a prompt.** Flags placed where prompt text is expected are now rejected. Before, they were sent to the model as text.
+- **`frontal-code repl` sent the word "repl" to the model.** It now opens the REPL.
+- **`frontal-code plugins list` asked for credentials.** It now lists plugins.
+- **Rust and TypeScript SDK turns failed.** They need `prompt -p ... --output-format json --stream --resume`, and the CLI now implements those flags. See [CLI_REFERENCES.md](CLI_REFERENCES.md#jsonl-events).
+- **`changeset` refused to run.** Fixed the config, the baseline, and the missing changelog package. See `RELEASE.md`.
+- **`.gitignore` got an orphan `# FrontalCode local artifacts` header.** `trust` and `init` now write only when an entry is missing.
+
+### Open
+
+- **The REPL needs credentials to start.** Without them it exits before any slash command runs, so `/doctor` cannot be reached. Use `frontal-code doctor` instead, which works without credentials.
+- **`auth status` and `mcp list` can report missing credentials in an untrusted workspace.** Reproduce with `frontal-code trust --revoke`, then `frontal-code auth status` with no API keys set. Trusted workspaces do not show the problem. The root cause is not yet isolated.
+- **`--image` is not supported.** No provider accepts image input yet. The SDKs' `local_image` input fails with a clear error.
+- **Local embeddings are a hashing function, not a model.** `LocalMlEmbeddingProvider` (model id `local-hash`) hashes tokens into a fixed-size vector. It is deterministic and cheap, but it is not semantic. The name predates this audit and is kept for compatibility.
+- **`lane_completion` is dormant.** `crates/code-tools/src/lane_completion.rs` is intentionally not wired into lane lifecycle.
+- **A Postgres integration test in `extensions/code-slack` is skipped** because it needs a database.
+- **SDK end-to-end suites skip silently** when `FRONTAL_CODE_E2E_BIN` is unset (and `OPENAI_API_KEY` for the `openai` provider). A skipped run reports as passing. Check the environment before reading a green result as proof.
+- **A Linux test run can hang (fixed, under watch).** Under Rosetta, the `code-runtime` library tests once deadlocked on a futex: threads of two tests blocked, and their `git` children were never reaped. It reproduced in two of four full-suite runs and did not occur in serial runs or on macOS. The cause was a test that changed the process working directory while other tests ran unlocked. That test no longer does. Six consecutive runs of the library suite passed afterward. `scripts/linux-amd64-tests.sh` is still bounded by `TEST_TIMEOUT` (default 5400 seconds), so a hang would fail the run instead of blocking it.
+- **Tracked files disappeared from the working tree during Linux runs.** `docs/design/` was deleted while containers that mounted the repository were running the test suite. The cause was not isolated. The Linux scripts now mount a copy of the source (`~/.frontal-code-dev/src-snapshot`), so a test can only damage the copy. The deleted files were restored from git.
+- **Docker Desktop stops answering when its disk fills.** Each `docker build` of the worker image leaves a layer behind, and the Linux test images add more. After several rebuilds the Docker VM disk was full, and `docker version` timed out. The host volume was nearly full as well, so both needed space. Free the space with `docker image prune` (dangling images only) and `docker builder prune` (build cache). Do not prune tagged images you still use. If the daemon still hangs, quit Docker Desktop. If it does not quit, stop its backend process (`com.docker.backend`) and start Docker Desktop again. The daemon recovered this way, and the worker E2E then passed on `linux/amd64`. Docker's VM disk is shared with the host volume, so keep both below full: `scripts/linux-amd64-tests.sh` builds into the `frontal-target-amd64` volume, which is about 14 GB.
+- **Native Linux Docker hosts are not verified.** The Linux checks ran on `linux/amd64` under Rosetta, with Docker Desktop as the daemon. On a native Linux host, `host-gateway` resolves to the real host bridge, so the relay and callback address need a run there (`scripts/linux-amd64-worker-e2e.sh` is the starting point).
+- **Cloud OpenAI-compatible gateways are not verified in this round.** The `openai` provider path has been checked against Ollama's compatible endpoint and against an earlier free OpenRouter model. Nothing has been run against a current paid gateway.
+- **A small local model sometimes narrates a command instead of running it.** `qwen2.5:1.5b` does this with the `curl` and `rm` steps in the worker E2E prompt, so the E2E cannot prove those steps were refused. The permission policy is checked directly instead: a test builds the policy from the lists the CLI receives and asserts that `curl`, `wget`, `ssh`, `rm -rf`, `git push`, `env`, and `sudo` are denied, and that `ls`, `cat`, `git status`, and `cargo` are allowed. Use a larger model for end-to-end evidence of the same behavior.
+- **Another `cargo` process can clobber a shared `target/` directory.** A second build in the same repository wrote partial fingerprints and deleted others while tests ran. Give each concurrent build its own `CARGO_TARGET_DIR`.

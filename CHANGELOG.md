@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `prompt --stream` emits the JSONL turn protocol the SDKs parse (`turn.started`, `item.completed`, `turn.completed`, `turn.failed`). `prompt --resume <id>` continues a session, and `prompt -p` and `prompt --config` are accepted. `--json` output includes `session_id`.
+- End-to-end suites for the TypeScript and Rust SDKs against the real CLI. They are gated on `FRONTAL_CODE_E2E_BIN` and `OPENAI_API_KEY`.
+- `FRONTAL_CODE_MAX_OUTPUT_TOKENS` caps output tokens per request.
+- `frontal-code repl` and `frontal-code plugins` subcommands.
+- `version changeset` runs `bun changeset version` and syncs the workspace version to the npm CLI package.
+- Ollama works as a provider. It is served through the OpenAI-compatible client at `OLLAMA_BASE_URL` (default `http://localhost:11434`), including tool calls and streamed usage. Hosted Ollama tasks reach the host's Ollama through the model proxy, so the worker never needs a key.
+
+### Fixed
+- `npm install` no longer fails when the release binary is unavailable. The postinstall passed its root as an argument instead of an environment variable, so it crashed before its own error handling.
+- A plugin hook that exits without reading its input is no longer reported as failed. The write to its stdin ignored `BrokenPipe` only when the hook had already exited.
+- Commands are found on the current `PATH` directly, not through a login shell that can reset it.
+- A worker's task network is removed as soon as its worker exits. Each server port has its own relay container, so two servers can share a Docker host.
+- A model that returns an empty reply is asked again, up to two times, before the turn fails.
+- `code-server` refuses to start if `FRONTAL_CODE_SERVER_CALLBACK_URL` has no port or a different one from the port it listens on.
+- Hosted Ollama tasks run end to end. The Ollama client sent a fixed placeholder key, so the model proxy refused every call from the worker. The client now sends `OLLAMA_API_KEY` when it is set, and the server sets it to the task token in worker containers. The Ollama client sent a fixed placeholder key, so the model proxy refused every call from the worker. The client now sends `OLLAMA_API_KEY` when it is set, and the server sets it to the task token in worker containers.
+- Unknown `--flags` in prompt text are rejected instead of being sent to the model.
+- `:free` OpenRouter models are priced at zero.
+- `.changeset/config.json` is valid, `@changesets/changelog-github` is installed, and `baseBranch` is `main`.
+- The npm CLI baseline is `0.1.1`, aligned with the Rust workspace.
+- `.gitignore` no longer receives an orphan `# FrontalCode local artifacts` header.
+- Hosted lanes run in worker containers by default. The in-memory simulator is test-only, and `FRONTAL_CODE_SERVER_LANE_TRANSPORT=in-memory` is now an error.
+- Worker containers never receive upstream provider keys or the control-plane key. Each task gets a token scoped to its own endpoints, and model calls go through a server-side proxy that adds the provider key. Tasks without a repository get a scratch workspace. The default worker permission mode is `workspace-write`. Shell commands run only from an allowlist (read and build commands), and network tools, `git push`, `env`, and `rm -rf` are denied.
+- `FRONTAL_CODE_SERVER_LANE_TRANSPORT=in-memory` is removed. The simulator exists only in tests.
+- The worker image builds from the whole workspace and ships the `code` binary, with a `frontal-code` alias.
+- The worker CLI may use cleartext to `host.docker.internal` only inside worker containers (`FRONTAL_CODE_HOSTED_WORKER=1`).
+
+### Known issues
+- The REPL needs credentials to start.
+- `--image` is not supported.
+
+### Added
 - Project policy: a `policy` object in `.frontal-code/settings.json` (or the user or local settings) limits `allowedProviders`, `allowedModels` (with `*` globs), per-provider `authMethods`, a `permissionCeiling`, and `deny` tools. Each source only adds restrictions. Enforced by the CLI on client construction and permission setup, and by the hosted server before a worker starts. See CONFIGURATION.md#project-policy.
 - `code login [anthropic|openai]`, `logout`, and `auth status`: OAuth (authorization code + PKCE) sign-in as an alternative to API keys. Providers are configured per name under `settings.oauth`, and no vendor client ID is bundled.
 - OpenAI accepts a saved OAuth login in place of `OPENAI_API_KEY`, and the Anthropic provider uses saved logins as well as env keys.

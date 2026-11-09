@@ -111,6 +111,31 @@ The CLI crate contains integration tests that test the full command flow:
 cargo test -p cli --test integration
 ```
 
+### Live-Service Tests
+
+Some tests need Postgres (worker tokens, verified TLS) and ClickHouse (audit, migrations). They run when their environment variables are set and skip otherwise. `scripts/dev-services.sh` starts both services with a private CA and prints the variables:
+
+```bash
+scripts/dev-services.sh up                 # start Postgres 17 (TLS, port 55433) and ClickHouse (port 8123)
+eval "$(scripts/dev-services.sh env)"      # the same, and export the test variables in this shell
+cargo test --workspace -- --include-ignored
+scripts/dev-services.sh down               # remove the containers; data volumes are kept
+```
+
+Certificates live in `~/.frontal-code-dev/tls`, outside the repository. They are generated once and reused.
+
+### Linux Verification
+
+Apple silicon can run the full suite on `linux/amd64` through Rosetta, to catch behavior that differs on Linux:
+
+```bash
+scripts/linux-amd64-tests.sh               # the whole workspace, including ignored tests
+TEST_FILTER=worker_ scripts/linux-amd64-tests.sh   # only matching tests
+scripts/linux-amd64-worker-e2e.sh          # code-server in the container drives real worker containers
+```
+
+The worker end-to-end scripts need a local Ollama and the worker image, `docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .`.
+
 ### Mock Parity Tests
 
 The project includes a comprehensive mock testing harness:

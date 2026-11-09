@@ -2,6 +2,8 @@
 
 This comprehensive reference covers all Frontal Code CLI commands, options, and usage patterns.
 
+> Audited on 2026-11-08 against `cli/src/main.rs`. Commands and flags that are not listed in the parser are marked *not implemented*. The `session`, `tools`, and singular `plugin` sections describe commands the parser does not accept as top-level subcommands. Use the slash commands in the REPL (`/session`, `/tools`) or the plural `plugins`.
+
 ## Table of Contents
 
 - [Global Options](#global-options)
@@ -14,23 +16,23 @@ This comprehensive reference covers all Frontal Code CLI commands, options, and 
 
 ## Global Options
 
-These options can be used with any Frontal Code command:
+These options are parsed before the subcommand, and most of them can also be placed after it:
 
 | Option | Short | Description | Default |
-|--------|--------|-------------|---------|
-| `--model` | `-m` | AI model to use | `claude-opus-5` |
-| `--provider` | `-p` | AI provider (anthropic, openai, xai) | `anthropic` |
-| `--output-format` | `-o` | Output format (text, json) | `text` |
-| `--permission-mode` | `-P` | Permission mode (danger-full-access, safe-mode, ask-permissions) | `danger-full-access` |
-| `--dangerously-skip-permissions` | | Skip all permission checks | `false` |
-| `--allowed-tools` | | Comma-separated list of allowed tools | All tools |
-| `--resume` | | Resume session (session-id, latest, or path) | None |
-| `--config` | | Path to config file | `~/.frontal-code/config.json` |
-| `--version` | `-V` | Show version information | |
-| `--help` | `-h` | Show help message | |
-| `--verbose` | `-v` | Enable verbose output | `false` |
-| `--quiet` | `-q` | Suppress non-error output | `false` |
-| `--no-color` | | Disable colored output | `false` |
+|--------|-------|-------------|---------|
+| `--model MODEL` | | Model name or alias (`opus`, `sonnet`, `haiku`, `fable`) | `claude-opus-5-5` |
+| `--provider NAME` | | Provider: `anthropic`, `openai`, `xai`, `frontal`, `bedrock`, `azure`, `ollama` | configured default (`frontal`) |
+| `--output-format FORMAT` | | `text` or `json` | `text` |
+| `--permission-mode MODE` | | `read-only`, `workspace-write`, `prompt`, or `danger-full-access` | `prompt` |
+| `--dangerously-skip-permissions` | | Same as `--permission-mode danger-full-access` | |
+| `--allowed-tools LIST` / `--allowedTools` | | Comma-separated tool allowlist | all tools |
+| `--resume SESSION` | | Resume a session by ID, `latest`, or path, followed by slash commands | |
+| `--print` | | Force text output (SDK compatibility) | |
+| `-p TEXT` | | One-shot prompt (same as `prompt -p`) | |
+| `--version` | `-V` | Show version | |
+| `--help` | `-h` | Show help | |
+
+**Not implemented:** `--config FILE`, `--verbose`, `--quiet`, `--no-color`. Use `--output-format json` for machine-readable output.
 
 ### Model Selection
 
@@ -70,95 +72,66 @@ frontal-code --provider frontal
 
 ### prompt
 
-Send a one-shot prompt to the AI model.
+Send one prompt to the model and print the result.
 
 ```bash
-frontal-code prompt [OPTIONS] <TEXT>
+frontal-code prompt [-p TEXT | TEXT...] [--stream] [--resume SESSION] [--config KEY=VALUE]
 ```
 
-**Options:**
-- `--file, -f <PATH>`: Read prompt from file
-- `--template, -t <NAME>`: Use prompt template
-- `--context, -c <PATH>`: Add context file(s)
-- `--stream, -s`: Enable streaming output
-- `--max-tokens <NUMBER>`: Maximum tokens in response
-- `--temperature <NUMBER>`: Sampling temperature (0.0-1.0)
+Also accepted as shorthand: `frontal-code "explain crates/code-runtime/src/lib.rs"`, or `frontal-code -p "..."`.
 
-**Examples:**
+Free text is sent to the model, so unrecognized `--flags` are rejected with `unknown option` instead of being sent as text.
+
+**Options** (`prompt` subcommand)
+- `-p TEXT`: prompt text. Words run until the next `--flag`.
+- `--stream`: print JSONL turn events. Requires `--output-format json`. See [JSONL events](#jsonl-events).
+- `--resume SESSION`: continue a stored session by ID or `latest`. The transcript is kept, and the model and provider from this run apply to the next turn.
+- `--config KEY=VALUE`: run-scoped override. Supported keys: `frontal_base_url` (overrides `FRONTAL_BASE_URL`) and `skip_git_repo_check` (accepted; the CLI does not check for a git repository). Other keys are rejected.
+
+**Not implemented**: `--image`, `--file`, `--template`, `--context`, `--temperature`, `--max-tokens`. The output token limit is set with `FRONTAL_CODE_MAX_OUTPUT_TOKENS` (see [Environment Variables](#environment-variables)).
+
+**Examples**
 ```bash
-# Simple prompt
 frontal-code prompt "What files are in the current directory?"
-
-# Read from file
-frontal-code prompt --file prompt.txt
-
-# With context
-frontal-code prompt --context README.md --context Cargo.toml "Summarize this project"
-
-# Streaming
-frontal-code prompt --stream "Explain this codebase"
-
-# With custom parameters
-frontal-code prompt --max-tokens 1000 --temperature 0.5 "Write a short poem"
+frontal-code --provider openai --model google/gemma-4-26b-a4b-it --permission-mode read-only prompt "Summarize Cargo.toml"
+frontal-code --output-format json prompt "status"
+frontal-code prompt -p "Continue the refactor" --resume latest --output-format json --stream
 ```
+
+### JSONL events
+
+`prompt --output-format json --stream` prints one JSON object per line. The Rust and TypeScript SDKs parse this stream.
+
+```
+{"type":"turn.started"}
+{"type":"item.completed","item":{"type":"tool_use","name":"read_file","input":"{\"path\":\"Cargo.toml\"}"}}
+{"type":"item.completed","item":{"type":"tool_result","content":"..."}}
+{"type":"item.completed","item":{"type":"text","text":"0.1.1"}}
+{"type":"turn.completed","finalResponse":"0.1.1","sessionId":"session-...","usage":{...}}
+```
+
+On failure the stream ends with `{"type":"turn.failed","error":"..."}` and the process exits non-zero. Events are emitted when the turn finishes, not token by token.
 
 ### repl
 
-Start interactive REPL (Read-Eval-Print Loop).
+Start the interactive REPL. `frontal-code` with no arguments does the same.
 
 ```bash
-frontal-code repl [OPTIONS]
-```
-
-**Options:**
-- `--history <PATH>`: Load history from file
-- `--no-history`: Disable history saving
-- `--prompt <STRING>`: Custom prompt string
-- `--multiline, -m`: Enable multiline input mode
-
-**Examples:**
-```bash
-# Start REPL
 frontal-code repl
-
-# With custom prompt
-frontal-code repl --prompt "frontal-code> "
-
-# Multiline mode
-frontal-code repl --multiline
-
-# Load history
-frontal-code repl --history ~/.frontal-code/repl-history
 ```
+
+The REPL builds its provider client at startup, so it needs credentials for the default provider. Without them it exits before any slash command runs. Use `frontal-code doctor` first when setting up. It works without credentials.
 
 ### status
 
-Show system status and information.
+Show runtime status: model, provider, sandbox, and session.
 
 ```bash
-frontal-code status [OPTIONS]
-```
-
-**Options:**
-- `--detailed, -d`: Show detailed information
-- `--json`: Output in JSON format
-- `--component <NAME>`: Show specific component status
-
-**Examples:**
-```bash
-# Basic status
 frontal-code status
-
-# Detailed status
-frontal-code status --detailed
-
-# JSON output
-frontal-code status --json
-
-# Specific component
- frontal-code status --component api
- frontal-code status --component mcp
+frontal-code --output-format json status
 ```
+
+`status --json` and `status --detailed` are not implemented. Use the global `--output-format json`.
 
 ### hosted
 
@@ -566,51 +539,14 @@ frontal-code --model haiku prompt "Simple task"
 
 ## Permission Modes
 
-### danger-full-access
-All tools are allowed without confirmation.
+| Mode | Reads | Writes | Shell |
+|------|-------|--------|-------|
+| `read-only` | allowed | denied | denied |
+| `workspace-write` | allowed | allowed inside the workspace | asks |
+| `prompt` (default) | allowed | asks | asks |
+| `danger-full-access` | allowed | allowed | allowed, no prompts |
 
-```bash
-frontal-code --permission-mode danger-full-access prompt "Deploy to production"
-```
-
-**Characteristics:**
-- No confirmation prompts
-- Full system access
-- Fastest execution
-- Highest risk
-
-### safe-mode
-Only safe tools allowed; destructive tools require approval.
-
-```bash
-frontal-code --permission-mode safe-mode prompt "Analyze this codebase"
-```
-
-**Safe Tools:**
-- `read` - Read file contents
-- `grep` - Search file contents
-- `glob` - Search file patterns
-- `web_search` - Search the web
-- `web_fetch` - Fetch web content
-
-**Restricted Tools:**
-- `write` - Write/create files (requires approval)
-- `edit` - Edit existing files (requires approval)
-- `bash` - Execute shell commands (requires approval)
-- `agent` - Launch sub-agents (requires approval)
-
-### ask-permissions
-Prompt for approval on every tool use.
-
-```bash
-frontal-code --permission-mode ask-permissions prompt "List files in /tmp"
-```
-
-**Characteristics:**
-- Explicit approval for every tool
-- Most secure
-- Interactive
-- Slowest execution
+Set it with `--permission-mode`, `RUSTY_CLAUDE_PERMISSION_MODE`, or `permissionMode` in `~/.frontal-code/settings.json`. Repository settings only apply after `frontal-code trust` (see [USAGE.md](../USAGE.md#trusting-a-repository)).
 
 ## Output Formats
 
@@ -676,23 +612,32 @@ frontal-code prompt --stream "Generate a long story"
 
 ## Environment Variables
 
-### Required Variables
+Each variable below was checked against the source (`cli/src/main.rs`, `crates/code-providers`, `crates/code-core`).
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `FRONTAL_API_KEY` | Anthropic API key | `sk-ant-...` |
-| `OPENAI_API_KEY` | OpenAI API key | `sk-...` |
-| `XAI_API_KEY` | xAI API key | `xai-...` |
+### Credentials and endpoints
 
-### Optional Variables
+| Variable | Description |
+|----------|-------------|
+| `FRONTAL_API_KEY` | Key for the default `frontal` provider, and for `--provider anthropic`. |
+| `FRONTAL_BASE_URL` | Base URL for the Frontal gateway or an Anthropic-compatible proxy. |
+| `OPENAI_API_KEY` | Key for `--provider openai`. Also works with OpenRouter (see [USAGE.md](../USAGE.md#openrouter)). |
+| `OPENAI_BASE_URL` | Base URL for the OpenAI-compatible endpoint, for example `https://openrouter.ai/api/v1`. |
+| `XAI_API_KEY`, `XAI_BASE_URL` | Key and base URL for `--provider xai`. |
+| `OLLAMA_BASE_URL` | Ollama endpoint, default `http://localhost:11434`. |
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `FRONTAL_CODE_CONFIG_DIR` | Configuration directory | `~/.frontal-code` |
-| `FRONTAL_CODE_DATA_DIR` | Data directory | `~/.frontal-code/data` |
-| `FRONTAL_CODE_LOG_LEVEL` | Log level | `info` |
-| `FRONTAL_CODE_SESSION_DIR` | Session directory | `~/.frontal-code/sessions` |
-| `RUST_LOG` | Rust log level | `info` |
+### Behavior
+
+| Variable | Description |
+|----------|-------------|
+| `FRONTAL_CODE_MAX_OUTPUT_TOKENS` | Caps output tokens per request. Overrides the per-model default. Use it when a gateway or prepaid balance cannot cover the model's output ceiling (HTTP 402). |
+| `RUSTY_CLAUDE_PERMISSION_MODE` | Default permission mode. Legacy name, still read. |
+| `FRONTAL_CODE_CONFIG_HOME` | Directory searched first for `project.json`. |
+| `FRONTAL_CODE_HOME` | Second directory searched for `project.json`. |
+| `FRONTAL_CODE_CONFIG_DIR` | Configuration directory. |
+| `FRONTAL_CODE_TELEMETRY_PATH` | Telemetry JSONL output path. |
+| `FRONTAL_CODE_CLI_BIN` | CLI binary used by `code-api` to run prompts. |
+
+**Not implemented** (documented before, but not read by the code): `FRONTAL_CODE_DEFAULT_PROVIDER`, `FRONTAL_CODE_LOG_LEVEL`, `FRONTAL_CODE_DATA_DIR`, `FRONTAL_CODE_SESSION_DIR`, `RUST_LOG`, `FRONTAL_CODE_PERMISSION_MODE`. The default provider is set in `config/project.json` under `runtime.default_provider`.
 
 ## Configuration Files
 

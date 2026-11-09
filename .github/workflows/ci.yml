@@ -42,6 +42,11 @@ jobs:
         with:
           node-version: "22"
 
+      # The REPL test runs Python, so the Bazel job needs an interpreter on PATH.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       # The Bazel targets shell out to bun (TypeScript) and cargo (Rust);
       # without them every wrapped target fails with "not found on PATH".
       - name: Set up Bun

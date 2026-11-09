@@ -191,6 +191,22 @@ Model aliases currently supported by the CLI:
 - `haiku` → `claude-haiku-5-5`
 - `fable` → `claude-fable-5-1`
 
+## OpenRouter
+
+OpenRouter exposes an OpenAI-compatible API, so the `openai` provider works with it. This was verified against live free-tier models on 2026-11-08.
+
+```bash
+export OPENAI_API_KEY="sk-or-v1-..."
+export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+
+frontal-code --provider openai --model google/gemma-4-26b-a4b-it --permission-mode read-only prompt "Summarize Cargo.toml"
+```
+
+- Use a model ID from `https://openrouter.ai/api/v1/models`. Free models end in `:free`, and they are priced at zero in the usage report.
+- Some providers reserve a large output budget. If you see `HTTP 402 Payment Required`, cap the output:
+  `export FRONTAL_CODE_MAX_OUTPUT_TOKENS=1024`.
+- Tool calls work through OpenRouter for the models tested (`read_file` round trip).
+
 ## Provider Selection
 
 Use the `--provider` flag to force a specific AI provider:

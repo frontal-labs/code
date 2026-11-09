@@ -181,6 +181,63 @@ docker manifest create frontal-code/cli:multiarch \
 docker manifest push frontal-code/cli:multiarch
 ```
 
+## Hosted Worker Containers
+
+`code-server` runs each hosted task in its own worker container, built from `docker/worker.Dockerfile`. This is the default lane transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`).
+
+```bash
+# Build the worker image from the workspace (the context is limited by .dockerignore)
+docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .
+
+# Check the whole path end to end: image, server, worker containers, model calls, branches.
+# Uses a local Ollama server with qwen2.5:1.5b, so no key is needed.
+OLLAMA_BASE_URL=http://127.0.0.1:11434 \
+FRONTAL_CODE_SERVER_DATABASE_URL='postgres://frontal:...@127.0.0.1:55433/frontal?sslmode=verify-full' \
+FRONTAL_CODE_SERVER_DATABASE_CA_FILE=/path/to/ca.crt \
+  scripts/worker-e2e.sh
+```
+
+### What a worker can see
+
+The server starts each worker with a small, deliberate environment:
+
+| Variable | Value | Why |
+|---|---|---|
+| `FRONTAL_CODE_SERVER_API_KEY` | A random token for this task only | Authenticates the worker's own calls: read the task and its runtime, read and write its GitHub integration, publish, and complete. |
+| `OPENAI_API_KEY` (or `FRONTAL_API_KEY`, `XAI_API_KEY`, `AZURE_OPENAI_API_KEY`) | The same task token | The CLI's provider client needs a value. Model calls use it to reach the proxy, not the provider. |
+| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `http://frontal-relay:<port>/v1/model-proxy/<provider>` | Sends model traffic through the server. |
+| `FRONTAL_CODE_SERVER_URL`, `FRONTAL_CODE_HOSTED_WORKER`, `FRONTAL_CODE_HOSTED_TASK_FILE` | Fixed values | Locate the server and the task file. |
+| `FRONTAL_CODE_MAX_OUTPUT_TOKENS` | Copied from the server, if set | Non-secret tuning. |
+
+**Not present, for any task:** upstream provider keys, `GITHUB_TOKEN`, the server's control-plane key, and Postgres credentials.
+
+### How the worker reaches the server
+
+Each task gets its own internal Docker network. The worker is attached to it, and so is the relay (`frontal-code-relay-<port>`, one per server port, under the alias `frontal-relay`). The relay forwards one TCP port to the server and nothing else. The task network has no route to the internet and no route to the host, so the worker reaches the server and nothing else.
+
+### How changes are published
+
+The worker does not push. At the end of a run it sends its changes as a patch to `/v1/tasks/<id>/publish`. The server applies the patch to a fresh clone, commits it, and pushes to a branch under `frontal-code/`. The server opens a pull request when a GitHub integration is configured. See [design/worker-architecture.md](design/worker-architecture.md#publication).
+
+### Container hardening
+
+Every worker runs with `--cap-drop ALL`, `--security-opt no-new-privileges:true`, a read-only root filesystem, `--pids-limit 512`, `--memory 4g`, and `--cpus 2`. Its only writable mounts are the task checkout and two tmpfs directories. It is never privileged, and it never gets the Docker socket.
+
+### How model calls reach the provider
+
+The worker sends each model request to `/v1/model-proxy/<provider>` on the server. The proxy:
+
+1. Checks the worker's token. The token must be live (issued for a task that has not completed or been cancelled).
+2. Removes the caller's authorization headers.
+3. Adds the server's key for that provider and forwards the request to the provider's base URL from the server's environment.
+4. Streams the response back to the worker.
+
+A token that is stolen from the container is useful only for model calls and for its own task's endpoints. It stops working when the task completes or is cancelled, or when the server restarts (tokens are held in memory).
+
+Bedrock is not proxied: its requests are signed per request and cannot use a static key. A task that asks for `bedrock` is refused.
+
+The worker has network access and runs with `danger-full-access` by default, so a prompt-injected agent could still read its own environment and send data out. The token limits the damage to model calls and one task's endpoints. The default permission mode is a separate decision: see the README.
+
 ## Docker Compose
 
 ### Development Environment

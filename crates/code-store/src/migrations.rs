@@ -192,8 +192,11 @@ pub async fn apply(
         for statement in split_statements(migration.sql) {
             client.query(&statement).execute().await?;
         }
+        // The record must be durable before the next migration runs, so it is written
+        // synchronously. ClickHouse's async_insert can acknowledge the statement first.
         client
             .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (?, ?, ?)")
+            .with_setting("async_insert", "0")
             .bind(migration.version)
             .bind(migration.name)
             .bind(checksum(migration.sql))

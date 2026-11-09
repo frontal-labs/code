@@ -1,204 +1,64 @@
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
+//! Ollama, through its OpenAI-compatible endpoint at `<root>/v1`.
+//!
+//! Ollama serves chat, tool calls, streaming, and token usage on that endpoint, so this
+//! provider reuses the OpenAI-compatible client rather than keeping a second wire format.
+//! No API key is needed; the client sends a placeholder that Ollama ignores.
 
-use crate::error::ApiError;
-use crate::providers::{Provider, ProviderFuture};
-use crate::sse::SseParser;
-use crate::types::{
-    InputContentBlock, MessageRequest, MessageResponse, MessageStopEvent, OutputContentBlock,
-    StreamEvent, Usage,
-};
+use super::openai::{AuthScheme, OpenAiCompatClient, OpenAiCompatConfig};
 
-#[derive(Debug, Clone)]
-pub struct OllamaClient {
-    client: Client,
-    base_url: String,
-    model: String,
-}
+/// Where a local Ollama server listens by default. This is the server root, not `/v1`.
+pub const DEFAULT_BASE_URL: &str = "http://localhost:11434";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct OllamaRequest {
-    model: String,
-    messages: Vec<OllamaMessage>,
-    stream: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct OllamaMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct OllamaResponse {
-    message: OllamaMessage,
-    #[allow(dead_code)]
-    done: bool,
-}
-
-#[derive(Debug)]
-pub struct MessageStream {
-    request_id: Option<String>,
-    finished: bool,
-    _response: reqwest::Response,
-    _parser: SseParser,
-}
-
-impl MessageStream {
-    #[must_use]
-    pub fn request_id(&self) -> Option<&str> {
-        self.request_id.as_deref()
-    }
-
-    pub fn next_event(&mut self) -> Option<StreamEvent> {
-        if self.finished {
-            return None;
-        }
-        self.finished = true;
-        Some(StreamEvent::MessageStop(MessageStopEvent {}))
+#[must_use]
+pub const fn config() -> OpenAiCompatConfig {
+    OpenAiCompatConfig {
+        provider_name: "Ollama",
+        api_key_env: "OLLAMA_API_KEY",
+        credential_env_vars: &[],
+        base_url_env: "OLLAMA_BASE_URL",
+        default_base_url: DEFAULT_BASE_URL,
+        auth_scheme: AuthScheme::Bearer,
+        requires_base_url: false,
     }
 }
 
-impl OllamaClient {
-    pub fn new(base_url: String, model: String) -> Self {
-        let client = Client::new();
-        Self {
-            client,
-            base_url,
-            model,
-        }
-    }
+/// Sent when `OLLAMA_API_KEY` is unset. Ollama ignores the value.
+const PLACEHOLDER_KEY: &str = "ollama";
 
-    pub fn from_env() -> Self {
-        let base_url = std::env::var("OLLAMA_BASE_URL")
-            .unwrap_or_else(|_| "http://localhost:11434".to_string());
-        let model =
-            std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "qwen2.5-coder:7b".to_string());
-        Self::new(base_url, model)
-    }
+/// A client for the server named by `OLLAMA_BASE_URL`, or the local default. It sends
+/// `OLLAMA_API_KEY` as the bearer when that is set. Hosted workers rely on this: their
+/// token travels in that variable so the server's model proxy can identify the task.
+#[must_use]
+pub fn client_from_env() -> OpenAiCompatClient {
+    let root = std::env::var("OLLAMA_BASE_URL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+    let key = std::env::var("OLLAMA_API_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| PLACEHOLDER_KEY.to_string());
+    with_key(&key, &root)
 }
 
-impl Provider for OllamaClient {
-    type Stream = MessageStream;
+fn with_key(key: &str, root: &str) -> OpenAiCompatClient {
+    OpenAiCompatClient::new(key, config())
+        .with_base_url(format!("{}/v1", root.trim_end_matches('/')))
+}
 
-    fn send_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, MessageResponse> {
-        Box::pin(async move {
-            let ollama_request = OllamaRequest {
-                model: self.model.clone(),
-                messages: request
-                    .messages
-                    .iter()
-                    .map(|msg| OllamaMessage {
-                        role: msg.role.clone(),
-                        content: msg
-                            .content
-                            .iter()
-                            .map(|block| match block {
-                                InputContentBlock::Text { text } => text.clone(),
-                                _ => format!("{block:?}"),
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-                stream: false,
-            };
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-            let response = self
-                .client
-                .post(format!("{}/api/chat", self.base_url))
-                .json(&ollama_request)
-                .send()
-                .await
-                .map_err(ApiError::Http)?;
-            let status = response.status();
-            let body = response.text().await.map_err(ApiError::Http)?;
-            if !status.is_success() {
-                return Err(ApiError::Api {
-                    status,
-                    error_type: Some("ollama_error".to_string()),
-                    message: None,
-                    request_id: None,
-                    body,
-                    retryable: false,
-                });
-            }
-
-            let ollama_response: OllamaResponse = match serde_json::from_str(&body) {
-                Ok(parsed) => parsed,
-                Err(err) => {
-                    // Some Ollama builds still return newline-delimited JSON chunks for chat responses.
-                    let maybe_fallback = body.lines().rev().find(|line| !line.trim().is_empty());
-                    let Some(fallback) = maybe_fallback else {
-                        return Err(ApiError::Json(err));
-                    };
-                    serde_json::from_str(fallback).map_err(|_| ApiError::Json(err))?
-                }
-            };
-
-            Ok(MessageResponse {
-                id: "default".to_string(),
-                kind: "message".to_string(),
-                role: "assistant".to_string(),
-                content: vec![OutputContentBlock::Text {
-                    text: ollama_response.message.content,
-                }],
-                model: self.model.clone(),
-                stop_reason: None,
-                stop_sequence: None,
-                usage: Usage {
-                    input_tokens: 0,
-                    cache_creation_input_tokens: 0,
-                    cache_read_input_tokens: 0,
-                    output_tokens: 0,
-                },
-                request_id: None,
-            })
-        })
-    }
-
-    fn stream_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, Self::Stream> {
-        Box::pin(async move {
-            // Create a simple streaming response by reusing the HTTP response from send_message
-            let stream_request = OllamaRequest {
-                model: self.model.clone(),
-                messages: request
-                    .messages
-                    .iter()
-                    .map(|msg| OllamaMessage {
-                        role: msg.role.clone(),
-                        content: msg
-                            .content
-                            .iter()
-                            .map(|block| match block {
-                                InputContentBlock::Text { text } => text.clone(),
-                                _ => format!("{block:?}"),
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-                stream: true,
-            };
-
-            let stream_response = self
-                .client
-                .post(format!("{}/api/chat", self.base_url))
-                .json(&stream_request)
-                .send()
-                .await
-                .map_err(ApiError::Http)?;
-
-            Ok(MessageStream {
-                request_id: Some("default".to_string()),
-                finished: false,
-                _response: stream_response,
-                _parser: SseParser::new(),
-            })
-        })
+    #[test]
+    fn the_root_gets_the_v1_suffix_once() {
+        assert_eq!(
+            with_key(PLACEHOLDER_KEY, "http://127.0.0.1:11434/").base_url_for_tests(),
+            "http://127.0.0.1:11434/v1"
+        );
+        assert_eq!(
+            with_key(PLACEHOLDER_KEY, "http://127.0.0.1:11434").base_url_for_tests(),
+            "http://127.0.0.1:11434/v1"
+        );
     }
 }

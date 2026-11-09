@@ -128,3 +128,18 @@ Tests run in GitHub Actions on every PR:
 ```bash
 cargo llvm-cov --package frontal-code-sdk --html
 ```
+
+## End-to-end suite (real CLI)
+
+`tests/e2e_test.rs` runs the real `code` binary against a live model. It is skipped unless `FRONTAL_CODE_E2E_BIN` is set. The default provider is a local Ollama server:
+
+```bash
+cargo build -p cli
+ollama pull qwen2.5:1.5b
+FRONTAL_CODE_E2E_BIN="$PWD/target/debug/code" \
+  cargo test --manifest-path sdks/rust/Cargo.toml --test e2e_test
+```
+
+Set `FRONTAL_CODE_E2E_PROVIDER=openai` with `OPENAI_API_KEY` (and `OPENAI_BASE_URL`) to run against a cloud gateway instead.
+
+A skipped run reports as passing, so check that the variables are set before you read a green result.

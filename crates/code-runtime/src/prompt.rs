@@ -736,12 +736,12 @@ mod tests {
 
         let _guard = env_lock();
         ensure_valid_cwd();
-        let previous = std::env::current_dir().expect("cwd");
         let original_home = std::env::var("HOME").ok();
         let original_code_home = std::env::var("FRONTAL_CODE_CONFIG_HOME").ok();
         std::env::set_var("HOME", &root);
         std::env::set_var("FRONTAL_CODE_CONFIG_HOME", root.join("missing-home"));
-        std::env::set_current_dir(&root).expect("change cwd");
+        // The root is passed in, so the process working directory is left alone. Changing it
+        // here would race with every other test that spawns a process.
         let prompt = super::load_system_prompt(&root, "2026-03-31", "linux", "6.8")
             .expect("system prompt should load")
             .join(
@@ -749,7 +749,6 @@ mod tests {
 
 ",
             );
-        std::env::set_current_dir(previous).expect("restore cwd");
         if let Some(value) = original_home {
             std::env::set_var("HOME", value);
         } else {

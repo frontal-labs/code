@@ -336,7 +336,13 @@ impl CommandWithStdin {
         let mut child = self.command.spawn()?;
         if let Some(mut child_stdin) = child.stdin.take() {
             use std::io::Write as _;
-            child_stdin.write_all(stdin)?;
+            // A hook that exits without reading its input closes the pipe first. That is
+            // not a failure of the hook, so only other write errors are reported.
+            match child_stdin.write_all(stdin) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => {}
+                Err(error) => return Err(error),
+            }
         }
         child.wait_with_output()
     }
@@ -344,12 +350,18 @@ impl CommandWithStdin {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::{HookRunResult, HookRunner};
+    #[cfg(unix)]
     use crate::{PluginManager, PluginManagerConfig};
+    #[cfg(unix)]
     use std::fs;
+    #[cfg(unix)]
     use std::path::{Path, PathBuf};
+    #[cfg(unix)]
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[cfg(unix)]
     fn temp_dir(label: &str) -> PathBuf {
         // Timestamp alone collides when parallel tests read the same instant.
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -365,6 +377,7 @@ mod tests {
         ))
     }
 
+    #[cfg(unix)]
     fn write_hook_plugin(
         root: &Path,
         name: &str,
@@ -398,8 +411,10 @@ mod tests {
         .expect("write plugin manifest");
     }
 
+    // Hooks are POSIX shell scripts, so this test needs a Unix shell. Windows CI runs the
+    // rest of the plugin tests.
+    #[cfg(unix)]
     #[test]
-    #[ignore = "hook runner shell script fails in CI with broken pipe"]
     fn collects_and_runs_hooks_from_enabled_plugins() {
         // given
         let config_home = temp_dir("config");

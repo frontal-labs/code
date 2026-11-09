@@ -1,12 +1,9 @@
 #![allow(clippy::cast_possible_truncation)]
-use std::future::Future;
-use std::pin::Pin;
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
 use crate::prompt_cache::PromptCache;
-use crate::types::{MessageRequest, MessageResponse};
 
 pub mod anthropic;
 pub mod azure;
@@ -17,21 +14,7 @@ pub mod openai;
 pub mod openai_responses;
 pub mod xai;
 
-pub type ProviderFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
-
-pub trait Provider {
-    type Stream;
-
-    fn send_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, MessageResponse>;
-
-    fn stream_message<'a>(
-        &'a self,
-        request: &'a MessageRequest,
-    ) -> ProviderFuture<'a, Self::Stream>;
-}
+use crate::types::MessageRequest;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
@@ -642,12 +625,12 @@ pub fn complete_oauth_login(
 #[must_use = "the constructed provider client must be used to send requests"]
 pub fn create_provider_client(
     provider: &str,
-    model: String,
+    model: &str,
 ) -> Result<crate::client::ProviderClient, ApiError> {
-    enforce_provider_policy(&provider.to_ascii_lowercase(), &model)?;
+    enforce_provider_policy(&provider.to_ascii_lowercase(), model)?;
     match provider.to_lowercase().as_str() {
         "anthropic" => {
-            enforce_provider_policy("anthropic", model.as_str())?;
+            enforce_provider_policy("anthropic", model)?;
             let auth = anthropic::resolve_startup_auth_source()?;
             Ok(crate::client::ProviderClient::Anthropic(
                 anthropic::AnthropicClient::from_auth(auth)
@@ -671,11 +654,7 @@ pub fn create_provider_client(
             openai::OpenAiCompatClient::from_env(azure::config())?,
         )),
         "ollama" => Ok(crate::client::ProviderClient::Ollama(
-            ollama::OllamaClient::new(
-                std::env::var("OLLAMA_BASE_URL")
-                    .unwrap_or_else(|_| "http://localhost:11434".to_string()),
-                model,
-            ),
+            ollama::client_from_env(),
         )),
         _ => Err(ApiError::Auth(format!("Unknown provider: {provider}"))),
     }

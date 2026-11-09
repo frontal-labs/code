@@ -272,6 +272,7 @@ impl HarnessWorkspace {
 struct ScenarioRun {
     response: Value,
     stdout: String,
+    stderr: String,
 }
 
 #[derive(Debug, Clone)]
@@ -354,6 +355,7 @@ fn run_case(case: ScenarioCase, workspace: &HarnessWorkspace, base_url: &str) ->
     ScenarioRun {
         response: parse_json_output(&stdout),
         stdout,
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
     }
 }
 
@@ -633,7 +635,9 @@ fn assert_bash_permission_prompt_approved(_: &HarnessWorkspace, run: &ScenarioRu
     let parsed: Value = serde_json::from_str(tool_output).expect("bash output json");
     assert_eq!(
         parsed["stdout"],
-        Value::String("approved via prompt".to_string())
+        Value::String("approved via prompt".to_string()),
+        "bash tool result: {tool_output}\nstderr: {}",
+        run.stderr
     );
     assert!(run.response["message"]
         .as_str()

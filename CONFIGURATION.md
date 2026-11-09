@@ -195,7 +195,12 @@ let services = manager.service_config();
 
 ## Environment Variables
 
-Environment variables override configuration file settings:
+Environment variables override configuration file settings. Two variables matter most for provider setup:
+
+- `FRONTAL_CODE_MAX_OUTPUT_TOKENS` caps output tokens per request. Use it when a gateway or prepaid balance cannot cover a model's default output budget (HTTP 402).
+- `OPENAI_BASE_URL` with `--provider openai` points the OpenAI-compatible client at another gateway, such as OpenRouter.
+
+Full list: [CLI_REFERENCES.md](docs/CLI_REFERENCES.md#environment-variables).
 
 ### Core Configuration Overrides
 ```bash

@@ -5,12 +5,20 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
 use std::fmt;
+use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path as FsPath;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+mod audit;
+mod docker_worker;
+mod publish;
+mod worker_access;
+mod worker_tokens;
+use worker_access::WorkerAccess;
 
 use crate::tracker_reporting::{maybe_spawn_tracker_report, TrackerEvent};
 use axum::body::Bytes;
@@ -35,11 +43,11 @@ use code_integrations::mcp::integration::{
 use code_orchestrator::{
     plan_work_item, LaneRole, WorkItem, WorkItemContext, WorkItemPriority, WorkItemSource,
 };
-use code_repo::{prepare_checkout, RepoCheckoutRequest, RepoSource};
+use code_repo::{prepare_checkout, PreparedRepo, RepoCheckoutRequest, RepoSource};
 use code_runtime::task_registry::{Task, TaskRegistry, TaskRegistrySnapshot, TaskStatus};
-use code_runtime::worker_boot::{
-    WorkerEventKind, WorkerEventPayload, WorkerRegistry, WorkerStatus,
-};
+use code_runtime::worker_boot::WorkerStatus;
+#[cfg(test)]
+use code_runtime::worker_boot::{WorkerEventKind, WorkerEventPayload, WorkerRegistry};
 use code_runtime::{
     generate_state, parse_permission_mode_label, save_oauth_credentials_for, ConfigLoader,
     OAuthTokenSet, ResolvedPermissionMode,
@@ -134,6 +142,17 @@ pub struct ServerConfig {
     pub docker_image: String,
     pub docker_server_url: String,
     pub reconcile_interval: Option<Duration>,
+    /// Postgres holds worker tokens. Required for the `local-docker` lane transport.
+    pub database_url: Option<String>,
+    /// CA file that signed the database certificate, for a private CA. Optional.
+    pub database_ca_file: Option<PathBuf>,
+    /// `ClickHouse` receives audit events for worker activity. Optional; when set, an
+    /// unreachable or refusing `ClickHouse` fails start-up.
+    pub clickhouse_url: Option<String>,
+    pub clickhouse_user: String,
+    pub clickhouse_password: String,
+    /// How long a worker token stays valid, in seconds.
+    pub worker_token_ttl_secs: u64,
     pub state_file: Option<PathBuf>,
     pub orphan_approval_delay: Duration,
     pub orphan_auto_retry_after: Option<Duration>,
@@ -143,9 +162,22 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaneTransportKind {
-    InMemory,
+    /// Each lane runs in a worker container (`docker/worker.Dockerfile`).
     LocalDocker,
+    /// Each lane runs an agent loop inside the server process.
     ToolsAgent,
+}
+
+/// Parses `FRONTAL_CODE_SERVER_LANE_TRANSPORT`. The simulator is not an option:
+/// an unknown value is an error, so a typo cannot silently fake lane execution.
+fn parse_lane_transport_kind(raw: &str) -> Result<LaneTransportKind, String> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "" | "docker" | "local-docker" | "local_docker" => Ok(LaneTransportKind::LocalDocker),
+        "tools-agent" | "tools_agent" | "agent" => Ok(LaneTransportKind::ToolsAgent),
+        other => Err(format!(
+            "unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT `{other}`; use `local-docker` (worker containers) or `tools-agent`"
+        )),
+    }
 }
 
 impl Default for ServerConfig {
@@ -153,12 +185,18 @@ impl Default for ServerConfig {
         Self {
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8788),
             event_replay_limit: DEFAULT_EVENT_REPLAY_LIMIT,
-            lane_transport_kind: LaneTransportKind::InMemory,
+            lane_transport_kind: LaneTransportKind::LocalDocker,
             api_key: None,
             workspace_root: default_server_workspace_root(),
             docker_image: default_server_docker_image(),
             docker_server_url: default_server_docker_server_url(),
             reconcile_interval: Some(Duration::from_secs(15)),
+            database_url: None,
+            database_ca_file: None,
+            clickhouse_url: None,
+            clickhouse_user: "frontal".to_string(),
+            clickhouse_password: String::new(),
+            worker_token_ttl_secs: 7200,
             state_file: default_server_state_file(),
             orphan_approval_delay: DEFAULT_ORPHAN_APPROVAL_DELAY,
             orphan_auto_retry_after: None,
@@ -188,11 +226,7 @@ impl ServerConfig {
         }
 
         if let Ok(kind) = env::var("FRONTAL_CODE_SERVER_LANE_TRANSPORT") {
-            config.lane_transport_kind = match kind.trim().to_ascii_lowercase().as_str() {
-                "docker" | "local-docker" | "local_docker" => LaneTransportKind::LocalDocker,
-                "tools-agent" | "tools_agent" | "agent" => LaneTransportKind::ToolsAgent,
-                _ => LaneTransportKind::InMemory,
-            };
+            config.lane_transport_kind = parse_lane_transport_kind(&kind)?;
         }
 
         if let Ok(api_key) = env::var("FRONTAL_CODE_SERVER_API_KEY") {
@@ -228,6 +262,26 @@ impl ServerConfig {
             config.reconcile_interval = (interval > 0).then(|| Duration::from_secs(interval));
         }
 
+        if let Ok(url) = env::var("FRONTAL_CODE_SERVER_DATABASE_URL") {
+            config.database_url = (!url.trim().is_empty()).then(|| url.trim().to_string());
+        }
+        if let Ok(path) = env::var("FRONTAL_CODE_SERVER_DATABASE_CA_FILE") {
+            config.database_ca_file = (!path.trim().is_empty()).then(|| PathBuf::from(path.trim()));
+        }
+        if let Ok(url) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_URL") {
+            config.clickhouse_url = (!url.trim().is_empty()).then(|| url.trim().to_string());
+        }
+        if let Ok(user) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_USER") {
+            if !user.trim().is_empty() {
+                config.clickhouse_user = user.trim().to_string();
+            }
+        }
+        if let Ok(password) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_PASSWORD") {
+            config.clickhouse_password = password;
+        }
+        if let Ok(ttl) = env::var("FRONTAL_CODE_WORKER_TOKEN_TTL_SECS") {
+            config.worker_token_ttl_secs = ttl.trim().parse()?;
+        }
         if let Ok(path) = env::var("FRONTAL_CODE_SERVER_STATE_FILE") {
             let path = path.trim();
             config.state_file = (!path.is_empty()).then(|| PathBuf::from(path));
@@ -311,8 +365,12 @@ pub struct ServerState {
     orphan_auto_cancel_after: Option<Duration>,
     orphan_policy_rules: Vec<OrphanPolicyRule>,
     pending_oauth_states: Arc<Mutex<HashMap<String, LinearOAuthPendingState>>>,
+    worker_access: Arc<WorkerAccess>,
+    model_proxy_client: reqwest::Client,
+    publish_workspace_root: PathBuf,
 }
 
+#[cfg(test)]
 impl Default for ServerState {
     fn default() -> Self {
         Self::new(DEFAULT_EVENT_REPLAY_LIMIT)
@@ -320,13 +378,10 @@ impl Default for ServerState {
 }
 
 impl ServerState {
+    #[cfg(test)]
     #[must_use]
     pub fn new(event_replay_limit: usize) -> Self {
-        Self::new_with_transport_kind_and_state_file(
-            event_replay_limit,
-            LaneTransportKind::InMemory,
-            None,
-        )
+        Self::with_lane_transport(event_replay_limit, Arc::new(FakeLaneWorkerTransport::new()))
     }
 
     #[must_use]
@@ -355,6 +410,7 @@ impl ServerState {
             default_server_workspace_root(),
             default_server_docker_image(),
             default_server_docker_server_url(),
+            WorkerAccess::new(None, 7200),
         )
     }
 
@@ -372,14 +428,16 @@ impl ServerState {
         workspace_root: PathBuf,
         docker_image: String,
         docker_server_url: String,
+        worker_access: WorkerAccess,
     ) -> Self {
+        let publish_workspace_root = workspace_root.clone();
+        let worker_access = Arc::new(worker_access);
         let lane_transport: Arc<dyn LaneWorkerTransport> = match lane_transport_kind {
-            LaneTransportKind::InMemory => Arc::new(InMemoryLaneWorkerTransport::new()),
             LaneTransportKind::LocalDocker => Arc::new(LocalDockerLaneWorkerTransport::new(
                 workspace_root,
                 docker_image,
                 docker_server_url,
-                control_plane_api_key.clone(),
+                worker_access.clone(),
             )),
             LaneTransportKind::ToolsAgent => Arc::new(HostedAgentLaneWorkerTransport),
         };
@@ -393,7 +451,9 @@ impl ServerState {
             orphan_auto_retry_after,
             orphan_auto_cancel_after,
             orphan_policy_rules,
+            worker_access,
         )
+        .with_publish_workspace_root(publish_workspace_root)
     }
 
     #[must_use]
@@ -408,6 +468,7 @@ impl ServerState {
         orphan_auto_retry_after: Option<Duration>,
         orphan_auto_cancel_after: Option<Duration>,
         orphan_policy_rules: Vec<OrphanPolicyRule>,
+        worker_access: Arc<WorkerAccess>,
     ) -> Self {
         let (event_sender, _) = broadcast::channel(event_replay_limit.max(1) * 4);
         let persistence = state_file.map(|path| Arc::new(ServerStatePersistence { path }));
@@ -446,6 +507,12 @@ impl ServerState {
             orphan_auto_cancel_after,
             orphan_policy_rules,
             pending_oauth_states: Arc::new(Mutex::new(HashMap::new())),
+            worker_access,
+            model_proxy_client: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .build()
+                .unwrap_or_default(),
+            publish_workspace_root: default_server_workspace_root(),
         };
         state.recover_loaded_state();
         state
@@ -459,9 +526,14 @@ impl ServerState {
     ) -> Self {
         Self::with_lane_transport_kind(
             event_replay_limit,
-            LaneTransportKind::InMemory,
+            LaneTransportKind::LocalDocker,
             lane_transport,
         )
+    }
+
+    fn with_publish_workspace_root(mut self, root: PathBuf) -> Self {
+        self.publish_workspace_root = root;
+        self
     }
 
     #[cfg(test)]
@@ -470,6 +542,24 @@ impl ServerState {
         event_replay_limit: usize,
         lane_transport_kind: LaneTransportKind,
         lane_transport: Arc<dyn LaneWorkerTransport>,
+    ) -> Self {
+        Self::with_lane_transport_kind_and_access(
+            event_replay_limit,
+            lane_transport_kind,
+            lane_transport,
+            Arc::new(WorkerAccess::new(None, 3600)),
+        )
+    }
+
+    /// Tests that drive a real transport must share its token store with the state, the
+    /// same way `new_with_transport_kind_state_file_policy_and_workspace_root` does.
+    #[cfg(test)]
+    #[must_use]
+    fn with_lane_transport_kind_and_access(
+        event_replay_limit: usize,
+        lane_transport_kind: LaneTransportKind,
+        lane_transport: Arc<dyn LaneWorkerTransport>,
+        worker_access: Arc<WorkerAccess>,
     ) -> Self {
         Self::build(
             event_replay_limit,
@@ -481,6 +571,7 @@ impl ServerState {
             None,
             None,
             Vec::new(),
+            worker_access,
         )
     }
 
@@ -493,7 +584,7 @@ impl ServerState {
     ) -> Self {
         Self::build(
             event_replay_limit,
-            LaneTransportKind::InMemory,
+            LaneTransportKind::LocalDocker,
             lane_transport,
             None,
             Some(state_file),
@@ -501,6 +592,7 @@ impl ServerState {
             None,
             None,
             Vec::new(),
+            Arc::new(WorkerAccess::new(None, 3600)),
         )
     }
 
@@ -515,7 +607,7 @@ impl ServerState {
     ) -> Self {
         Self::build(
             event_replay_limit,
-            LaneTransportKind::InMemory,
+            LaneTransportKind::LocalDocker,
             lane_transport,
             None,
             None,
@@ -523,6 +615,7 @@ impl ServerState {
             orphan_auto_retry_after,
             orphan_auto_cancel_after,
             Vec::new(),
+            Arc::new(WorkerAccess::new(None, 3600)),
         )
     }
 
@@ -538,7 +631,7 @@ impl ServerState {
     ) -> Self {
         Self::build(
             event_replay_limit,
-            LaneTransportKind::InMemory,
+            LaneTransportKind::LocalDocker,
             lane_transport,
             None,
             None,
@@ -546,6 +639,7 @@ impl ServerState {
             orphan_auto_retry_after,
             orphan_auto_cancel_after,
             orphan_policy_rules,
+            Arc::new(WorkerAccess::new(None, 3600)),
         )
     }
 
@@ -1559,10 +1653,59 @@ async fn require_control_plane_auth(
     next: Next,
 ) -> Result<Response, AppError> {
     if is_control_plane_authorized(state.as_ref(), request.headers()) {
+        return Ok(next.run(request).await);
+    }
+    let worker_allowed = worker_token_may_access(
+        state.as_ref(),
+        request.headers().clone(),
+        request.method().clone(),
+        request.uri().path().to_string(),
+    )
+    .await;
+    if worker_allowed {
         Ok(next.run(request).await)
     } else {
         Err(AppError::unauthorized("missing or invalid API key"))
     }
+}
+
+/// A worker's task token opens only the endpoints that worker calls for its own task.
+async fn worker_token_may_access(
+    state: &ServerState,
+    headers: HeaderMap,
+    method: axum::http::Method,
+    path: String,
+) -> bool {
+    // Owned copies only: the request body is not Sync, so the request itself must not be
+    // borrowed across the await below.
+    let Some(token) = worker_access::token_from_headers(&headers) else {
+        return false;
+    };
+    let Some(requested_task) = worker_access::worker_endpoint_task_id(&method, &path) else {
+        return false;
+    };
+    state
+        .worker_access
+        .task_for_token(&token)
+        .await
+        .is_some_and(|token_task| token_task == requested_task)
+}
+
+/// Forwards a worker's model call to the provider with the server's own key.
+async fn model_proxy_route(
+    State(state): State<Arc<ServerState>>,
+    Path((provider, rest)): Path<(String, String)>,
+    request: Request,
+) -> Response {
+    worker_access::proxy_model_request(
+        &state.worker_access,
+        &state.model_proxy_client,
+        &provider,
+        &rest,
+        request,
+        |name| env::var(name).ok(),
+    )
+    .await
 }
 
 pub fn app(state: Arc<ServerState>) -> Router {
@@ -1583,6 +1726,7 @@ pub fn app(state: Arc<ServerState>) -> Router {
         .route("/v1/tasks/:task_id/approval", post(resolve_approval))
         .route("/v1/tasks/:task_id/reconcile", post(reconcile_task))
         .route("/v1/tasks/:task_id/complete", post(complete_task))
+        .route("/v1/tasks/:task_id/publish", post(publish_task_changes))
         .route("/v1/events/ws", get(events_ws))
         .route(
             "/v1/connectors/:connector/interactions",
@@ -1606,6 +1750,10 @@ pub fn app(state: Arc<ServerState>) -> Router {
 
     Router::new()
         .route("/health", get(health))
+        .route(
+            "/v1/model-proxy/:provider/*rest",
+            axum::routing::any(model_proxy_route),
+        )
         .route("/v1/webhooks/:source", post(integration_webhook))
         .route("/v1/oauth/:provider/callback", get(generic_oauth_callback))
         .merge(protected)
@@ -1653,8 +1801,57 @@ fn check_auth_posture(config: &ServerConfig) -> Result<(), String> {
     Ok(())
 }
 
+/// Local Docker workers reach this server through the relay, which forwards to the port in
+/// `docker_server_url`. That port must be the one the server listens on. A URL without a
+/// port, or with another one, would send every worker to the wrong place, so refuse to start.
+fn check_callback_port(config: &ServerConfig) -> Result<(), String> {
+    if config.lane_transport_kind != LaneTransportKind::LocalDocker {
+        return Ok(());
+    }
+    let url = &config.docker_server_url;
+    let authority = url.rsplit("//").next().unwrap_or(url);
+    let explicit = authority
+        .rsplit_once(':')
+        .and_then(|(_, port)| port.parse::<u16>().ok());
+    match explicit {
+        Some(port) if port == config.bind_addr.port() => Ok(()),
+        Some(port) => Err(format!(
+            "FRONTAL_CODE_SERVER_CALLBACK_URL ({url}) names port {port}, but the server listens on {}. Workers would reach the wrong port.",
+            config.bind_addr.port()
+        )),
+        None => Err(format!(
+            "FRONTAL_CODE_SERVER_CALLBACK_URL ({url}) must include the port the server listens on ({}).",
+            config.bind_addr.port()
+        )),
+    }
+}
+
 pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     check_auth_posture(&config)?;
+
+    // Worker tokens live in Postgres. Start-up fails if it is unreachable, rather than
+    // running workers that cannot authenticate.
+    let worker_store = if config.lane_transport_kind == LaneTransportKind::LocalDocker {
+        let url = config.database_url.as_deref().ok_or(
+            "FRONTAL_CODE_SERVER_DATABASE_URL is required for worker lanes (worker tokens are stored in Postgres)",
+        )?;
+        let tls = worker_tokens::tls_mode_for(url, config.database_ca_file.clone())?;
+        Some(worker_tokens::WorkerTokenStore::connect(url, tls)?)
+    } else {
+        None
+    };
+    // Audit events go to ClickHouse when it is configured. A configured but unusable
+    // ClickHouse fails start-up, because the operator asked for an audit trail.
+    let audit = match config.clickhouse_url.clone() {
+        Some(url) => Some(audit::AuditSink::connect(audit::ClickHouseSettings {
+            url,
+            user: config.clickhouse_user.clone(),
+            password: config.clickhouse_password.clone(),
+        })?),
+        None => None,
+    };
+    let worker_access =
+        WorkerAccess::new(worker_store, config.worker_token_ttl_secs).with_audit(audit);
 
     let state = Arc::new(
         ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
@@ -1669,6 +1866,7 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
             config.workspace_root.clone(),
             config.docker_image.clone(),
             config.docker_server_url.clone(),
+            worker_access,
         ),
     );
     if let Some(interval) = config.reconcile_interval {
@@ -1692,6 +1890,7 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
         }
     }
     let app = app(state);
+    check_callback_port(&config)?;
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     println!("code-server listening on http://{}", config.bind_addr);
     axum::serve(listener, app).await?;
@@ -2147,6 +2346,163 @@ async fn update_task_integration(
     Ok(Json(state.task_snapshot(task)))
 }
 
+#[derive(Debug, Deserialize)]
+struct PublishTaskRequest {
+    patch: String,
+}
+
+/// Publishes a worker's changes. The worker sends a patch; the server applies it to a fresh
+/// clone and pushes the branch with its own GitHub token. A repeated call returns the existing
+/// publication. Repositories on GitHub are refused unless `FRONTAL_CODE_GITHUB_ALLOWED_REPOS`
+/// names them.
+#[allow(clippy::too_many_lines)] // The publish sequence reads best as one function: checks, publish, audit, PR.
+async fn publish_task_changes(
+    Path(task_id): Path<String>,
+    State(state): State<Arc<ServerState>>,
+    Json(request): Json<PublishTaskRequest>,
+) -> Result<Json<Value>, AppError> {
+    let mut context = state
+        .context_for(&task_id)
+        .ok_or_else(|| AppError::not_found(format!("task not found: {task_id}")))?;
+    if let Some(commit) = context.published_commit_sha.clone() {
+        return Ok(Json(json!({
+            "published_branch": context.published_branch,
+            "published_commit_sha": commit,
+            "already_published": true,
+        })));
+    }
+    let repo_url = context
+        .repo_url
+        .clone()
+        .ok_or_else(|| AppError::bad_request("task has no repository to publish to"))?;
+    let branch = context
+        .branch
+        .clone()
+        .ok_or_else(|| AppError::bad_request("task has no branch to publish to"))?;
+    let prompt = state
+        .tasks
+        .get(&task_id)
+        .map(|task| task.prompt)
+        .unwrap_or_default();
+    let base_ref = context.base_ref.clone();
+    let github_token = env::var("GITHUB_TOKEN")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let allowed_repos = publish::parse_allowed_repos(
+        &env::var("FRONTAL_CODE_GITHUB_ALLOWED_REPOS").unwrap_or_default(),
+    );
+    // The allowlist is checked before any clone, so the token is never used on a repository
+    // that was not named.
+    if let Err(error) = publish::check_github_publication_allowed(
+        &repo_url,
+        github_token.as_deref(),
+        &allowed_repos,
+    ) {
+        if let Some(audit) = state.worker_access.audit() {
+            audit.emit("publish.refused", &task_id, &error);
+        }
+        return Err(AppError::bad_request(error));
+    }
+
+    let task = task_id.clone();
+    let publish_repo_url = repo_url.clone();
+    let publish_branch = branch.clone();
+    let publish_base = base_ref.clone();
+    let publish_token = github_token.clone();
+    let outcome = tokio::task::spawn_blocking(move || {
+        publish::publish_changes(&publish::PublishRequest {
+            task_id: &task,
+            prompt: &prompt,
+            repo_url: &publish_repo_url,
+            base_ref: publish_base.as_deref(),
+            branch: &publish_branch,
+            patch: &request.patch,
+            github_token: publish_token.as_deref(),
+            author_name: &hosted_publish_author_name(),
+            author_email: &hosted_publish_author_email(),
+        })
+    })
+    .await
+    .map_err(|error| AppError::internal(error.to_string()))?
+    .map_err(|error| {
+        if let Some(audit) = state.worker_access.audit() {
+            audit.emit("publish.failed", &task_id, &error);
+        }
+        AppError::bad_request(error)
+    })?;
+    if let Some(audit) = state.worker_access.audit() {
+        audit.emit(
+            "publish.succeeded",
+            &task_id,
+            &format!("branch={} commit={}", outcome.branch, outcome.commit_sha),
+        );
+    }
+
+    // Opening the PR is best effort: the branch is already published. A failure is returned to
+    // the caller, not hidden.
+    let (pull_request, pull_request_error) = match github_token.as_deref() {
+        Some(token) if publish::github_owner_repo(&repo_url).is_some() => {
+            let api_base = env::var("FRONTAL_CODE_GITHUB_API_BASE")
+                .unwrap_or_else(|_| "https://api.github.com".to_string());
+            match publish::open_pull_request(
+                &state.model_proxy_client,
+                &publish::PullRequest {
+                    api_base: &api_base,
+                    token,
+                    repo_url: &repo_url,
+                    head: &outcome.branch,
+                    base: base_ref.as_deref(),
+                    title: &format!("Hosted task {task_id}"),
+                    body: &format!(
+                        "Changes published by Frontal Code for hosted task `{task_id}`."
+                    ),
+                },
+            )
+            .await
+            {
+                Ok(value) => (Some(value), None),
+                Err(error) => (None, Some(error)),
+            }
+        }
+        _ => (None, None),
+    };
+
+    context.published_branch = Some(outcome.branch.clone());
+    context.published_commit_sha = Some(outcome.commit_sha.clone());
+    context.published_remote = Some(outcome.remote.clone());
+    if let Some(pr) = pull_request.as_ref() {
+        context.pr_number = pr.get("number").and_then(Value::as_u64);
+        context.pr_url = pr
+            .get("html_url")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+    }
+    state.record_context(&task_id, context);
+    state.persist_state().map_err(AppError::internal)?;
+    Ok(Json(json!({
+        "published_branch": outcome.branch,
+        "published_commit_sha": outcome.commit_sha,
+        "published_remote": outcome.remote,
+        "pr_url": pull_request.as_ref().and_then(|pr| pr.get("html_url").cloned()),
+        "pr_error": pull_request_error,
+        "already_published": false,
+    })))
+}
+
+fn hosted_publish_author_name() -> String {
+    env::var("FRONTAL_CODE_GIT_AUTHOR_NAME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "Frontal Code Worker".to_string())
+}
+
+fn hosted_publish_author_email() -> String {
+    env::var("FRONTAL_CODE_GIT_AUTHOR_EMAIL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "worker@frontal.invalid".to_string())
+}
+
 async fn reconcile_task(
     Path(task_id): Path<String>,
     State(state): State<Arc<ServerState>>,
@@ -2563,6 +2919,7 @@ fn cancel_task_internal_with_detail(
     task_id: &str,
     detail_override: Option<String>,
 ) -> Result<HostedTaskSnapshot, AppError> {
+    state.worker_access.revoke(task_id);
     let task = state
         .tasks
         .get(task_id)
@@ -2845,6 +3202,7 @@ async fn complete_task(
         .lane_transport
         .observe_completion(&worker_id, &request.finish_reason, request.tokens_output)
         .map_err(AppError::internal)?;
+    state.worker_access.revoke_async(&task_id).await;
 
     if let Some(result) = request
         .result
@@ -3309,6 +3667,7 @@ struct LaneTransportSignal {
     payload: Option<serde_json::Value>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // Blocked/Failed are built by the test simulator only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LaneTransportSignalKind {
     Running,
@@ -3321,12 +3680,20 @@ struct DockerLaunchSpec {
     image: String,
     checkout_root: PathBuf,
     task_id: String,
+    /// The task's internal network. The worker can reach only the relay on it.
+    network: String,
     command: Vec<String>,
     env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct HostedDockerTaskPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_commit: Option<String>,
+    /// Shell commands the worker may run without asking, as permission rules.
+    bash_allow: Vec<String>,
+    /// Shell commands the worker may never run.
+    bash_deny: Vec<String>,
     task_id: String,
     prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3404,57 +3771,306 @@ trait DockerRunner: Send + Sync + fmt::Debug {
     fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String>;
 
     fn stop(&self, container_id: &str) -> Result<(), String>;
+
+    /// Starts the relay that workers use to reach the server. Test runners need nothing.
+    fn ensure_relay(&self, _image: &str, _port: u16) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Creates a task's internal network and attaches the relay to it.
+    fn prepare_task_network(&self, _network: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Removes a task network. Best effort: the network may still be in use.
+    fn remove_task_network(&self, _network: &str) {}
+
+    /// Removes task networks that no worker is using.
+    fn sweep_idle_task_networks(&self) {}
 }
 
 #[derive(Debug)]
-struct CliDockerRunner;
+struct CliDockerRunner {
+    /// The server port the relay forwards to. It names this server's relay and marks its
+    /// task networks.
+    relay_port: u16,
+}
+
+/// Writes the container environment to a file only this user can read. Passing values
+/// as `--env` would expose them in the process list. Docker reads the file while
+/// creating the container, so the caller deletes the directory right after `docker run`.
+fn write_worker_env_file(env: &BTreeMap<String, String>) -> Result<PathBuf, String> {
+    let mut contents = String::new();
+    for (key, value) in env {
+        if value.contains('\n') || value.contains('\r') {
+            return Err(format!(
+                "worker environment value for {key} contains a newline"
+            ));
+        }
+        contents.push_str(key);
+        contents.push('=');
+        contents.push_str(value);
+        contents.push('\n');
+    }
+
+    let mut bytes = [0_u8; 8];
+    getrandom::getrandom(&mut bytes).map_err(|error| format!("random source: {error}"))?;
+    let dir = env::temp_dir().join(format!("frontal-code-worker-{}", hex::encode(bytes)));
+    fs::create_dir_all(&dir).map_err(|error| format!("failed to create env dir: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("failed to restrict env dir: {error}"))?;
+    }
+    let path = dir.join("worker.env");
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&path)
+        .map_err(|error| format!("failed to create env file: {error}"))?;
+    std::io::Write::write_all(&mut file, contents.as_bytes())
+        .map_err(|error| format!("failed to write env file: {error}"))?;
+    Ok(path)
+}
+
+impl CliDockerRunner {
+    fn docker(args: &[String]) -> Result<String, String> {
+        let output = Command::new("docker")
+            .args(args)
+            .output()
+            .map_err(|error| format!("failed to run docker: {error}"))?;
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+
+    fn docker_str(args: &[&str]) -> Result<String, String> {
+        Self::docker(
+            &args
+                .iter()
+                .map(|arg| (*arg).to_string())
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn relay_port(port: u16) -> String {
+        port.to_string()
+    }
+}
 
 impl DockerRunner for CliDockerRunner {
     fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String> {
-        let mut command = Command::new("docker");
-        command
-            .args(["run", "-d", "--rm", "--workdir", "/workspace", "--volume"])
-            .arg(format!("{}:/workspace", spec.checkout_root.display()))
-            .args(["--add-host", "host.docker.internal:host-gateway"])
-            .args(["--label", &format!("frontal-code.task_id={}", spec.task_id)]);
-        for (key, value) in &spec.env {
-            command.arg("--env").arg(format!("{key}={value}"));
+        let env_file = write_worker_env_file(&spec.env)?;
+        let env_dir = env_file.parent().map(PathBuf::from);
+        let args = docker_worker::worker_run_args(
+            &spec.network,
+            &spec.checkout_root.display().to_string(),
+            &env_file.display().to_string(),
+            &spec.task_id,
+            &spec.image,
+            &spec.command,
+        );
+        let output = Self::docker(&args);
+        if let Some(dir) = env_dir {
+            let _ = fs::remove_dir_all(dir);
         }
-        command.arg(&spec.image).args(&spec.command);
-
-        let output = command
-            .output()
-            .map_err(|error| format!("failed to spawn docker: {error}"))?;
-
-        if !output.status.success() {
-            return Err(format!(
-                "docker run failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            ));
-        }
-
-        let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let container_id = output.map_err(|error| format!("docker run failed: {error}"))?;
         if container_id.is_empty() {
             return Err("docker run returned an empty container id".to_string());
         }
-
+        // Remove the task's network as soon as its worker exits. Without this, a finished
+        // task's network stays until the next sweep.
+        let relay = self.relay_container();
+        let network = spec.network.clone();
+        let waited = container_id.clone();
+        std::thread::spawn(move || {
+            let _ = Self::docker_str(&["wait", &waited]);
+            remove_network_when_free(&relay, &network);
+        });
         Ok(DockerLaunchResult { container_id })
     }
 
     fn stop(&self, container_id: &str) -> Result<(), String> {
-        let output = Command::new("docker")
-            .args(["stop", container_id])
-            .output()
-            .map_err(|error| format!("failed to stop docker container: {error}"))?;
+        // Read the task network first: the container's labels are gone once it is removed.
+        let network = Self::docker_str(&[
+            "inspect",
+            "--format",
+            &format!(
+                "{{{{index .Config.Labels \"{}\"}}}}",
+                docker_worker::TASK_NETWORK_CONTAINER_LABEL
+            ),
+            container_id,
+        ])
+        .ok()
+        .filter(|name| !name.is_empty() && name != "<no value>");
+        Self::docker_str(&["stop", container_id])
+            .map_err(|error| format!("docker stop failed: {error}"))?;
+        if let Some(network) = network {
+            self.remove_task_network(&network);
+        }
+        Ok(())
+    }
 
-        if output.status.success() {
+    fn ensure_relay(&self, image: &str, port: u16) -> Result<(), String> {
+        let relay = docker_worker::relay_container_name(port);
+        let wanted = Self::relay_port(port);
+        let running = Self::docker_str(&["inspect", "--format", "{{.State.Running}}", &relay]);
+        let current_port = Self::docker_str(&[
+            "inspect",
+            "--format",
+            &format!(
+                "{{{{index .Config.Labels \"{}\"}}}}",
+                docker_worker::RELAY_PORT_LABEL
+            ),
+            &relay,
+        ]);
+        if running.as_deref() == Ok("true") && current_port.as_deref() == Ok(wanted.as_str()) {
             return Ok(());
         }
+        // Not running, or forwarding a different port: replace it.
+        let _ = Self::docker_str(&["rm", "-f", &relay]);
+        Self::docker(&docker_worker::relay_run_args(image, port))
+            .map(|_| ())
+            .map_err(|error| format!("failed to start the worker relay: {error}"))
+    }
 
-        Err(format!(
-            "docker stop failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ))
+    fn prepare_task_network(&self, network: &str) -> Result<(), String> {
+        let created = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        let task_label = format!("{}={network}", docker_worker::TASK_NETWORK_LABEL);
+        let port_label = format!(
+            "{}={}",
+            docker_worker::NETWORK_RELAY_PORT_LABEL,
+            self.relay_port
+        );
+        let created_label = format!("{}={created}", docker_worker::NETWORK_CREATED_LABEL);
+        match Self::docker_str(&[
+            "network",
+            "create",
+            "--internal",
+            "--label",
+            &task_label,
+            "--label",
+            &port_label,
+            "--label",
+            &created_label,
+            network,
+        ]) {
+            Ok(_) => {}
+            Err(error) if error.contains("already exists") => {}
+            Err(error) => return Err(format!("failed to create the task network: {error}")),
+        }
+        match Self::docker_str(&[
+            "network",
+            "connect",
+            "--alias",
+            docker_worker::RELAY_ALIAS,
+            network,
+            &self.relay_container(),
+        ]) {
+            Ok(_) => Ok(()),
+            Err(error) if error.contains("already exists") => Ok(()),
+            Err(error) => Err(format!("failed to attach the relay: {error}")),
+        }
+    }
+
+    fn remove_task_network(&self, network: &str) {
+        remove_network_now(&self.relay_container(), network);
+    }
+
+    fn sweep_idle_task_networks(&self) {
+        let task_filter = format!("label={}", docker_worker::TASK_NETWORK_LABEL);
+        let port_filter = format!(
+            "label={}={}",
+            docker_worker::NETWORK_RELAY_PORT_LABEL,
+            self.relay_port
+        );
+        let Ok(names) = Self::docker_str(&[
+            "network",
+            "ls",
+            "--filter",
+            &task_filter,
+            "--filter",
+            &port_filter,
+            "--format",
+            "{{.Name}}",
+        ]) else {
+            return;
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        for name in names.lines().filter(|name| !name.is_empty()) {
+            // A network younger than this may belong to a launch still in progress.
+            let created = Self::docker_str(&[
+                "network",
+                "inspect",
+                "--format",
+                &format!(
+                    "{{{{index .Labels \"{}\"}}}}",
+                    docker_worker::NETWORK_CREATED_LABEL
+                ),
+                name,
+            ])
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok());
+            if created.is_none_or(|created| now.saturating_sub(created) < SWEEP_MIN_AGE_SECS) {
+                continue;
+            }
+            // An idle task network has nothing attached (a crash before the relay joined) or
+            // only the relay. A worker still attached means its task is running.
+            let attached = Self::docker_str(&[
+                "network",
+                "inspect",
+                "--format",
+                "{{len .Containers}}",
+                name,
+            ]);
+            if matches!(attached.as_deref(), Ok("0" | "1")) {
+                self.remove_task_network(name);
+            }
+        }
+    }
+}
+
+/// Minimum age before a task network without a running worker is treated as abandoned.
+const SWEEP_MIN_AGE_SECS: u64 = 120;
+
+/// Disconnects the relay from a task network and removes it. Ignores errors: a missing
+/// network is already clean, and a sweep retries anything left behind.
+fn remove_network_now(relay: &str, network: &str) {
+    let _ = CliDockerRunner::docker_str(&["network", "disconnect", "-f", network, relay]);
+    let _ = CliDockerRunner::docker_str(&["network", "rm", network]);
+}
+
+/// Removes a task network once its worker has gone. The container's `--rm` removal can
+/// lag the exit by a moment, and Docker refuses to remove a network with endpoints, so
+/// retry briefly.
+fn remove_network_when_free(relay: &str, network: &str) {
+    for _ in 0..30 {
+        remove_network_now(relay, network);
+        let gone =
+            CliDockerRunner::docker_str(&["network", "inspect", "--format", "{{.Id}}", network])
+                .is_err();
+        if gone {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
+impl CliDockerRunner {
+    /// The name of this server's relay container.
+    fn relay_container(&self) -> String {
+        docker_worker::relay_container_name(self.relay_port)
     }
 }
 
@@ -3475,12 +4091,15 @@ trait LaneWorkerTransport: Send + Sync + fmt::Debug {
     ) -> Result<LaneCompletionResult, String>;
 }
 
+/// Test double. It never runs an agent, so it must not be reachable from production.
+#[cfg(test)]
 #[derive(Debug, Default)]
-struct InMemoryLaneWorkerTransport {
+struct FakeLaneWorkerTransport {
     workers: WorkerRegistry,
 }
 
-impl InMemoryLaneWorkerTransport {
+#[cfg(test)]
+impl FakeLaneWorkerTransport {
     fn new() -> Self {
         Self {
             workers: WorkerRegistry::new(),
@@ -3488,7 +4107,8 @@ impl InMemoryLaneWorkerTransport {
     }
 }
 
-impl LaneWorkerTransport for InMemoryLaneWorkerTransport {
+#[cfg(test)]
+impl LaneWorkerTransport for FakeLaneWorkerTransport {
     fn bootstrap(&self, request: &LaneExecutionRequest) -> Result<LaneBootstrapResult, String> {
         let cwd = request
             .repository
@@ -3653,9 +4273,33 @@ impl LaneWorkerTransport for HostedAgentLaneWorkerTransport {
 struct LocalDockerLaneWorkerTransport {
     workspace_root: PathBuf,
     image: String,
+    /// The worker's view of the server: the relay, by its alias on the task network.
     server_url: String,
-    server_api_key: Option<String>,
+    relay_image: String,
+    relay_port: u16,
+    worker_access: Arc<WorkerAccess>,
     docker: Arc<dyn DockerRunner>,
+}
+
+/// Port a server URL points at, or the default server port.
+fn port_from_server_url(url: &str) -> u16 {
+    url.trim_end_matches('/')
+        .rsplit(':')
+        .next()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(8788)
+}
+
+/// The relay image, pinned by digest. A tag can move; a digest cannot. Override it with
+/// `FRONTAL_CODE_WORKER_RELAY_IMAGE` after reviewing the image you choose.
+pub(crate) const DEFAULT_RELAY_IMAGE: &str =
+    "alpine/socat@sha256:e8a6e8868a8e6e01d9c2c321a8f8d4474d2d741d962462e5c5a124a8e66a0055";
+
+fn relay_image_from_env() -> String {
+    env::var("FRONTAL_CODE_WORKER_RELAY_IMAGE")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_RELAY_IMAGE.to_string())
 }
 
 impl LocalDockerLaneWorkerTransport {
@@ -3663,30 +4307,33 @@ impl LocalDockerLaneWorkerTransport {
         workspace_root: PathBuf,
         image: String,
         server_url: String,
-        server_api_key: Option<String>,
+        worker_access: Arc<WorkerAccess>,
     ) -> Self {
-        Self {
+        let relay_port = port_from_server_url(&server_url);
+        Self::with_runner(
             workspace_root,
             image,
             server_url,
-            server_api_key,
-            docker: Arc::new(CliDockerRunner),
-        }
+            worker_access,
+            Arc::new(CliDockerRunner { relay_port }),
+        )
     }
 
-    #[cfg(test)]
     fn with_runner(
         workspace_root: PathBuf,
         image: String,
-        server_url: String,
-        server_api_key: Option<String>,
+        server_url: impl AsRef<str>,
+        worker_access: Arc<WorkerAccess>,
         docker: Arc<dyn DockerRunner>,
     ) -> Self {
+        let relay_port = port_from_server_url(server_url.as_ref());
         Self {
             workspace_root,
             image,
-            server_url,
-            server_api_key,
+            server_url: format!("http://{}:{relay_port}", docker_worker::RELAY_ALIAS),
+            relay_image: relay_image_from_env(),
+            relay_port,
+            worker_access,
             docker,
         }
     }
@@ -3694,46 +4341,74 @@ impl LocalDockerLaneWorkerTransport {
 
 impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
     fn bootstrap(&self, request: &LaneExecutionRequest) -> Result<LaneBootstrapResult, String> {
-        let source = lane_repo_source(request).ok_or_else(|| {
-            "local docker transport requires repo_url or a local repository path".to_string()
-        })?;
-        let prepared = prepare_checkout(&RepoCheckoutRequest {
-            workspace_root: self.workspace_root.clone(),
-            checkout_id: request.task_id.clone(),
-            source,
-            repository: request.repository.clone(),
-            base_ref: request.base_ref.clone(),
-            branch: request.branch.clone(),
-        })
-        .map_err(|error| format!("failed to prepare repo checkout: {error}"))?;
+        // A task with a repository gets a checkout on its own branch. A task without one
+        // gets an empty scratch workspace, so a plain prompt can still run in a worker.
+        let prepared = match lane_repo_source(request) {
+            Some(source) => prepare_checkout(&RepoCheckoutRequest {
+                workspace_root: self.workspace_root.clone(),
+                checkout_id: request.task_id.clone(),
+                source,
+                repository: request.repository.clone(),
+                base_ref: request.base_ref.clone(),
+                branch: request.branch.clone(),
+            })
+            .map_err(|error| format!("failed to prepare repo checkout: {error}"))?,
+            None => prepare_scratch_workspace(&self.workspace_root, &request.task_id)?,
+        };
         check_hosted_task_policy(&prepared.checkout_root, request)?;
-        let task_file = write_local_docker_task_payload(&prepared.checkout_root, request)
-            .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
+        // The commit the worker's changes are measured against. The server records it, so the
+        // worker cannot pick its own baseline.
+        let base_commit = git_head_commit(&prepared.checkout_root);
+        let task_file =
+            write_local_docker_task_payload(&prepared.checkout_root, request, base_commit)
+                .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
         let image = self.image.clone();
+        // The worker gets a token that works only for this task, plus a proxy URL for
+        // the model provider. No provider key and no control-plane key enter the
+        // container. See worker_access.rs.
+        let token = self
+            .worker_access
+            .issue(&request.task_id)
+            .map_err(|error| format!("failed to issue worker token: {error}"))?;
+        let provider = worker_access::worker_provider_name(
+            request.provider.as_deref(),
+            request.model.as_deref(),
+        )?;
         let mut container_env = BTreeMap::from([
             (
                 "FRONTAL_CODE_SERVER_URL".to_string(),
                 self.server_url.clone(),
             ),
+            ("FRONTAL_CODE_SERVER_API_KEY".to_string(), token.clone()),
             (
                 "FRONTAL_CODE_HOSTED_TASK_FILE".to_string(),
                 "/workspace/.frontal-code-hosted/task.json".to_string(),
             ),
         ]);
-        if let Some(api_key) = &self.server_api_key {
-            container_env.insert("FRONTAL_CODE_SERVER_API_KEY".to_string(), api_key.clone());
+        // Lets the worker CLI accept the cleartext Docker host alias. Set only here.
+        container_env.insert("FRONTAL_CODE_HOSTED_WORKER".to_string(), "1".to_string());
+        for (key, value) in worker_access::worker_provider_env(provider, &self.server_url, &token) {
+            container_env.insert(key, value);
         }
-        for key in ["GITHUB_TOKEN", "FRONTAL_CODE_GITHUB_API_BASE"] {
-            if let Ok(value) = env::var(key) {
-                if !value.trim().is_empty() {
-                    container_env.insert(key.to_string(), value);
-                }
+        // Non-secret tuning only. Provider keys are never forwarded.
+        if let Ok(value) = env::var("FRONTAL_CODE_MAX_OUTPUT_TOKENS") {
+            if !value.trim().is_empty() {
+                container_env.insert("FRONTAL_CODE_MAX_OUTPUT_TOKENS".to_string(), value);
             }
         }
+        // No GitHub credentials enter the container. The server publishes the branch and
+        // opens the pull request from its own environment. See publish.rs.
+        // The relay must be up, and the task must have its own network, before the worker starts.
+        self.docker
+            .ensure_relay(&self.relay_image, self.relay_port)?;
+        self.docker.sweep_idle_task_networks();
+        let network = docker_worker::task_network_name(&request.task_id);
+        self.docker.prepare_task_network(&network)?;
         let launch = self.docker.launch(&DockerLaunchSpec {
             image: image.clone(),
             checkout_root: prepared.checkout_root.clone(),
             task_id: request.task_id.clone(),
+            network: network.clone(),
             command: vec![
                 "frontal-code".to_string(),
                 "hosted".to_string(),
@@ -3744,6 +4419,13 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             env: container_env,
         })?;
 
+        if let Some(audit) = self.worker_access.audit() {
+            audit.emit(
+                "worker.launched",
+                &request.task_id,
+                &format!("container={}", launch.container_id),
+            );
+        }
         Ok(LaneBootstrapResult {
             worker_id: launch.container_id.clone(),
             worker_status: WorkerStatus::Running,
@@ -3820,9 +4502,53 @@ fn lane_repo_source(request: &LaneExecutionRequest) -> Option<RepoSource> {
         .then_some(RepoSource::LocalPath(repo_path))
 }
 
+/// Creates an empty workspace for a task that has no repository. It is not a git
+/// checkout, so no branch is published.
+fn prepare_scratch_workspace(
+    workspace_root: &FsPath,
+    task_id: &str,
+) -> Result<PreparedRepo, String> {
+    let name: String = task_id
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let checkout_root = workspace_root.join(format!("scratch-{name}"));
+    fs::create_dir_all(&checkout_root)
+        .map_err(|error| format!("failed to create scratch workspace: {error}"))?;
+    Ok(PreparedRepo {
+        checkout_root,
+        source: RepoSource::LocalPath(PathBuf::from(".")),
+        repository: None,
+        active_ref: "scratch".to_string(),
+        branch: None,
+    })
+}
+
+/// The checked-out commit, or `None` for a scratch workspace without a repository.
+fn git_head_commit(checkout_root: &FsPath) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(checkout_root)
+        .args(["rev-parse", "--verify", "HEAD"])
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .filter(|sha| sha.len() == 40 && sha.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
 fn write_local_docker_task_payload(
     checkout_root: &FsPath,
     request: &LaneExecutionRequest,
+    base_commit: Option<String>,
 ) -> Result<PathBuf, std::io::Error> {
     let payload_dir = checkout_root.join(".frontal-code-hosted");
     std::fs::create_dir_all(&payload_dir)?;
@@ -3838,8 +4564,22 @@ fn write_local_docker_task_payload(
             branch: request.branch.clone(),
             model: request.model.clone(),
             provider: request.provider.clone(),
-            permission_mode: request.permission_mode.clone(),
+            permission_mode: Some(
+                request
+                    .permission_mode
+                    .clone()
+                    .unwrap_or_else(|| worker_access::WORKER_DEFAULT_PERMISSION_MODE.to_string()),
+            ),
             allowed_tools: request.allowed_tools.clone(),
+            bash_allow: worker_access::WORKER_BASH_ALLOW
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
+            bash_deny: worker_access::WORKER_BASH_DENY
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
+            base_commit,
         })
         .map_err(std::io::Error::other)?,
     )?;
@@ -4093,6 +4833,7 @@ fn bootstrap_task_lane(
     }
 }
 
+#[cfg(test)]
 fn signal_from_worker_event(
     event: &code_runtime::worker_boot::WorkerEvent,
 ) -> Option<LaneTransportSignal> {
@@ -4120,6 +4861,7 @@ fn signal_from_worker_event(
     })
 }
 
+#[cfg(test)]
 fn worker_payload_to_json(
     payload: &WorkerEventPayload,
 ) -> Result<serde_json::Value, serde_json::Error> {
@@ -4278,7 +5020,6 @@ fn lane_role_label(role: LaneRole) -> &'static str {
 
 fn lane_transport_kind_label(kind: LaneTransportKind) -> &'static str {
     match kind {
-        LaneTransportKind::InMemory => "in_memory",
         LaneTransportKind::LocalDocker => "local_docker",
         LaneTransportKind::ToolsAgent => "tools_agent",
     }
@@ -4356,6 +5097,81 @@ impl IntoResponse for AppError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scratch_workspace_is_created_for_tasks_without_a_repository() {
+        use super::prepare_scratch_workspace;
+        let root = temp_test_dir("scratch-workspace");
+        let prepared =
+            prepare_scratch_workspace(&root, "task/with spaces").expect("scratch should prepare");
+        assert!(prepared.checkout_root.is_dir());
+        assert!(prepared.checkout_root.ends_with("scratch-task-with-spaces"));
+        assert!(prepared.branch.is_none());
+        assert!(prepared.repository.is_none());
+    }
+
+    #[test]
+    fn worker_payload_defaults_to_full_access_inside_the_container() {
+        use super::{write_local_docker_task_payload, LaneExecutionRequest};
+        let root = temp_test_dir("worker-payload");
+        let request = LaneExecutionRequest {
+            task_id: "task-1".to_string(),
+            prompt: "hello".to_string(),
+            repository: None,
+            repo_url: None,
+            base_ref: None,
+            branch: None,
+            lane_role: None,
+            model: None,
+            provider: None,
+            permission_mode: None,
+            allowed_tools: Vec::new(),
+        };
+        let path = write_local_docker_task_payload(&root, &request, None).expect("payload written");
+        let payload: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
+                .expect("payload json");
+        assert_eq!(payload["permission_mode"], "workspace-write");
+        assert!(payload["bash_allow"]
+            .as_array()
+            .is_some_and(|rules| rules.iter().any(|rule| rule == "bash(cargo:*)")));
+        assert!(payload["bash_deny"]
+            .as_array()
+            .is_some_and(|rules| rules.iter().any(|rule| rule == "bash(curl:*)")));
+
+        let explicit = LaneExecutionRequest {
+            permission_mode: Some("read-only".to_string()),
+            ..request
+        };
+        let path =
+            write_local_docker_task_payload(&root, &explicit, None).expect("payload written");
+        let payload: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
+                .expect("payload json");
+        assert_eq!(payload["permission_mode"], "read-only");
+    }
+
+    #[test]
+    fn lane_transport_parser_accepts_workers_and_refuses_everything_else() {
+        use super::{parse_lane_transport_kind, LaneTransportKind};
+        assert_eq!(
+            parse_lane_transport_kind("").unwrap(),
+            LaneTransportKind::LocalDocker
+        );
+        assert_eq!(
+            parse_lane_transport_kind(" Local-Docker ").unwrap(),
+            LaneTransportKind::LocalDocker
+        );
+        assert_eq!(
+            parse_lane_transport_kind("tools-agent").unwrap(),
+            LaneTransportKind::ToolsAgent
+        );
+        for refused in ["in-memory", "in_memory", "memory", "bogus"] {
+            let error = parse_lane_transport_kind(refused)
+                .expect_err("the simulator and unknown names must be refused");
+            assert!(error.contains("unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT"));
+        }
+    }
+
     use super::*;
     use axum::body::to_bytes;
     use axum::body::Body;
@@ -4879,7 +5695,7 @@ mod tests {
         assert_eq!(snapshot["repo_url"], "https://github.com/acme/repo-a.git");
         assert_eq!(snapshot["base_ref"], "main");
         assert_eq!(snapshot["branch"], "frontal-code/investigate-flake");
-        assert_eq!(snapshot["execution_backend"], "in_memory");
+        assert_eq!(snapshot["execution_backend"], "local_docker");
         assert_eq!(snapshot["lane_id"].as_str().map(str::is_empty), Some(false));
         assert_eq!(
             snapshot["plan_kind"].as_str().map(str::is_empty),
@@ -4936,7 +5752,7 @@ mod tests {
                 .payload
                 .as_ref()
                 .and_then(|payload| payload.get("execution_backend")),
-            Some(&json!("in_memory"))
+            Some(&json!("local_docker"))
         );
         assert_eq!(
             created_event
@@ -4996,6 +5812,9 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn local_docker_transport_prepares_checkout_workspace_for_task() {
+        let Some(store) = worker_tokens::tests::test_store() else {
+            return;
+        };
         let dir = temp_test_dir("code-server-local-docker");
         let source_repo = init_git_repo(dir.join("source"));
         commit_file(
@@ -5006,16 +5825,18 @@ mod tests {
         );
         let workspace_root = dir.join("workspaces");
         let docker = Arc::new(MockDockerRunner::default());
-        let state = Arc::new(ServerState::with_lane_transport_kind(
+        let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
+        let state = Arc::new(ServerState::with_lane_transport_kind_and_access(
             DEFAULT_EVENT_REPLAY_LIMIT,
             LaneTransportKind::LocalDocker,
             Arc::new(LocalDockerLaneWorkerTransport::with_runner(
                 workspace_root.clone(),
                 "frontal-code-worker:test".to_string(),
-                "http://host.docker.internal:8788".to_string(),
-                Some("server-secret".to_string()),
+                "http://host.docker.internal:8788",
+                access.clone(),
                 docker.clone(),
             )),
+            access,
         ));
         let router = app(state.clone());
 
@@ -5128,7 +5949,7 @@ mod tests {
                 .env
                 .get("FRONTAL_CODE_SERVER_URL")
                 .map(String::as_str),
-            Some("http://host.docker.internal:8788")
+            Some("http://frontal-relay:8788")
         );
         assert_eq!(
             launched[0]
@@ -5137,12 +5958,24 @@ mod tests {
                 .map(String::as_str),
             Some("/workspace/.frontal-code-hosted/task.json")
         );
+        // The worker authenticates with a per-task token, never the server's own key.
+        let worker_token = launched[0]
+            .env
+            .get("FRONTAL_CODE_SERVER_API_KEY")
+            .cloned()
+            .expect("worker token");
+        assert_eq!(worker_token.len(), 64);
+        assert!(worker_token.chars().all(|c| c.is_ascii_hexdigit()));
+        // No upstream provider key reaches the container. The model traffic goes to the proxy.
+        assert!(!launched[0].env.keys().any(|key| key.ends_with("_API_KEY")
+            && key != "FRONTAL_CODE_SERVER_API_KEY"
+            && launched[0].env.get(key).map(String::as_str) != Some(worker_token.as_str())));
         assert_eq!(
             launched[0]
                 .env
-                .get("FRONTAL_CODE_SERVER_API_KEY")
+                .get("FRONTAL_CODE_SERVER_URL")
                 .map(String::as_str),
-            Some("server-secret")
+            Some("http://frontal-relay:8788")
         );
 
         let task_payload: HostedDockerTaskPayload = serde_json::from_slice(
@@ -5192,6 +6025,9 @@ mod tests {
 
     #[tokio::test]
     async fn local_docker_transport_launch_failure_marks_task_failed() {
+        let Some(store) = worker_tokens::tests::test_store() else {
+            return;
+        };
         let dir = temp_test_dir("code-server-local-docker-fail");
         let source_repo = init_git_repo(dir.join("source"));
         commit_file(
@@ -5205,16 +6041,18 @@ mod tests {
             fail_launch: Some("docker launch spec rejected".to_string()),
             ..MockDockerRunner::default()
         });
-        let state = Arc::new(ServerState::with_lane_transport_kind(
+        let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
+        let state = Arc::new(ServerState::with_lane_transport_kind_and_access(
             DEFAULT_EVENT_REPLAY_LIMIT,
             LaneTransportKind::LocalDocker,
             Arc::new(LocalDockerLaneWorkerTransport::with_runner(
                 workspace_root,
                 "frontal-code-worker:test".to_string(),
-                "http://host.docker.internal:8788".to_string(),
-                None,
+                "http://host.docker.internal:8788",
+                access.clone(),
                 docker,
             )),
+            access,
         ));
         let router = app(state.clone());
 
@@ -5272,7 +6110,7 @@ mod tests {
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let router = app(state.clone());
@@ -5336,7 +6174,7 @@ mod tests {
 
         let restored = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let restored_context = restored
@@ -5362,7 +6200,7 @@ mod tests {
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let router = app(state.clone());
@@ -5476,7 +6314,7 @@ mod tests {
 
         let restored = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let restored_context = restored
@@ -5668,7 +6506,7 @@ mod tests {
     async fn orphan_policy_endpoint_returns_default_policy_and_rules() {
         let state = Arc::new(ServerState::with_lane_transport_and_policy_rules(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::default()),
+            Arc::new(FakeLaneWorkerTransport::default()),
             Duration::from_mins(2),
             Some(Duration::from_mins(1)),
             Some(Duration::from_mins(10)),
@@ -5711,7 +6549,7 @@ mod tests {
     async fn orphan_policy_endpoint_previews_scoped_rule_match() {
         let state = Arc::new(ServerState::with_lane_transport_and_policy_rules(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::default()),
+            Arc::new(FakeLaneWorkerTransport::default()),
             Duration::from_mins(5),
             None,
             None,
@@ -5843,6 +6681,196 @@ mod tests {
                 .and_then(|payload| payload.get("detail"))
                 .and_then(|value| value.as_str()),
             Some("trust prompt detected")
+        );
+    }
+
+    /// Publishes a patch through the real route to a local bare repository, then checks the
+    /// branch on the remote. Covers the protected-branch refusal and the idempotent repeat.
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)] // One scenario, read top to bottom: publish, repeat, refuse.
+    async fn publish_route_pushes_the_patch_to_the_branch_and_refuses_protected_branches() {
+        use std::process::Command;
+        fn git(cwd: &std::path::Path, args: &[&str]) -> String {
+            let output = Command::new("git")
+                .current_dir(cwd)
+                .args(args)
+                .output()
+                .expect("git");
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).into_owned()
+        }
+        let root = temp_test_dir("publish-route");
+        let remote = root.join("remote.git");
+        let source = root.join("source");
+        fs::create_dir_all(&source).expect("source");
+        git(
+            &root,
+            &["init", "--bare", "--quiet", remote.to_str().unwrap()],
+        );
+        git(&source, &["init", "--quiet", "-b", "main"]);
+        fs::write(source.join("README.md"), "hello\n").expect("readme");
+        git(&source, &["add", "."]);
+        git(
+            &source,
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "--quiet",
+                "-m",
+                "init",
+            ],
+        );
+        git(
+            &source,
+            &["push", "--quiet", remote.to_str().unwrap(), "main"],
+        );
+
+        let mut state = ServerState::with_lane_transport(
+            DEFAULT_EVENT_REPLAY_LIMIT,
+            Arc::new(FakeLaneWorkerTransport::new()),
+        )
+        .with_control_plane_api_key(Some("admin-key".to_string()))
+        .with_publish_workspace_root(root.join("workspaces"));
+        let state_arc = Arc::new(std::mem::take(&mut state));
+        state_arc.record_context(
+            "task-publish-route",
+            HostedTaskContext {
+                repo_url: Some(remote.display().to_string()),
+                base_ref: Some("main".to_string()),
+                branch: Some("frontal-code/publish-route".to_string()),
+                ..HostedTaskContext::default()
+            },
+        );
+        let router = app(state_arc.clone());
+        let patch = "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-hello\n+hello from the route\n";
+        let post = |patch: &str| {
+            let body = serde_json::to_vec(&json!({ "patch": patch })).expect("json");
+            Request::builder()
+                .method("POST")
+                .uri("/v1/tasks/task-publish-route/publish")
+                .header("authorization", "Bearer admin-key")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("request")
+        };
+
+        let first = router.clone().oneshot(post(patch)).await.expect("route");
+        assert_eq!(first.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(first.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+        assert_eq!(value["published_branch"], "frontal-code/publish-route");
+        assert_eq!(value["already_published"], false);
+        let content = git(
+            &remote,
+            &["show", "refs/heads/frontal-code/publish-route:README.md"],
+        );
+        assert_eq!(content, "hello from the route\n");
+
+        // A repeat returns the existing publication and pushes nothing new.
+        let repeat = router.clone().oneshot(post(patch)).await.expect("route");
+        let bytes = axum::body::to_bytes(repeat.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+        assert_eq!(value["already_published"], true);
+
+        // A task cannot publish to a protected branch: its branch is replaced in the context.
+        state_arc.record_context(
+            "task-publish-route",
+            HostedTaskContext {
+                repo_url: Some(remote.display().to_string()),
+                base_ref: Some("main".to_string()),
+                branch: Some("main".to_string()),
+                ..HostedTaskContext::default()
+            },
+        );
+        let refused = router.clone().oneshot(post(patch)).await.expect("route");
+        assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
+        // The protected branch is unchanged.
+        assert!(git(&remote, &["rev-parse", "refs/heads/main"]).len() >= 40);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn worker_token_reaches_only_its_own_task_endpoints_and_is_revoked_on_completion() {
+        async fn send(
+            router: &Router,
+            method: &str,
+            uri: &str,
+            bearer: Option<&str>,
+        ) -> StatusCode {
+            let mut builder = Request::builder().method(method).uri(uri);
+            if let Some(bearer) = bearer {
+                builder = builder.header("authorization", format!("Bearer {bearer}"));
+            }
+            let request = builder
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .expect("request");
+            router
+                .clone()
+                .oneshot(request)
+                .await
+                .expect("router responds")
+                .status()
+        }
+        let Some(store) = worker_tokens::tests::test_store() else {
+            return;
+        };
+        let task = worker_tokens::tests::unique_task("router");
+        let state = Arc::new(
+            ServerState::with_lane_transport_kind_and_access(
+                DEFAULT_EVENT_REPLAY_LIMIT,
+                LaneTransportKind::LocalDocker,
+                Arc::new(FakeLaneWorkerTransport::new()),
+                Arc::new(WorkerAccess::new(Some(store), 3600)),
+            )
+            .with_control_plane_api_key(Some("admin-key".to_string())),
+        );
+        let token = state.worker_access.issue(&task).expect("token");
+        let router = app(state.clone());
+
+        let own_uri = format!("/v1/tasks/{task}");
+        let other_uri = "/v1/tasks/some-other-task";
+        let cancel_uri = format!("/v1/tasks/{task}/cancel");
+
+        // Its own task: authorized, so the answer is 404 (the task does not exist), not 401.
+        assert_eq!(
+            send(&router, "GET", &own_uri, Some(&token)).await,
+            StatusCode::NOT_FOUND
+        );
+        // Another task, the task list, and cancel are outside the worker's reach.
+        assert_eq!(
+            send(&router, "GET", other_uri, Some(&token)).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            send(&router, "GET", "/v1/tasks", Some(&token)).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            send(&router, "POST", &cancel_uri, Some(&token)).await,
+            StatusCode::UNAUTHORIZED
+        );
+        // The control-plane key still works everywhere.
+        assert_eq!(
+            send(&router, "GET", "/v1/tasks", Some("admin-key")).await,
+            StatusCode::OK
+        );
+        // Once the worker's task is finished, its token stops working.
+        state.worker_access.revoke(&task);
+        assert_eq!(
+            send(&router, "GET", &own_uri, Some(&token)).await,
+            StatusCode::UNAUTHORIZED
         );
     }
 
@@ -8023,7 +9051,7 @@ mod tests {
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
-                LaneTransportKind::InMemory,
+                LaneTransportKind::LocalDocker,
                 None,
                 None,
                 Duration::from_secs(0),
@@ -8033,6 +9061,7 @@ mod tests {
                 default_server_workspace_root(),
                 default_server_docker_image(),
                 default_server_docker_server_url(),
+                WorkerAccess::new(None, 7200),
             ),
         );
 
@@ -8065,7 +9094,7 @@ mod tests {
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
-                LaneTransportKind::InMemory,
+                LaneTransportKind::LocalDocker,
                 None,
                 None,
                 Duration::from_secs(0),
@@ -8075,6 +9104,7 @@ mod tests {
                 default_server_workspace_root(),
                 default_server_docker_image(),
                 default_server_docker_server_url(),
+                WorkerAccess::new(None, 7200),
             ),
         );
 
@@ -8661,7 +9691,7 @@ mod tests {
 
         let restored = ServerState::new_with_transport_kind_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            LaneTransportKind::InMemory,
+            LaneTransportKind::LocalDocker,
             Some(state_file),
         );
         let restored_task = restored.tasks.get(&task_id).expect("task should reload");
@@ -8693,7 +9723,7 @@ mod tests {
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let app = app(state.clone());
@@ -8731,7 +9761,7 @@ mod tests {
 
         let restored = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let restored_task = restored
@@ -8758,7 +9788,7 @@ mod tests {
         );
         assert_eq!(
             restored_context.execution_backend.as_deref(),
-            Some("in_memory")
+            Some("local_docker")
         );
         assert_eq!(restored_context.source.as_deref(), Some("api"));
         assert_eq!(restored_context.worker_status.as_deref(), Some("running"));
@@ -8787,7 +9817,7 @@ mod tests {
         );
         assert_eq!(snapshot["base_ref"], "develop");
         assert_eq!(snapshot["branch"], "frontal-code/persisted-work");
-        assert_eq!(snapshot["execution_backend"], "in_memory");
+        assert_eq!(snapshot["execution_backend"], "local_docker");
         assert_eq!(snapshot["worker_status"], "running");
 
         let _ = fs::remove_dir_all(dir);
@@ -8799,7 +9829,7 @@ mod tests {
         let state_file = dir.join("state.json");
         let state = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let app = app(state.clone());
@@ -8861,7 +9891,7 @@ mod tests {
 
         let restored = Arc::new(ServerState::with_lane_transport_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            Arc::new(InMemoryLaneWorkerTransport::new()),
+            Arc::new(FakeLaneWorkerTransport::new()),
             state_file.clone(),
         ));
         let restored_events = restored.replay_events();
@@ -9776,5 +10806,47 @@ mod tests {
             Some(&json!("https://github.com/acme/payments/pull/42"))
         );
         assert_eq!(payload.get("pr_number"), Some(&json!(42)));
+    }
+}
+
+#[cfg(test)]
+mod callback_port_tests {
+    use super::*;
+
+    fn config(url: &str, bind_port: u16) -> ServerConfig {
+        ServerConfig {
+            lane_transport_kind: LaneTransportKind::LocalDocker,
+            docker_server_url: url.to_string(),
+            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), bind_port),
+            ..ServerConfig::default()
+        }
+    }
+
+    #[test]
+    fn a_callback_url_on_the_listening_port_is_accepted() {
+        assert!(check_callback_port(&config("http://host.docker.internal:8790", 8790)).is_ok());
+    }
+
+    #[test]
+    fn a_callback_url_without_a_port_is_refused() {
+        let error =
+            check_callback_port(&config("http://host.docker.internal", 8790)).expect_err("no port");
+        assert!(error.contains("must include the port"));
+    }
+
+    #[test]
+    fn a_callback_url_on_another_port_is_refused() {
+        let error = check_callback_port(&config("http://host.docker.internal:9000", 8790))
+            .expect_err("wrong port");
+        assert!(error.contains("names port 9000"));
+    }
+
+    #[test]
+    fn the_check_does_not_apply_to_other_transports() {
+        let config = ServerConfig {
+            lane_transport_kind: LaneTransportKind::ToolsAgent,
+            ..config("http://elsewhere", 8790)
+        };
+        assert!(check_callback_port(&config).is_ok());
     }
 }

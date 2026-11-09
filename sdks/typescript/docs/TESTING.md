@@ -12,19 +12,34 @@ predefined JSONL events over stdout.
 
 ## Running Tests
 
+CI installs with Bun from the repository root. Run the same commands locally:
+
 ```bash
-# Run all tests
-npm test
+# From the repository root
+bun install
+bun run --filter @frontal-labs/code-sdk test
 
-# Run with coverage
-npm run test:coverage
+# One file (from sdks/typescript)
+bunx vitest run tests/thread.test.ts
 
-# Run specific test file
-npm test -- tests/thread.test.ts
-
-# Watch mode
-npm run test:watch
+# Watch mode (from sdks/typescript)
+bunx vitest
 ```
+
+`npm ci` inside `sdks/typescript` does not work: the root `package.json` declares the workspace, and the lockfile that CI uses is `bun.lock`.
+
+### End-to-end suite (real CLI)
+
+`tests/e2e.test.ts` runs the real `code` binary against a live model. It is skipped unless `FRONTAL_CODE_E2E_BIN` is set. The default provider is a local Ollama server:
+
+```bash
+cargo build -p cli
+ollama pull qwen2.5:1.5b
+FRONTAL_CODE_E2E_BIN="$PWD/target/debug/code" \
+  npx vitest run tests/e2e.test.ts
+```
+
+Optional: `FRONTAL_CODE_E2E_PROVIDER` (default `ollama`; `openai` also needs `OPENAI_API_KEY`), `FRONTAL_CODE_E2E_MODEL` (default `qwen2.5:1.5b`), `OLLAMA_BASE_URL` (default `http://localhost:11434`), and `FRONTAL_CODE_E2E_MAX_TOKENS` (default `1024`). A skipped run reports as passing, so check that the variables are set before you read a green result.
 
 ## Test Structure
 

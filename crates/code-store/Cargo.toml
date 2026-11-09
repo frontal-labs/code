@@ -1,5 +1,5 @@
 [package]
-name = "code-conversation-store"
+name = "code-store"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

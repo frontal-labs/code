@@ -56,7 +56,6 @@ use code_integrations::mcp::integration::{
     global_integration_registry, CheckRunOutput, IntegrationConfig, IntegrationTools,
 };
 use code_plugins::{PluginHooks, PluginManager, PluginManagerConfig, PluginRegistry};
-use code_repo::{push_branch, repo_status, stage_and_commit, RepoCommitRequest};
 use code_runtime::{
     format_usd, load_system_prompt, permission_enforcer::PermissionEnforcer, pricing_for_model,
     resolve_sandbox_status, ApiClient, ApiRequest, AssistantEvent, CompactionConfig, ConfigLoader,
@@ -77,6 +76,15 @@ const DEFAULT_MODEL: &str = "claude-opus-5-5";
 const DEFAULT_HOSTED_SERVER_URL: &str = "http://127.0.0.1:8788";
 const HOSTED_SERVER_TIMEOUT_SECS: u64 = 30;
 fn max_tokens_for_model(model: &str) -> u32 {
+    // Operators can cap output size explicitly, for example when a gateway or
+    // prepaid balance cannot cover the model's full output ceiling.
+    if let Some(value) = env::var("FRONTAL_CODE_MAX_OUTPUT_TOKENS")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u32>().ok())
+        .filter(|value| *value > 0)
+    {
+        return value;
+    }
     if model.contains("gpt-4.1") {
         32_768
     } else if model.contains("opus")
@@ -203,8 +211,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             output_format,
             allowed_tools,
             permission_mode,
-        } => LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?
-            .run_turn_with_output(&prompt, output_format)?,
+            options,
+        } => run_prompt_action(
+            &prompt,
+            model,
+            provider,
+            output_format,
+            allowed_tools,
+            permission_mode,
+            &options,
+        )?,
         CliAction::Doctor { output_format } => run_doctor(output_format)?,
         CliAction::Init { output_format } => run_init(output_format)?,
         CliAction::Hosted {
@@ -315,6 +331,16 @@ fn attach_session_tracer(
     }
 }
 
+/// Flags accepted by the `prompt` subcommand. The SDKs drive the CLI through
+/// these: `--stream` emits JSONL turn events, `--resume` continues a session,
+/// and `--config` carries run-scoped overrides.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct PromptOptions {
+    stream: bool,
+    resume: Option<String>,
+    config: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CliAction {
     Login {
@@ -388,6 +414,7 @@ enum CliAction {
         output_format: CliOutputFormat,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
+        options: PromptOptions,
     },
     Doctor {
         output_format: CliOutputFormat,
@@ -639,6 +666,14 @@ struct HostedTaskRuntimeResponse {
 struct HostedTaskWorkerPayload {
     task_id: String,
     prompt: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    base_commit: Option<String>,
+    /// Shell commands allowed without asking, from the server. Repository settings cannot widen them.
+    #[serde(default)]
+    bash_allow: Vec<String>,
+    /// Shell commands never allowed, from the server.
+    #[serde(default)]
+    bash_deny: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -750,6 +785,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let mut wants_version = false;
     let mut allowed_tool_values = Vec::new();
     let mut rest = Vec::new();
+    let mut dash_p_prompt: Option<String> = None;
     let mut index = 0;
 
     while index < args.len() {
@@ -811,20 +847,19 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 index += 1;
             }
             "-p" => {
-                // FrontalCode compat: -p "prompt" = one-shot prompt
-                let prompt = args[index + 1..].join(" ");
-                if prompt.trim().is_empty() {
+                // FrontalCode compat: -p "prompt" = one-shot prompt. The words run
+                // until the next `--flag`, so `prompt -p hi --stream` still parses
+                // its flags instead of treating them as prompt text.
+                index += 1;
+                let mut words = Vec::new();
+                while index < args.len() && !args[index].starts_with("--") {
+                    words.push(args[index].clone());
+                    index += 1;
+                }
+                if words.iter().all(|word| word.trim().is_empty()) {
                     return Err("-p requires a prompt string".to_string());
                 }
-                return Ok(CliAction::Prompt {
-                    prompt,
-                    model: resolve_model_alias(&model).to_string(),
-                    provider: provider.clone(),
-                    output_format,
-                    allowed_tools: normalize_allowed_tools(&allowed_tool_values)?,
-                    permission_mode: permission_mode_override
-                        .unwrap_or_else(default_permission_mode),
-                });
+                dash_p_prompt = Some(words.join(" "));
             }
             "--print" => {
                 // FrontalCode compat: --print makes output non-interactive
@@ -874,6 +909,10 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     }
 
     let allowed_tools = normalize_allowed_tools(&allowed_tool_values)?;
+
+    if dash_p_prompt.is_some() && rest.first().map(String::as_str) != Some("prompt") {
+        rest.insert(0, "prompt".to_string());
+    }
 
     if rest.is_empty() {
         let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
@@ -929,6 +968,19 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             action: rest.get(1).cloned(),
             target: rest.get(2).cloned(),
         }),
+        // Without this arm `repl` fell through to the shorthand prompt path and
+        // was sent to the model as text.
+        "repl" => Ok(CliAction::Repl {
+            model,
+            provider: provider.clone(),
+            allowed_tools,
+            permission_mode,
+        }),
+        "plugins" => Ok(CliAction::Plugins {
+            action: rest.get(1).cloned(),
+            target: rest.get(2).cloned(),
+            output_format,
+        }),
         "agents" => Ok(CliAction::Agents {
             args: join_optional_args(&rest[1..]),
             output_format,
@@ -954,6 +1006,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                     output_format,
                     allowed_tools,
                     permission_mode,
+                    options: PromptOptions::default(),
                 }),
                 SkillSlashDispatch::Local => Ok(CliAction::Skills {
                     args,
@@ -965,10 +1018,11 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
         "system-prompt" => parse_system_prompt_args(&rest[1..], output_format),
         "init" => Ok(CliAction::Init { output_format }),
         "prompt" => {
-            let prompt = rest[1..].join(" ");
-            if prompt.trim().is_empty() {
-                return Err("prompt subcommand requires a prompt string".to_string());
-            }
+            let (prompt, options) = parse_prompt_subcommand_args(
+                dash_p_prompt.as_deref(),
+                &rest[1..],
+                output_format,
+            )?;
             Ok(CliAction::Prompt {
                 prompt,
                 model,
@@ -976,6 +1030,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 output_format,
                 allowed_tools,
                 permission_mode,
+                options,
             })
         }
         other if other.starts_with('/') => parse_direct_slash_cli_action(
@@ -986,14 +1041,18 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             permission_mode,
             provider.as_ref(),
         ),
-        _other => Ok(CliAction::Prompt {
-            prompt: rest.join(" "),
-            model,
-            provider: provider.clone(),
-            output_format,
-            allowed_tools,
-            permission_mode,
-        }),
+        _other => {
+            reject_flags_in_prompt_text(&rest)?;
+            Ok(CliAction::Prompt {
+                prompt: rest.join(" "),
+                model,
+                provider: provider.clone(),
+                output_format,
+                allowed_tools,
+                permission_mode,
+                options: PromptOptions::default(),
+            })
+        }
     }
 }
 
@@ -1716,6 +1775,7 @@ fn parse_direct_slash_cli_action(
                     output_format,
                     allowed_tools,
                     permission_mode,
+                    options: PromptOptions::default(),
                 }),
                 SkillSlashDispatch::Local => Ok(CliAction::Skills {
                     args,
@@ -1735,6 +1795,85 @@ fn parse_direct_slash_cli_action(
         Ok(None) => Err(format!("unknown subcommand: {}", rest[0])),
         Err(error) => Err(error.to_string()),
     }
+}
+
+/// Free text that becomes a prompt must not carry unknown `--flags`. Without this
+/// check, a flag placed where prompt text is expected (for example `prompt --stream`)
+/// is sent to the model as if the user had typed it. Quoted text containing `--`
+/// is still a single argument and is not affected.
+fn reject_flags_in_prompt_text(tokens: &[String]) -> Result<(), String> {
+    match tokens.iter().find(|token| token.starts_with("--")) {
+        Some(flag) => Err(format_unknown_option(flag)),
+        None => Ok(()),
+    }
+}
+
+/// Config keys a `prompt --config KEY=VALUE` run may override. Anything else is
+/// rejected up front rather than silently ignored.
+const PROMPT_CONFIG_KEYS: &[&str] = &["frontal_base_url", "skip_git_repo_check"];
+
+/// Parses `prompt [-p TEXT] [--stream] [--resume REF] [--config KEY=VALUE] [TEXT...]`.
+fn parse_prompt_subcommand_args(
+    dash_p_prompt: Option<&str>,
+    args: &[String],
+    output_format: CliOutputFormat,
+) -> Result<(String, PromptOptions), String> {
+    let mut options = PromptOptions::default();
+    let mut words = Vec::new();
+    if let Some(text) = dash_p_prompt {
+        words.push(text.to_string());
+    }
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--stream" => {
+                options.stream = true;
+                index += 1;
+            }
+            "--resume" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --resume".to_string())?;
+                options.resume = Some(value.clone());
+                index += 2;
+            }
+            "--config" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --config".to_string())?;
+                let (key, literal) = value
+                    .split_once('=')
+                    .ok_or_else(|| format!("--config expects KEY=VALUE, got `{value}`"))?;
+                if !PROMPT_CONFIG_KEYS.contains(&key) {
+                    return Err(format!(
+                        "unsupported --config key `{key}`; supported keys: {}",
+                        PROMPT_CONFIG_KEYS.join(", ")
+                    ));
+                }
+                options.config.push((key.to_string(), literal.to_string()));
+                index += 2;
+            }
+            "--image" => {
+                return Err(
+                    "--image is not supported: image input is not wired to any provider yet"
+                        .to_string(),
+                )
+            }
+            flag if flag.starts_with("--") => return Err(format_unknown_option(flag)),
+            word => {
+                words.push(word.to_string());
+                index += 1;
+            }
+        }
+    }
+    let prompt = words.join(" ");
+    if prompt.trim().is_empty() {
+        return Err("prompt subcommand requires a prompt string".to_string());
+    }
+    if options.stream && output_format != CliOutputFormat::Json {
+        return Err("--stream requires --output-format json".to_string());
+    }
+    Ok((prompt, options))
 }
 
 fn format_unknown_option(option: &str) -> String {
@@ -3156,13 +3295,18 @@ fn validate_hosted_server_url(raw: &str) -> Result<reqwest::Url, Box<dyn std::er
         .map_err(|error| format!("invalid hosted server URL '{raw}': {error}"))?;
     let host = url.host_str().unwrap_or_default();
     let is_loopback = matches!(host, "localhost" | "127.0.0.1" | "[::1]");
+    // A worker container reaches the server that launched it through the Docker host
+    // alias. The server sets FRONTAL_CODE_HOSTED_WORKER only in containers it starts,
+    // so this exception does not apply to a user's own shell.
+    let is_worker_host_alias = matches!(host, "host.docker.internal" | "frontal-relay")
+        && env::var("FRONTAL_CODE_HOSTED_WORKER").is_ok_and(|value| value == "1");
     match url.scheme() {
         "https" | "wss" => Ok(url),
-        "http" | "ws" if is_loopback => Ok(url),
+        "http" | "ws" if is_loopback || is_worker_host_alias => Ok(url),
         "http" | "ws" => Err(format!(
             "refusing to send credentials over cleartext {} to non-loopback host '{host}'; \
              use https (or wss) for hosted server URLs. http/ws is only permitted for \
-             localhost, 127.0.0.1, and [::1]",
+             localhost, 127.0.0.1, [::1], and the Docker host alias inside hosted worker containers",
             url.scheme()
         )
         .into()),
@@ -3412,14 +3556,6 @@ fn update_hosted_task_github(
     Ok(response.json()?)
 }
 
-fn hosted_git_author_name() -> String {
-    code_runtime::GIT_AUTHOR_NAME.to_string()
-}
-
-fn hosted_git_author_email() -> String {
-    code_runtime::GIT_AUTHOR_EMAIL.to_string()
-}
-
 #[derive(Debug, Clone)]
 struct GitHubRepoRef {
     owner: String,
@@ -3469,46 +3605,6 @@ fn summarize_hosted_prompt(prompt: &str) -> String {
     summary
 }
 
-fn default_hosted_commit_message(task_id: &str, prompt: &str) -> String {
-    format!(
-        "frontal-code: {} ({task_id})",
-        summarize_hosted_prompt(prompt)
-    )
-}
-
-fn default_hosted_pr_draft(
-    payload: &HostedTaskWorkerPayload,
-    published_branch: &str,
-    commit_sha: &str,
-) -> Option<PrDraft> {
-    let repo_url = payload.repo_url.as_deref()?;
-    let repo = parse_github_repo_url(repo_url).ok()?;
-    let base = payload.base_ref.as_deref()?.trim();
-    if base.is_empty() || base == published_branch {
-        return None;
-    }
-
-    Some(PrDraft {
-        title: summarize_hosted_prompt(&payload.prompt),
-        body: format!(
-            "Automated by FrontalCode hosted task `{}`.\n\nRepository: {}\nBranch: {}\nCommit: {}\n\nPrompt:\n{}\n",
-            payload.task_id,
-            payload
-                .repository
-                .as_deref()
-                .or(payload.repo_url.as_deref())
-                .unwrap_or("unknown"),
-            published_branch,
-            commit_sha,
-            payload.prompt.trim()
-        ),
-        head: published_branch.to_string(),
-        base: base.to_string(),
-        draft: true,
-        repo,
-    })
-}
-
 #[derive(Debug, Clone)]
 struct PrDraft {
     title: String,
@@ -3519,95 +3615,80 @@ struct PrDraft {
     repo: GitHubRepoRef,
 }
 
+/// The worker's changes as a patch against the commit the server recorded. Paths the
+/// server's own state lives in are excluded, so they never reach the patch.
+fn worker_patch(
+    checkout_root: &Path,
+    base_commit: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    git_stdout(
+        checkout_root,
+        &[
+            "add",
+            "-A",
+            "--",
+            ".",
+            ":(exclude).frontal-code-hosted",
+            ":(exclude).frontal-code",
+        ],
+    )?;
+    git_stdout(
+        checkout_root,
+        &["diff", "--cached", "--binary", "--no-ext-diff", base_commit],
+    )
+}
+
+fn git_stdout(cwd: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
+    let output = Command::new("git").current_dir(cwd).args(args).output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "git {} failed: {}",
+            args.first().copied().unwrap_or(""),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Sends the worker's changes to the server, which applies them to a fresh clone and
+/// pushes the branch. The worker holds no GitHub credentials.
 fn publish_hosted_repo_changes(
+    client: &HttpClient,
+    server_url: &str,
     checkout_root: &Path,
     payload: &HostedTaskWorkerPayload,
 ) -> Result<Option<HostedTaskGithubResponse>, Box<dyn std::error::Error>> {
-    let status = match repo_status(checkout_root) {
-        Ok(status) => status,
-        Err(error) => {
-            let message = error.to_string();
-            if message.contains("not a git repository") {
-                return Ok(None);
-            }
-            return Err(error.into());
-        }
+    // A scratch workspace has no repository, so there is nothing to publish.
+    let Some(base_commit) = payload.base_commit.as_deref() else {
+        return Ok(None);
     };
-    if !status.dirty {
+    let patch = worker_patch(checkout_root, base_commit)?;
+    if patch.trim().is_empty() {
         return Ok(None);
     }
 
-    let published_branch = payload
-        .branch
-        .clone()
-        .or(status.branch.clone())
-        .ok_or_else(|| {
-            format!(
-                "cannot publish hosted task {} from detached HEAD without a target branch",
-                payload.task_id
-            )
-        })?;
-    let commit = stage_and_commit(
-        checkout_root,
-        &RepoCommitRequest {
-            message: default_hosted_commit_message(&payload.task_id, &payload.prompt),
-            author_name: Some(hosted_git_author_name()),
-            author_email: Some(hosted_git_author_email()),
-        },
-    )?;
-    push_branch(checkout_root, "origin", &published_branch)?;
-
-    let mut github = HostedTaskGithubResponse {
-        published_remote: Some("origin".to_string()),
-        published_branch: Some(published_branch.clone()),
-        published_commit_sha: Some(commit.commit_sha.clone()),
-        ..HostedTaskGithubResponse::default()
-    };
-
-    if let (Some(repo_url), Some(draft)) = (
-        payload.repo_url.as_deref(),
-        default_hosted_pr_draft(payload, &published_branch, &commit.commit_sha),
-    ) {
-        let repo = &draft.repo;
-        let result = global_integration_registry().call_github_create_pr(
-            &repo.owner,
-            &repo.repo,
-            &draft.title,
-            &draft.body,
-            &draft.head,
-            &draft.base,
-            draft.draft,
-        );
-        if let Ok(pr_result) = result {
-            github.owner = Some(repo.owner.clone());
-            github.repo = Some(repo.repo.clone());
-            if let Some(number) = pr_result.get("number").and_then(Value::as_u64) {
-                github.pr_number = Some(number);
-            }
-            if let Some(url) = pr_result.get("html_url").and_then(|v| v.as_str()) {
-                github.pr_url = Some(url.to_string());
-            }
-            if let Some(url) = pr_result.get("url").and_then(|v| v.as_str()) {
-                github.pr_api_url = Some(url.to_string());
-            }
-            if let Some(head) = pr_result
-                .get("head")
-                .and_then(|v| v.get("ref"))
-                .and_then(|v| v.as_str())
-            {
-                github.pr_head_ref = Some(head.to_string());
-            }
-            if let Some(base) = pr_result
-                .get("base")
-                .and_then(|v| v.get("ref"))
-                .and_then(|v| v.as_str())
-            {
-                github.pr_base_ref = Some(base.to_string());
-            }
-        }
+    let url = format!("{server_url}/v1/tasks/{}/publish", payload.task_id);
+    let response = authorize_hosted_request(client.post(url))
+        .json(&json!({ "patch": patch }))
+        .send()?;
+    let status = response.status();
+    let body: Value = response.json().unwrap_or(Value::Null);
+    if !status.is_success() {
+        let message = body
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("the server refused the publication");
+        return Err(format!("could not publish the changes: {message}").into());
     }
-
-    Ok(Some(github))
+    let text = |key: &str| body.get(key).and_then(Value::as_str).map(str::to_string);
+    Ok(Some(HostedTaskGithubResponse {
+        published_remote: text("published_remote"),
+        published_branch: text("published_branch"),
+        published_commit_sha: text("published_commit_sha"),
+        pr_url: text("pr_url"),
+        ..HostedTaskGithubResponse::default()
+    }))
 }
 
 fn augment_hosted_result_with_publication(
@@ -3645,68 +3726,6 @@ fn summarize_hosted_result(value: Option<&str>, fallback: &str) -> String {
         )
 }
 
-fn report_hosted_task_to_github(
-    task_id: &str,
-    server_url: &str,
-    github: &HostedTaskGithubResponse,
-    result: Option<&str>,
-    error: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let (Some(owner), Some(repo)) = (github.owner.as_deref(), github.repo.as_deref()) else {
-        return Ok(());
-    };
-    let details_url = format!("{server_url}/v1/tasks/{task_id}");
-
-    if let Some(head_sha) = github.published_commit_sha.as_deref() {
-        let success = error.is_none();
-        let summary = if success {
-            summarize_hosted_result(result, "Hosted task completed successfully.")
-        } else {
-            summarize_hosted_result(error, "Hosted task failed.")
-        };
-        let text = result
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .or(error.map(str::trim).filter(|value| !value.is_empty()))
-            .map(str::to_string);
-        let _ = global_integration_registry().call_github_create_check_run(
-            owner,
-            repo,
-            "frontal-code/hosted-task",
-            head_sha,
-            "completed",
-            Some(if success { "success" } else { "failure" }),
-            Some(&details_url),
-            Some(&CheckRunOutput {
-                title: if success {
-                    format!("FrontalCode task {task_id} completed")
-                } else {
-                    format!("FrontalCode task {task_id} failed")
-                },
-                summary,
-                text,
-            }),
-        );
-    }
-
-    if let Some(pr_number) = github.pr_number {
-        let body = if let Some(error) = error.filter(|value| !value.trim().is_empty()) {
-            format!(
-                "FrontalCode hosted task `{task_id}` failed.\n\nTask: {details_url}\n\nError:\n{error}\n"
-            )
-        } else {
-            format!(
-                "FrontalCode hosted task `{task_id}` completed.\n\nTask: {details_url}\n\nSummary:\n{}\n",
-                summarize_hosted_result(result, "Hosted task completed successfully.")
-            )
-        };
-        let _ = global_integration_registry()
-            .call_github_create_issue_comment(owner, repo, pr_number, &body);
-    }
-
-    Ok(())
-}
-
 fn run_hosted_task_worker(
     client: &HttpClient,
     server_url: &str,
@@ -3714,7 +3733,7 @@ fn run_hosted_task_worker(
     output_format: CliOutputFormat,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let payload = load_hosted_task_worker_payload(task_id)?;
-    let mut github = get_hosted_task_github(client, server_url, task_id).unwrap_or_default();
+    let github = get_hosted_task_github(client, server_url, task_id).unwrap_or_default();
     let model = payload
         .model
         .clone()
@@ -3726,6 +3745,11 @@ fn run_hosted_task_worker(
         .transpose()?
         .unwrap_or_else(default_permission_mode);
     let allowed_tools = normalize_allowed_tools(&payload.allowed_tools)?;
+    let _ = WORKER_PERMISSION_RULES.set(code_runtime::RuntimePermissionRuleConfig::new(
+        payload.bash_allow.clone(),
+        payload.bash_deny.clone(),
+        Vec::new(),
+    ));
     let mut cli = LiveCli::new_with_provider(
         model,
         payload.provider.clone(),
@@ -3745,12 +3769,20 @@ fn run_hosted_task_worker(
                 .get("message")
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            if let Some(github_update) = publish_hosted_repo_changes(Path::new("."), &payload)? {
-                github = update_hosted_task_github(client, server_url, task_id, &github_update)?;
-                result = augment_hosted_result_with_publication(result, &github);
+            match publish_hosted_repo_changes(client, server_url, Path::new("."), &payload) {
+                Ok(Some(publication)) => {
+                    result = augment_hosted_result_with_publication(result, &publication);
+                }
+                Ok(None) => {}
+                // The run itself succeeded. The publication failure is recorded in the result.
+                Err(error) => {
+                    let note = format!("Publication failed: {error}");
+                    result = Some(match result {
+                        Some(value) if !value.trim().is_empty() => format!("{value}\n\n{note}"),
+                        _ => note,
+                    });
+                }
             }
-            let _ =
-                report_hosted_task_to_github(task_id, server_url, &github, result.as_deref(), None);
             let response = complete_hosted_task(
                 client,
                 server_url,
@@ -3771,13 +3803,6 @@ fn run_hosted_task_worker(
         }
         Err(error) => {
             let error_message = error.to_string();
-            let _ = report_hosted_task_to_github(
-                task_id,
-                server_url,
-                &github,
-                None,
-                Some(&error_message),
-            );
             let _ = complete_hosted_task(
                 client,
                 server_url,
@@ -4702,6 +4727,43 @@ fn version_json_value() -> serde_json::Value {
         "git_sha": GIT_SHA,
         "target": BUILD_TARGET,
     })
+}
+
+fn run_prompt_action(
+    prompt: &str,
+    model: String,
+    provider: Option<String>,
+    output_format: CliOutputFormat,
+    allowed_tools: Option<AllowedToolSet>,
+    permission_mode: PermissionMode,
+    options: &PromptOptions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (key, literal) in &options.config {
+        if key == "frontal_base_url" {
+            env::set_var("FRONTAL_BASE_URL", literal);
+        }
+    }
+    let mut cli = match options.resume.as_deref() {
+        Some(reference) => LiveCli::resume_with_provider(
+            reference,
+            model,
+            provider,
+            true,
+            allowed_tools,
+            permission_mode,
+        )?,
+        None => LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?,
+    };
+    if options.stream {
+        cli.run_turn_jsonl_stream(prompt)
+    } else {
+        cli.run_turn_with_output(prompt, output_format)
+    }
+}
+
+fn print_jsonl_event(event: &Value) -> Result<(), Box<dyn std::error::Error>> {
+    println!("{}", serde_json::to_string(event)?);
+    Ok(())
 }
 
 fn resume_session(session_path: &Path, commands: &[String], output_format: CliOutputFormat) {
@@ -6153,26 +6215,8 @@ impl LiveCli {
         permission_mode: PermissionMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let system_prompt = build_system_prompt()?;
-        let mut effective_model = model;
-        let effective_provider = if let Some(provider_name) = provider.as_deref() {
-            Some(provider_name.to_string())
-        } else if code_api::model_requires_responses(&effective_model) {
-            // Codex models are only served by OpenAI, whatever the configured default is.
-            Some("openai".to_string())
-        } else {
-            // No explicit provider: honor the configured default provider so that
-            // `runtime.default_provider` is authoritative for the no-flag path.
-            match ConfigurationManager::load() {
-                Ok(config_manager) => Some(config_manager.default_provider().to_string()),
-                Err(_) => None,
-            }
-        };
-
-        if let Some(provider_name) = effective_provider.as_deref() {
-            if provider_name.eq_ignore_ascii_case("ollama") && effective_model == DEFAULT_MODEL {
-                effective_model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
-            }
-        }
+        let (effective_model, effective_provider) =
+            resolve_effective_model_and_provider(model, provider);
 
         let mut session_state = Session::new();
         session_state.set_metadata(session_metadata_for_new_session(
@@ -6180,21 +6224,71 @@ impl LiveCli {
             effective_provider.as_deref(),
         ));
         let session = create_managed_session_handle(&session_state.session_id)?;
+        Self::assemble(
+            session_state,
+            session,
+            effective_model,
+            effective_provider,
+            system_prompt,
+            enable_tools,
+            allowed_tools,
+            permission_mode,
+        )
+    }
+
+    /// Continues a stored session. The caller's model and provider apply to the
+    /// next turn, and the stored transcript is kept as is.
+    fn resume_with_provider(
+        reference: &str,
+        model: String,
+        provider: Option<String>,
+        enable_tools: bool,
+        allowed_tools: Option<AllowedToolSet>,
+        permission_mode: PermissionMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let system_prompt = build_system_prompt()?;
+        let (effective_model, effective_provider) =
+            resolve_effective_model_and_provider(model, provider);
+        let session = resolve_session_reference(reference)?;
+        let session_state = Session::load_from_path(&session.path)?;
+        Self::assemble(
+            session_state,
+            session,
+            effective_model,
+            effective_provider,
+            system_prompt,
+            enable_tools,
+            allowed_tools,
+            permission_mode,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn assemble(
+        session_state: Session,
+        session: SessionHandle,
+        model: String,
+        provider: Option<String>,
+        system_prompt: Vec<String>,
+        enable_tools: bool,
+        allowed_tools: Option<AllowedToolSet>,
+        permission_mode: PermissionMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let runtime = build_runtime_with_provider(
             session_state.with_persistence_path(session.path.clone()),
             &session.id,
-            effective_model.clone(),
+            model.clone(),
             system_prompt.clone(),
             enable_tools,
             true,
             allowed_tools.clone(),
             permission_mode,
-            effective_provider.clone(),
+            provider.clone(),
             None,
         )?;
         let cli = Self {
-            model: effective_model,
-            provider: effective_provider,
+            model,
+            provider,
             allowed_tools,
             permission_mode,
             system_prompt,
@@ -6307,6 +6401,57 @@ impl LiveCli {
         Ok(())
     }
 
+    /// Runs one turn and prints it as JSONL events, the protocol the SDKs parse:
+    /// `turn.started`, one `item.completed` per tool call, tool result, and text,
+    /// then `turn.completed` (or `turn.failed`). Events are emitted once the turn
+    /// finishes, not token by token.
+    fn run_turn_jsonl_stream(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        print_jsonl_event(&json!({ "type": "turn.started" }))?;
+        let summary = match self.run_prompt_json_value(input) {
+            Ok(summary) => summary,
+            Err(error) => {
+                print_jsonl_event(&json!({
+                    "type": "turn.failed",
+                    "error": error.to_string(),
+                }))?;
+                return Err(error);
+            }
+        };
+
+        for tool_use in summary["tool_uses"].as_array().into_iter().flatten() {
+            print_jsonl_event(&json!({
+                "type": "item.completed",
+                "item": {
+                    "type": "tool_use",
+                    "name": tool_use["name"],
+                    "input": tool_use["input"],
+                },
+            }))?;
+        }
+        for tool_result in summary["tool_results"].as_array().into_iter().flatten() {
+            print_jsonl_event(&json!({
+                "type": "item.completed",
+                "item": {
+                    "type": "tool_result",
+                    "content": tool_result["output"],
+                },
+            }))?;
+        }
+
+        let message = summary["message"].clone();
+        print_jsonl_event(&json!({
+            "type": "item.completed",
+            "item": { "type": "text", "text": message },
+        }))?;
+        print_jsonl_event(&json!({
+            "type": "turn.completed",
+            "finalResponse": message,
+            "usage": summary["usage"],
+            "sessionId": summary["session_id"],
+        }))?;
+        Ok(())
+    }
+
     fn run_prompt_json_value(&mut self, input: &str) -> Result<Value, Box<dyn std::error::Error>> {
         let (mut runtime, hook_abort_monitor) = self.prepare_turn_runtime(false)?;
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
@@ -6317,6 +6462,7 @@ impl LiveCli {
         self.persist_session()?;
         Ok(json!({
             "message": final_assistant_text(&summary),
+            "session_id": self.session.id,
             "model": self.model,
             "iterations": summary.iterations,
             "auto_compaction": summary.auto_compaction.map(|event| json!({
@@ -7081,6 +7227,35 @@ fn sessions_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let path = cwd.join(".frontal-code").join("sessions");
     fs::create_dir_all(&path)?;
     Ok(path)
+}
+
+/// Picks the model and provider a session should run with. Explicit flags win;
+/// otherwise the configured default provider applies.
+fn resolve_effective_model_and_provider(
+    model: String,
+    provider: Option<String>,
+) -> (String, Option<String>) {
+    let mut effective_model = model;
+    let effective_provider = if let Some(provider_name) = provider.as_deref() {
+        Some(provider_name.to_string())
+    } else if code_api::model_requires_responses(&effective_model) {
+        // Codex models are only served by OpenAI, whatever the configured default is.
+        Some("openai".to_string())
+    } else {
+        // No explicit provider: honor the configured default provider so that
+        // `runtime.default_provider` is authoritative for the no-flag path.
+        match ConfigurationManager::load() {
+            Ok(config_manager) => Some(config_manager.default_provider().to_string()),
+            Err(_) => None,
+        }
+    };
+
+    if let Some(provider_name) = effective_provider.as_deref() {
+        if provider_name.eq_ignore_ascii_case("ollama") && effective_model == DEFAULT_MODEL {
+            effective_model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
+        }
+    }
+    (effective_model, effective_provider)
 }
 
 fn create_managed_session_handle(
@@ -9231,7 +9406,7 @@ fn build_runtime_with_plugin_state_and_provider(
                     .with_prompt_cache(PromptCache::new(session_id)),
             )
         } else {
-            create_provider_client(&provider_name, effective_model.clone())?
+            create_provider_client(&provider_name, &effective_model)?
         }
     } else {
         ProviderClient::from_model(&effective_model)?
@@ -10708,6 +10883,27 @@ impl ToolExecutor for CliToolExecutor {
     }
 }
 
+/// Permission rules the server sent with a hosted task. Set once, before the worker's
+/// session starts. A worker's own repository settings cannot add allow rules.
+static WORKER_PERMISSION_RULES: std::sync::OnceLock<code_runtime::RuntimePermissionRuleConfig> =
+    std::sync::OnceLock::new();
+
+/// The worker's allow rules replace the repository's, so a checkout cannot grant itself
+/// commands. Deny and ask rules from both sources apply.
+fn merge_worker_permission_rules(
+    worker: Option<&code_runtime::RuntimePermissionRuleConfig>,
+    repository: code_runtime::RuntimePermissionRuleConfig,
+) -> code_runtime::RuntimePermissionRuleConfig {
+    match worker {
+        None => repository,
+        Some(worker) => code_runtime::RuntimePermissionRuleConfig::new(
+            worker.allow().to_vec(),
+            [worker.deny(), repository.deny()].concat(),
+            [worker.ask(), repository.ask()].concat(),
+        ),
+    }
+}
+
 fn permission_policy(
     mode: PermissionMode,
     feature_config: &code_runtime::RuntimeFeatureConfig,
@@ -10715,9 +10911,12 @@ fn permission_policy(
 ) -> Result<PermissionPolicy, String> {
     let project_policy = feature_config.policy();
     let mode = cap_permission_mode_for_policy(mode, project_policy);
-    let rules = feature_config
-        .permission_rules()
-        .with_extra_deny(&project_policy.deny_tools());
+    let rules = merge_worker_permission_rules(
+        WORKER_PERMISSION_RULES.get(),
+        feature_config
+            .permission_rules()
+            .with_extra_deny(&project_policy.deny_tools()),
+    );
     Ok(tool_registry.permission_specs(None)?.into_iter().fold(
         PermissionPolicy::new(mode).with_permission_rules(&rules),
         |policy, (name, required_permission)| {
@@ -11077,30 +11276,30 @@ mod tests {
     use super::{
         augment_hosted_result_with_publication, build_runtime_plugin_state_with_loader,
         build_runtime_with_plugin_state, cap_permission_mode_for_policy, config_json_value,
-        create_managed_session_handle, default_hosted_pr_draft, describe_tool_progress,
-        filter_tool_specs, format_bughunter_report, format_commit_preflight_report,
-        format_commit_skipped_report, format_compact_report, format_cost_report,
-        format_internal_prompt_progress_line, format_issue_report, format_model_report,
-        format_model_switch_report, format_permissions_report, format_permissions_switch_report,
-        format_pr_report, format_resume_report, format_status_report, format_tool_call_start,
-        format_tool_result, format_ultraplan_report, format_unknown_slash_command,
+        create_managed_session_handle, describe_tool_progress, filter_tool_specs,
+        format_bughunter_report, format_commit_preflight_report, format_commit_skipped_report,
+        format_compact_report, format_cost_report, format_internal_prompt_progress_line,
+        format_issue_report, format_model_report, format_model_switch_report,
+        format_permissions_report, format_permissions_switch_report, format_pr_report,
+        format_resume_report, format_status_report, format_tool_call_start, format_tool_result,
+        format_ultraplan_report, format_unknown_slash_command,
         format_unknown_slash_command_message, format_user_visible_api_error, hosted_events_ws_url,
         hosted_server_url, hosted_task_snapshot_from_event, load_hosted_task_worker_payload,
-        normalize_permission_mode, parse_args, parse_git_status_branch,
-        parse_git_status_metadata_for, parse_git_workspace_summary, permission_policy,
-        print_help_to, publish_hosted_repo_changes, push_output_block, render_config_report,
-        render_diff_report, render_diff_report_for, render_memory_report, render_repl_help,
-        render_resume_usage, render_telemetry_report, report_row, resolve_model_alias,
-        resolve_session_reference, resolve_telemetry_config, response_to_events,
-        resume_supported_slash_commands, run_resume_command,
+        merge_worker_permission_rules, normalize_permission_mode, parse_args,
+        parse_git_status_branch, parse_git_status_metadata_for, parse_git_workspace_summary,
+        permission_policy, print_help_to, publish_hosted_repo_changes, push_output_block,
+        render_config_report, render_diff_report, render_diff_report_for, render_memory_report,
+        render_repl_help, render_resume_usage, render_telemetry_report, report_row,
+        resolve_model_alias, resolve_session_reference, resolve_telemetry_config,
+        response_to_events, resume_supported_slash_commands, run_resume_command,
         slash_command_completion_candidates_with_sessions, status_context,
         telemetry_status_json_value, update_project_telemetry_settings, validate_hosted_server_url,
-        validate_no_args, write_mcp_server_fixture, CliAction, CliOutputFormat, CliToolExecutor,
-        EventEnvelope, GitWorkspaceSummary, HostedApprovalAction, HostedCommand, HostedEventName,
-        HostedEventStatus, HostedEventTopic, HostedEventWatchQuery, HostedTaskGithubResponse,
-        HostedTaskListQuery, HostedTaskWorkerPayload, InternalPromptProgressEvent,
-        InternalPromptProgressState, LiveCli, LocalHelpTopic, SlashCommand, StatusUsage,
-        DEFAULT_MODEL, FRONTAL_CODE_TELEMETRY_PATH,
+        validate_no_args, worker_patch, write_mcp_server_fixture, CliAction, CliOutputFormat,
+        CliToolExecutor, EventEnvelope, GitWorkspaceSummary, HostedApprovalAction, HostedCommand,
+        HostedEventName, HostedEventStatus, HostedEventTopic, HostedEventWatchQuery,
+        HostedTaskGithubResponse, HostedTaskListQuery, HostedTaskWorkerPayload,
+        InternalPromptProgressEvent, InternalPromptProgressState, LiveCli, LocalHelpTopic,
+        PromptOptions, SlashCommand, StatusUsage, DEFAULT_MODEL, FRONTAL_CODE_TELEMETRY_PATH,
     };
     use code_api::{ApiError, MessageResponse, OutputContentBlock, Usage};
     use code_events::EventIdentifiers;
@@ -11588,6 +11787,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11615,6 +11815,7 @@ mod tests {
                 output_format: CliOutputFormat::Json,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11641,6 +11842,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11671,6 +11873,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11696,6 +11899,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -11875,6 +12079,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
         assert_eq!(
@@ -12283,9 +12488,7 @@ mod tests {
         std::env::set_var("FRONTAL_CODE_SERVER_URL", "http://hosted.frontal-code.test");
         let error = hosted_server_url().expect_err("cleartext remote host must be rejected");
         assert!(error.to_string().contains("cleartext http"));
-        assert!(error
-            .to_string()
-            .contains("localhost, 127.0.0.1, and [::1]"));
+        assert!(error.to_string().contains("localhost, 127.0.0.1, [::1]"));
         std::env::remove_var("FRONTAL_CODE_SERVER_URL");
     }
 
@@ -12366,6 +12569,9 @@ mod tests {
                 provider: Some("openai".to_string()),
                 permission_mode: Some("workspace-write".to_string()),
                 allowed_tools: vec!["git".to_string()],
+                base_commit: None,
+                bash_allow: Vec::new(),
+                bash_deny: Vec::new(),
             })
             .unwrap(),
         )
@@ -12393,121 +12599,76 @@ mod tests {
     }
 
     #[test]
-    fn default_hosted_pr_draft_uses_repo_and_prompt_context() {
-        let payload = HostedTaskWorkerPayload {
-            task_id: "task_123".to_string(),
-            prompt: "Fix the flaky release workflow by pinning the Docker image".to_string(),
-            repository: Some("acme/payments".to_string()),
-            repo_url: Some("https://github.com/acme/payments.git".to_string()),
-            base_ref: Some("main".to_string()),
-            branch: Some("frontal-code/fix-release".to_string()),
-            model: None,
-            provider: None,
-            permission_mode: None,
-            allowed_tools: Vec::new(),
-        };
-
-        let draft = default_hosted_pr_draft(&payload, "frontal-code/fix-release", "abc123def456")
-            .expect("github payload should produce a PR draft");
-
-        assert_eq!(
-            draft.title,
-            "Fix the flaky release workflow by pinning the Docker image"
+    fn worker_rules_replace_repository_allow_rules_but_keep_every_deny() {
+        let worker = code_runtime::RuntimePermissionRuleConfig::new(
+            vec!["bash(cargo:*)".to_string()],
+            vec!["bash(curl:*)".to_string()],
+            Vec::new(),
         );
-        assert_eq!(draft.head, "frontal-code/fix-release");
-        assert_eq!(draft.base, "main");
-        assert!(draft.draft);
-        assert!(draft.body.contains("task_123"));
-        assert!(draft.body.contains("acme/payments"));
-        assert!(draft.body.contains("abc123def456"));
+        let repository = code_runtime::RuntimePermissionRuleConfig::new(
+            vec!["bash(curl:*)".to_string(), "bash(rm -rf:*)".to_string()],
+            vec!["bash(make clean:*)".to_string()],
+            vec!["bash(git push:*)".to_string()],
+        );
+        let merged = merge_worker_permission_rules(Some(&worker), repository);
+        assert_eq!(merged.allow(), ["bash(cargo:*)".to_string()]);
+        assert!(merged.deny().contains(&"bash(curl:*)".to_string()));
+        assert!(merged.deny().contains(&"bash(make clean:*)".to_string()));
+        assert!(merged.ask().contains(&"bash(git push:*)".to_string()));
+        // Without worker rules, the repository's own configuration is used unchanged.
+        let untouched = merge_worker_permission_rules(
+            None,
+            code_runtime::RuntimePermissionRuleConfig::new(
+                vec!["bash(ls:*)".to_string()],
+                Vec::new(),
+                Vec::new(),
+            ),
+        );
+        assert_eq!(untouched.allow(), ["bash(ls:*)".to_string()]);
     }
 
     #[test]
-    fn publish_hosted_repo_changes_commits_and_pushes_branch() {
-        let _guard = env_lock();
-        let previous_token = std::env::var_os("GITHUB_TOKEN");
-        let previous_api_base = std::env::var_os("FRONTAL_CODE_GITHUB_API_BASE");
-        std::env::remove_var("GITHUB_TOKEN");
-        std::env::remove_var("FRONTAL_CODE_GITHUB_API_BASE");
-
-        let remote = temp_dir();
-        let repo = temp_dir();
-        fs::create_dir_all(&remote).expect("remote dir should exist");
-        fs::create_dir_all(&repo).expect("repo dir should exist");
-
+    fn worker_patch_carries_the_worker_changes_and_not_server_state() {
+        let root = temp_dir();
+        let repo = root.join("checkout");
+        fs::create_dir_all(&repo).expect("repo dir");
+        git(&["init", "--quiet", "-b", "main"], &repo);
+        fs::write(repo.join("README.md"), "hello\n").expect("readme");
+        git(&["add", "."], &repo);
         git(
-            &["init", "--bare", remote.to_str().unwrap()],
-            Path::new("."),
-        );
-        git(&["init", "-b", "main"], &repo);
-        git(&["config", "user.name", "FrontalCode Test"], &repo);
-        git(&["config", "user.email", "frontal-code@test.dev"], &repo);
-        fs::write(repo.join("README.md"), "hello\n").expect("seed file");
-        git(&["add", "README.md"], &repo);
-        git(&["commit", "-m", "initial"], &repo);
-        git(
-            &["remote", "add", "origin", remote.to_str().unwrap()],
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "--quiet",
+                "-m",
+                "init",
+            ],
             &repo,
         );
-        git(&["push", "-u", "origin", "main"], &repo);
-        git(&["checkout", "-b", "frontal-code/task-publish"], &repo);
-        fs::write(repo.join("README.md"), "hello\nworld\n").expect("updated file");
+        let base = git_output(&["rev-parse", "HEAD"], &repo);
 
-        let payload = HostedTaskWorkerPayload {
-            task_id: "task_123".to_string(),
-            prompt: "Update the README for the hosted task".to_string(),
-            repository: Some("acme/payments".to_string()),
-            repo_url: Some(remote.display().to_string()),
-            base_ref: Some("main".to_string()),
-            branch: Some("frontal-code/task-publish".to_string()),
-            model: None,
-            provider: None,
-            permission_mode: None,
-            allowed_tools: Vec::new(),
-        };
+        fs::write(repo.join("README.md"), "hello from the worker\n").expect("edit");
+        fs::write(repo.join("new.txt"), "added\n").expect("new file");
+        fs::create_dir_all(repo.join(".frontal-code-hosted")).expect("state dir");
+        fs::write(repo.join(".frontal-code-hosted").join("task.json"), "{}\n").expect("task file");
 
-        let publication = with_current_dir(&repo, || {
-            publish_hosted_repo_changes(Path::new("."), &payload)
-                .expect("publish helper should succeed")
-                .expect("dirty repo should produce publication metadata")
-        });
+        let patch = worker_patch(&repo, base.trim()).expect("patch should build");
+        assert!(patch.contains("+hello from the worker"), "{patch}");
+        assert!(patch.contains("new.txt"), "{patch}");
+        assert!(!patch.contains(".frontal-code-hosted"), "{patch}");
+    }
 
-        assert_eq!(publication.published_remote.as_deref(), Some("origin"));
-        assert_eq!(
-            publication.published_branch.as_deref(),
-            Some("frontal-code/task-publish")
-        );
-        assert!(publication
-            .published_commit_sha
-            .as_deref()
-            .is_some_and(|value| !value.is_empty()));
-        assert_eq!(publication.pr_url, None);
-
-        let branch_ref = Command::new("git")
-            .args([
-                "--git-dir",
-                remote.to_str().unwrap(),
-                "show-ref",
-                "--verify",
-                "refs/heads/frontal-code/task-publish",
-            ])
+    fn git_output(args: &[&str], cwd: &Path) -> String {
+        let output = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
             .output()
-            .expect("show-ref should run");
-        assert!(
-            branch_ref.status.success(),
-            "expected pushed branch to exist in remote"
-        );
-
-        match previous_token {
-            Some(value) => std::env::set_var("GITHUB_TOKEN", value),
-            None => std::env::remove_var("GITHUB_TOKEN"),
-        }
-        match previous_api_base {
-            Some(value) => std::env::set_var("FRONTAL_CODE_GITHUB_API_BASE", value),
-            None => std::env::remove_var("FRONTAL_CODE_GITHUB_API_BASE"),
-        }
-        let _ = fs::remove_dir_all(remote);
-        let _ = fs::remove_dir_all(repo);
+            .expect("git");
+        assert!(output.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
     #[test]
@@ -12667,6 +12828,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
     }
@@ -12740,6 +12902,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
         assert_eq!(
@@ -12764,6 +12927,7 @@ mod tests {
                 output_format: CliOutputFormat::Text,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                options: PromptOptions::default(),
             }
         );
         let error = parse_args(&["/status".to_string()])
@@ -12889,6 +13053,142 @@ mod tests {
         assert!(error.contains("unknown option: --resum"));
         assert!(error.contains("Did you mean --resume?"));
         assert!(error.contains("frontal-code --help"));
+    }
+
+    fn sdk_style_args(extra: &[&str]) -> Vec<String> {
+        let mut args = vec![
+            "prompt".to_string(),
+            "-p".to_string(),
+            "Say hi".to_string(),
+            "--provider".to_string(),
+            "openai".to_string(),
+            "--model".to_string(),
+            "google/gemma-4-26b-a4b-it".to_string(),
+            "--output-format".to_string(),
+            "json".to_string(),
+        ];
+        args.extend(extra.iter().map(|value| (*value).to_string()));
+        args
+    }
+
+    #[test]
+    fn parses_sdk_style_prompt_with_stream_and_resume() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let action = parse_args(&sdk_style_args(&[
+            "--stream",
+            "--resume",
+            "session-123",
+            "--config",
+            "frontal_base_url=https://example.test",
+        ]))
+        .expect("sdk-style prompt should parse");
+        let CliAction::Prompt {
+            prompt,
+            provider,
+            output_format,
+            options,
+            ..
+        } = action
+        else {
+            panic!("expected a prompt action");
+        };
+        assert_eq!(prompt, "Say hi");
+        assert_eq!(provider.as_deref(), Some("openai"));
+        assert_eq!(output_format, CliOutputFormat::Json);
+        assert!(options.stream);
+        assert_eq!(options.resume.as_deref(), Some("session-123"));
+        assert_eq!(
+            options.config,
+            vec![(
+                "frontal_base_url".to_string(),
+                "https://example.test".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn prompt_flags_fail_clearly_when_unsupported() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let stream_in_text = parse_args(&[
+            "prompt".to_string(),
+            "--stream".to_string(),
+            "hi".to_string(),
+        ])
+        .expect_err("--stream needs json output");
+        assert!(stream_in_text.contains("--stream requires --output-format json"));
+
+        let image = parse_args(&sdk_style_args(&["--image", "pic.png"]))
+            .expect_err("images are not supported");
+        assert!(image.contains("--image is not supported"));
+
+        let unknown_key = parse_args(&sdk_style_args(&["--config", "bogus=1"]))
+            .expect_err("unknown config keys should fail");
+        assert!(unknown_key.contains("unsupported --config key `bogus`"));
+    }
+
+    #[test]
+    fn rejects_unknown_flags_after_a_subcommand_instead_of_sending_them_to_the_model() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let error = parse_args(&[
+            "prompt".to_string(),
+            "--bogus".to_string(),
+            "hi".to_string(),
+        ])
+        .expect_err("flag after subcommand should fail");
+        assert!(error.contains("unknown option: --bogus"));
+    }
+
+    #[test]
+    fn hosted_server_url_allows_cleartext_only_for_loopback_or_worker_alias() {
+        let _guard = env_lock();
+        let previous = std::env::var_os("FRONTAL_CODE_HOSTED_WORKER");
+        std::env::remove_var("FRONTAL_CODE_HOSTED_WORKER");
+        assert!(validate_hosted_server_url("http://127.0.0.1:8788").is_ok());
+        assert!(validate_hosted_server_url("https://hosted.example.com").is_ok());
+        assert!(validate_hosted_server_url("http://hosted.example.com").is_err());
+        assert!(validate_hosted_server_url("http://host.docker.internal:8788").is_err());
+
+        std::env::set_var("FRONTAL_CODE_HOSTED_WORKER", "1");
+        assert!(validate_hosted_server_url("http://host.docker.internal:8788").is_ok());
+        assert!(validate_hosted_server_url("http://hosted.example.com").is_err());
+
+        match previous {
+            Some(value) => std::env::set_var("FRONTAL_CODE_HOSTED_WORKER", value),
+            None => std::env::remove_var("FRONTAL_CODE_HOSTED_WORKER"),
+        }
+    }
+
+    #[test]
+    fn repl_subcommand_opens_the_repl_instead_of_prompting_the_model() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let action = parse_args(&["repl".to_string()]).expect("repl should parse");
+        assert!(
+            matches!(action, CliAction::Repl { .. }),
+            "expected Repl, got {action:?}"
+        );
+    }
+
+    #[test]
+    fn parses_plugins_subcommand() {
+        let _cwd_guard = cwd_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(
+            parse_args(&["plugins".to_string(), "list".to_string()]).expect("plugins should parse"),
+            CliAction::Plugins {
+                action: Some("list".to_string()),
+                target: None,
+                output_format: CliOutputFormat::Text,
+            }
+        );
     }
 
     #[test]

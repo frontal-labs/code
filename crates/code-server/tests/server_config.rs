@@ -11,14 +11,13 @@ fn default_server_config() {
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8788)
     );
     assert_eq!(config.event_replay_limit, 100);
-    assert_eq!(config.lane_transport_kind, LaneTransportKind::InMemory);
+    assert_eq!(config.lane_transport_kind, LaneTransportKind::LocalDocker);
     assert!(config.api_key.is_none());
     assert_eq!(config.reconcile_interval, Some(Duration::from_secs(15)));
 }
 
 #[test]
 fn lane_transport_kind_default() {
-    assert_eq!(LaneTransportKind::InMemory, LaneTransportKind::InMemory);
     assert_eq!(
         LaneTransportKind::LocalDocker,
         LaneTransportKind::LocalDocker
@@ -28,8 +27,6 @@ fn lane_transport_kind_default() {
 
 #[test]
 fn lane_transport_kind_debug() {
-    let in_memory = LaneTransportKind::InMemory;
-    assert_eq!(format!("{in_memory:?}"), "InMemory");
     assert_eq!(
         format!("{:?}", LaneTransportKind::LocalDocker),
         "LocalDocker"
@@ -39,12 +36,11 @@ fn lane_transport_kind_debug() {
 
 #[test]
 fn lane_transport_kind_clone_and_eq() {
-    let a = LaneTransportKind::InMemory;
+    let a = LaneTransportKind::LocalDocker;
     let b = a;
     assert_eq!(a, b);
 
     let kinds = [
-        LaneTransportKind::InMemory,
         LaneTransportKind::LocalDocker,
         LaneTransportKind::ToolsAgent,
     ];

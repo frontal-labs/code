@@ -1,17 +1,18 @@
-//! Integration tests against a real `ClickHouse` server. They are `#[ignore]`d
-//! so `cargo test` stays hermetic. Run them with:
+//! Integration tests against a real `ClickHouse` server. They run when
+//! `FRONTAL_TEST_CLICKHOUSE_URL` is set and are skipped otherwise, like the other
+//! live-service suites:
 //!
 //! ```sh
 //! docker compose -f infrastructure/compose/docker-compose.clickhouse.yml up -d
 //! FRONTAL_TEST_CLICKHOUSE_URL=http://127.0.0.1:8123 \
 //! FRONTAL_TEST_CLICKHOUSE_PASSWORD=dev \
-//!   cargo test -p code-conversation-store -- --ignored
+//!   cargo test -p code-store
 //! ```
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clickhouse::Row;
-use code_conversation_store::{apply, ClickHouseSettings, MigrationError, MIGRATIONS};
+use code_store::{apply, ClickHouseSettings, MigrationError, MIGRATIONS};
 use serde::Deserialize;
 
 #[derive(Row, Deserialize)]
@@ -27,7 +28,7 @@ struct TableName {
 /// Each test gets its own database so runs cannot see each other's state.
 fn settings_for_fresh_database() -> ClickHouseSettings {
     let url = std::env::var("FRONTAL_TEST_CLICKHOUSE_URL")
-        .expect("set FRONTAL_TEST_CLICKHOUSE_URL to run the ignored ClickHouse tests");
+        .expect("FRONTAL_TEST_CLICKHOUSE_URL must name the server");
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -50,8 +51,10 @@ async fn drop_database(settings: &ClickHouseSettings) {
 }
 
 #[tokio::test]
-#[ignore = "needs a ClickHouse server; see module docs"]
 async fn applies_schema_once_and_is_idempotent() {
+    if std::env::var("FRONTAL_TEST_CLICKHOUSE_URL").is_err() {
+        return;
+    }
     let settings = settings_for_fresh_database();
     let client = settings.connect().await.expect("connect");
 
@@ -86,8 +89,10 @@ async fn applies_schema_once_and_is_idempotent() {
 }
 
 #[tokio::test]
-#[ignore = "needs a ClickHouse server; see module docs"]
 async fn nullable_created_at_and_dedupe_key_behave_as_designed() {
+    if std::env::var("FRONTAL_TEST_CLICKHOUSE_URL").is_err() {
+        return;
+    }
     let settings = settings_for_fresh_database();
     let client = settings.connect().await.expect("connect");
     apply(&client, MIGRATIONS).await.expect("apply");
@@ -99,7 +104,12 @@ async fn nullable_created_at_and_dedupe_key_behave_as_designed() {
          input_tokens, output_tokens, legacy, created_at) \
         VALUES ('u1', 'session-1', 1, 0, generateUUIDv4(), 'user', 'message', 'hi', \
                 'm', 'p', 0, 0, true, NULL)";
-    client.query(insert).execute().await.expect("first insert");
+    client
+        .query(insert)
+        .with_setting("async_insert", "0")
+        .execute()
+        .await
+        .expect("first insert");
     client
         .query(insert)
         .execute()
@@ -120,14 +130,17 @@ async fn nullable_created_at_and_dedupe_key_behave_as_designed() {
 }
 
 #[tokio::test]
-#[ignore = "needs a ClickHouse server; see module docs"]
 async fn refuses_to_run_when_an_applied_migration_was_edited() {
+    if std::env::var("FRONTAL_TEST_CLICKHOUSE_URL").is_err() {
+        return;
+    }
     let settings = settings_for_fresh_database();
     let client = settings.connect().await.expect("connect");
     apply(&client, MIGRATIONS).await.expect("apply");
 
     client
         .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (1, 'conversation_store', 'tampered')")
+        .with_setting("async_insert", "0")
         .execute()
         .await
         .expect("tamper");
@@ -144,14 +157,17 @@ async fn refuses_to_run_when_an_applied_migration_was_edited() {
 }
 
 #[tokio::test]
-#[ignore = "needs a ClickHouse server; see module docs"]
 async fn refuses_to_run_against_a_newer_schema() {
+    if std::env::var("FRONTAL_TEST_CLICKHOUSE_URL").is_err() {
+        return;
+    }
     let settings = settings_for_fresh_database();
     let client = settings.connect().await.expect("connect");
     apply(&client, MIGRATIONS).await.expect("apply");
 
     client
         .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (2, 'from_the_future', 'x')")
+        .with_setting("async_insert", "0")
         .execute()
         .await
         .expect("insert newer version");
@@ -168,15 +184,18 @@ async fn refuses_to_run_against_a_newer_schema() {
 }
 
 #[tokio::test]
-#[ignore = "needs a ClickHouse server; see module docs"]
 async fn refuses_to_run_when_an_applied_migration_was_renamed() {
+    if std::env::var("FRONTAL_TEST_CLICKHOUSE_URL").is_err() {
+        return;
+    }
     let settings = settings_for_fresh_database();
     let client = settings.connect().await.expect("connect");
     apply(&client, MIGRATIONS).await.expect("apply");
 
-    let correct_checksum = code_conversation_store::checksum(MIGRATIONS[0].sql);
+    let correct_checksum = code_store::checksum(MIGRATIONS[0].sql);
     client
         .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (1, 'renamed', ?)")
+        .with_setting("async_insert", "0")
         .bind(correct_checksum)
         .execute()
         .await

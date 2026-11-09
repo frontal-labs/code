@@ -12,18 +12,11 @@ on:
       - Cargo.toml
       - Cargo.lock
       - rust-toolchain.toml
-      - crates/code-conversation-store/**
+      - crates/code-store/**
       - infrastructure/compose/docker-compose.clickhouse.yml
   pull_request:
     branches:
       - main
-    paths:
-      - .github/workflows/conversation-store.yml
-      - Cargo.toml
-      - Cargo.lock
-      - rust-toolchain.toml
-      - crates/code-conversation-store/**
-      - infrastructure/compose/docker-compose.clickhouse.yml
   workflow_dispatch:
 
 jobs:
@@ -56,6 +49,6 @@ jobs:
         with:
           workspaces: . -> target
       - name: Unit tests
-        run: cargo test -p code-conversation-store
+        run: cargo test -p code-store
       - name: Migrations against a live ClickHouse
-        run: cargo test -p code-conversation-store -- --ignored
+        run: cargo test -p code-store -- --ignored

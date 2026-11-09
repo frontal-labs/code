@@ -320,25 +320,35 @@ where
                 return Err(error);
             }
 
-            let request = ApiRequest {
-                system_prompt: self.system_prompt.clone(),
-                messages: self.session.messages.clone(),
-            };
-            let events = match self.api_client.stream(request) {
-                Ok(events) => events,
-                Err(error) => {
-                    self.record_turn_failed(iterations, &error);
-                    return Err(error);
-                }
-            };
-            let (assistant_message, usage, turn_prompt_cache_events) =
-                match build_assistant_message(events) {
-                    Ok(result) => result,
+            // A model can end a turn with nothing in it. Ask again with the same context
+            // rather than failing the whole turn; the empty reply is not recorded.
+            let mut empty_replies = 0;
+            let (assistant_message, usage, turn_prompt_cache_events) = loop {
+                let request = ApiRequest {
+                    system_prompt: self.system_prompt.clone(),
+                    messages: self.session.messages.clone(),
+                };
+                let events = match self.api_client.stream(request) {
+                    Ok(events) => events,
                     Err(error) => {
                         self.record_turn_failed(iterations, &error);
                         return Err(error);
                     }
                 };
+                match build_assistant_message(events) {
+                    Ok(result) => break result,
+                    Err(error)
+                        if error.to_string() == EMPTY_ASSISTANT_REPLY
+                            && empty_replies < EMPTY_REPLY_RETRIES =>
+                    {
+                        empty_replies += 1;
+                    }
+                    Err(error) => {
+                        self.record_turn_failed(iterations, &error);
+                        return Err(error);
+                    }
+                }
+            };
             if let Some(usage) = usage {
                 self.usage_tracker.record(usage);
             }
@@ -675,6 +685,13 @@ fn parse_auto_compaction_threshold(value: Option<&str>) -> u32 {
         .unwrap_or(DEFAULT_AUTO_COMPACTION_INPUT_TOKENS_THRESHOLD)
 }
 
+/// Error text for a reply with no text and no tool calls.
+const EMPTY_ASSISTANT_REPLY: &str = "assistant stream produced no content";
+
+/// How many times an empty reply is requested again before the turn fails. Small local
+/// models sometimes stop without output; a second attempt usually succeeds.
+const EMPTY_REPLY_RETRIES: usize = 2;
+
 fn build_assistant_message(
     events: Vec<AssistantEvent>,
 ) -> Result<
@@ -714,7 +731,7 @@ fn build_assistant_message(
         ));
     }
     if blocks.is_empty() {
-        return Err(RuntimeError::new("assistant stream produced no content"));
+        return Err(RuntimeError::new(EMPTY_ASSISTANT_REPLY));
     }
 
     Ok((
@@ -796,6 +813,7 @@ impl ToolExecutor for StaticToolExecutor {
 // Windows the remaining tests still compile, so allow the resulting unused items.
 #[cfg_attr(not(unix), allow(dead_code, unused_imports))]
 mod tests {
+    use super::EMPTY_ASSISTANT_REPLY;
     use super::{
         build_assistant_message, parse_auto_compaction_threshold, ApiClient, ApiRequest,
         AssistantEvent, AutoCompactionEvent, ConversationRuntime, PromptCacheEvent, RuntimeError,
@@ -1612,6 +1630,73 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_reply_is_requested_again_before_the_turn_fails() {
+        struct EmptyThenText {
+            calls: usize,
+        }
+        impl ApiClient for EmptyThenText {
+            fn stream(
+                &mut self,
+                _request: ApiRequest,
+            ) -> Result<Vec<AssistantEvent>, RuntimeError> {
+                self.calls += 1;
+                if self.calls <= 2 {
+                    Ok(vec![AssistantEvent::MessageStop])
+                } else {
+                    Ok(vec![
+                        AssistantEvent::TextDelta("pong".to_string()),
+                        AssistantEvent::MessageStop,
+                    ])
+                }
+            }
+        }
+
+        let mut runtime = ConversationRuntime::new(
+            Session::new(),
+            EmptyThenText { calls: 0 },
+            StaticToolExecutor::new(),
+            PermissionPolicy::new(PermissionMode::DangerFullAccess),
+            vec!["system".to_string()],
+        );
+
+        let summary = runtime
+            .run_turn("ping", None)
+            .expect("the third reply should succeed");
+        assert_eq!(summary.assistant_messages.len(), 1);
+        assert_eq!(
+            runtime.session().messages.len(),
+            2,
+            "the empty replies are not recorded"
+        );
+    }
+
+    #[test]
+    fn an_empty_reply_fails_after_the_retries_are_spent() {
+        struct AlwaysEmpty;
+        impl ApiClient for AlwaysEmpty {
+            fn stream(
+                &mut self,
+                _request: ApiRequest,
+            ) -> Result<Vec<AssistantEvent>, RuntimeError> {
+                Ok(vec![AssistantEvent::MessageStop])
+            }
+        }
+
+        let mut runtime = ConversationRuntime::new(
+            Session::new(),
+            AlwaysEmpty,
+            StaticToolExecutor::new(),
+            PermissionPolicy::new(PermissionMode::DangerFullAccess),
+            vec!["system".to_string()],
+        );
+
+        let error = runtime
+            .run_turn("ping", None)
+            .expect_err("empty every time");
+        assert_eq!(error.to_string(), EMPTY_ASSISTANT_REPLY);
+    }
+
+    #[test]
     fn build_assistant_message_requires_content() {
         // given
         let events = vec![AssistantEvent::MessageStop];
@@ -1621,9 +1706,7 @@ mod tests {
             build_assistant_message(events).expect_err("assistant messages should require content");
 
         // then
-        assert!(error
-            .to_string()
-            .contains("assistant stream produced no content"));
+        assert!(error.to_string().contains(EMPTY_ASSISTANT_REPLY));
     }
 
     #[test]

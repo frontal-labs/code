@@ -14,7 +14,7 @@ sh_test(
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
     args = [
-        "code-conversation-store",
+        "code-store",
         "test",
     ],
     tags = [
@@ -29,7 +29,7 @@ sh_test(
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
     args = [
-        "code-conversation-store",
+        "code-store",
         "fmt-check",
     ],
     tags = [
@@ -43,7 +43,7 @@ sh_test(
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
     args = [
-        "code-conversation-store",
+        "code-store",
         "clippy",
     ],
     tags = [

@@ -93,17 +93,12 @@
     "name": "auto_compact_triggered",
     "category": "session-compaction",
     "description": "Verifies auto-compact fires when cumulative input tokens exceed the configured threshold.",
-    "parity_refs": [
-      "Session compaction behavior matching",
-      "auto_compaction threshold from env"
-    ]
+    "parity_refs": ["Session compaction behavior matching", "auto_compaction threshold from env"]
   },
   {
     "name": "token_cost_reporting",
     "category": "token-usage",
     "description": "Confirms usage token counts and estimated_cost appear in JSON output.",
-    "parity_refs": [
-      "Token counting / cost tracking accuracy"
-    ]
+    "parity_refs": ["Token counting / cost tracking accuracy"]
   }
 ]

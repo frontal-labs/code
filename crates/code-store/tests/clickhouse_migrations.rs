@@ -29,15 +29,21 @@ struct TableName {
 fn settings_for_fresh_database() -> ClickHouseSettings {
     let url = std::env::var("FRONTAL_TEST_CLICKHOUSE_URL")
         .expect("FRONTAL_TEST_CLICKHOUSE_URL must name the server");
+    // Tests run in parallel and can read the same clock value, so the name also carries the
+    // process id and a counter. Two tests sharing a database would see each other's rows, and one
+    // would drop the database while the other still used it.
+    static SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
+    let serial = SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let pid = std::process::id();
     ClickHouseSettings {
         url,
         user: std::env::var("FRONTAL_TEST_CLICKHOUSE_USER").unwrap_or_else(|_| "frontal".into()),
         password: std::env::var("FRONTAL_TEST_CLICKHOUSE_PASSWORD").unwrap_or_default(),
-        database: format!("cs_test_{nanos}"),
+        database: format!("cs_test_{pid}_{nanos}_{serial}"),
     }
 }
 

@@ -7621,6 +7621,11 @@ mod tests {
             return;
         }
 
+        // The variable below is process-wide, so this test holds the env lock like the others.
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
         let server = TestServer::spawn(Arc::new(|request_line: &str| {
             assert!(request_line.contains("GET /search?q=rust+web+search "));
             HttpResponse::html(

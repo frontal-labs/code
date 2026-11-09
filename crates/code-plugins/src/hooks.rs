@@ -350,9 +350,8 @@ impl CommandWithStdin {
 
 #[cfg(test)]
 mod tests {
-    use super::HookRunResult;
     #[cfg(unix)]
-    use super::HookRunner;
+    use super::{HookRunResult, HookRunner};
     #[cfg(unix)]
     use crate::{PluginManager, PluginManagerConfig};
     #[cfg(unix)]

@@ -14,7 +14,7 @@ RUN npm run build \
     && npm link
 
 FROM node:22-slim
-LABEL org.opencontainers.image.source="https://github.com/frontal-labs/frontal-code"
+LABEL org.opencontainers.image.source="https://github.com/frontal-labs/code"
 LABEL org.opencontainers.image.description="Frontal Code TypeScript SDK (code-sdk)"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 

@@ -467,7 +467,7 @@ frontal-code security report
     },
     "allowed_sources": [
       "https://github.com",
-      "https://github.com/frontal-labs/frontal-code"
+      "https://github.com/frontal-labs/code"
     ],
     "blocked_sources": [
       "*.malicious.com"

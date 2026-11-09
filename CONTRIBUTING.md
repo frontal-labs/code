@@ -20,7 +20,7 @@ Thank you for your interest in contributing to Frontal Code! This document provi
    ```
 3. Add the upstream repository:
    ```bash
-   git remote add upstream https://github.com/frontal-labs/frontal-code.git
+   git remote add upstream https://github.com/frontal-labs/code.git
    ```
 4. Install dependencies and build:
    ```bash

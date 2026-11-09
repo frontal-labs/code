@@ -602,7 +602,7 @@ frontal-code plugin doctor my-plugin
 
 The official plugin registry hosts community plugins:
 
-- **URL**: https://github.com/frontal-labs/frontal-code
+- **URL**: https://github.com/frontal-labs/code
 - **Search**: `frontal-code plugin search <keyword>`
 - **Categories**: Tools, Commands, Providers, Themes
 

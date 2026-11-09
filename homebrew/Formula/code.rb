@@ -1,6 +1,6 @@
 class FrontalCode < Formula
   desc "High-performance Rust AI agent harness"
-  homepage "https://github.com/frontal-labs/frontal-code"
+  homepage "https://github.com/frontal-labs/code"
   license "Apache-2.0"
   version "0.1.1"
 
@@ -14,7 +14,7 @@ class FrontalCode < Formula
     end
   end
 
-  head "https://github.com/frontal-labs/frontal-code.git", branch: "main"
+  head "https://github.com/frontal-labs/code.git", branch: "main"
 
   depends_on "rust" => :build if build.head?
 

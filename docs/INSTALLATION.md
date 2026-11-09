@@ -22,7 +22,7 @@ If you prefer to build from source:
 
 ```bash
 # Clone the repository
-git clone https://github.com/frontal-labs/frontal-code.git
+git clone https://github.com/frontal-labs/code.git
 cd frontal-code
 
 # Build the workspace

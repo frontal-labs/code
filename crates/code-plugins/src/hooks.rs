@@ -351,11 +351,13 @@ impl CommandWithStdin {
 #[cfg(test)]
 mod tests {
     use super::{HookRunResult, HookRunner};
+    #[cfg(unix)]
     use crate::{PluginManager, PluginManagerConfig};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[cfg(unix)]
     fn temp_dir(label: &str) -> PathBuf {
         // Timestamp alone collides when parallel tests read the same instant.
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -371,6 +373,7 @@ mod tests {
         ))
     }
 
+    #[cfg(unix)]
     fn write_hook_plugin(
         root: &Path,
         name: &str,

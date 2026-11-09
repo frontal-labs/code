@@ -741,3 +741,69 @@ mod proxy_tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }
+
+#[cfg(test)]
+mod worker_policy_tests {
+    use super::{WORKER_BASH_ALLOW, WORKER_BASH_DENY};
+    use code_runtime::{
+        PermissionMode, PermissionOutcome, PermissionPolicy, RuntimePermissionRuleConfig,
+    };
+
+    /// The policy a worker's bash calls run under: the same lists the CLI receives in the
+    /// task payload, in `workspace-write`, with bash requiring full access as the CLI registers it.
+    fn worker_policy() -> PermissionPolicy {
+        let rules = RuntimePermissionRuleConfig::new(
+            WORKER_BASH_ALLOW
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
+            WORKER_BASH_DENY
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
+            Vec::new(),
+        );
+        PermissionPolicy::new(PermissionMode::WorkspaceWrite)
+            .with_permission_rules(&rules)
+            .with_tool_requirement("bash", PermissionMode::DangerFullAccess)
+    }
+
+    fn bash(command: &str) -> String {
+        serde_json::json!({ "command": command }).to_string()
+    }
+
+    fn outcome(policy: &PermissionPolicy, command: &str) -> PermissionOutcome {
+        policy.authorize("bash", &bash(command), None)
+    }
+
+    #[test]
+    fn a_worker_cannot_reach_the_network_or_delete_recursively() {
+        let policy = worker_policy();
+        for command in [
+            "curl -m 5 https://example.com",
+            "wget https://example.com",
+            "ssh host",
+            "rm -rf /tmp/anything",
+            "git push origin main",
+            "env",
+            "sudo ls",
+        ] {
+            assert!(
+                matches!(outcome(&policy, command), PermissionOutcome::Deny { .. }),
+                "expected `{command}` to be denied"
+            );
+        }
+    }
+
+    #[test]
+    fn a_worker_can_run_its_allowed_read_and_build_commands() {
+        let policy = worker_policy();
+        for command in ["ls", "cat README.md", "git status", "cargo --version"] {
+            assert_eq!(
+                outcome(&policy, command),
+                PermissionOutcome::Allow,
+                "expected `{command}` to be allowed"
+            );
+        }
+    }
+}

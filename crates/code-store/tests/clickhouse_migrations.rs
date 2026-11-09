@@ -135,6 +135,7 @@ async fn refuses_to_run_when_an_applied_migration_was_edited() {
 
     client
         .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (1, 'conversation_store', 'tampered')")
+        .with_setting("async_insert", "0")
         .execute()
         .await
         .expect("tamper");
@@ -161,6 +162,7 @@ async fn refuses_to_run_against_a_newer_schema() {
 
     client
         .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (2, 'from_the_future', 'x')")
+        .with_setting("async_insert", "0")
         .execute()
         .await
         .expect("insert newer version");
@@ -188,6 +190,7 @@ async fn refuses_to_run_when_an_applied_migration_was_renamed() {
     let correct_checksum = code_store::checksum(MIGRATIONS[0].sql);
     client
         .query("INSERT INTO schema_migrations (version, name, checksum) VALUES (1, 'renamed', ?)")
+        .with_setting("async_insert", "0")
         .bind(correct_checksum)
         .execute()
         .await

@@ -104,7 +104,12 @@ async fn nullable_created_at_and_dedupe_key_behave_as_designed() {
          input_tokens, output_tokens, legacy, created_at) \
         VALUES ('u1', 'session-1', 1, 0, generateUUIDv4(), 'user', 'message', 'hi', \
                 'm', 'p', 0, 0, true, NULL)";
-    client.query(insert).execute().await.expect("first insert");
+    client
+        .query(insert)
+        .with_setting("async_insert", "0")
+        .execute()
+        .await
+        .expect("first insert");
     client
         .query(insert)
         .execute()

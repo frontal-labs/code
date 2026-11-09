@@ -350,11 +350,16 @@ impl CommandWithStdin {
 
 #[cfg(test)]
 mod tests {
-    use super::{HookRunResult, HookRunner};
+    use super::HookRunResult;
+    #[cfg(unix)]
+    use super::HookRunner;
     #[cfg(unix)]
     use crate::{PluginManager, PluginManagerConfig};
+    #[cfg(unix)]
     use std::fs;
+    #[cfg(unix)]
     use std::path::{Path, PathBuf};
+    #[cfg(unix)]
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[cfg(unix)]

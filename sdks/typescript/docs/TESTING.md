@@ -39,7 +39,9 @@ FRONTAL_CODE_E2E_BIN="$PWD/target/debug/code" \
   npx vitest run tests/e2e.test.ts
 ```
 
-Optional: `FRONTAL_CODE_E2E_PROVIDER` (default `ollama`; `openai` also needs `OPENAI_API_KEY`), `FRONTAL_CODE_E2E_MODEL` (default `qwen2.5:1.5b`), `OLLAMA_BASE_URL` (default `http://localhost:11434`), and `FRONTAL_CODE_E2E_MAX_TOKENS` (default `1024`). A skipped run reports as passing, so check that the variables are set before you read a green result.
+Every streamed event is checked against the shared schema in `extensions/zod`.
+
+Optional: `FRONTAL_CODE_E2E_PROVIDER` (default `ollama`; `openai` also needs `OPENAI_API_KEY`; `anthropic` uses `FRONTAL_BASE_URL` and `FRONTAL_API_KEY`, as in `scripts/verify-claude-gateway.sh`), `FRONTAL_CODE_E2E_MODEL` (default `qwen2.5:1.5b`), `OLLAMA_BASE_URL` (default `http://localhost:11434`), and `FRONTAL_CODE_E2E_MAX_TOKENS` (default `1024`). A skipped run reports as passing, so check that the variables are set before you read a green result.
 
 ## Test Structure
 

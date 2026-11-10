@@ -1,11 +1,12 @@
+import { defaultCommand } from "./command.js";
 import type { FrontalCodeOptions, JsonValue, ThreadOptions } from "./protocol.js";
 import { Thread } from "./thread.js";
 
 const REQUIRED_ENV_VARS = ["CODEX_API_KEY"];
 
 /**
- * The top-level Frontal Code client. Wraps the `frontal-code` CLI and is used to start and
- * resume conversation {@link Thread}s.
+ * The top-level Frontal Code client. Wraps the Frontal Code CLI (`frontal-code`, or `code`, the same
+ * program) and is used to start and resume conversation {@link Thread}s.
  */
 export class FrontalCode {
   readonly options: FrontalCodeOptions;
@@ -13,7 +14,7 @@ export class FrontalCode {
 
   constructor(options: FrontalCodeOptions = {}) {
     this.options = options;
-    this.command = options.command ?? "frontal-code";
+    this.command = options.command ?? defaultCommand();
   }
 
   /** Start a fresh conversation thread. */

@@ -52,10 +52,11 @@ WORKDIR /workspace
 
 # Copy binaries from builder stage
 COPY --from=builder /workspace/target/release/code /usr/local/bin/code
+COPY --from=builder /workspace/target/release/frontal-code /usr/local/bin/frontal-code
 COPY --from=builder /workspace/target/release/code-server /usr/local/bin/code-server
 
 # Set permissions
-RUN chmod +x /usr/local/bin/code
+RUN chmod +x /usr/local/bin/code /usr/local/bin/frontal-code
 
 # Create necessary directories
 RUN mkdir -p /workspace/.frontal-code /workspace/.sandbox-home \

@@ -29,7 +29,9 @@ function fail(message) {
 async function fetchOnFirstRun() {
   const version = JSON.parse(readFileSync(join(PKG_ROOT, "package.json"), "utf8")).version;
   if (!version || /dev$/.test(version) || version === "0.0.0") return null;
-  process.stderr.write(`frontal-code: native binary missing; downloading ${version} (first run)...\n`);
+  process.stderr.write(
+    `frontal-code: native binary missing; downloading ${version} (first run)...\n`,
+  );
   try {
     await downloadRelease({
       version,

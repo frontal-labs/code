@@ -21,6 +21,10 @@ your platform from the
 package's `vendor/` directory. (`vendor/` is git- and npm-ignored; it is
 populated at install time, not committed.)
 
+## Commands
+
+The package installs `frontal-code`. It also installs `code` when no other `code` command exists on your PATH, such as VS Code's. Both run the same CLI, so `frontal-code --help` and `code --help` are equivalent. If `code` is already taken, use `frontal-code`.
+
 ## What it does
 
 ```

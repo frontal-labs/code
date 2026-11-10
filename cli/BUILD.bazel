@@ -22,6 +22,18 @@ sh_binary(
     ],
 )
 
+# The same CLI under its second name. `frontal-code` runs the `code` beside it.
+sh_binary(
+    name = "frontal-code",
+    srcs = ["//tools:crate.sh"],
+    args = [
+        "cli",
+        "run",
+        "--bin",
+        "frontal-code",
+    ],
+)
+
 sh_test(
     name = "test",
     size = "large",

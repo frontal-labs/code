@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "orbit-coverage", about = "Summarize lcov coverage reports")]
+#[command(name = "tools-coverage", about = "Summarize lcov coverage reports")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

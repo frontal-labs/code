@@ -33,9 +33,12 @@ fn validate_workspace_boundary(resolved: &Path, workspace_root: &Path) -> io::Re
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             format!(
-                "path {} escapes workspace boundary {}",
+                "path {} escapes workspace boundary {}; use a path relative to the workspace, such as {}",
                 resolved.display(),
-                workspace_root.display()
+                workspace_root.display(),
+                resolved
+                    .file_name()
+                    .map_or_else(|| "a relative file name".to_string(), |name| name.to_string_lossy().into_owned()),
             ),
         ));
     }

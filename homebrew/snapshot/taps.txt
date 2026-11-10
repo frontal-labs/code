@@ -5,7 +5,6 @@ buildkite/buildkite
 cloudflare/cloudflare
 coder/coder
 dotenvx/brew
-frontal-labs/orbit
 frontal-labs/vibe-test
 go-task/tap
 hashicorp/tap

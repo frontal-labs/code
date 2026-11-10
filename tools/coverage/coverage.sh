@@ -23,7 +23,7 @@ if [ ! -f "$LCOV" ]; then
 fi
 
 if [ -f "$LCOV" ]; then
-  echo "==> orbit-coverage summarize"
+  echo "==> tools-coverage summarize"
   cargo run -q -p tools-coverage -- summarize "$LCOV" "${@}"
 else
   echo "no lcov report produced (did bazel coverage run?)"

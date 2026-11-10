@@ -23,7 +23,12 @@ use sha2::{Digest, Sha256};
 use tokio::sync::{mpsc, oneshot};
 use tokio_postgres::{Client, NoTls, Socket};
 
+// Several stores can start at once (server restarts, parallel tests). Concurrent `CREATE ... IF
+// NOT EXISTS` statements can still fail with a unique violation in the catalog, so the schema runs
+// in one transaction that first takes an advisory lock. The lock is released at commit.
 const SCHEMA: &str = "
+BEGIN;
+SELECT pg_advisory_xact_lock(hashtext('frontal-code.worker-tokens-schema'));
 CREATE TABLE IF NOT EXISTS hosted_worker_tokens (
     token_hash TEXT PRIMARY KEY,
     task_id    TEXT NOT NULL,
@@ -33,6 +38,7 @@ CREATE TABLE IF NOT EXISTS hosted_worker_tokens (
 );
 CREATE INDEX IF NOT EXISTS hosted_worker_tokens_task_idx
     ON hosted_worker_tokens (task_id) WHERE revoked_at IS NULL;
+COMMIT;
 ";
 
 /// How the store connects to Postgres.
@@ -464,6 +470,48 @@ pub(crate) mod tests {
             strip_sslmode("postgres://u@h/db?sslmode=verify-full"),
             "postgres://u@h/db"
         );
+    }
+
+    #[test]
+    fn stores_that_start_together_all_create_the_schema() {
+        // The race needs a schema that does not exist yet, so the test builds a fresh database.
+        let Some((url, tls)) = test_database() else {
+            return;
+        };
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let name = format!(
+            "frontal_schema_race_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        );
+        let admin = runtime
+            .block_on(connect_client(&url, &tls))
+            .expect("admin connection");
+        runtime
+            .block_on(admin.batch_execute(&format!("CREATE DATABASE {name}")))
+            .expect("create fresh database");
+        let fresh_url = url.replacen("/frontal?", &format!("/{name}?"), 1);
+
+        let handles: Vec<_> = (0..12)
+            .map(|_| {
+                let (fresh_url, tls) = (fresh_url.clone(), tls.clone());
+                std::thread::spawn(move || WorkerTokenStore::connect(&fresh_url, tls).map(|_| ()))
+            })
+            .collect();
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("connect thread"))
+            .collect();
+
+        runtime
+            .block_on(admin.batch_execute(&format!("DROP DATABASE {name} WITH (FORCE)")))
+            .expect("drop fresh database");
+        for result in results {
+            result.expect("store should start while others start");
+        }
     }
 
     #[test]

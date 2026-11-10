@@ -1,6 +1,36 @@
+# Local-docker lane. code-server starts worker containers through a Docker socket proxy
+# that allows only the API calls the server makes (containers, images, networks, ping,
+# version). The raw Docker socket is not mounted into code-server, which would be
+# root-equivalent on the host. The proxy is pinned by digest and sits on its own internal
+# network, so only code-server can reach it.
 services:
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"
+      IMAGES: "1"
+      NETWORKS: "1"
+      POST: "1"
+      PING: "1"
+      VERSION: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-api
+    security_opt:
+      - no-new-privileges:true
+
   code-server:
     environment:
       FRONTAL_CODE_SERVER_LANE_TRANSPORT: ${FRONTAL_CODE_SERVER_LANE_TRANSPORT:-local-docker}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+    depends_on:
+      - docker-socket-proxy
+    networks:
+      - default
+      - docker-api
+
+networks:
+  docker-api:
+    internal: true

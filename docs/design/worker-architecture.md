@@ -46,7 +46,8 @@ What a worker never holds: provider keys, `GITHUB_TOKEN`, the control-plane API 
 - **Storage:** Postgres table `hosted_worker_tokens`. The table holds the SHA-256 of the token, never the token. Each row has a task id, an expiry, and an optional revocation time.
 - **Issue:** at bootstrap. A new token for a task revokes that task's previous token.
 - **Use:** on each request. The worker may call only: read the task, read its runtime, read and write its GitHub integration, publish, and complete. Those endpoints are listed in `worker_access.rs`, and everything else returns 401.
-- **Revoke:** on completion, on cancel, and on expiry (`FRONTAL_CODE_WORKER_TOKEN_TTL_SECS`, default 7200).
+- **Expiry:** an idle timeout. Each successful use pushes the expiry out by `FRONTAL_CODE_WORKER_TOKEN_TTL_SECS` (default 7200), so a task that keeps calling the model keeps its token.
+- **Revoke:** on completion and on cancel, which ends access at once. A token that goes unused past its TTL also stops working.
 - **Restart:** tokens survive a restart because they are in Postgres. A running worker keeps working.
 
 The server does not hold worker tokens in memory. The Postgres client runs on a dedicated thread, so the synchronous lane transport and the async handlers share one store.

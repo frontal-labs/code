@@ -75,7 +75,7 @@ docker compose --env-file infrastructure/compose/.env \
 
 In this mode:
 
-- `code-server` uses `/var/run/docker.sock` to launch worker containers
+- `code-server` launches worker containers through a Docker socket proxy (`docker-socket-proxy`, pinned by digest) that allows only the API calls the server makes. The raw Docker socket is mounted only into the proxy, not into `code-server`
 - workers default to `FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
 - workers call back to the server through `FRONTAL_CODE_SERVER_CALLBACK_URL`
 - per-task repo checkouts live under `FRONTAL_CODE_SERVER_WORKSPACE_ROOT`

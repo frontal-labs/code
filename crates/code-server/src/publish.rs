@@ -19,8 +19,13 @@ pub(crate) const MAX_PATCH_BYTES: usize = 16 * 1024 * 1024;
 pub(crate) const PUBLISH_BRANCH_PREFIX: &str = "frontal-code/";
 
 /// Paths a worker may not change. `.github/workflows` changes CI behavior, and `.git`
-/// holds repository configuration.
+/// holds repository configuration. Matching is case-insensitive, since some file systems
+/// fold case.
 const FORBIDDEN_PATH_PREFIXES: &[&str] = &[".git/", ".github/workflows/", ".github/actions/"];
+
+/// File names a worker may not change in any directory. `CODEOWNERS` decides who must
+/// review a change, and `.gitmodules` points git at other repositories.
+const FORBIDDEN_FILE_NAMES: &[&str] = &["codeowners", ".gitmodules"];
 
 /// Checks a patch before it is applied. The checks are about what the patch does to the
 /// repository, not about its content: it must not touch `.git`, CI definitions, or
@@ -73,11 +78,38 @@ fn check_path(path: &str) -> Result<(), String> {
     {
         return Err(format!("patch path escapes the repository: {path}"));
     }
-    let dotted = format!("{path}/");
+    let lower = path.to_ascii_lowercase();
+    let dotted = format!("{lower}/");
     for forbidden in FORBIDDEN_PATH_PREFIXES {
-        if dotted.starts_with(forbidden) || path == forbidden.trim_end_matches('/') {
+        if dotted.starts_with(forbidden) || lower == forbidden.trim_end_matches('/') {
             return Err(format!("patch changes a protected path: {path}"));
         }
+    }
+    // A nested `.git` directory is a repository of its own, wherever it sits.
+    let segments: Vec<&str> = lower.split('/').collect();
+    let file_name = segments.last().copied().unwrap_or_default();
+    if segments.contains(&".git") || FORBIDDEN_FILE_NAMES.contains(&file_name) {
+        return Err(format!("patch changes a protected path: {path}"));
+    }
+    Ok(())
+}
+
+/// Checks that a base or branch name is safe to pass to git. Option-like names, spaces,
+/// control characters, and names git refuses are rejected.
+pub(crate) fn validate_ref_name(name: &str) -> Result<(), String> {
+    let allowed_chars = name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-'));
+    if name.is_empty()
+        || !allowed_chars
+        || name.starts_with('-')
+        || name.starts_with('/')
+        || name.ends_with('/')
+        || name.contains("..")
+        || name.contains("//")
+        || name.to_ascii_lowercase().ends_with(".lock")
+    {
+        return Err(format!("`{name}` is not a valid git ref name"));
     }
     Ok(())
 }
@@ -128,6 +160,9 @@ pub(crate) fn publish_changes(request: &PublishRequest<'_>) -> Result<PublishOut
     }
     validate_patch(request.patch)?;
     validate_branch(request.branch)?;
+    if let Some(base) = request.base_ref {
+        validate_ref_name(base)?;
+    }
 
     // The scratch directory is a fixed place in the OS temp directory with a random name. No
     // configuration or request data goes into the path.
@@ -568,6 +603,53 @@ index 1111111..2222222 100644
         ] {
             let patch = format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n");
             assert!(validate_patch(&patch).is_err(), "should refuse {path}");
+        }
+    }
+
+    #[test]
+    fn protected_paths_match_regardless_of_case_and_nesting() {
+        for path in [
+            ".GitHub/workflows/ci.yml",
+            ".github/Workflows/ci.yml",
+            "CODEOWNERS",
+            "docs/codeowners",
+            ".github/CODEOWNERS",
+            ".gitmodules",
+            "vendor/lib/.git/config",
+        ] {
+            assert!(check_path(path).is_err(), "expected `{path}` to be refused");
+        }
+        assert!(check_path("src/main.rs").is_ok());
+        assert!(check_path("docs/github-notes.md").is_ok());
+    }
+
+    #[test]
+    fn base_and_branch_names_cannot_be_options_or_escape_refs() {
+        for name in [
+            "main",
+            "origin/main",
+            "release-1.2_x",
+            "frontal-code/task-1",
+        ] {
+            assert!(validate_ref_name(name).is_ok(), "expected `{name}` to pass");
+        }
+        for name in [
+            "",
+            "-f",
+            "--upload-pack=x",
+            "a b",
+            "a..b",
+            "/abs",
+            "trailing/",
+            "a//b",
+            "x.lock",
+            "HEAD~1",
+            "main\nrm",
+        ] {
+            assert!(
+                validate_ref_name(name).is_err(),
+                "expected `{name}` to be refused"
+            );
         }
     }
 

@@ -76,6 +76,10 @@ export interface ThreadOptions {
   model?: string;
   /** Permission mode override. */
   permissionMode?: string;
+  /** Skip all permission checks (maps to `--dangerously-skip-permissions`). */
+  dangerouslySkipPermissions?: boolean;
+  /** Restrict enabled tools (maps to `--allowed-tools`, repeatable). */
+  allowedTools?: string[];
   /** Thread-level CLI `--config` overrides (take precedence over global). */
   config?: Record<string, JsonValue>;
 }

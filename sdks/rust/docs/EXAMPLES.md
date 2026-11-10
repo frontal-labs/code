@@ -257,7 +257,7 @@ mod tests {
     #[tokio::test]
     async fn test_basic_thread() {
         let frontal-code = Frontal Code::new(FrontalCodeConfig {
-            command: Some("tests/mock_frontal-code.sh".into()),
+            command: Some("path/to/frontal-code".into()),
             env: Some([("REQUEST_TYPE".into(), "basic".into())].into()),
             ..Default::default()
         });

@@ -98,6 +98,10 @@ pub struct ThreadOptions {
   pub model: Option<String>,
   /// Permission mode override.
   pub permission_mode: Option<String>,
+  /// Skip all permission checks (maps to `--dangerously-skip-permissions`).
+  pub dangerously_skip_permissions: bool,
+  /// Restrict enabled tools (maps to `--allowed-tools`, repeatable).
+  pub allowed_tools: Option<Vec<String>>,
   /// Thread-level CLI `--config` overrides (precedence over global).
   pub config: Option<serde_json::Value>,
 }

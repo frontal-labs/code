@@ -104,11 +104,11 @@ All config overrides are flattened to dotted TOML and passed as repeated
 Tests are hermetic - they spawn a mock `frontal-code` script instead of the real CLI:
 
 ```rust
-// tests/mock_frontal-code.sh - emits predetermined JSONL events
+// path/to/frontal-code - emits predetermined JSONL events
 #[tokio::test]
 async fn test_thread_run() {
     let frontal-code = Frontal Code::new(FrontalCodeConfig {
-        command: Some("tests/mock_frontal-code.sh".into()),
+        command: Some("path/to/frontal-code".into()),
         ..Default::default()
     });
     // ... test assertions

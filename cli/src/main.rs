@@ -1810,7 +1810,7 @@ fn reject_flags_in_prompt_text(tokens: &[String]) -> Result<(), String> {
 
 /// Config keys a `prompt --config KEY=VALUE` run may override. Anything else is
 /// rejected up front rather than silently ignored.
-const PROMPT_CONFIG_KEYS: &[&str] = &["frontal_base_url", "skip_git_repo_check"];
+const PROMPT_CONFIG_KEYS: &[&str] = &["frontal_base_url", "skip_git_repo_check", "output_schema"];
 
 /// Parses `prompt [-p TEXT] [--stream] [--resume REF] [--config KEY=VALUE] [TEXT...]`.
 fn parse_prompt_subcommand_args(

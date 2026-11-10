@@ -78,20 +78,6 @@ describe("Thread.run", () => {
     expect(args[resumeIndex + 1]).toBe("sess-1");
   });
 
-  it("emits --image for each local image entry", async () => {
-    const entries: InputEntry[] = [
-      { type: "text", text: "describe these" },
-      { type: "local_image", path: "./ui.png" },
-      { type: "local_image", path: "./diagram.jpg" },
-    ];
-    const { args } = await capture((frontal_code) => frontal_code.startThread().run(entries));
-    const imageIndexes = args.map((a, i) => (a === "--image" ? i : -1)).filter((i) => i > -1);
-    expect(imageIndexes).toHaveLength(2);
-    expect(args[imageIndexes[0] + 1]).toBe("./ui.png");
-    expect(args[imageIndexes[1] + 1]).toBe("./diagram.jpg");
-    expect(args).toContain("describe these");
-  });
-
   it("concatenates multiple text entries into the prompt", async () => {
     const entries: InputEntry[] = [
       { type: "text", text: "line one" },
@@ -99,6 +85,35 @@ describe("Thread.run", () => {
     ];
     const { args } = await capture((frontal_code) => frontal_code.startThread().run(entries));
     expect(args).toContain("line one\nline two");
+  });
+
+  it("does not pass --image (the CLI does not yet accept it)", async () => {
+    const entries: InputEntry[] = [
+      { type: "text", text: "describe this" },
+      { type: "local_image", path: "./ui.png" },
+    ];
+    const { args } = await capture((frontal_code) => frontal_code.startThread().run(entries));
+    expect(args).not.toContain("--image");
+    expect(args).toContain("describe this");
+  });
+
+  it("passes --dangerously-skip-permissions when set", async () => {
+    const { args } = await capture((frontal_code) =>
+      frontal_code.startThread({ dangerouslySkipPermissions: true }).run("x"),
+    );
+    expect(args).toContain("--dangerously-skip-permissions");
+  });
+
+  it("passes --allowed-tools for each tool", async () => {
+    const { args } = await capture((frontal_code) =>
+      frontal_code.startThread({ allowedTools: ["read", "bash"] }).run("x"),
+    );
+    const toolIndexes = args
+      .map((a, i) => (a === "--allowed-tools" ? i : -1))
+      .filter((i) => i > -1);
+    expect(toolIndexes).toHaveLength(2);
+    expect(args[toolIndexes[0] + 1]).toBe("read");
+    expect(args[toolIndexes[1] + 1]).toBe("bash");
   });
 
   it("passes provider, model, and permission mode", async () => {

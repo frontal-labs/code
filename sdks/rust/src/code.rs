@@ -8,8 +8,6 @@ use std::sync::Arc;
 use crate::protocol::{FrontalCodeOptions, ThreadOptions};
 use crate::thread::Thread;
 
-const REQUIRED_ENV_VARS: &[&str] = &["CODEX_API_KEY"];
-
 /// The two names every install channel provides for the same CLI.
 const COMMAND_NAMES: [&str; 2] = ["frontal-code", "code"];
 
@@ -71,20 +69,15 @@ impl FrontalCode {
   }
 
   /// Build the environment for a spawned CLI. Starts from the ambient
-  /// environment, applies the user-provided `env`, then injects any required
-  /// variables (such as `CODEX_API_KEY`) if still missing.
+  /// environment, applies the user-provided `env`.
+  /// The `frontal-code` CLI authenticates via provider-specific environment
+  /// variables (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) which the caller
+  /// is responsible for setting; this SDK does not inject any of its own.
   pub fn build_env(&self) -> HashMap<String, String> {
     let mut env: HashMap<String, String> = std::env::vars().collect();
     if let Some(user_env) = &self.options.env {
       for (key, value) in user_env {
         env.insert(key.clone(), value.clone());
-      }
-    }
-    for var in REQUIRED_ENV_VARS {
-      if !env.contains_key(*var) {
-        if let Ok(value) = std::env::var(var) {
-          env.insert((*var).to_string(), value);
-        }
       }
     }
     env

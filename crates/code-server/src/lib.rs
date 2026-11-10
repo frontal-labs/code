@@ -2,7 +2,7 @@
 //!
 //! Hosted HTTP and WebSocket control-plane surface for `Frontal Code`.
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::env;
 use std::fmt;
 use std::fs;
@@ -135,6 +135,8 @@ struct OrphanPolicyRule {
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub bind_addr: SocketAddr,
+    /// Whether tasks may clone and publish to repositories given as paths on this host.
+    pub allow_local_repos: bool,
     pub event_replay_limit: usize,
     pub lane_transport_kind: LaneTransportKind,
     pub api_key: Option<String>,
@@ -197,6 +199,7 @@ impl Default for ServerConfig {
             clickhouse_user: "frontal".to_string(),
             clickhouse_password: String::new(),
             worker_token_ttl_secs: 7200,
+            allow_local_repos: false,
             state_file: default_server_state_file(),
             orphan_approval_delay: DEFAULT_ORPHAN_APPROVAL_DELAY,
             orphan_auto_retry_after: None,
@@ -279,6 +282,8 @@ impl ServerConfig {
         if let Ok(password) = env::var("FRONTAL_CODE_SERVER_CLICKHOUSE_PASSWORD") {
             config.clickhouse_password = password;
         }
+        config.allow_local_repos = env::var("FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS")
+            .is_ok_and(|value| matches!(value.trim(), "1" | "true"));
         if let Ok(ttl) = env::var("FRONTAL_CODE_WORKER_TOKEN_TTL_SECS") {
             config.worker_token_ttl_secs = ttl.trim().parse()?;
         }
@@ -368,6 +373,24 @@ pub struct ServerState {
     worker_access: Arc<WorkerAccess>,
     model_proxy_client: reqwest::Client,
     publish_workspace_root: PathBuf,
+    // Tasks with a publish in flight. Held so two requests cannot push the same task twice.
+    publishing_tasks: Arc<Mutex<HashSet<String>>>,
+    // Off unless configured. See `ServerConfig::allow_local_repos`.
+    allow_local_repos: bool,
+}
+
+/// A task's publish slot. Dropping it frees the slot, including when a publish fails.
+struct PublishSlot {
+    publishing_tasks: Arc<Mutex<HashSet<String>>>,
+    task_id: String,
+}
+
+impl Drop for PublishSlot {
+    fn drop(&mut self) {
+        if let Ok(mut tasks) = self.publishing_tasks.lock() {
+            tasks.remove(&self.task_id);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -513,6 +536,8 @@ impl ServerState {
                 .build()
                 .unwrap_or_default(),
             publish_workspace_root: default_server_workspace_root(),
+            publishing_tasks: Arc::new(Mutex::new(HashSet::new())),
+            allow_local_repos: false,
         };
         state.recover_loaded_state();
         state
@@ -533,6 +558,11 @@ impl ServerState {
 
     fn with_publish_workspace_root(mut self, root: PathBuf) -> Self {
         self.publish_workspace_root = root;
+        self
+    }
+
+    fn with_local_repos_allowed(mut self, allowed: bool) -> Self {
+        self.allow_local_repos = allowed;
         self
     }
 
@@ -1867,7 +1897,8 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
             config.docker_image.clone(),
             config.docker_server_url.clone(),
             worker_access,
-        ),
+        )
+        .with_local_repos_allowed(config.allow_local_repos),
     );
     if let Some(interval) = config.reconcile_interval {
         let reconcile_state = state.clone();
@@ -2371,10 +2402,37 @@ async fn publish_task_changes(
             "already_published": true,
         })));
     }
+    // One publish per task at a time. The slot is taken before the published check is
+    // repeated, so a publish that finished in the meantime is seen and not repeated.
+    let claimed = state
+        .publishing_tasks
+        .lock()
+        .map_err(|_| AppError::internal("publish registry is unavailable"))?
+        .insert(task_id.clone());
+    if !claimed {
+        return Err(AppError::conflict(format!(
+            "task {task_id} already has a publish in progress"
+        )));
+    }
+    let _slot = PublishSlot {
+        publishing_tasks: state.publishing_tasks.clone(),
+        task_id: task_id.clone(),
+    };
+    if let Some(current) = state
+        .context_for(&task_id)
+        .filter(|current| current.published_commit_sha.is_some())
+    {
+        return Ok(Json(json!({
+            "published_branch": current.published_branch,
+            "published_commit_sha": current.published_commit_sha,
+            "already_published": true,
+        })));
+    }
     let repo_url = context
         .repo_url
         .clone()
         .ok_or_else(|| AppError::bad_request("task has no repository to publish to"))?;
+    check_repo_source(&repo_url, state.allow_local_repos).map_err(AppError::bad_request)?;
     let branch = context
         .branch
         .clone()
@@ -3190,6 +3248,22 @@ async fn complete_task(
     State(state): State<Arc<ServerState>>,
     Json(request): Json<CompleteTaskRequest>,
 ) -> Result<Json<HostedTaskSnapshot>, AppError> {
+    // Refuse a second completion, or one after cancellation. Checked before the lane is
+    // touched, so a stale worker cannot change a task that has already ended.
+    let task = state
+        .tasks
+        .get(&task_id)
+        .ok_or_else(|| AppError::not_found(format!("task not found: {task_id}")))?;
+    if matches!(
+        task.status,
+        TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Stopped
+    ) {
+        return Err(AppError::bad_request(format!(
+            "task {task_id} is already in terminal state: {}",
+            task.status
+        )));
+    }
+
     let mut context = state
         .context_for(&task_id)
         .ok_or_else(|| AppError::not_found(format!("task not found: {task_id}")))?;
@@ -4587,9 +4661,40 @@ fn write_local_docker_task_payload(
 }
 
 #[allow(clippy::too_many_lines)]
+/// Whether the server may clone and publish to a repository that is a path on this host.
+/// Off by default: a task could otherwise read or push to any repository the server can
+/// reach. Local development and the e2e scripts turn it on.
+/// Checks a repository location from a task request. A remote URL is always allowed. A
+/// path on this host needs `FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS=1`.
+fn check_repo_source(location: &str, allow_local_repos: bool) -> Result<(), String> {
+    if location.starts_with('-') {
+        return Err("repository location must not start with `-`".to_string());
+    }
+    if FsPath::new(location).exists() && !allow_local_repos {
+        return Err(
+            "local repository paths are disabled; set FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS=1 to allow them"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
 fn create_task_internal(state: &ServerState, request: CreateTaskRequest) -> Result<Task, AppError> {
     if request.prompt.trim().is_empty() {
         return Err(AppError::bad_request("prompt must not be empty"));
+    }
+    if let Some(repo_url) = request.repo_url.as_deref() {
+        check_repo_source(repo_url, state.allow_local_repos).map_err(AppError::bad_request)?;
+    }
+    if let Some(repository) = request.repository.as_deref() {
+        check_repo_source(repository, state.allow_local_repos).map_err(AppError::bad_request)?;
+    }
+    for reference in [request.base_ref.as_deref(), request.branch.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        publish::validate_ref_name(reference).map_err(AppError::bad_request)?;
     }
 
     let description = request.repository.as_deref();
@@ -5071,6 +5176,13 @@ impl AppError {
     fn not_found(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,
+            message: message.into(),
+        }
+    }
+
+    fn conflict(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::CONFLICT,
             message: message.into(),
         }
     }
@@ -5826,18 +5938,21 @@ mod tests {
         let workspace_root = dir.join("workspaces");
         let docker = Arc::new(MockDockerRunner::default());
         let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
-        let state = Arc::new(ServerState::with_lane_transport_kind_and_access(
-            DEFAULT_EVENT_REPLAY_LIMIT,
-            LaneTransportKind::LocalDocker,
-            Arc::new(LocalDockerLaneWorkerTransport::with_runner(
-                workspace_root.clone(),
-                "frontal-code-worker:test".to_string(),
-                "http://host.docker.internal:8788",
-                access.clone(),
-                docker.clone(),
-            )),
-            access,
-        ));
+        let state = Arc::new(
+            ServerState::with_lane_transport_kind_and_access(
+                DEFAULT_EVENT_REPLAY_LIMIT,
+                LaneTransportKind::LocalDocker,
+                Arc::new(LocalDockerLaneWorkerTransport::with_runner(
+                    workspace_root.clone(),
+                    "frontal-code-worker:test".to_string(),
+                    "http://host.docker.internal:8788",
+                    access.clone(),
+                    docker.clone(),
+                )),
+                access,
+            )
+            .with_local_repos_allowed(true),
+        );
         let router = app(state.clone());
 
         let create_response = router
@@ -6042,18 +6157,21 @@ mod tests {
             ..MockDockerRunner::default()
         });
         let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
-        let state = Arc::new(ServerState::with_lane_transport_kind_and_access(
-            DEFAULT_EVENT_REPLAY_LIMIT,
-            LaneTransportKind::LocalDocker,
-            Arc::new(LocalDockerLaneWorkerTransport::with_runner(
-                workspace_root,
-                "frontal-code-worker:test".to_string(),
-                "http://host.docker.internal:8788",
-                access.clone(),
-                docker,
-            )),
-            access,
-        ));
+        let state = Arc::new(
+            ServerState::with_lane_transport_kind_and_access(
+                DEFAULT_EVENT_REPLAY_LIMIT,
+                LaneTransportKind::LocalDocker,
+                Arc::new(LocalDockerLaneWorkerTransport::with_runner(
+                    workspace_root,
+                    "frontal-code-worker:test".to_string(),
+                    "http://host.docker.internal:8788",
+                    access.clone(),
+                    docker,
+                )),
+                access,
+            )
+            .with_local_repos_allowed(true),
+        );
         let router = app(state.clone());
 
         let create_response = router
@@ -6737,7 +6855,8 @@ mod tests {
             Arc::new(FakeLaneWorkerTransport::new()),
         )
         .with_control_plane_api_key(Some("admin-key".to_string()))
-        .with_publish_workspace_root(root.join("workspaces"));
+        .with_publish_workspace_root(root.join("workspaces"))
+        .with_local_repos_allowed(true);
         let state_arc = Arc::new(std::mem::take(&mut state));
         state_arc.record_context(
             "task-publish-route",
@@ -7173,6 +7292,58 @@ mod tests {
                 .and_then(|value| value.as_str()),
             Some("stop")
         );
+    }
+
+    #[tokio::test]
+    async fn complete_task_refuses_a_second_completion() {
+        let state = Arc::new(ServerState::default());
+        let create_response = app(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "prompt": "Finish once",
+                            "repository": "repo-twice",
+                            "source": "api"
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let created_body = to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&created_body).unwrap();
+        let task_id = created["task_id"].as_str().unwrap().to_string();
+
+        let complete = |finish_reason: &'static str| {
+            app(state.clone()).oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/v1/tasks/{task_id}/complete"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "finish_reason": finish_reason,
+                            "tokens_output": 1,
+                            "result": "first"
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+        };
+
+        assert_eq!(complete("stop").await.unwrap().status(), StatusCode::OK);
+        let second = complete("error").await.unwrap();
+        assert_eq!(second.status(), StatusCode::BAD_REQUEST);
+        let task = state.tasks.get(&task_id).expect("task still tracked");
+        assert_eq!(task.status, TaskStatus::Completed);
     }
 
     fn policy_request(

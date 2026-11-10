@@ -25,7 +25,12 @@ pub(crate) const WORKER_DEFAULT_PERMISSION_MODE: &str = "workspace-write";
 
 /// Shell commands a worker may run without asking. Each entry is a prefix. Chained or
 /// partial commands are not covered by a prefix, so `git status && curl ...` is refused.
-/// The list is for building, testing, and reading code, and it has no network tools.
+/// The list is for reading code and running the project's build and test tools.
+///
+/// Build and test tools run project code (`cargo test`, `make`, `npm test`), so this list
+/// is not a sandbox. The container and its internal network are the real boundary.
+/// Interpreters and runners that take arbitrary code (`python3`, `find -exec`,
+/// `npm run`) are left out, since a prefix match cannot limit what they run.
 pub(crate) const WORKER_BASH_ALLOW: &[&str] = &[
     "bash(ls:*)",
     "bash(cat:*)",
@@ -34,7 +39,6 @@ pub(crate) const WORKER_BASH_ALLOW: &[&str] = &[
     "bash(wc:*)",
     "bash(grep:*)",
     "bash(rg:*)",
-    "bash(find:*)",
     "bash(sort:*)",
     "bash(diff:*)",
     "bash(pwd:*)",
@@ -44,11 +48,9 @@ pub(crate) const WORKER_BASH_ALLOW: &[&str] = &[
     "bash(git log:*)",
     "bash(git show:*)",
     "bash(git add:*)",
-    "bash(python3:*)",
     "bash(cargo:*)",
     "bash(make:*)",
     "bash(npm test:*)",
-    "bash(npm run:*)",
 ];
 
 /// Commands a worker may never run, even if an allow rule or the task would grant them.
@@ -146,7 +148,7 @@ impl WorkerAccess {
     /// Returns the task a live token belongs to. A store error counts as "no access".
     pub(crate) async fn task_for_token(&self, token: &str) -> Option<String> {
         let store = self.store.as_ref()?;
-        match store.validate(token).await {
+        match store.validate(token, self.ttl_secs).await {
             Ok(task) => task,
             Err(error) => {
                 eprintln!("worker token check failed: {error}");
@@ -373,6 +375,33 @@ pub(crate) fn upstream_for(
     })
 }
 
+/// Whether the proxy forwards `method` `rest` for `provider`. Only model calls are allowed:
+/// a worker token must not be able to reach an arbitrary upstream path such as a file
+/// upload, fine-tuning, or account endpoint.
+pub(crate) fn proxy_path_allowed(provider: &str, method: &Method, rest: &str) -> bool {
+    if *method != Method::POST {
+        return false;
+    }
+    let path = rest.trim_start_matches('/');
+    let openai_chat = matches!(
+        path,
+        "chat/completions" | "responses" | "v1/chat/completions" | "v1/responses"
+    );
+    // Azure routes model calls under the deployment name.
+    let azure_chat = path
+        .strip_prefix("openai/deployments/")
+        .is_some_and(|tail| tail.ends_with("/chat/completions") && !tail.contains(".."));
+    let anthropic = matches!(path, "v1/messages" | "v1/messages/count_tokens");
+    match provider {
+        "openai" | "xai" | "ollama" => openai_chat,
+        "azure" => openai_chat || azure_chat,
+        // `frontal` and `anthropic` share FRONTAL_BASE_URL, and the CLI picks the wire format.
+        "frontal" => openai_chat || anthropic,
+        "anthropic" => anthropic,
+        _ => false,
+    }
+}
+
 /// Forwards one model request. The caller must present a live worker token.
 pub(crate) async fn proxy_model_request(
     access: &WorkerAccess,
@@ -387,6 +416,13 @@ pub(crate) async fn proxy_model_request(
     };
     if access.task_for_token(&token).await.is_none() {
         return error_response(StatusCode::UNAUTHORIZED, "invalid or revoked worker token");
+    }
+
+    if !proxy_path_allowed(provider, request.method(), rest) {
+        return error_response(
+            StatusCode::NOT_FOUND,
+            "that path is not a model endpoint the proxy forwards",
+        );
     }
 
     let upstream = match upstream_for(provider, server_env) {
@@ -684,6 +720,59 @@ mod proxy_tests {
         assert!(!head.contains(&token), "worker token leaked upstream");
     }
 
+    #[test]
+    fn proxy_forwards_only_model_call_paths_per_provider() {
+        assert!(proxy_path_allowed(
+            "openai",
+            &Method::POST,
+            "chat/completions"
+        ));
+        assert!(proxy_path_allowed(
+            "ollama",
+            &Method::POST,
+            "v1/chat/completions"
+        ));
+        assert!(proxy_path_allowed(
+            "anthropic",
+            &Method::POST,
+            "v1/messages"
+        ));
+        assert!(proxy_path_allowed(
+            "anthropic",
+            &Method::POST,
+            "v1/messages/count_tokens"
+        ));
+        assert!(proxy_path_allowed(
+            "azure",
+            &Method::POST,
+            "openai/deployments/gpt/chat/completions"
+        ));
+
+        // Other paths, other methods, and shape mismatches are refused.
+        assert!(!proxy_path_allowed("openai", &Method::POST, "files"));
+        assert!(!proxy_path_allowed(
+            "openai",
+            &Method::POST,
+            "fine_tuning/jobs"
+        ));
+        assert!(!proxy_path_allowed(
+            "openai",
+            &Method::GET,
+            "chat/completions"
+        ));
+        assert!(!proxy_path_allowed(
+            "anthropic",
+            &Method::POST,
+            "chat/completions"
+        ));
+        assert!(!proxy_path_allowed("openai", &Method::POST, "../admin"));
+        assert!(!proxy_path_allowed(
+            "azure",
+            &Method::POST,
+            "openai/deployments/../files/chat/completions"
+        ));
+    }
+
     #[tokio::test]
     async fn proxy_refuses_missing_or_revoked_tokens_without_contacting_the_provider() {
         let Some(store) = crate::worker_tokens::tests::test_store() else {
@@ -791,6 +880,23 @@ mod worker_policy_tests {
             assert!(
                 matches!(outcome(&policy, command), PermissionOutcome::Deny { .. }),
                 "expected `{command}` to be denied"
+            );
+        }
+    }
+
+    #[test]
+    fn a_worker_cannot_run_arbitrary_code_through_interpreters_or_runners() {
+        let policy = worker_policy();
+        for command in [
+            "python3 -c 'import os'",
+            "find . -exec sh -c 'id' \\;",
+            "find . -delete",
+            "npm run deploy",
+        ] {
+            assert_ne!(
+                outcome(&policy, command),
+                PermissionOutcome::Allow,
+                "expected `{command}` not to be allowed"
             );
         }
     }

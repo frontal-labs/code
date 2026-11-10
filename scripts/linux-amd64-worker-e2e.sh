@@ -57,7 +57,7 @@ docker run -d --name "$CONTAINER" --platform linux/amd64 -p "127.0.0.1:$PORT:$PO
   -v frontal-cargo-registry:/usr/local/cargo/registry -v frontal-target-amd64:/src/target-linux \
   -v "$WORK":"$WORK" -v /var/run/docker.sock:/var/run/docker.sock -v "$TLS_DIR":/certs:ro \
   -e FRONTAL_CODE_SERVER_HOST=0.0.0.0 -e FRONTAL_CODE_SERVER_PORT="$PORT" \
-  -e FRONTAL_CODE_SERVER_API_KEY="$KEY" -e FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker \
+  -e FRONTAL_CODE_SERVER_API_KEY="$KEY" -e FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker -e FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS=1 \
   -e FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local \
   -e FRONTAL_CODE_SERVER_CALLBACK_URL="http://host.docker.internal:$PORT" \
   -e FRONTAL_CODE_SERVER_WORKSPACE_ROOT="$WORK/workspaces" \

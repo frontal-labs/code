@@ -216,6 +216,7 @@ enum Command {
     },
     Validate {
         token: String,
+        ttl_secs: f64,
         reply: Responder<Result<Option<String>, String>>,
     },
     Revoke {
@@ -259,8 +260,7 @@ impl WorkerTokenStore {
     /// synchronous lane transport.
     pub(crate) fn issue_blocking(&self, task_id: &str, ttl_secs: u64) -> Result<String, String> {
         let (reply_tx, reply_rx) = std_mpsc::channel();
-        // Lifetimes beyond u32::MAX seconds (136 years) are clamped, not wrapped.
-        let ttl_secs = f64::from(u32::try_from(ttl_secs).unwrap_or(u32::MAX));
+        let ttl_secs = ttl_as_secs(ttl_secs);
         self.send(Command::Issue {
             task_id: task_id.to_string(),
             ttl_secs,
@@ -273,10 +273,19 @@ impl WorkerTokenStore {
 
     /// Returns the task a live token belongs to. `Ok(None)` means the token is unknown,
     /// expired, or revoked.
-    pub(crate) async fn validate(&self, token: &str) -> Result<Option<String>, String> {
+    ///
+    /// A live token's expiry is pushed `ttl_secs` into the future. The TTL is an idle
+    /// timeout, so a task that keeps calling the model keeps its token. Revoking on
+    /// completion or cancellation still ends access at once.
+    pub(crate) async fn validate(
+        &self,
+        token: &str,
+        ttl_secs: u64,
+    ) -> Result<Option<String>, String> {
         let (reply_tx, reply_rx) = oneshot::channel();
         self.send(Command::Validate {
             token: token.to_string(),
+            ttl_secs: ttl_as_secs(ttl_secs),
             reply: Responder::Async(reply_tx),
         })?;
         reply_rx
@@ -357,7 +366,11 @@ fn run_store(
                     ttl_secs,
                     reply,
                 } => reply.send(issue(db, &task_id, ttl_secs).await),
-                Command::Validate { token, reply } => reply.send(validate(db, &token).await),
+                Command::Validate {
+                    token,
+                    ttl_secs,
+                    reply,
+                } => reply.send(validate(db, &token, ttl_secs).await),
                 Command::Revoke { task_id, reply } => reply.send(revoke(db, &task_id).await),
             }
         }
@@ -380,6 +393,11 @@ fn reply_unavailable(command: Command) {
         Command::Validate { reply, .. } => reply.send(Err(message)),
         Command::Revoke { reply, .. } => reply.send(Err(message)),
     }
+}
+
+/// Lifetimes beyond `u32::MAX` seconds (136 years) are clamped, not wrapped.
+fn ttl_as_secs(ttl_secs: u64) -> f64 {
+    f64::from(u32::try_from(ttl_secs).unwrap_or(u32::MAX))
 }
 
 async fn issue(db: &mut Client, task_id: &str, ttl_secs: f64) -> Result<String, String> {
@@ -415,13 +433,14 @@ async fn issue(db: &mut Client, task_id: &str, ttl_secs: f64) -> Result<String, 
     Ok(token)
 }
 
-async fn validate(db: &mut Client, token: &str) -> Result<Option<String>, String> {
+async fn validate(db: &mut Client, token: &str, ttl_secs: f64) -> Result<Option<String>, String> {
     let hash = hash_token(token);
     let row = db
         .query_opt(
-            "SELECT task_id FROM hosted_worker_tokens
-             WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()",
-            &[&hash],
+            "UPDATE hosted_worker_tokens SET expires_at = now() + make_interval(secs => $2)
+             WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
+             RETURNING task_id",
+            &[&hash, &ttl_secs],
         )
         .await
         .map_err(|error| format!("token store: {error}"))?;
@@ -556,23 +575,23 @@ pub(crate) mod tests {
         let task = unique_task("revoke");
         let first = store.issue_blocking(&task, 3600).expect("first token");
         assert_eq!(
-            futures_block(store.validate(&first)).expect("validate"),
+            futures_block(store.validate(&first, 3600)).expect("validate"),
             Some(task.clone())
         );
 
         let second = store.issue_blocking(&task, 3600).expect("second token");
         assert_eq!(
-            futures_block(store.validate(&first)).expect("validate"),
+            futures_block(store.validate(&first, 3600)).expect("validate"),
             None
         );
         assert_eq!(
-            futures_block(store.validate(&second)).expect("validate"),
+            futures_block(store.validate(&second, 3600)).expect("validate"),
             Some(task.clone())
         );
 
         store.revoke_blocking(&task).expect("revoke");
         assert_eq!(
-            futures_block(store.validate(&second)).expect("validate"),
+            futures_block(store.validate(&second, 3600)).expect("validate"),
             None
         );
     }
@@ -583,8 +602,26 @@ pub(crate) mod tests {
         let task = unique_task("expire");
         let token = store.issue_blocking(&task, 0).expect("token");
         assert_eq!(
-            futures_block(store.validate(&token)).expect("validate"),
+            futures_block(store.validate(&token, 3600)).expect("validate"),
             None
+        );
+    }
+
+    #[test]
+    fn a_token_that_is_used_stays_live_past_its_original_expiry() {
+        let Some(store) = test_store() else { return };
+        let task = unique_task("slide");
+        let token = store.issue_blocking(&task, 2).expect("token");
+        std::thread::sleep(std::time::Duration::from_millis(1_200));
+        assert_eq!(
+            futures_block(store.validate(&token, 2)).expect("validate"),
+            Some(task.clone())
+        );
+        // Without the refresh above, the token would have expired at the two-second mark.
+        std::thread::sleep(std::time::Duration::from_millis(1_200));
+        assert_eq!(
+            futures_block(store.validate(&token, 2)).expect("validate"),
+            Some(task.clone())
         );
     }
 

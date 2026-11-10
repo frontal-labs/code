@@ -219,6 +219,13 @@ Each task gets its own internal Docker network. The worker is attached to it, an
 
 The worker does not push. At the end of a run it sends its changes as a patch to `/v1/tasks/<id>/publish`. The server applies the patch to a fresh clone, commits it, and pushes to a branch under `frontal-code/`. The server opens a pull request when a GitHub integration is configured. See [design/worker-architecture.md](design/worker-architecture.md#publication).
 
+The server refuses a patch that changes `.git`, `.github/workflows`, `.github/actions`, `CODEOWNERS`, or `.gitmodules`, in any letter case and at any depth, and it refuses symbolic links and submodules. Only one publish runs per task at a time. A second request gets `409 Conflict` while the first is in progress.
+
+Repository locations and refs are checked when the task is created and again at publish time:
+
+- A remote URL is always accepted. A path on the server's host is refused unless `FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS=1`. Local development and the e2e scripts turn it on. Otherwise a task could clone or push to any repository the server can reach.
+- `base_ref` and `branch` must be valid git ref names. Names that start with `-`, contain spaces or `..`, or end in `.lock` are refused.
+
 ### Container hardening
 
 Every worker runs with `--cap-drop ALL`, `--security-opt no-new-privileges:true`, a read-only root filesystem, `--pids-limit 512`, `--memory 4g`, and `--cpus 2`. Its only writable mounts are the task checkout and two tmpfs directories. It is never privileged, and it never gets the Docker socket.
@@ -232,11 +239,11 @@ The worker sends each model request to `/v1/model-proxy/<provider>` on the serve
 3. Adds the server's key for that provider and forwards the request to the provider's base URL from the server's environment.
 4. Streams the response back to the worker.
 
-A token that is stolen from the container is useful only for model calls and for its own task's endpoints. It stops working when the task completes or is cancelled, or when the server restarts (tokens are held in memory).
+A token that is stolen from the container is useful only for model calls and for its own task's endpoints. The proxy forwards only model-call paths (for example `chat/completions`, `responses`, and `v1/messages`) and only `POST`, so a token cannot reach file, fine-tuning, or account endpoints. Tokens are stored as SHA-256 hashes in Postgres, so they survive a server restart. Each successful use extends the token's expiry by the configured TTL (`FRONTAL_CODE_WORKER_TOKEN_TTL_SECS`, default 7200), so the TTL is an idle timeout and a long-running task keeps access. The token is revoked as soon as the task completes or is cancelled.
 
 Bedrock is not proxied: its requests are signed per request and cannot use a static key. A task that asks for `bedrock` is refused.
 
-The worker has network access and runs with `danger-full-access` by default, so a prompt-injected agent could still read its own environment and send data out. The token limits the damage to model calls and one task's endpoints. The default permission mode is a separate decision: see the README.
+The worker runs with the `workspace-write` permission mode by default. File edits are confined to its checkout, and shell commands are refused unless an allow rule grants them. Its container runs with no Linux capabilities, `no-new-privileges`, a read-only root filesystem, and its own `--internal` Docker network. That network has no route to the internet and reaches only the relay to the server. A prompt-injected agent can still run the build and test tools it is allowed, and those run project code. The network, not the allow list, is the real boundary. The token limits what a compromised worker can do to model calls and to its own task's endpoints.
 
 ## Docker Compose
 

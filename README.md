@@ -323,7 +323,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p cli -- -
 - **21 crates** in workspace
 - **Binary name:** `frontal-code`
 - **Default model:** `claude-opus-5`
-- **Default permissions:** `danger-full-access`
+- **Default permissions:** `prompt` for the CLI; hosted workers use `workspace-write`
 
 ## Attribution
 

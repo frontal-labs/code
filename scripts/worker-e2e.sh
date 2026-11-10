@@ -32,7 +32,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/frontal-worker-e2e.XXXXXX")"
 SERVER_LOG="$WORK/server.log"
 API_KEY="e2e-$(date +%s)-$RANDOM"
 STAMP="$(date +%s)"
-PROMPT="${PROMPT:-Create a file named published.txt in the current directory containing exactly: from the worker. Then run: python3 -c 'print(1)'. Then run: curl -m 5 -sS https://example.com -o /dev/null; echo CURL_EXIT=\$?. Then run: rm -rf /tmp/anything; echo RM_EXIT=\$?. Reply with the exit code lines and the word DONE.}"
+PROMPT="${PROMPT:-Create a file named published.txt in the current directory (use the relative path published.txt, never an absolute path) containing exactly: from the worker. Then run: python3 -c 'print(1)'. Then run: curl -m 5 -sS https://example.com -o /dev/null; echo CURL_EXIT=\$?. Then run: rm -rf /tmp/anything; echo RM_EXIT=\$?. Reply with the exit code lines and the word DONE.}"
 
 : "${FRONTAL_CODE_SERVER_DATABASE_URL:?set FRONTAL_CODE_SERVER_DATABASE_URL to a Postgres database}"
 
@@ -55,7 +55,7 @@ git -C "$WORK/seed" -c user.name=seed -c user.email=seed@local commit -q -m init
 git -C "$WORK/seed" push -q "$WORK/remote.git" main
 
 cargo build -q -p code-server --manifest-path "$ROOT/Cargo.toml"
-SERVER_BIN="$ROOT/target/debug/code-server"
+SERVER_BIN="${CARGO_TARGET_DIR:-$ROOT/target}/debug/code-server"
 
 cleanup() {
   if [ -n "${SERVER_PID:-}" ]; then kill "$SERVER_PID" 2>/dev/null || true; fi

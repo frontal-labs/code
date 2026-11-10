@@ -43,12 +43,12 @@ RUN useradd --create-home --shell /bin/bash frontal-code
 
 WORKDIR /workspace
 
-# The CLI binary is named `code`. The server launches `frontal-code hosted task run`,
-# so both names are installed.
+# The package builds two commands for the same CLI: `code`, and `frontal-code`, which runs the
+# `code` beside it. The server launches `frontal-code hosted task run`, so both are installed.
 COPY --from=builder /src/target/release/code /usr/local/bin/code
+COPY --from=builder /src/target/release/frontal-code /usr/local/bin/frontal-code
 
-RUN chmod +x /usr/local/bin/code \
-    && ln -s /usr/local/bin/code /usr/local/bin/frontal-code \
+RUN chmod +x /usr/local/bin/code /usr/local/bin/frontal-code \
     && mkdir -p /workspace/.frontal-code /workspace/.sandbox-home \
     && chown -R frontal-code:frontal-code /workspace
 

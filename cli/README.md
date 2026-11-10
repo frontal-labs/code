@@ -47,7 +47,7 @@ The Frontal Code CLI is the primary user interface for interacting with the Fron
 
 ## Usage
 
-The main binary is named `frontal-code` and can be used in multiple ways:
+The CLI runs as `frontal-code` or `code`; both are the same program (see [Command names](../docs/INSTALLATION.md#command-names)). The examples below use `frontal-code`:
 
 ### Interactive Mode
 ```bash

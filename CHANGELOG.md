@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ollama works as a provider. It is served through the OpenAI-compatible client at `OLLAMA_BASE_URL` (default `http://localhost:11434`), including tool calls and streamed usage. Hosted Ollama tasks reach the host's Ollama through the model proxy, so the worker never needs a key.
 
 ### Changed
+- Every install provides the CLI as both `frontal-code` and `code`. Cargo builds both binaries; `frontal-code` runs the `code` beside it, with the same arguments, stdio, and exit status. Homebrew, the release-based installs, and the Docker images install both names. npm installs `frontal-code` and adds `code` only when no other `code` command exists, so VS Code's command is never replaced.
+- The TypeScript SDK, the Rust SDK, and the VS Code extension default to `frontal-code` when it is on `PATH` and to `code` otherwise. The VS Code `cliPath` setting now defaults to empty, which means detect.
 - Extension directories are renamed: `extensions/code-ide` is now `extensions/vs-code`, and `extensions/code-slack` is now `extensions/slack-agent`. Package names are unchanged.
 
 ### Fixed

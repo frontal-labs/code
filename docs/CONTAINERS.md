@@ -183,7 +183,7 @@ docker manifest push frontal-code/cli:multiarch
 
 ## Hosted Worker Containers
 
-`code-server` runs each hosted task in its own worker container, built from `docker/worker.Dockerfile`. This is the default lane transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`).
+`code-server` runs each hosted task in its own worker container, built from `docker/worker.Dockerfile`. The image installs both command names, `frontal-code` and `code`; the hosted task runs `frontal-code hosted task run`. This is the default lane transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`).
 
 ```bash
 # Build the worker image from the workspace (the context is limited by .dockerignore)

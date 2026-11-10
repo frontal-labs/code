@@ -20,12 +20,12 @@ class FrontalCode < Formula
 
   def install
     if build.head?
+      # cargo installs both commands: `code` and `frontal-code`, which runs `code` beside it.
       system "cargo", "install", *std_cargo_args(path: "cli")
-      # cargo installs the `code` bin; expose it under the package name like the release build.
-      mv bin/"code", bin/"frontal-code"
     else
-      # Release asset is a raw binary named code-cli-<target>; install it as frontal-code.
-      bin.install Dir["code-cli-*"].first => "frontal-code"
+      # The release asset is one raw binary, so both names point at it.
+      bin.install Dir["code-cli-*"].first => "code"
+      bin.install_symlink "code" => "frontal-code"
     end
   end
 
@@ -38,11 +38,15 @@ class FrontalCode < Formula
         export FRONTAL_AUTH_TOKEN="<your-auth-token>"
         export FRONTAL_BASE_URL="https://api.deepseek.com/anthropic"
 
-      Run `frontal-code --help` to see available commands.
+      Both `frontal-code` and `code` run the same CLI. Run `frontal-code --help` to see the commands.
+
+      If VS Code's `code` command is already on your PATH, this formula's `code` conflicts with it.
+      Keep VS Code's command and use `frontal-code`, or remove the other link first.
     EOS
   end
 
   test do
-    assert_match "frontal-code", shell_output("#{bin}/frontal-code --version")
+    assert_match version.to_s, shell_output("#{bin}/frontal-code --version")
+    assert_equal shell_output("#{bin}/code --version"), shell_output("#{bin}/frontal-code --version")
   end
 end

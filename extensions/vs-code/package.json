@@ -45,9 +45,9 @@
       "properties": {
         "frontal-code.cliPath": {
           "type": "string",
-          "default": "frontal-code",
+          "default": "",
           "scope": "machine",
-          "description": "Path to the Frontal Code CLI binary. Set in user or machine settings only; workspace settings are ignored."
+          "description": "Path to the Frontal Code CLI. Leave empty to use `frontal-code` from PATH, or `code` if that is not found. Set in user or machine settings only; workspace settings are ignored."
         },
         "frontal-code.defaultModel": {
           "type": "string",

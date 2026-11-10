@@ -1,5 +1,10 @@
 const vscode = require("vscode");
 const { execFile } = require("node:child_process");
+const { accessSync, constants } = require("node:fs");
+const path = require("node:path");
+
+// The two names every install channel provides for the same CLI.
+const COMMAND_NAMES = ["frontal-code", "code"];
 
 function activate(context) {
   context.subscriptions.push(
@@ -22,7 +27,32 @@ function config() {
 function frontalCodeCliPath() {
   const inspected = config().inspect("cliPath");
   const value = inspected?.globalValue ?? inspected?.defaultValue;
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "frontal-code";
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : defaultCliCommand();
+}
+
+// `frontal-code` when it is on PATH, otherwise `code`: the same program under either name.
+function defaultCliCommand() {
+  for (const name of COMMAND_NAMES) {
+    if (isOnPath(name)) {
+      return name;
+    }
+  }
+  return COMMAND_NAMES[0];
+}
+
+function isOnPath(name) {
+  const dirs = (process.env.PATH || "").split(path.delimiter).filter((dir) => dir.length > 0);
+  const suffixes = process.platform === "win32" ? [".exe", ""] : [""];
+  return dirs.some((dir) =>
+    suffixes.some((suffix) => {
+      try {
+        accessSync(path.join(dir, name + suffix), constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+  );
 }
 
 function frontalCodeModelArgs() {

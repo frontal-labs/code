@@ -4,10 +4,17 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+# `cargo run -p cli` runs `code`; `frontal-code` is run with --bin frontal-code.
+default-run = "code"
 
 [[bin]]
 name = "code"
 path = "src/main.rs"
+
+# Both names run the same CLI. `frontal-code` runs the `code` beside it (see src/bin/frontal-code.rs).
+[[bin]]
+name = "frontal-code"
+path = "src/bin/frontal-code.rs"
 
 [dependencies]
 code-api = { path = "../crates/code-api" }

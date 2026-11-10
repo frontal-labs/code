@@ -28,10 +28,12 @@
     "lib/**/*.mjs",
     "checksums.json",
     "scripts/postinstall.sh",
+    "scripts/command-alias.sh",
     "README.md"
   ],
   "scripts": {
-    "postinstall": "./scripts/postinstall.sh",
+    "postinstall": "./scripts/postinstall.sh && ./scripts/command-alias.sh install",
+    "preuninstall": "./scripts/command-alias.sh remove",
     "build": "./scripts/build.sh",
     "download": "./scripts/download.sh",
     "test": "./scripts/test.sh",

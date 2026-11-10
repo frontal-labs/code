@@ -12,7 +12,7 @@ For a task-oriented guide with copy/paste examples, see [`./USAGE.md`](./USAGE.m
 # Install the CLI with Homebrew
 brew install --HEAD ./homebrew/Formula/code.rb
 
-# Inspect available commands (npm and Homebrew installs use `frontal-code`; a Cargo build produces `code`)
+# Inspect available commands (`frontal-code` and `code` run the same CLI; see docs/INSTALLATION.md#command-names)
 frontal-code --help
 
 # Run the interactive REPL

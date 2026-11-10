@@ -77,7 +77,7 @@ done
 curl -sf -H "authorization: Bearer $KEY" "http://127.0.0.1:$PORT/v1/version" >/dev/null \
   || { echo "error: server did not start"; docker logs "$CONTAINER" 2>&1 | tail -30; exit 1; }
 
-PROMPT="Create a file named published.txt in the current directory containing exactly: from the linux worker. Reply DONE."
+PROMPT="Create a file named published.txt in the current directory (use the relative path published.txt, never an absolute path) containing exactly: from the linux worker. Reply DONE."
 IDS=()
 for n in 1 2; do
   BRANCH="frontal-code/linux-e2e-$n"

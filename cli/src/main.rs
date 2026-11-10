@@ -3773,7 +3773,17 @@ fn run_hosted_task_worker(
                 Ok(Some(publication)) => {
                     result = augment_hosted_result_with_publication(result, &publication);
                 }
-                Ok(None) => {}
+                // A repository task that changed no files publishes nothing. Say so in the result,
+                // so a finished task without a branch is not mistaken for a publication failure.
+                Ok(None) => {
+                    if payload.base_commit.is_some() {
+                        let note = "No file changes were made, so no branch was published.";
+                        result = Some(match result {
+                            Some(value) if !value.trim().is_empty() => format!("{value}\n\n{note}"),
+                            _ => note.to_string(),
+                        });
+                    }
+                }
                 // The run itself succeeded. The publication failure is recorded in the result.
                 Err(error) => {
                     let note = format!("Publication failed: {error}");

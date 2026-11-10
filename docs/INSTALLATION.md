@@ -22,7 +22,7 @@ Every install provides the CLI under two names that run the same program: `front
 |---|---|---|
 | Source (`cargo build -p cli`, `cargo install --path cli`) | yes | yes |
 | Homebrew | yes | yes (a symlink to the same binary) |
-| npm (`@frontal-labs/code-cli`) | yes | yes, if no other `code` command exists |
+| npm (`@frontal-labs/code-cli`) | yes | yes, if the install script ran and no other `code` exists |
 | Docker images (`frontal-code/cli`, worker) | yes | yes |
 
 `frontal-code` is the name the SDKs and the VS Code extension look for first. They fall back to `code` when `frontal-code` is not on `PATH`.

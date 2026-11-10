@@ -23,7 +23,10 @@ populated at install time, not committed.)
 
 ## Commands
 
-The package installs `frontal-code`. It also installs `code` when no other `code` command exists on your PATH, such as VS Code's. Both run the same CLI, so `frontal-code --help` and `code --help` are equivalent. If `code` is already taken, use `frontal-code`.
+The package installs `frontal-code`. Both names run the same CLI, so `frontal-code --help` and `code --help` are equivalent.
+
+- The `code` alias is added by the install script, and only when no other `code` command exists on your PATH (VS Code's, for example). npm 11 may not run install scripts unless they are allowed, in which case no alias is created. Then use `frontal-code`, or run `ln -s "$(command -v frontal-code)" "$(dirname "$(command -v frontal-code)")/code"` yourself if the name is free.
+- If the native binary is missing (install scripts did not run), the launcher downloads it on first run.
 
 ## What it does
 

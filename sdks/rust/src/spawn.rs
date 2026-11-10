@@ -182,7 +182,14 @@ pub async fn run_turn_buffered(
         usage = u.clone();
         session_id = sid.clone();
       }
-      _ => {}
+      FrontalCodeEvent::TurnFailed { error } => {
+        let stderr = stderr_buffer.lock().await.clone();
+        return Err(FrontalCodeError::Exit {
+          code: None,
+          stderr: format!("frontal-code turn failed: {error}\n{stderr}"),
+        });
+      }
+      FrontalCodeEvent::TurnStarted => {}
     }
   }
 

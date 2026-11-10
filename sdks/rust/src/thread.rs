@@ -89,10 +89,10 @@ impl Thread {
     let (prompt, images) = input.to_prompt_and_images();
 
     let mut args = vec!["prompt".to_string(), "-p".to_string(), prompt];
-    for image in &images {
-      args.push("--image".to_string());
-      args.push(image.clone());
-    }
+    // `local_image` entries are kept in the protocol for forward compatibility,
+    // but the `frontal-code` CLI does not yet accept `--image`, so only text
+    // entries are concatenated into the prompt.
+    let _ = images;
     if let Some(provider) = &self.options.provider {
       args.push("--provider".to_string());
       args.push(provider.clone());
@@ -104,6 +104,15 @@ impl Thread {
     if let Some(permission_mode) = &self.options.permission_mode {
       args.push("--permission-mode".to_string());
       args.push(permission_mode.clone());
+    }
+    if self.options.dangerously_skip_permissions {
+      args.push("--dangerously-skip-permissions".to_string());
+    }
+    if let Some(tools) = &self.options.allowed_tools {
+      for tool in tools {
+        args.push("--allowed-tools".to_string());
+        args.push(tool.clone());
+      }
     }
     if let Some(id) = session_id {
       args.push("--resume".to_string());

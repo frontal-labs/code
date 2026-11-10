@@ -106,6 +106,10 @@ export async function collectTurn(events: AsyncIterable<FrontalCodeEvent>): Prom
       finalResponse = event.finalResponse;
       usage = event.usage;
       sessionId = event.sessionId;
+    } else if (event.type === "turn.failed") {
+      throw new FrontalCodeCliError(
+        `frontal-code turn failed: ${(event as { error?: string }).error ?? "unknown error"}`,
+      );
     }
   }
 

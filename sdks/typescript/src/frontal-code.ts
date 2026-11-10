@@ -2,8 +2,6 @@ import { defaultCommand } from "./command.js";
 import type { FrontalCodeOptions, JsonValue, ThreadOptions } from "./protocol.js";
 import { Thread } from "./thread.js";
 
-const REQUIRED_ENV_VARS = ["CODEX_API_KEY"];
-
 /**
  * The top-level Frontal Code client. Wraps the Frontal Code CLI (`frontal-code`, or `code`, the same
  * program) and is used to start and resume conversation {@link Thread}s.
@@ -29,8 +27,10 @@ export class FrontalCode {
 
   /**
    * Build the environment for a spawned CLI. Starts from `process.env`, applies
-   * the user-provided `env`, then injects any required variables (such as
-   * `CODEX_API_KEY`) from the ambient environment if still missing.
+   * the user-provided `env`, then applies any `extra` overrides on top.
+   * The `frontal-code` CLI authenticates via provider-specific environment
+   * variables (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) which the caller
+   * is responsible for setting; this SDK does not inject any of its own.
    */
   buildEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
     const base: NodeJS.ProcessEnv = { ...process.env };
@@ -39,11 +39,6 @@ export class FrontalCode {
     }
     if (extra) {
       Object.assign(base, extra);
-    }
-    for (const varName of REQUIRED_ENV_VARS) {
-      if (!base[varName] && process.env[varName]) {
-        base[varName] = process.env[varName];
-      }
     }
     return base;
   }

@@ -15,10 +15,10 @@ Requires Node.js 18+.
 ## Quickstart
 
 ```typescript
-import { Frontal Code } from "@frontal-labs/code-sdk";
+import { FrontalCode } from "@frontal-labs/code-sdk";
 
-const frontal-code = new Frontal Code();
-const thread = frontal-code.startThread();
+const frontal = new FrontalCode();
+const thread = frontal.startThread();
 const turn = await thread.run("Diagnose the test failure and propose a fix");
 
 console.log(turn.finalResponse);
@@ -83,25 +83,13 @@ const turn = await thread.run("Summarize repository status", {
 console.log(turn.finalResponse);
 ```
 
-### Attaching images
-
-Provide structured input entries when you need to include images alongside text. Text entries are concatenated into the final prompt while image entries are passed to the Frontal Code CLI via `--image`.
-
-```typescript
-const turn = await thread.run([
-  { type: "text", text: "Describe these screenshots" },
-  { type: "local_image", path: "./ui.png" },
-  { type: "local_image", path: "./diagram.jpg" },
-]);
-```
-
 ### Resuming an existing thread
 
 Threads are persisted in `~/.frontal-code/sessions`. If you lose the in-memory `Thread` object, reconstruct it with `resumeThread()` and keep going.
 
 ```typescript
-const savedThreadId = process.env.CODEX_THREAD_ID!;
-const thread = frontal-code.resumeThread(savedThreadId);
+const savedThreadId = process.env.FRONTAL_CODE_THREAD_ID!;
+const thread = frontal.resumeThread(savedThreadId);
 await thread.run("Implement the fix");
 ```
 
@@ -110,7 +98,7 @@ await thread.run("Implement the fix");
 Frontal Code runs in the current working directory by default. To avoid unrecoverable errors, Frontal Code requires the working directory to be a Git repository. You can skip the Git repository check by passing the `skipGitRepoCheck` option when creating a thread.
 
 ```typescript
-const thread = frontal-code.startThread({
+const thread = frontal.startThread({
   workingDirectory: "/path/to/project",
   skipGitRepoCheck: true,
 });
@@ -119,18 +107,19 @@ const thread = frontal-code.startThread({
 ### Controlling the Frontal Code CLI environment
 
 By default, the Frontal Code CLI inherits the Node.js process environment. Provide the optional `env` parameter when instantiating the
-`Frontal Code` client to fully control which variables the CLI receives—useful for sandboxed hosts like Electron apps.
+`FrontalCode` client to fully control which variables the CLI receives—useful for sandboxed hosts like Electron apps.
 
 ```typescript
-const frontal-code = new Frontal Code({
+const frontal = new FrontalCode({
   env: {
     PATH: "/usr/local/bin",
   },
 });
 ```
 
-The SDK still injects its required variables (such as `CODEX_API_KEY`) on top of the environment you provide. If you set
-`baseUrl`, the SDK passes it as a `--config frontal_base_url=...` override.
+The SDK does not inject any environment variables of its own. Authentication is handled by the `frontal-code` CLI through
+provider-specific environment variables (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `FRONTAL_API_KEY`) that you set in your
+shell before running the agent. If you set `baseUrl`, the SDK passes it as a `--config frontal_base_url=...` override.
 
 ### Passing `--config` overrides
 
@@ -138,7 +127,7 @@ Use the `config` option to provide additional Frontal Code CLI configuration ove
 into dotted paths, and serializes values as TOML literals before passing them as repeated `--config key=value` flags.
 
 ```typescript
-const frontal-code = new Frontal Code({
+const frontal = new FrontalCode({
   config: {
     show_raw_agent_reasoning: true,
     sandbox_workspace_write: { network_access: true },
@@ -147,3 +136,15 @@ const frontal-code = new Frontal Code({
 ```
 
 Thread options still take precedence for overlapping settings because they are emitted after these global overrides.
+
+## Permission control and tool restriction
+
+Thread options support the same permission and tool-restriction flags as the CLI:
+
+```typescript
+const thread = frontal.startThread({
+  permissionMode: "danger-full-access", // or read-only, workspace-write, prompt
+  dangerouslySkipPermissions: true,     // --dangerously-skip-permissions
+  allowedTools: ["read", "bash"],       --allowed-tools (repeatable)
+});
+```

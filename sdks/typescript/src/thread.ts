@@ -74,36 +74,36 @@ export class Thread {
     return { events: wrap() };
   }
 
-  private toPromptAndImages(input: ThreadInput): {
-    prompt: string;
-    images: string[];
-  } {
+  private toPrompt(input: ThreadInput): string {
     if (typeof input === "string") {
-      return { prompt: input, images: [] };
+      return input;
     }
+    // `local_image` entries are kept in the protocol for forward compatibility,
+    // but the `frontal-code` CLI does not yet accept `--image`, so only text
+    // entries are concatenated into the prompt.
     const texts: string[] = [];
-    const images: string[] = [];
     for (const entry of input as InputEntry[]) {
       if (entry.type === "text") {
         texts.push(entry.text);
-      } else if (entry.type === "local_image") {
-        images.push(entry.path);
       }
     }
-    return { prompt: texts.join("\n"), images };
+    return texts.join("\n");
   }
 
   private buildArgs(input: ThreadInput, runOptions: ThreadRunOptions): string[] {
-    const { prompt, images } = this.toPromptAndImages(input);
+    const prompt = this.toPrompt(input);
 
     const args = ["prompt", "-p", prompt];
-    for (const image of images) {
-      args.push("--image", image);
-    }
     if (this.options.provider) args.push("--provider", this.options.provider);
     if (this.options.model) args.push("--model", this.options.model);
     if (this.options.permissionMode) {
       args.push("--permission-mode", this.options.permissionMode);
+    }
+    if (this.options.dangerouslySkipPermissions) {
+      args.push("--dangerously-skip-permissions");
+    }
+    for (const tool of this.options.allowedTools ?? []) {
+      args.push("--allowed-tools", tool);
     }
     args.push("--output-format", "json", "--stream");
 

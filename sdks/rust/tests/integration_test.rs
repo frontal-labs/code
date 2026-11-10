@@ -140,7 +140,7 @@ async fn subsequent_turns_pass_resume() {
 }
 
 #[tokio::test]
-async fn images_emit_image_flags() {
+async fn images_do_not_emit_image_flags() {
   let mock = MockFrontalCode::new(SINGLE_TURN, 0);
   let frontal_code = code_for(&mock);
   let entries = vec![
@@ -160,16 +160,49 @@ async fn images_emit_image_flags() {
     .await
     .expect("run");
   let args = mock.captured_args();
-  let image_indexes: Vec<usize> = args
+  assert!(!args.iter().any(|a| a == "--image"));
+  assert!(args.contains(&"describe these".to_string()));
+}
+
+#[tokio::test]
+async fn dangerously_skip_permissions_emits_flag() {
+  let mock = MockFrontalCode::new(SINGLE_TURN, 0);
+  let frontal_code = code_for(&mock);
+  frontal_code
+    .start_thread(ThreadOptions {
+      dangerously_skip_permissions: true,
+      ..Default::default()
+    })
+    .run(&ThreadInput::Text("x".into()), &ThreadRunOptions::default())
+    .await
+    .expect("run");
+  assert!(mock
+    .captured_args()
+    .contains(&"--dangerously-skip-permissions".to_string()));
+}
+
+#[tokio::test]
+async fn allowed_tools_emit_flags() {
+  let mock = MockFrontalCode::new(SINGLE_TURN, 0);
+  let frontal_code = code_for(&mock);
+  frontal_code
+    .start_thread(ThreadOptions {
+      allowed_tools: Some(vec!["read".into(), "bash".into()]),
+      ..Default::default()
+    })
+    .run(&ThreadInput::Text("x".into()), &ThreadRunOptions::default())
+    .await
+    .expect("run");
+  let args = mock.captured_args();
+  let tool_indexes: Vec<usize> = args
     .iter()
     .enumerate()
-    .filter(|(_, a)| *a == "--image")
+    .filter(|(_, a)| *a == "--allowed-tools")
     .map(|(i, _)| i)
     .collect();
-  assert_eq!(image_indexes.len(), 2);
-  assert_eq!(args[image_indexes[0] + 1], "./ui.png");
-  assert_eq!(args[image_indexes[1] + 1], "./diagram.jpg");
-  assert!(args.contains(&"describe these".to_string()));
+  assert_eq!(tool_indexes.len(), 2);
+  assert_eq!(args[tool_indexes[0] + 1], "read");
+  assert_eq!(args[tool_indexes[1] + 1], "bash");
 }
 
 #[tokio::test]

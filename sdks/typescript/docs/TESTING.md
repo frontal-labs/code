@@ -4,7 +4,7 @@
 
 Tests are fully hermetic - they do **not** require:
 - Network access
-- API keys (`CODEX_API_KEY`)
+- API keys
 - Real `frontal-code` CLI binary
 
 Instead, tests use a mock CLI (`tests/mock-frontal-code.ts`) that emits

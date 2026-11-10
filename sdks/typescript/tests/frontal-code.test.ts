@@ -31,31 +31,6 @@ describe("Frontal Code client", () => {
     expect(env.PATH).toBeDefined();
   });
 
-  it("injects required variables from the ambient environment", () => {
-    const previous = process.env.CODEX_API_KEY;
-    process.env.CODEX_API_KEY = "injected-key";
-    try {
-      const frontal_code = new FrontalCode({ env: {} });
-      const env = frontal_code.buildEnv();
-      expect(env.CODEX_API_KEY).toBe("injected-key");
-    } finally {
-      if (previous === undefined) delete process.env.CODEX_API_KEY;
-      else process.env.CODEX_API_KEY = previous;
-    }
-  });
-
-  it("does not overwrite a user-provided required variable", () => {
-    const previous = process.env.CODEX_API_KEY;
-    process.env.CODEX_API_KEY = "ambient";
-    try {
-      const frontal_code = new FrontalCode({ env: { CODEX_API_KEY: "explicit" } });
-      expect(frontal_code.buildEnv().CODEX_API_KEY).toBe("explicit");
-    } finally {
-      if (previous === undefined) delete process.env.CODEX_API_KEY;
-      else process.env.CODEX_API_KEY = previous;
-    }
-  });
-
   it("routes spawned CLI calls to a mock binary", async () => {
     const mock = new MockFrontalCode({
       response: '{"type":"turn.completed","finalResponse":"hi","sessionId":"s1"}',

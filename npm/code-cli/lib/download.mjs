@@ -13,7 +13,9 @@ import { join } from "node:path";
 import { loadPinnedChecksums, pinnedSha256 } from "./pinned-checksums.mjs";
 import { detectTarget, UnsupportedPlatformError } from "./platform.mjs";
 
-export const RELEASE_BASE = "https://github.com/frontal-labs/code/releases/download";
+// FRONTAL_CODE_RELEASE_BASE points downloads at a mirror, or at an unreachable address in tests.
+export const RELEASE_BASE =
+  process.env.FRONTAL_CODE_RELEASE_BASE || "https://github.com/frontal-labs/code/releases/download";
 
 // Build the release asset URL for a given version + target descriptor.
 export function releaseAssetUrl(version, assetName) {

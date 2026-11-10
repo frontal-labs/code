@@ -119,7 +119,7 @@ brew install --HEAD ./homebrew/Formula/code.rb
 cargo build --workspace
 ```
 
-The installed CLI is available as `frontal-code`. If you build from source instead, the debug binary is available at `target/debug/frontal-code`. Make the doctor check above your first post-build step.
+The installed CLI is available as `frontal-code`, and `code` runs the same program. See [Command names](docs/INSTALLATION.md#command-names). If you build from source instead, the debug binaries are at `target/debug/frontal-code` and `target/debug/code`. Make the doctor check above your first post-build step.
 
 ## Quick start
 

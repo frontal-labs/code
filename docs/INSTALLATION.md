@@ -12,9 +12,22 @@ The easiest way to install the Frontal Code CLI is via Homebrew:
 brew install --HEAD ./homebrew/Formula/code.rb
 ```
 
-This will build and install the `frontal-code` binary from source.
+This will build and install the `frontal-code` command from source. The `code` command is installed as well.
 
-Naming: npm and Homebrew installs expose `frontal-code`. A Cargo build (`cargo build -p cli` or `cargo install --path cli`) produces a binary named `code`, so use that name when running a local build.
+### Command names
+
+Every install provides the CLI under two names that run the same program: `frontal-code` and `code`. Use either; scripts and SDKs accept both.
+
+| Install | `frontal-code` | `code` |
+|---|---|---|
+| Source (`cargo build -p cli`, `cargo install --path cli`) | yes | yes |
+| Homebrew | yes | yes (a symlink to the same binary) |
+| npm (`@frontal-labs/code-cli`) | yes | yes, if no other `code` command exists |
+| Docker images (`frontal-code/cli`, worker) | yes | yes |
+
+`frontal-code` is the name the SDKs and the VS Code extension look for first. They fall back to `code` when `frontal-code` is not on `PATH`.
+
+**VS Code also installs a `code` command.** Installers never replace an existing `code`. npm leaves it alone and says so during install. Homebrew reports a conflict, so keep VS Code's command and use `frontal-code`. If you want the other way around, remove one link first.
 
 ### From Source
 

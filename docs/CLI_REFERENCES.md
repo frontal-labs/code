@@ -1,6 +1,6 @@
 # CLI Reference
 
-This comprehensive reference covers all Frontal Code CLI commands, options, and usage patterns.
+This comprehensive reference covers all Frontal Code CLI commands, options, and usage patterns. Every example runs as `frontal-code`; `code` runs the same program ([Command names](INSTALLATION.md#command-names)).
 
 > Audited on 2026-11-08 against `cli/src/main.rs`. Commands and flags that are not listed in the parser are marked *not implemented*. The `session`, `tools`, and singular `plugin` sections describe commands the parser does not accept as top-level subcommands. Use the slash commands in the REPL (`/session`, `/tools`) or the plural `plugins`.
 

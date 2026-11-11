@@ -35,8 +35,10 @@ jobs:
           - name: macos-arm64
             os: macos-14
             target: aarch64-apple-darwin
+          # macos-13 (Intel) runners are retired and stay queued. This builds x86_64 by
+          # cross-compiling on the arm64 macos-14 runner; the target is added above.
           - name: macos-x64
-            os: macos-13
+            os: macos-14
             target: x86_64-apple-darwin
           - name: windows-x64
             os: windows-2022

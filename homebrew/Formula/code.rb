@@ -2,7 +2,7 @@ class FrontalCode < Formula
   desc "High-performance Rust AI agent harness"
   homepage "https://github.com/frontal-labs/code"
   license "Apache-2.0"
-  version "0.1.1"
+  version "0.2.2"
 
   if OS.mac?
     if Hardware::CPU.arm?

@@ -22,7 +22,7 @@
     },
     "npm/code-cli": {
       "name": "@frontal-labs/code-cli",
-      "version": "0.1.1",
+      "version": "0.2.2",
       "bin": {
         "frontal-code": "bin/index.js",
       },

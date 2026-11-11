@@ -182,6 +182,14 @@ fn parse_lane_transport_kind(raw: &str) -> Result<LaneTransportKind, String> {
     }
 }
 
+/// Refuses `tools-agent` unless the operator opted in with `FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT`.
+fn check_host_agent_opt_in(kind: LaneTransportKind, allowed: bool) -> Result<(), String> {
+    if kind == LaneTransportKind::ToolsAgent && !allowed {
+        return Err("FRONTAL_CODE_SERVER_LANE_TRANSPORT=tools-agent runs agents with the server's privileges; set FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1 to allow it, or use local-docker".to_string());
+    }
+    Ok(())
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -231,6 +239,12 @@ impl ServerConfig {
         if let Ok(kind) = env::var("FRONTAL_CODE_SERVER_LANE_TRANSPORT") {
             config.lane_transport_kind = parse_lane_transport_kind(&kind)?;
         }
+        // `tools-agent` runs the agent inside the server process with its privileges. It is
+        // refused unless the operator opts in, for example because the server already runs
+        // inside an isolated VM. `local-docker` (the default) isolates each task in a container.
+        let host_agent_allowed = env::var("FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT")
+            .is_ok_and(|value| matches!(value.trim(), "1" | "true"));
+        check_host_agent_opt_in(config.lane_transport_kind, host_agent_allowed)?;
 
         if let Ok(api_key) = env::var("FRONTAL_CODE_SERVER_API_KEY") {
             let api_key = api_key.trim();
@@ -5424,6 +5438,13 @@ mod tests {
                 .expect_err("the simulator and unknown names must be refused");
             assert!(error.contains("unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT"));
         }
+    }
+
+    #[test]
+    fn host_agent_transport_requires_an_explicit_opt_in() {
+        assert!(check_host_agent_opt_in(LaneTransportKind::ToolsAgent, false).is_err());
+        assert!(check_host_agent_opt_in(LaneTransportKind::ToolsAgent, true).is_ok());
+        assert!(check_host_agent_opt_in(LaneTransportKind::LocalDocker, false).is_ok());
     }
 
     use super::*;

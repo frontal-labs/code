@@ -99,6 +99,8 @@ resource "kubernetes_config_map" "frontal-code_server_config" {
     "FRONTAL_CODE_SERVER_HOST"                       = "0.0.0.0"
     "FRONTAL_CODE_SERVER_PORT"                       = "8788"
     "FRONTAL_CODE_SERVER_LANE_TRANSPORT"             = "tools-agent"
+    # The managed instance is the isolation boundary for host-side agents.
+    "FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT"           = "1"
     "FRONTAL_CODE_SERVER_RECONCILE_INTERVAL_SECS"    = "15"
     "FRONTAL_CODE_SERVER_ORPHAN_APPROVAL_DELAY_SECS" = "0"
     "FRONTAL_CODE_SERVER_ORPHAN_AUTO_RETRY_SECS"     = "0"

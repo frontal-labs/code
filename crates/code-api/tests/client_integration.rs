@@ -104,7 +104,7 @@ async fn send_message_posts_json_and_parses_response() {
     );
     assert_eq!(
         request.headers.get("user-agent").map(String::as_str),
-        Some("claude-code/0.1.1")
+        Some(concat!("claude-code/", env!("CARGO_PKG_VERSION")))
     );
     assert_eq!(
         request.headers.get("anthropic-beta").map(String::as_str),

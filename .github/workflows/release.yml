@@ -82,6 +82,7 @@ jobs:
           # Raw per-target binary, named by Rust target triple: code-cli-<target>[.exe]
           src="target/${{ matrix.target }}/release/code${{ matrix.ext }}"
           asset="code-cli-${{ matrix.target }}${{ matrix.ext }}"
+          mkdir -p dist
           cp "${src}" "dist/${asset}"
           shasum -a 256 "dist/${asset}" > "dist/${asset}.sha256"
 

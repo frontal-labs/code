@@ -185,6 +185,8 @@ docker manifest push frontal-code/cli:multiarch
 
 `code-server` runs each hosted task in its own worker container, built from `docker/worker.Dockerfile`. The image installs both command names, `frontal-code` and `code`; the hosted task runs `frontal-code hosted task run`. This is the default lane transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`).
 
+`FRONTAL_CODE_SERVER_LANE_TRANSPORT=tools-agent` runs agents inside the server process with its privileges. The server refuses it unless `FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1` is set. The managed deploy configs in `deploy/` and `infrastructure/` set that opt-in, because the platform VM or pod is their isolation boundary.
+
 ```bash
 # Build the worker image from the workspace (the context is limited by .dockerignore)
 docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .

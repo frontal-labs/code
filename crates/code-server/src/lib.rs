@@ -494,7 +494,12 @@ impl ServerState {
         worker_access: Arc<WorkerAccess>,
     ) -> Self {
         let (event_sender, _) = broadcast::channel(event_replay_limit.max(1) * 4);
-        let persistence = state_file.map(|path| Arc::new(ServerStatePersistence { path }));
+        let persistence = state_file.map(|path| {
+            Arc::new(ServerStatePersistence {
+                path,
+                write_lock: Mutex::new(()),
+            })
+        });
         let (tasks, contexts, event_history) = persistence
             .as_ref()
             .and_then(|persistence| persistence.load().ok())
@@ -801,6 +806,8 @@ impl ServerState {
 #[derive(Debug)]
 struct ServerStatePersistence {
     path: PathBuf,
+    // Serializes writes so two saves never share the temporary file.
+    write_lock: Mutex<()>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -821,15 +828,26 @@ impl ServerStatePersistence {
     }
 
     fn save(&self, snapshot: &ServerStateSnapshot) -> Result<(), String> {
+        use std::io::Write;
+
+        let _guard = self
+            .write_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
-        let tmp_path = self.path.with_extension("tmp");
-        std::fs::write(
-            &tmp_path,
-            serde_json::to_string_pretty(snapshot).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| error.to_string())?;
+        let json = serde_json::to_string_pretty(snapshot).map_err(|error| error.to_string())?;
+        // Write to a temporary file, flush it to disk, then rename it into place. A crash
+        // leaves either the old file or the new one, never a partial one.
+        let tmp_path = self
+            .path
+            .with_extension(format!("tmp-{}", std::process::id()));
+        let mut file = std::fs::File::create(&tmp_path).map_err(|error| error.to_string())?;
+        file.write_all(json.as_bytes())
+            .and_then(|()| file.sync_all())
+            .map_err(|error| error.to_string())?;
+        drop(file);
         std::fs::rename(&tmp_path, &self.path).map_err(|error| error.to_string())
     }
 }
@@ -1944,16 +1962,27 @@ async fn generic_oauth_authorize(
 
     let client_id = std::env::var(&oauth.client_id_env)
         .map_err(|_| AppError::internal(format!("{} not set", oauth.client_id_env)))?;
-    let redirect_uri = std::env::var("FRONTAL_CODE_OAUTH_REDIRECT_BASE").map_or_else(
-        |_| format!("https://frontal-code.fly.dev/v1/oauth/{provider}/callback"),
-        |base| format!("{base}/v1/oauth/{provider}/callback"),
+    // The callback must point at this server. There is no default host, so a deployment
+    // that has not set its own base cannot send users to someone else's server.
+    let redirect_base = std::env::var("FRONTAL_CODE_OAUTH_REDIRECT_BASE")
+        .ok()
+        .filter(|base| !base.trim().is_empty())
+        .ok_or_else(|| {
+            AppError::internal("FRONTAL_CODE_OAUTH_REDIRECT_BASE is not set".to_string())
+        })?;
+    let redirect_uri = format!(
+        "{}/v1/oauth/{provider}/callback",
+        redirect_base.trim_end_matches('/')
     );
 
     let csrf_state = generate_state()
         .map_err(|e| AppError::internal(format!("state generation failed: {e}")))?;
 
     {
-        let mut states = state.pending_oauth_states.lock().unwrap();
+        let mut states = state
+            .pending_oauth_states
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         states.retain(|_, v| v.created_at.elapsed() < OAUTH_STATE_TTL);
         states.insert(
             csrf_state.clone(),
@@ -2072,7 +2101,10 @@ async fn generic_oauth_callback(
         .ok_or_else(|| AppError::bad_request("missing state parameter"))?;
 
     let pending = {
-        let mut states = state.pending_oauth_states.lock().unwrap();
+        let mut states = state
+            .pending_oauth_states
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         take_pending_oauth_state(&mut states, &provider, state_param, Instant::now())?
     };
 
@@ -2343,6 +2375,25 @@ async fn get_task_integration(
     Ok(Json(filtered))
 }
 
+/// Fields a caller may write to a task's GitHub integration. The worker writes these after it
+/// publishes; the tracker reports later read them. Anything else is refused, so a worker cannot
+/// plant arbitrary metadata for other integrations to act on.
+const GITHUB_INTEGRATION_FIELDS: &[&str] = &[
+    "owner",
+    "repo",
+    "published_remote",
+    "published_branch",
+    "published_commit_sha",
+    "pr_number",
+    "pr_url",
+    "pr_api_url",
+    "pr_base_ref",
+    "pr_head_ref",
+];
+
+/// Longest string accepted for one integration field.
+const INTEGRATION_FIELD_MAX_LEN: usize = 2048;
+
 async fn update_task_integration(
     Path((task_id, name)): Path<(String, String)>,
     State(state): State<Arc<ServerState>>,
@@ -2355,6 +2406,23 @@ async fn update_task_integration(
     let mut context = state.context_for(&task_id).unwrap_or_default();
 
     if let Some(obj) = request.as_object() {
+        if name == "github" {
+            for (key, value) in obj {
+                if !GITHUB_INTEGRATION_FIELDS.contains(&key.as_str()) {
+                    return Err(AppError::bad_request(format!(
+                        "unsupported github integration field: {key}"
+                    )));
+                }
+                if value
+                    .as_str()
+                    .is_some_and(|text| text.len() > INTEGRATION_FIELD_MAX_LEN)
+                {
+                    return Err(AppError::bad_request(format!(
+                        "github integration field {key} is longer than {INTEGRATION_FIELD_MAX_LEN} bytes"
+                    )));
+                }
+            }
+        }
         for (key, value) in obj {
             if let Some(string_value) = value.as_str() {
                 context
@@ -2375,6 +2443,80 @@ async fn update_task_integration(
         .get(&task_id)
         .ok_or_else(|| AppError::not_found(format!("task not found: {task_id}")))?;
     Ok(Json(state.task_snapshot(task)))
+}
+
+#[cfg(test)]
+mod integration_field_tests {
+    use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    async fn post_github(state: Arc<ServerState>, task_id: &str, body: Value) -> StatusCode {
+        app(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/v1/tasks/{task_id}/integration/github"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+    }
+
+    #[tokio::test]
+    async fn github_integration_accepts_known_fields_and_refuses_others() {
+        let state = Arc::new(ServerState::default());
+        let created = app(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "prompt": "integration fields",
+                            "repository": "repo-fields",
+                            "source": "api"
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = to_bytes(created.into_body(), usize::MAX).await.unwrap();
+        let task_id = serde_json::from_slice::<Value>(&body).unwrap()["task_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        assert_eq!(
+            post_github(
+                state.clone(),
+                &task_id,
+                json!({"pr_url": "https://github.com/a/b/pull/1"})
+            )
+            .await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            post_github(state.clone(), &task_id, json!({"linear_token": "x"})).await,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            post_github(
+                state.clone(),
+                &task_id,
+                json!({"published_branch": "x".repeat(INTEGRATION_FIELD_MAX_LEN + 1)})
+            )
+            .await,
+            StatusCode::BAD_REQUEST
+        );
+    }
 }
 
 #[derive(Debug, Deserialize)]

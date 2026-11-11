@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-11
+
 ### Added
 - `extensions/zod` (`@frontal-labs/zod-schemas`): Zod schemas for the event protocol. The TypeScript SDK's end-to-end suite validates every streamed event from the real CLI against them.
 - `scripts/verify-claude-gateway.sh` checks the Anthropic provider through any gateway that serves the Messages API, with a plain prompt and a tool call. It passes against Ollama.

@@ -84,7 +84,7 @@ GITHUB_APP_ID=your-github-app-id
 GITHUB_PRIVATE_KEY_PATH=/path/to/github/private/key.pem
 ```
 
-Set the same shared secret value as `FRONTAL_SERVER_API_KEY` on the hosted server and
+Set the same shared secret as `FRONTAL_CODE_SERVER_API_KEY` on the hosted server and as
 `FRONTAL_SERVER_API_KEY` on the Slack connector so authenticated control-plane calls succeed.
 
 ### 4. Install Dependencies and Build

@@ -41,14 +41,14 @@ All API requests require authentication using an API key:
 ```bash
 # Using environment variable
 export FRONTAL_API_KEY="your-api-key-here"
-export FRONTAL_SERVER_API_KEY="your-hosted-server-api-key"
+export FRONTAL_CODE_SERVER_API_KEY="your-hosted-server-api-key"
 
 # Using header
 curl -H "Authorization: Bearer your-api-key-here" \
      https://api.frontal-code.ai/v1/completions
 ```
 
-For self-hosted `code-server` deployments, set `FRONTAL_SERVER_API_KEY` on the server and
+For self-hosted `code-server` deployments, set `FRONTAL_CODE_SERVER_API_KEY` on the server and
 have connectors or other clients present that same shared secret as `FRONTAL_API_KEY` or
 the `x-api-key` header when calling hosted control-plane routes.
 

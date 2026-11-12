@@ -1,6 +1,6 @@
 {
-  "name": "frontal-code-ide",
-  "displayName": "Frontal Code IDE",
+  "name": "@frontal-labs/code-vscode",
+  "displayName": "Frontal Code VSCode IDE",
   "description": "Frontal Code integration for VS Code and Cursor",
   "version": "0.1.0",
   "publisher": "frontal-code",

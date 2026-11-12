@@ -3,8 +3,9 @@ package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "all_extensions",
     srcs = [
-        "//extensions/vs-code:srcs",
+        "//extensions/vscode:srcs",
         "//extensions/slack-agent:srcs",
         "//extensions/zod:srcs",
+        "//extensions/zed:srcs",
     ],
 )

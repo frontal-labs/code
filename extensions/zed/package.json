@@ -1,0 +1,25 @@
+{
+  "name": "@frontal-labs/code-zed",
+  "displayName": "Frontal Code Zed",
+  "description": "Frontal Code integration for the Zed editor",
+  "version": "0.1.0",
+  "publisher": "frontal-labs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/frontal-labs/code.git",
+    "directory": "extensions/zed"
+  },
+  "keywords": [
+    "frontal-code",
+    "zed",
+    "extension"
+  ],
+  "author": "Frontal Labs",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "node --check extension.js"
+  },
+  "dependencies": {
+    "@zed-industries/extension-api": "^0.4.2"
+  }
+}

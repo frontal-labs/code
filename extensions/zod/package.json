@@ -1,5 +1,5 @@
 {
-  "name": "@frontal-labs/zod-schemas",
+  "name": "@frontal-labs/code-zod-schemas",
   "version": "0.1.0",
   "private": true,
   "description": "Zod schemas for the Frontal Code event protocol, shared by the SDKs and extensions.",

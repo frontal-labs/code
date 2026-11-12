@@ -777,8 +777,8 @@ impl CliOutputFormat {
 
 #[allow(clippy::too_many_lines)]
 fn parse_args(args: &[String]) -> Result<CliAction, String> {
-    let mut model = DEFAULT_MODEL.to_string();
-    let mut provider = None;
+    let mut model = env::var("FRONTAL_CODE_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string());
+    let mut provider = env::var("FRONTAL_CODE_DEFAULT_PROVIDER").ok();
     let mut output_format = CliOutputFormat::Text;
     let mut permission_mode_override = None;
     let mut wants_help = false;

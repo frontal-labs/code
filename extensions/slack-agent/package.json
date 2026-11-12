@@ -1,5 +1,5 @@
 {
-  "name": "code-slack",
+  "name": "@frontal-labs/code-slack",
   "version": "0.1.0",
   "description": "Frontal Code Slack agent for autonomous coding operations",
   "main": "dist/index.js",

@@ -1,0 +1,20 @@
+{
+  "id": "frontal-code",
+  "name": "Frontal Code",
+  "description": "Frontal Code integration for the Zed editor",
+  "version": "0.1.0",
+  "author": {
+    "name": "Frontal Labs"
+  },
+  "homepage": "https://github.com/frontal-labs/code",
+  "repository": "https://github.com/frontal-labs/code",
+  "license": "Apache-2.0",
+  "icon": "",
+  "features": {
+    "commands": {
+      "startRepl": "Start the Frontal Code REPL",
+      "askSelection": "Ask Frontal Code about the current selection",
+      "askInput": "Ask Frontal Code a question"
+    }
+  }
+}

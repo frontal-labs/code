@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "code-slack",
+      "name": "@frontal-labs/code-slack",
       "dependencies": {
         "@openchannelprotocol/sdk": "^0.1.0",
         "@sentry/node": "^11.8.0",

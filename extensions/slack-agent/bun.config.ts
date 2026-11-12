@@ -1,4 +1,4 @@
-// Bun configuration for frontal-code-slack extension
+// Bun configuration for @frontal-labs/code-slack extension
 
 const config = {
   // Build configuration

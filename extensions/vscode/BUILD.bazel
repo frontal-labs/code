@@ -18,7 +18,7 @@ sh_test(
     srcs = ["//tools:extension.sh"],
     data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore", "package.json"],
     args = [
-        "extensions/vs-code",
+        "extensions/vscode",
         "lint",
     ],
     tags = [
@@ -32,7 +32,7 @@ sh_test(
     srcs = ["//tools:extension.sh"],
     data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore", "package.json"],
     args = [
-        "extensions/vs-code",
+        "extensions/vscode",
         "build",
     ],
     tags = [

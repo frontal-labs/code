@@ -1,9 +1,9 @@
-# @frontal-labs/zod-schemas
+# @frontal-labs/code-zod-schemas
 
 Zod schemas for the Frontal Code event protocol. The SDKs and extensions share them, so every consumer checks the same contract.
 
 ```ts
-import { FrontalCodeEventSchema, parseFrontalCodeEvent } from "@frontal-labs/zod-schemas";
+import { FrontalCodeEventSchema, parseFrontalCodeEvent } from "@frontal-labs/code-zod-schemas";
 
 const event = parseFrontalCodeEvent('{"type":"turn.started"}');
 FrontalCodeEventSchema.parse(event);

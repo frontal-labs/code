@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FrontalCodeEventSchema } from "@frontal-labs/zod-schemas";
+import { FrontalCodeEventSchema } from "@frontal-labs/code-zod-schemas";
 import { describe, expect, it } from "vitest";
 import { FrontalCode } from "../src/frontal-code.js";
 import type { FrontalCodeEvent } from "../src/protocol.js";

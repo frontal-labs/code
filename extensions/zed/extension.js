@@ -22,7 +22,9 @@ function deactivate() {
 function frontalCodeCliPath() {
   const inspected = zed.config().get("frontal-code.cliPath");
   const value =
-    typeof inspected === "string" && inspected.trim().length > 0 ? inspected.trim() : defaultCliCommand();
+    typeof inspected === "string" && inspected.trim().length > 0
+      ? inspected.trim()
+      : defaultCliCommand();
   return value;
 }
 

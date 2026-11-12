@@ -116,7 +116,7 @@ test_suite(
         "//crates/code-webhooks:lint",
         "//sdks/rust:lint",
         "//sdks/typescript:lint",
-        "//extensions/vs-code:lint",
+        "//extensions/vscode:lint",
         "//extensions/slack-agent:lint",
         "//tests/mock-gateway:lint",
     ],

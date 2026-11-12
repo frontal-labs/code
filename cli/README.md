@@ -35,7 +35,7 @@ The Frontal Code CLI is the primary user interface for interacting with the Fron
 
 - `code-api` for AI provider integration and HTTP services
 - `code-commands` for slash command system and registry
-- `frontal-code-compat-harness` for testing and compatibility validation
+- `code-compat-harness` for testing and compatibility validation
 - `code-runtime` for core functionality and session management
 - `code-plugins` for extensibility and plugin management
 - `code-tools` for tool integration and execution

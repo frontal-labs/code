@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::time::Duration;
 
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -627,8 +628,25 @@ struct ChatMessage {
     role: String,
     #[serde(default)]
     content: Option<String>,
-    #[serde(default)]
+    // Some OpenAI-compatible hosts (e.g. `SGLang`) send `"tool_calls": null`
+    // instead of omitting the field. `#[serde(default)]` only fills missing
+    // keys, so tolerate an explicit null as "no tool calls".
+    #[serde(default, deserialize_with = "deser_null_as_empty_seq")]
     tool_calls: Vec<ResponseToolCall>,
+}
+
+/// Deserialize a sequence, treating an explicit JSON `null` as empty.
+///
+/// Serde's `#[serde(default)]` only substitutes a value for *missing* keys, so
+/// a host that emits `"tool_calls": null` (e.g. `SGLang`) would otherwise fail
+/// with "invalid type: null, expected a sequence".
+fn deser_null_as_empty_seq<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    let value = Option::<Vec<T>>::deserialize(deserializer)?;
+    Ok(value.unwrap_or_default())
 }
 
 #[derive(Debug, Deserialize)]
@@ -673,7 +691,7 @@ struct ChunkChoice {
 struct ChunkDelta {
     #[serde(default)]
     content: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deser_null_as_empty_seq")]
     tool_calls: Vec<DeltaToolCall>,
 }
 

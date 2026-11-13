@@ -55,6 +55,21 @@ pub trait ApiClient {
     fn stream(&mut self, request: ApiRequest) -> Result<Vec<AssistantEvent>, RuntimeError>;
 }
 
+/// Receives [`AssistantEvent`]s as they are produced while a turn runs.
+///
+/// The callback is invoked on the calling thread, in order, between two API
+/// calls. It must return `true` to keep the turn going and `false` to abort
+/// it early (which surfaces as an interrupted [`RuntimeError`]).
+pub trait EventSink {
+    fn on_event(&mut self, event: &AssistantEvent) -> bool;
+}
+
+impl<F: FnMut(&AssistantEvent) -> bool> EventSink for F {
+    fn on_event(&mut self, event: &AssistantEvent) -> bool {
+        self(event)
+    }
+}
+
 /// Trait implemented by tool dispatchers that execute model-requested tools.
 pub trait ToolExecutor {
     fn execute(&mut self, tool_name: &str, input: &str) -> Result<String, ToolError>;
@@ -294,10 +309,38 @@ where
     }
 
     #[allow(clippy::too_many_lines)]
+    /// Runs a full turn, collecting the summary without exposing intermediate
+    /// events. This is the path the CLI's JSONL `--stream` output uses; it
+    /// emits nothing until the turn completes.
     pub fn run_turn(
         &mut self,
         user_input: impl Into<String>,
         mut prompter: Option<&mut dyn PermissionPrompter>,
+    ) -> Result<TurnSummary, RuntimeError> {
+        self.execute_turn(user_input, &mut prompter, None)
+    }
+
+    /// Runs a full turn, invoking `on_event` with each [`AssistantEvent`] as it
+    /// is produced during an API call (and tool results as they complete).
+    ///
+    /// The events the sink sees are exactly the ones `run_turn` would have
+    /// collected per API call, in order. Returning `false` from the callback
+    /// aborts the turn. The summary is identical to `run_turn`'s for the same
+    /// inputs.
+    pub fn run_turn_stream(
+        &mut self,
+        user_input: impl Into<String>,
+        mut prompter: Option<&mut dyn PermissionPrompter>,
+        on_event: &mut dyn EventSink,
+    ) -> Result<TurnSummary, RuntimeError> {
+        self.execute_turn(user_input, &mut prompter, Some(on_event))
+    }
+
+    fn execute_turn(
+        &mut self,
+        user_input: impl Into<String>,
+        prompter: &mut Option<&mut dyn PermissionPrompter>,
+        mut on_event: Option<&mut dyn EventSink>,
     ) -> Result<TurnSummary, RuntimeError> {
         let user_input = user_input.into();
         self.record_turn_started(&user_input);
@@ -320,35 +363,8 @@ where
                 return Err(error);
             }
 
-            // A model can end a turn with nothing in it. Ask again with the same context
-            // rather than failing the whole turn; the empty reply is not recorded.
-            let mut empty_replies = 0;
-            let (assistant_message, usage, turn_prompt_cache_events) = loop {
-                let request = ApiRequest {
-                    system_prompt: self.system_prompt.clone(),
-                    messages: self.session.messages.clone(),
-                };
-                let events = match self.api_client.stream(request) {
-                    Ok(events) => events,
-                    Err(error) => {
-                        self.record_turn_failed(iterations, &error);
-                        return Err(error);
-                    }
-                };
-                match build_assistant_message(events) {
-                    Ok(result) => break result,
-                    Err(error)
-                        if error.to_string() == EMPTY_ASSISTANT_REPLY
-                            && empty_replies < EMPTY_REPLY_RETRIES =>
-                    {
-                        empty_replies += 1;
-                    }
-                    Err(error) => {
-                        self.record_turn_failed(iterations, &error);
-                        return Err(error);
-                    }
-                }
-            };
+            let (assistant_message, usage, turn_prompt_cache_events) =
+                self.request_assistant_message(iterations, &mut on_event)?;
             if let Some(usage) = usage {
                 self.usage_tracker.record(usage);
             }
@@ -379,102 +395,7 @@ where
             }
 
             for (tool_use_id, tool_name, input) in pending_tool_uses {
-                let pre_hook_result = self.run_pre_tool_use_hook(&tool_name, &input);
-                let effective_input = pre_hook_result
-                    .updated_input()
-                    .map_or_else(|| input.clone(), ToOwned::to_owned);
-                let permission_context = PermissionContext::new(
-                    pre_hook_result.permission_override(),
-                    pre_hook_result.permission_reason().map(ToOwned::to_owned),
-                );
-
-                let permission_outcome = if pre_hook_result.is_cancelled() {
-                    PermissionOutcome::Deny {
-                        reason: format_hook_message(
-                            &pre_hook_result,
-                            &format!("PreToolUse hook cancelled tool `{tool_name}`"),
-                        ),
-                    }
-                } else if pre_hook_result.is_failed() {
-                    PermissionOutcome::Deny {
-                        reason: format_hook_message(
-                            &pre_hook_result,
-                            &format!("PreToolUse hook failed for tool `{tool_name}`"),
-                        ),
-                    }
-                } else if pre_hook_result.is_denied() {
-                    PermissionOutcome::Deny {
-                        reason: format_hook_message(
-                            &pre_hook_result,
-                            &format!("PreToolUse hook denied tool `{tool_name}`"),
-                        ),
-                    }
-                } else if let Some(prompt) = prompter.as_mut() {
-                    self.permission_policy.authorize_with_context(
-                        &tool_name,
-                        &effective_input,
-                        &permission_context,
-                        Some(*prompt),
-                    )
-                } else {
-                    self.permission_policy.authorize_with_context(
-                        &tool_name,
-                        &effective_input,
-                        &permission_context,
-                        None,
-                    )
-                };
-
-                let result_message = match permission_outcome {
-                    PermissionOutcome::Allow => {
-                        self.record_tool_started(iterations, &tool_name);
-                        let (mut output, mut is_error) =
-                            match self.tool_executor.execute(&tool_name, &effective_input) {
-                                Ok(output) => (output, false),
-                                Err(error) => (error.to_string(), true),
-                            };
-                        output = merge_hook_feedback(pre_hook_result.messages(), output, false);
-
-                        let post_hook_result = if is_error {
-                            self.run_post_tool_use_failure_hook(
-                                &tool_name,
-                                &effective_input,
-                                &output,
-                            )
-                        } else {
-                            self.run_post_tool_use_hook(
-                                &tool_name,
-                                &effective_input,
-                                &output,
-                                false,
-                            )
-                        };
-                        if post_hook_result.is_denied()
-                            || post_hook_result.is_failed()
-                            || post_hook_result.is_cancelled()
-                        {
-                            is_error = true;
-                        }
-                        output = merge_hook_feedback(
-                            post_hook_result.messages(),
-                            output,
-                            post_hook_result.is_denied()
-                                || post_hook_result.is_failed()
-                                || post_hook_result.is_cancelled(),
-                        );
-
-                        ConversationMessage::tool_result(tool_use_id, tool_name, output, is_error)
-                    }
-                    PermissionOutcome::Deny { reason } => ConversationMessage::tool_result(
-                        tool_use_id,
-                        tool_name,
-                        merge_hook_feedback(pre_hook_result.messages(), reason, true),
-                        true,
-                    ),
-                };
-                self.session
-                    .push_message(result_message.clone())
-                    .map_err(|error| RuntimeError::new(error.to_string()))?;
+                let result_message = self.execute_tool_use(iterations, &tool_use_id, &tool_name, &input, prompter)?;
                 self.record_tool_finished(iterations, &result_message);
                 tool_results.push(result_message);
             }
@@ -493,6 +414,163 @@ where
         self.record_turn_completed(&summary);
 
         Ok(summary)
+    }
+
+    /// Requests one assistant message from the model, delivering streaming events to the
+    /// sink if present. Retries on empty replies rather than failing the turn; the empty
+    /// reply is not recorded. Returns the assistant message, its usage, and prompt-cache
+    /// events.
+    fn request_assistant_message(
+        &mut self,
+        iterations: usize,
+        sink: &mut Option<&mut dyn EventSink>,
+    ) -> Result<(ConversationMessage, Option<TokenUsage>, Vec<PromptCacheEvent>), RuntimeError> {
+        // A model can end a turn with nothing in it. Ask again with the same context
+        // rather than failing the whole turn; the empty reply is not recorded.
+        let mut empty_replies = 0;
+        loop {
+            let request = ApiRequest {
+                system_prompt: self.system_prompt.clone(),
+                messages: self.session.messages.clone(),
+            };
+            let events = match self.api_client.stream(request) {
+                Ok(events) => events,
+                Err(error) => {
+                    self.record_turn_failed(iterations, &error);
+                    return Err(error);
+                }
+            };
+            if let Some(s) = sink.as_deref_mut() {
+                if !deliver_events(s, &events) {
+                    let error = RuntimeError::new("turn interrupted by event handler");
+                    self.record_turn_failed(iterations, &error);
+                    return Err(error);
+                }
+            }
+            match build_assistant_message(events) {
+                Ok(result) => return Ok(result),
+                Err(error)
+                    if error.to_string() == EMPTY_ASSISTANT_REPLY
+                        && empty_replies < EMPTY_REPLY_RETRIES =>
+                {
+                    empty_replies += 1;
+                }
+                Err(error) => {
+                    self.record_turn_failed(iterations, &error);
+                    return Err(error);
+                }
+            }
+        }
+    }
+
+    /// Runs a single pending tool use: pre-hook, permission check, execution, post-hook.
+    /// The result message is pushed onto the session. Returns the result message.
+    fn execute_tool_use(
+        &mut self,
+        iterations: usize,
+        tool_use_id: &str,
+        tool_name: &str,
+        input: &str,
+        prompter: &mut Option<&mut dyn PermissionPrompter>,
+    ) -> Result<ConversationMessage, RuntimeError> {
+        let pre_hook_result = self.run_pre_tool_use_hook(tool_name, input);
+        let effective_input = pre_hook_result
+            .updated_input()
+            .map_or_else(|| input.to_string(), ToOwned::to_owned);
+        let permission_context = PermissionContext::new(
+            pre_hook_result.permission_override(),
+            pre_hook_result.permission_reason().map(ToOwned::to_owned),
+        );
+
+        let permission_outcome = if pre_hook_result.is_cancelled() {
+            PermissionOutcome::Deny {
+                reason: format_hook_message(
+                    &pre_hook_result,
+                    &format!("PreToolUse hook cancelled tool `{tool_name}`"),
+                ),
+            }
+        } else if pre_hook_result.is_failed() {
+            PermissionOutcome::Deny {
+                reason: format_hook_message(
+                    &pre_hook_result,
+                    &format!("PreToolUse hook failed for tool `{tool_name}`"),
+                ),
+            }
+        } else if pre_hook_result.is_denied() {
+            PermissionOutcome::Deny {
+                reason: format_hook_message(
+                    &pre_hook_result,
+                    &format!("PreToolUse hook denied tool `{tool_name}`"),
+                ),
+            }
+        } else {
+            match prompter.as_mut() {
+                Some(prompt) => self.permission_policy.authorize_with_context(
+                    tool_name,
+                    &effective_input,
+                    &permission_context,
+                    Some(*prompt),
+                ),
+                None => self.permission_policy.authorize_with_context(
+                    tool_name,
+                    &effective_input,
+                    &permission_context,
+                    None,
+                ),
+            }
+        };
+
+        let result_message = match permission_outcome {
+            PermissionOutcome::Allow => {
+                self.record_tool_started(iterations, tool_name);
+                let (mut output, mut is_error) =
+                    match self.tool_executor.execute(tool_name, &effective_input) {
+                        Ok(output) => (output, false),
+                        Err(error) => (error.to_string(), true),
+                    };
+                output = merge_hook_feedback(pre_hook_result.messages(), output, false);
+
+                let post_hook_result = if is_error {
+                    self.run_post_tool_use_failure_hook(
+                        tool_name,
+                        &effective_input,
+                        &output,
+                    )
+                } else {
+                    self.run_post_tool_use_hook(
+                        tool_name,
+                        &effective_input,
+                        &output,
+                        false,
+                    )
+                };
+                if post_hook_result.is_denied()
+                    || post_hook_result.is_failed()
+                    || post_hook_result.is_cancelled()
+                {
+                    is_error = true;
+                }
+                output = merge_hook_feedback(
+                    post_hook_result.messages(),
+                    output,
+                    post_hook_result.is_denied()
+                        || post_hook_result.is_failed()
+                        || post_hook_result.is_cancelled(),
+                );
+
+                ConversationMessage::tool_result(tool_use_id, tool_name, output, is_error)
+            }
+            PermissionOutcome::Deny { reason } => ConversationMessage::tool_result(
+                tool_use_id,
+                tool_name,
+                merge_hook_feedback(pre_hook_result.messages(), reason, true),
+                true,
+            ),
+        };
+        self.session
+            .push_message(result_message.clone())
+            .map_err(|error| RuntimeError::new(error.to_string()))?;
+        Ok(result_message)
     }
 
     #[must_use]
@@ -691,6 +769,17 @@ const EMPTY_ASSISTANT_REPLY: &str = "assistant stream produced no content";
 /// How many times an empty reply is requested again before the turn fails. Small local
 /// models sometimes stop without output; a second attempt usually succeeds.
 const EMPTY_REPLY_RETRIES: usize = 2;
+
+/// Forwards each event in order to the sink, returning `false` (stopping the
+/// turn) as soon as the sink signals an abort.
+fn deliver_events(sink: &mut dyn EventSink, events: &[AssistantEvent]) -> bool {
+    for event in events {
+        if !sink.on_event(event) {
+            return false;
+        }
+    }
+    true
+}
 
 fn build_assistant_message(
     events: Vec<AssistantEvent>,
@@ -956,6 +1045,118 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn run_turn_stream_delivers_the_same_events_in_order() {
+        let api_client = ScriptedApiClient { call_count: 0 };
+        let tool_executor = StaticToolExecutor::new().register("add", |input| {
+            let total = input
+                .split(',')
+                .map(|part| part.parse::<i32>().expect("input must be valid integer"))
+                .sum::<i32>();
+            Ok(total.to_string())
+        });
+        let permission_policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
+        let mut runtime = ConversationRuntime::new(
+            Session::new(),
+            api_client,
+            tool_executor,
+            permission_policy,
+            vec!["system".to_string()],
+        );
+
+        let mut received = Vec::new();
+        let mut on_event = |event: &AssistantEvent| {
+            received.push(event.clone());
+            true
+        };
+
+        let summary = runtime
+            .run_turn_stream("what is 2 + 2?", Some(&mut PromptAllowOnce), &mut on_event)
+            .expect("streaming turn should succeed");
+
+        // The sink saw every event from both API calls, in order: text + tool use
+        // + usage from the first call, then text + usage + cache + stop from the second.
+        assert_eq!(
+            received,
+            vec![
+                AssistantEvent::TextDelta("Let me calculate that.".to_string()),
+                AssistantEvent::ToolUse {
+                    id: "tool-1".to_string(),
+                    name: "add".to_string(),
+                    input: "2,2".to_string(),
+                },
+                AssistantEvent::Usage(TokenUsage {
+                    input_tokens: 20,
+                    output_tokens: 6,
+                    cache_creation_input_tokens: 1,
+                    cache_read_input_tokens: 2,
+                }),
+                AssistantEvent::MessageStop,
+                AssistantEvent::TextDelta("The answer is 4.".to_string()),
+                AssistantEvent::Usage(TokenUsage {
+                    input_tokens: 24,
+                    output_tokens: 4,
+                    cache_creation_input_tokens: 1,
+                    cache_read_input_tokens: 3,
+                }),
+                AssistantEvent::PromptCache(PromptCacheEvent {
+                    unexpected: true,
+                    reason: "cache read tokens dropped while prompt fingerprint remained stable"
+                        .to_string(),
+                    previous_cache_read_input_tokens: 6_000,
+                    current_cache_read_input_tokens: 1_000,
+                    token_drop: 5_000,
+                }),
+                AssistantEvent::MessageStop,
+            ]
+        );
+
+        // The summary is identical to what a plain run_turn would produce.
+        assert_eq!(summary.iterations, 2);
+        assert_eq!(summary.assistant_messages.len(), 2);
+        assert_eq!(summary.tool_results.len(), 1);
+        assert_eq!(summary.usage.output_tokens, 10);
+    }
+
+    #[test]
+    fn run_turn_stream_aborts_when_the_sink_says_stop() {
+        let api_client = ScriptedApiClient { call_count: 0 };
+        let tool_executor = StaticToolExecutor::new().register("add", |input| {
+            let total = input
+                .split(',')
+                .map(|part| part.parse::<i32>().expect("input must be valid integer"))
+                .sum::<i32>();
+            Ok(total.to_string())
+        });
+        let permission_policy = PermissionPolicy::new(PermissionMode::WorkspaceWrite);
+        let mut runtime = ConversationRuntime::new(
+            Session::new(),
+            api_client,
+            tool_executor,
+            permission_policy,
+            vec!["system".to_string()],
+        );
+
+        let mut count = 0usize;
+        let mut on_event = |_event: &AssistantEvent| -> bool {
+            count += 1;
+            // Deliver the first two events, then stop the turn mid-first-call.
+            count <= 2
+        };
+
+        let result =
+            runtime.run_turn_stream("what is 2 + 2?", Some(&mut PromptAllowOnce), &mut on_event);
+
+        assert!(
+            result.is_err(),
+            "the turn should abort when the sink returns false"
+        );
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "turn interrupted by event handler"
+        );
     }
 
     #[test]

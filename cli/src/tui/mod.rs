@@ -821,7 +821,7 @@ fn render_frame(frame: &mut Frame, snapshot: &Snapshot) {
 }
 
 fn render_header(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snapshot) {
-    let title = format!("  Code · {} · {}", snapshot.model, snapshot.mode);
+    let title = format!("  Frontal Code · {} · {}", snapshot.model, snapshot.mode);
     frame.render_widget(
         Paragraph::new(title).style(
             Style::default()

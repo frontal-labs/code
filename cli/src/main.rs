@@ -13694,7 +13694,8 @@ mod tests {
         assert!(banner.contains("Tab"));
         assert!(banner.contains("workflow completions"));
 
-        fs::remove_dir_all(root).expect("cleanup temp dir");
+        // Windows keeps files open for a moment after the session closes, so cleanup is best effort.
+        let _ = fs::remove_dir_all(root);
         std::env::remove_var("FRONTAL_API_KEY");
     }
 

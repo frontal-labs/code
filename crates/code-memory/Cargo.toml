@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 code-embeddings = { path = "../code-embeddings" }
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true
 code-types = { path = "../code-types" }

@@ -7,9 +7,9 @@ publish.workspace = true
 
 [dependencies]
 code-core = { path = "../code-core" }
-sha2 = "0.10"
+sha2 = "0.11"
 glob = "0.3"
-getrandom = "0.2"
+getrandom = "0.4"
 uuid = { version = "1", features = ["v7"] }
 code-plugins = { path = "../code-plugins" }
 code-integrations = { path = "../code-integrations" }

@@ -104,7 +104,7 @@ impl WebhookReceiver {
     fn create_app(self) -> Router {
         Router::new()
             .route("/webhook", post(handle_webhook))
-            .route("/webhook/:source", post(handle_webhook_with_source))
+            .route("/webhook/{source}", post(handle_webhook_with_source))
             .with_state(self.state)
     }
 

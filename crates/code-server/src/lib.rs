@@ -59,7 +59,7 @@ use code_tools::{
 };
 use futures_util::{SinkExt, StreamExt};
 mod tracker_reporting;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::Sha256;
@@ -1777,31 +1777,31 @@ pub fn app(state: Arc<ServerState>) -> Router {
         .route("/v1/version", get(version))
         .route("/v1/policies/orphans", get(get_orphan_policy))
         .route("/v1/tasks", get(list_tasks).post(create_task))
-        .route("/v1/tasks/:task_id", get(get_task))
-        .route("/v1/tasks/:task_id/context", post(update_task_context))
+        .route("/v1/tasks/{task_id}", get(get_task))
+        .route("/v1/tasks/{task_id}/context", post(update_task_context))
         .route(
-            "/v1/tasks/:task_id/integration/:name",
+            "/v1/tasks/{task_id}/integration/{name}",
             get(get_task_integration).post(update_task_integration),
         )
-        .route("/v1/tasks/:task_id/runtime", get(get_task_runtime))
-        .route("/v1/tasks/:task_id/cancel", post(cancel_task))
-        .route("/v1/tasks/:task_id/approval", post(resolve_approval))
-        .route("/v1/tasks/:task_id/reconcile", post(reconcile_task))
-        .route("/v1/tasks/:task_id/complete", post(complete_task))
-        .route("/v1/tasks/:task_id/publish", post(publish_task_changes))
+        .route("/v1/tasks/{task_id}/runtime", get(get_task_runtime))
+        .route("/v1/tasks/{task_id}/cancel", post(cancel_task))
+        .route("/v1/tasks/{task_id}/approval", post(resolve_approval))
+        .route("/v1/tasks/{task_id}/reconcile", post(reconcile_task))
+        .route("/v1/tasks/{task_id}/complete", post(complete_task))
+        .route("/v1/tasks/{task_id}/publish", post(publish_task_changes))
         .route("/v1/events/ws", get(events_ws))
         .route(
-            "/v1/connectors/:connector/interactions",
+            "/v1/connectors/{connector}/interactions",
             post(connector_interaction),
         )
-        .route("/v1/connectors/:connector/events", post(connector_event))
+        .route("/v1/connectors/{connector}/events", post(connector_event))
         // Starting a login stores a pending state for the single tenant, so it needs the
         // control-plane key. It is a POST that returns the provider URL as JSON: a browser
         // navigation cannot send the `x-api-key` header, so the caller opens the returned
         // URL itself. The callback stays public because the provider redirects the browser
         // there; it is bound to the flow by the one-time `state` instead.
         .route(
-            "/v1/oauth/:provider/authorize",
+            "/v1/oauth/{provider}/authorize",
             post(generic_oauth_authorize),
         )
         .route_layer(middleware::from_fn_with_state(
@@ -1813,11 +1813,11 @@ pub fn app(state: Arc<ServerState>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route(
-            "/v1/model-proxy/:provider/*rest",
+            "/v1/model-proxy/{provider}/{*rest}",
             axum::routing::any(model_proxy_route),
         )
-        .route("/v1/webhooks/:source", post(integration_webhook))
-        .route("/v1/oauth/:provider/callback", get(generic_oauth_callback))
+        .route("/v1/webhooks/{source}", post(integration_webhook))
+        .route("/v1/oauth/{provider}/callback", get(generic_oauth_callback))
         .merge(protected)
         .with_state(state)
 }
@@ -3844,7 +3844,10 @@ async fn send_event(
     event: &EventEnvelope,
 ) -> Result<(), ()> {
     let payload = serde_json::to_string(&state.hydrate_event_for_stream(event)).map_err(|_| ())?;
-    sender.send(Message::Text(payload)).await.map_err(|_| ())
+    sender
+        .send(Message::Text(payload.into()))
+        .await
+        .map_err(|_| ())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4044,7 +4047,7 @@ fn write_worker_env_file(env: &BTreeMap<String, String>) -> Result<PathBuf, Stri
     }
 
     let mut bytes = [0_u8; 8];
-    getrandom::getrandom(&mut bytes).map_err(|error| format!("random source: {error}"))?;
+    getrandom::fill(&mut bytes).map_err(|error| format!("random source: {error}"))?;
     let dir = env::temp_dir().join(format!("frontal-code-worker-{}", hex::encode(bytes)));
     fs::create_dir_all(&dir).map_err(|error| format!("failed to create env dir: {error}"))?;
     #[cfg(unix)]

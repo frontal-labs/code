@@ -12,7 +12,9 @@
 mod auth;
 mod init;
 mod input;
+mod mentions;
 mod render;
+mod thinking;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -149,8 +151,11 @@ Run `frontal-code --help` for usage."
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().skip(1).collect();
-    print_ignored_settings_warnings();
-    match parse_args(&args)? {
+    let action = parse_args(&args)?;
+    if !matches!(action, CliAction::Repl { .. }) {
+        print_ignored_settings_warnings();
+    }
+    match action {
         CliAction::DumpManifests { output_format } => dump_manifests(output_format)?,
         CliAction::BootstrapPlan { output_format } => print_bootstrap_plan(output_format)?,
         CliAction::Agents {
@@ -5069,6 +5074,42 @@ fn format_compact_report(removed: usize, resulting_messages: usize, skipped: boo
     }
 }
 
+/// One dim line after a turn: wall time, input and output tokens, estimated cost (when the
+/// model's pricing is known), and the number of tool calls.
+fn format_turn_summary(
+    summary: &code_runtime::TurnSummary,
+    model: &str,
+    elapsed: Duration,
+    tool_calls: usize,
+) -> String {
+    let mut parts = vec![
+        format!("{:.1}s", elapsed.as_secs_f64()),
+        format!("in {}", format_token_count(summary.usage.input_tokens)),
+        format!("out {}", format_token_count(summary.usage.output_tokens)),
+    ];
+    if let Some(pricing) = pricing_for_model(model) {
+        let cost = summary
+            .usage
+            .estimate_cost_usd_with_pricing(pricing)
+            .total_cost_usd();
+        parts.push(code_runtime::format_usd(cost));
+    }
+    if tool_calls > 0 {
+        let noun = if tool_calls == 1 { "tool" } else { "tools" };
+        parts.push(format!("{tool_calls} {noun}"));
+    }
+    format!("\x1b[2m  {}\x1b[0m", parts.join("  \u{b7}  "))
+}
+
+/// Token counts as "812" or "4.1k" to keep the summary line short.
+fn format_token_count(tokens: u32) -> String {
+    if tokens < 1_000 {
+        tokens.to_string()
+    } else {
+        format!("{:.1}k", f64::from(tokens) / 1_000.0)
+    }
+}
+
 fn format_auto_compaction_notice(removed: usize) -> String {
     format!("[auto-compacted: removed {removed} messages]")
 }
@@ -5509,48 +5550,8 @@ fn run_repl(
     allowed_tools: Option<AllowedToolSet>,
     permission_mode: PermissionMode,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cli = LiveCli::new(model, true, allowed_tools, permission_mode)?;
-    let mut editor =
-        input::LineEditor::new("> ", cli.repl_completion_candidates().unwrap_or_default());
-    println!("{}", cli.startup_banner());
-
-    loop {
-        editor.set_completions(cli.repl_completion_candidates().unwrap_or_default());
-        match editor.read_line()? {
-            input::ReadOutcome::Submit(input) => {
-                let trimmed = input.trim().to_string();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                if matches!(trimmed.as_str(), "/exit" | "/quit") {
-                    cli.persist_session()?;
-                    break;
-                }
-                match SlashCommand::parse(&trimmed) {
-                    Ok(Some(command)) => {
-                        if cli.handle_repl_command(command)? {
-                            cli.persist_session()?;
-                        }
-                        continue;
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        eprintln!("{error}");
-                        continue;
-                    }
-                }
-                editor.push_history(input);
-                cli.run_turn(&trimmed)?;
-            }
-            input::ReadOutcome::Cancel => {}
-            input::ReadOutcome::Exit => {
-                cli.persist_session()?;
-                break;
-            }
-        }
-    }
-
-    Ok(())
+    let cli = LiveCli::new(model, true, allowed_tools, permission_mode)?;
+    drive_repl(cli)
 }
 
 fn run_repl_with_provider(
@@ -5559,14 +5560,29 @@ fn run_repl_with_provider(
     allowed_tools: Option<AllowedToolSet>,
     permission_mode: PermissionMode,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cli =
-        LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?;
-    let mut editor =
-        input::LineEditor::new("> ", cli.repl_completion_candidates().unwrap_or_default());
+    let cli = LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?;
+    drive_repl(cli)
+}
+
+/// Runs the interactive prompt until the user exits. A failed turn or command is reported
+/// and the prompt stays open, so a network or API error does not end the session.
+fn drive_repl(mut cli: LiveCli) -> Result<(), Box<dyn std::error::Error>> {
+    let cwd = env::current_dir()?;
+    let mut editor = input::LineEditor::new(
+        "\u{276f} ",
+        cli.repl_completion_candidates().unwrap_or_default(),
+    );
+    editor.enable_history(
+        ConfigLoader::default_for(&cwd)
+            .config_home()
+            .join("repl_history"),
+    );
+    editor.set_mention_candidates(mentions::workspace_files(&cwd));
     println!("{}", cli.startup_banner());
 
     loop {
         editor.set_completions(cli.repl_completion_candidates().unwrap_or_default());
+        editor.set_footer(cli.input_footer());
         match editor.read_line()? {
             input::ReadOutcome::Submit(input) => {
                 let trimmed = input.trim().to_string();
@@ -5577,10 +5593,17 @@ fn run_repl_with_provider(
                     cli.persist_session()?;
                     break;
                 }
+                if let Some(command) = trimmed.strip_prefix('!') {
+                    editor.push_history(trimmed.clone());
+                    run_shell_command(command.trim(), &cwd);
+                    continue;
+                }
                 match SlashCommand::parse(&trimmed) {
                     Ok(Some(command)) => {
-                        if cli.handle_repl_command(command)? {
-                            cli.persist_session()?;
+                        match cli.handle_repl_command(command) {
+                            Ok(true) => cli.persist_session()?,
+                            Ok(false) => {}
+                            Err(error) => eprintln!("error: {error}"),
                         }
                         continue;
                     }
@@ -5590,13 +5613,35 @@ fn run_repl_with_provider(
                         continue;
                     }
                 }
-                editor.push_history(input);
-                cli.run_turn(&trimmed)?;
+                editor.push_history(trimmed.clone());
+                let (prompt, attached) = mentions::expand(&trimmed, &cwd);
+                if !attached.is_empty() {
+                    println!("\x1b[2mAttached {}\x1b[0m", attached.join(", "));
+                }
+                if let Err(error) = cli.run_turn(&prompt) {
+                    eprintln!("error: {error}");
+                }
+                editor.set_mention_candidates(mentions::workspace_files(&cwd));
             }
             input::ReadOutcome::Cancel => {}
             input::ReadOutcome::Exit => {
                 cli.persist_session()?;
                 break;
+            }
+            input::ReadOutcome::Clear => {
+                print!("\x1b[2J\x1b[H");
+                println!("{}", cli.startup_banner());
+            }
+            input::ReadOutcome::Shortcuts => println!("{}", render_shortcuts()),
+            input::ReadOutcome::CyclePermission => {
+                let next = next_permission_mode(cli.permission_mode.as_str());
+                match cli.switch_permission_mode(next) {
+                    Ok(previous) => {
+                        println!("\x1b[2mPermission mode: {previous} -> {next}\x1b[0m");
+                        cli.persist_session()?;
+                    }
+                    Err(error) => eprintln!("error: {error}"),
+                }
             }
         }
     }
@@ -6305,11 +6350,66 @@ impl LiveCli {
         Ok(cli)
     }
 
+    /// How the active provider is reached, e.g. `OpenAI API key`.
+    fn access_label(&self) -> String {
+        let provider = self
+            .provider
+            .clone()
+            .unwrap_or_else(|| provider_id(detect_provider_kind(&self.model)).to_string());
+        auth::access_label(&provider)
+    }
+
+    /// Line under the input box: the app name, then the model in bright text and how
+    /// it is reached in gray.
+    fn input_footer(&self) -> String {
+        let cwd = env::current_dir().ok();
+        let mut parts = vec![
+            format!("\x1b[90mFrontal Code · \x1b[0m{}", self.model),
+            format!("\x1b[90m{}\x1b[0m", self.access_label()),
+        ];
+        if let Some(branch) = cwd.as_deref().and_then(resolve_git_branch_for) {
+            let dirty = cwd
+                .as_deref()
+                .and_then(|dir| run_git_capture_in(dir, &["status", "--porcelain"]))
+                .is_some_and(|status| !status.trim().is_empty());
+            let marker = if dirty { "*" } else { "" };
+            parts.push(format!("\x1b[90mbranch {branch}{marker}\x1b[0m"));
+        }
+        parts.push(format!("\x1b[90m{}\x1b[0m", self.permission_mode.as_str()));
+        let tokens = u32::try_from(self.runtime.estimated_tokens()).unwrap_or(u32::MAX);
+        parts.push(format!("\x1b[90mctx {}\x1b[0m", format_token_count(tokens)));
+        parts.join(" \x1b[90m·\x1b[0m ")
+    }
+
     fn startup_banner(&self) -> String {
-        "\x1b[1mCode\x1b[0m\n\n\
-  Session details are redacted by default.\n\n\
-  Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context · \x1b[2m/resume latest\x1b[0m to resume · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship · \x1b[2mTab\x1b[0m for workflow completions · \x1b[2mShift+Enter\x1b[0m for newline"
-            .to_string()
+        // Logo bitmap (5 columns x 8 rows) as solid squares: each half-block character is one
+        // pixel tall, so two pixel rows share each text line.
+        const LOGO: [&str; 4] = ["▀▄▀▄▀", "▀▄▀▄ ", "▀▄▀  ", "▀▄   "];
+        const INDENT: &str = "  ";
+        const GAP: &str = "   ";
+        let info = [
+            format!("\x1b[1mFrontal Code\x1b[0m \x1b[90mv{VERSION}\x1b[0m"),
+            format!("\x1b[90m{} · {}\x1b[0m", self.model, self.access_label()),
+            format!("\x1b[90m{}\x1b[0m", display_directory()),
+        ];
+        // One blank line above matches the horizontal indent, since a terminal line is
+        // about twice a column's width.
+        let mut banner = String::from("\n");
+        for (index, logo) in LOGO.iter().enumerate() {
+            let line = info.get(index).map_or("", String::as_str);
+            let _ = writeln!(banner, "{INDENT}{logo}{GAP}{line}");
+        }
+        let _ = writeln!(banner, "\n{INDENT}Session details are redacted by default.");
+        for note in workspace_notes() {
+            let _ = writeln!(banner, "{INDENT}\x1b[2m{}\x1b[0m", banner_note(&note));
+        }
+        let _ = write!(
+            banner,
+            "\n{INDENT}Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context\n\
+{INDENT}\x1b[2m/resume latest\x1b[0m to resume · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship\n\
+{INDENT}\x1b[2mTab\x1b[0m for workflow completions · \x1b[1m?\x1b[0m for shortcuts\n"
+        );
+        banner
     }
 
     fn repl_completion_candidates(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -6356,19 +6456,21 @@ impl LiveCli {
         let (mut runtime, hook_abort_monitor) = self.prepare_turn_runtime(true)?;
         let mut spinner = Spinner::new();
         let mut stdout = io::stdout();
-        spinner.tick(
-            "Thinking...",
-            TerminalRenderer::new().color_theme(),
-            &mut stdout,
-        )?;
+        thinking::start();
+        let started = Instant::now();
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
         let result = runtime.run_turn(input, Some(&mut permission_prompter));
+        thinking::stop();
         hook_abort_monitor.stop();
         match result {
             Ok(summary) => {
+                let tool_calls = collect_tool_uses(&summary).len();
                 self.replace_runtime(runtime)?;
-                spinner.finish("Done", TerminalRenderer::new().color_theme(), &mut stdout)?;
                 println!();
+                println!(
+                    "{}",
+                    format_turn_summary(&summary, &self.model, started.elapsed(), tool_calls)
+                );
                 if let Some(event) = summary.auto_compaction {
                     println!(
                         "{}",
@@ -6381,7 +6483,7 @@ impl LiveCli {
             Err(error) => {
                 runtime.shutdown_plugins()?;
                 spinner.fail(
-                    "❌ Request failed",
+                    "Request failed",
                     TerminalRenderer::new().color_theme(),
                     &mut stdout,
                 )?;
@@ -6462,6 +6564,7 @@ impl LiveCli {
         let (mut runtime, hook_abort_monitor) = self.prepare_turn_runtime(false)?;
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
         let result = runtime.run_turn(input, Some(&mut permission_prompter));
+        thinking::stop();
         hook_abort_monitor.stop();
         let summary = result?;
         self.replace_runtime(runtime)?;
@@ -6499,6 +6602,10 @@ impl LiveCli {
         command: SlashCommand,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         Ok(match command {
+            SlashCommand::Keybindings => {
+                println!("{}", render_shortcuts());
+                false
+            }
             SlashCommand::Help => {
                 println!("{}", render_repl_help());
                 false
@@ -6659,7 +6766,6 @@ impl LiveCli {
             | SlashCommand::Thinkback
             | SlashCommand::ReleaseNotes
             | SlashCommand::SecurityReview
-            | SlashCommand::Keybindings
             | SlashCommand::PrivacySettings
             | SlashCommand::Plan { .. }
             | SlashCommand::Review { .. }
@@ -6806,6 +6912,20 @@ impl LiveCli {
             return Ok(false);
         }
 
+        let previous = self.switch_permission_mode(normalized)?;
+        println!(
+            "{}",
+            format_permissions_switch_report(&previous, normalized)
+        );
+        Ok(true)
+    }
+
+    /// Switches the permission mode and rebuilds the runtime, keeping the session.
+    /// Returns the previous mode label.
+    fn switch_permission_mode(
+        &mut self,
+        normalized: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let previous = self.permission_mode.as_str().to_string();
         let session = self.runtime.session().clone();
         self.permission_mode = permission_mode_from_label(normalized);
@@ -6822,11 +6942,7 @@ impl LiveCli {
             None,
         )?;
         self.replace_runtime(runtime)?;
-        println!(
-            "{}",
-            format_permissions_switch_report(&previous, normalized)
-        );
-        Ok(true)
+        Ok(previous)
     }
 
     fn clear_session(&mut self, confirm: bool) -> Result<bool, Box<dyn std::error::Error>> {
@@ -7480,18 +7596,68 @@ fn session_clear_backup_path(session_path: &Path) -> PathBuf {
     session_path.with_file_name(format!("{file_name}.before-clear-{timestamp}.bak"))
 }
 
+/// Keyboard shortcuts, shown by `?` on an empty prompt and by `/keybindings`.
+fn render_shortcuts() -> String {
+    [
+        "Shortcuts",
+        "  ?                    Show this list (on an empty prompt)",
+        "  Enter                Send the message",
+        "  Alt+Enter, Ctrl-J    Insert a newline",
+        "  Up/Down              Previous and next prompt from history",
+        "  Ctrl-R               Search prompt history",
+        "  Right                Accept the grey suggestion",
+        "  Tab                  Complete commands, modes, and recent sessions; @ completes file paths",
+        "  Shift+Tab            Cycle the permission mode",
+        "  Ctrl-L               Clear the screen",
+        "  Ctrl-C               Clear the line; press twice on an empty prompt to exit",
+        "  Ctrl-D               Exit on an empty prompt",
+        "  !<command>           Run a shell command without sending it to the model",
+        "  @<path>              Attach a workspace file to the message",
+    ]
+    .join("\n")
+}
+
+/// Runs `command` through the shell in `cwd`, with the terminal attached.
+fn run_shell_command(command: &str, cwd: &Path) {
+    if command.is_empty() {
+        println!("usage: !<command>");
+        return;
+    }
+    match Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .current_dir(cwd)
+        .status()
+    {
+        Ok(status) if status.success() => {}
+        Ok(status) => match status.code() {
+            Some(code) => println!("\x1b[2mexit {code}\x1b[0m"),
+            None => println!("\x1b[2mterminated by signal\x1b[0m"),
+        },
+        Err(error) => eprintln!("error: {error}"),
+    }
+}
+
+/// The next permission mode in the Shift+Tab cycle.
+fn next_permission_mode(current: &str) -> &'static str {
+    match current {
+        "read-only" => "workspace-write",
+        "workspace-write" => "danger-full-access",
+        _ => "read-only",
+    }
+}
+
 fn render_repl_help() -> String {
     [
         "REPL".to_string(),
         "  /exit                Quit the REPL".to_string(),
         "  /quit                Quit the REPL".to_string(),
-        "  Up/Down              Navigate prompt history".to_string(),
-        "  Tab                  Complete commands, modes, and recent sessions".to_string(),
-        "  Ctrl-C               Clear input (or exit on empty prompt)".to_string(),
-        "  Shift+Enter/Ctrl+J   Insert a newline".to_string(),
+        "  Shift+Enter/Ctrl+J   Insert a newline (Alt+Enter also works)".to_string(),
         "  Auto-save            .frontal-code/sessions/<session-id>.jsonl".to_string(),
         "  Resume latest        /resume latest".to_string(),
         "  Browse sessions      /session list".to_string(),
+        String::new(),
+        render_shortcuts(),
         String::new(),
         render_slash_command_help(),
     ]
@@ -9148,7 +9314,7 @@ fn format_internal_prompt_progress_line(
     match event {
         InternalPromptProgressEvent::Started => {
             format!(
-                "🧭 {} status · planning started · {status}",
+                "{} status · planning started · {status}",
                 snapshot.command_label
             )
         }
@@ -9499,38 +9665,60 @@ impl CliPermissionPrompter {
     }
 }
 
+/// Tools the user approved with "always" for the rest of this session.
+static ALWAYS_ALLOWED_TOOLS: std::sync::Mutex<BTreeSet<String>> =
+    std::sync::Mutex::new(BTreeSet::new());
+
 impl code_runtime::PermissionPrompter for CliPermissionPrompter {
     fn decide(
         &mut self,
         request: &code_runtime::PermissionRequest,
     ) -> code_runtime::PermissionPromptDecision {
-        println!();
-        println!("Permission approval required");
-        println!("  Tool             {}", request.tool_name);
-        println!("  Current mode     {}", self.current_mode.as_str());
-        println!("  Required mode    {}", request.required_mode.as_str());
-        if let Some(reason) = &request.reason {
-            println!("  Reason           {reason}");
+        thinking::stop();
+        let always_allowed = ALWAYS_ALLOWED_TOOLS
+            .lock()
+            .is_ok_and(|set| set.contains(&request.tool_name));
+        if always_allowed {
+            return code_runtime::PermissionPromptDecision::Allow;
         }
-        println!("  Input            {}", request.input);
-        print!("Approve this tool call? [y/N]: ");
+
+        println!();
+        println!(
+            "\x1b[1m{}\x1b[0m needs {} (current mode: {})",
+            request.tool_name,
+            request.required_mode.as_str(),
+            self.current_mode.as_str()
+        );
+        if let Some(reason) = &request.reason {
+            println!("  \x1b[2m{reason}\x1b[0m");
+        }
+        println!(
+            "  \x1b[2m{}\x1b[0m",
+            truncate_for_summary(&request.input, 160)
+        );
+        print!(
+            "Allow?  [y] yes   [n] no   [a] always for {}  > ",
+            request.tool_name
+        );
         let _ = io::stdout().flush();
 
         let mut response = String::new();
         match io::stdin().read_line(&mut response) {
-            Ok(_) => {
-                let normalized = response.trim().to_ascii_lowercase();
-                if matches!(normalized.as_str(), "y" | "yes") {
-                    code_runtime::PermissionPromptDecision::Allow
-                } else {
-                    code_runtime::PermissionPromptDecision::Deny {
-                        reason: format!(
-                            "tool '{}' denied by user approval prompt",
-                            request.tool_name
-                        ),
+            Ok(_) => match response.trim().to_ascii_lowercase().as_str() {
+                "y" | "yes" => code_runtime::PermissionPromptDecision::Allow,
+                "a" | "always" => {
+                    if let Ok(mut set) = ALWAYS_ALLOWED_TOOLS.lock() {
+                        set.insert(request.tool_name.clone());
                     }
+                    code_runtime::PermissionPromptDecision::Allow
                 }
-            }
+                _ => code_runtime::PermissionPromptDecision::Deny {
+                    reason: format!(
+                        "tool '{}' denied by user approval prompt",
+                        request.tool_name
+                    ),
+                },
+            },
             Err(error) => code_runtime::PermissionPromptDecision::Deny {
                 reason: format!("permission approval failed: {error}"),
             },
@@ -9643,10 +9831,13 @@ impl ApiClient for GenericRuntimeClient {
                     ApiStreamEvent::ContentBlockDelta(delta) => match delta.delta {
                         ContentBlockDelta::TextDelta { text } => {
                             if !text.is_empty() {
+                                thinking::stop();
                                 if let Some(progress_reporter) = &self.progress_reporter {
                                     progress_reporter.mark_text_phase(&text);
                                 }
-                                if let Some(rendered) = markdown_stream.push(&renderer, &text) {
+                                if let Some(rendered) =
+                                    markdown_stream.push(&renderer, &render::strip_emoji(&text))
+                                {
                                     write!(out, "{rendered}")
                                         .and_then(|()| out.flush())
                                         .map_err(|error| RuntimeError::new(error.to_string()))?;
@@ -9660,6 +9851,7 @@ impl ApiClient for GenericRuntimeClient {
                             }
                         }
                         ContentBlockDelta::ThinkingDelta { .. } => {
+                            thinking::stop();
                             if !block_has_thinking_summary {
                                 render_thinking_block_summary(out, None, false)?;
                                 block_has_thinking_summary = true;
@@ -9675,6 +9867,7 @@ impl ApiClient for GenericRuntimeClient {
                                 .map_err(|error| RuntimeError::new(error.to_string()))?;
                         }
                         if let Some((id, name, input)) = pending_tool.take() {
+                            thinking::stop();
                             if let Some(progress_reporter) = &self.progress_reporter {
                                 progress_reporter.mark_tool_phase(&name, &input);
                             }
@@ -9846,10 +10039,13 @@ impl ApiClient for AnthropicRuntimeClient {
                     ApiStreamEvent::ContentBlockDelta(delta) => match delta.delta {
                         ContentBlockDelta::TextDelta { text } => {
                             if !text.is_empty() {
+                                thinking::stop();
                                 if let Some(progress_reporter) = &self.progress_reporter {
                                     progress_reporter.mark_text_phase(&text);
                                 }
-                                if let Some(rendered) = markdown_stream.push(&renderer, &text) {
+                                if let Some(rendered) =
+                                    markdown_stream.push(&renderer, &render::strip_emoji(&text))
+                                {
                                     write!(out, "{rendered}")
                                         .and_then(|()| out.flush())
                                         .map_err(|error| RuntimeError::new(error.to_string()))?;
@@ -9863,6 +10059,7 @@ impl ApiClient for AnthropicRuntimeClient {
                             }
                         }
                         ContentBlockDelta::ThinkingDelta { .. } => {
+                            thinking::stop();
                             if !block_has_thinking_summary {
                                 render_thinking_block_summary(out, None, false)?;
                                 block_has_thinking_summary = true;
@@ -9878,6 +10075,7 @@ impl ApiClient for AnthropicRuntimeClient {
                                 .map_err(|error| RuntimeError::new(error.to_string()))?;
                         }
                         if let Some((id, name, input)) = pending_tool.take() {
+                            thinking::stop();
                             if let Some(progress_reporter) = &self.progress_reporter {
                                 progress_reporter.mark_tool_phase(&name, &input);
                             }
@@ -10185,23 +10383,34 @@ fn slash_command_completion_candidates_with_sessions(
     completions.into_iter().collect()
 }
 
+/// Friendly name for a tool in the transcript (for example `read_file` shows as "Read").
+fn tool_display_name(name: &str) -> &str {
+    match name {
+        "bash" | "Bash" => "Bash",
+        "read_file" | "Read" => "Read",
+        "write_file" | "Write" => "Write",
+        "edit_file" | "Edit" => "Edit",
+        "glob_search" | "Glob" => "Glob",
+        "grep_search" | "Grep" => "Grep",
+        "web_search" | "WebSearch" => "WebSearch",
+        other => other,
+    }
+}
+
 fn format_tool_call_start(name: &str, input: &str) -> String {
     let parsed: serde_json::Value =
         serde_json::from_str(input).unwrap_or(serde_json::Value::String(input.to_string()));
 
     let detail = match name {
         "bash" | "Bash" => format_bash_call(&parsed),
-        "read_file" | "Read" => {
-            let path = extract_tool_path(&parsed);
-            format!("\x1b[2m📄 Reading {path}…\x1b[0m")
-        }
+        "read_file" | "Read" => extract_tool_path(&parsed),
         "write_file" | "Write" => {
             let path = extract_tool_path(&parsed);
             let lines = parsed
                 .get("content")
                 .and_then(|value| value.as_str())
                 .map_or(0, |content| content.lines().count());
-            format!("\x1b[1m✏️ Writing {path}\x1b[0m \x1b[2m({lines} lines)\x1b[0m")
+            format!("{path} \x1b[2m({lines} lines)\x1b[0m")
         }
         "edit_file" | "Edit" => {
             let path = extract_tool_path(&parsed);
@@ -10216,14 +10425,13 @@ fn format_tool_call_start(name: &str, input: &str) -> String {
                 .and_then(|value| value.as_str())
                 .unwrap_or_default();
             format!(
-                "\x1b[1m📝 Editing {path}\x1b[0m{}",
+                "{path}{}",
                 format_patch_preview(old_value, new_value)
                     .map(|preview| format!("\n{preview}"))
                     .unwrap_or_default()
             )
         }
-        "glob_search" | "Glob" => format_search_start("🔎 Glob", &parsed),
-        "grep_search" | "Grep" => format_search_start("🔎 Grep", &parsed),
+        "glob_search" | "Glob" | "grep_search" | "Grep" => format_search_start(&parsed),
         "web_search" | "WebSearch" => parsed
             .get("query")
             .and_then(|value| value.as_str())
@@ -10232,10 +10440,15 @@ fn format_tool_call_start(name: &str, input: &str) -> String {
         _ => summarize_tool_payload(input),
     };
 
-    let border = "─".repeat(name.len() + 8);
-    format!(
-        "\x1b[38;5;245m╭─ \x1b[1m{name}\x1b[0;38;5;245m ─╮\x1b[0m\n\x1b[38;5;245m│\x1b[0m {detail}\n\x1b[38;5;245m╰{border}╯\x1b[0m"
-    )
+    // Headline "● Name detail", with any further detail lines indented beneath it.
+    let mut lines = detail.lines();
+    let first = lines.next().unwrap_or_default();
+    let mut block = format!("\x1b[1m\u{25cf} {}\x1b[0m {first}", tool_display_name(name));
+    for line in lines {
+        block.push_str("\n  ");
+        block.push_str(line);
+    }
+    block
 }
 
 fn format_tool_result(name: &str, output: &str, is_error: bool) -> String {
@@ -10283,7 +10496,7 @@ fn extract_tool_path(parsed: &serde_json::Value) -> String {
         .to_string()
 }
 
-fn format_search_start(label: &str, parsed: &serde_json::Value) -> String {
+fn format_search_start(parsed: &serde_json::Value) -> String {
     let pattern = parsed
         .get("pattern")
         .and_then(|value| value.as_str())
@@ -10292,7 +10505,7 @@ fn format_search_start(label: &str, parsed: &serde_json::Value) -> String {
         .get("path")
         .and_then(|value| value.as_str())
         .unwrap_or(".");
-    format!("{label} {pattern}\n\x1b[2min {scope}\x1b[0m")
+    format!("{pattern}\n\x1b[2min {scope}\x1b[0m")
 }
 
 fn format_patch_preview(old_value: &str, new_value: &str) -> Option<String> {
@@ -10391,7 +10604,7 @@ fn format_read_result(icon: &str, parsed: &serde_json::Value) -> String {
     let end_line = start_line.saturating_add(num_lines.saturating_sub(1));
 
     format!(
-        "{icon} \x1b[2m📄 Read {path} (lines {}-{} of {})\x1b[0m\n{}",
+        "{icon} \x1b[2mRead {path} (lines {}-{} of {})\x1b[0m\n{}",
         start_line,
         end_line.max(start_line),
         total_lines,
@@ -10410,7 +10623,7 @@ fn format_write_result(icon: &str, parsed: &serde_json::Value) -> String {
         .and_then(|value| value.as_str())
         .map_or(0, |content| content.lines().count());
     format!(
-        "{icon} \x1b[1m✏️ {} {path}\x1b[0m \x1b[2m({line_count} lines)\x1b[0m",
+        "{icon} \x1b[1m{} {path}\x1b[0m \x1b[2m({line_count} lines)\x1b[0m",
         if kind == "create" { "Wrote" } else { "Updated" },
     )
 }
@@ -10459,8 +10672,8 @@ fn format_edit_result(icon: &str, parsed: &serde_json::Value) -> String {
     });
 
     match preview {
-        Some(preview) => format!("{icon} \x1b[1m📝 Edited {path}{suffix}\x1b[0m\n{preview}"),
-        None => format!("{icon} \x1b[1m📝 Edited {path}{suffix}\x1b[0m"),
+        Some(preview) => format!("{icon} \x1b[1mEdited {path}{suffix}\x1b[0m\n{preview}"),
+        None => format!("{icon} \x1b[1mEdited {path}{suffix}\x1b[0m"),
     }
 }
 
@@ -10482,9 +10695,9 @@ fn format_glob_result(icon: &str, parsed: &serde_json::Value) -> String {
         })
         .unwrap_or_default();
     if filenames.is_empty() {
-        format!("{icon} \x1b[38;5;245mglob_search\x1b[0m matched {num_files} files")
+        format!("{icon} \x1b[38;5;245mGlob\x1b[0m matched {num_files} files")
     } else {
-        format!("{icon} \x1b[38;5;245mglob_search\x1b[0m matched {num_files} files\n{filenames}")
+        format!("{icon} \x1b[38;5;245mGlob\x1b[0m matched {num_files} files\n{filenames}")
     }
 }
 
@@ -10513,9 +10726,8 @@ fn format_grep_result(icon: &str, parsed: &serde_json::Value) -> String {
                 .join("\n")
         })
         .unwrap_or_default();
-    let summary = format!(
-        "{icon} \x1b[38;5;245mgrep_search\x1b[0m {num_matches} matches across {num_files} files"
-    );
+    let summary =
+        format!("{icon} \x1b[38;5;245mGrep\x1b[0m {num_matches} matches across {num_files} files");
     if !content.trim().is_empty() {
         format!(
             "{summary}\n{}",
@@ -10646,7 +10858,8 @@ fn push_output_block(
     match block {
         OutputContentBlock::Text { text } => {
             if !text.is_empty() {
-                let rendered = TerminalRenderer::new().markdown_to_ansi(&text);
+                let rendered =
+                    TerminalRenderer::new().markdown_to_ansi(&render::strip_emoji(&text));
                 write!(out, "{rendered}")
                     .and_then(|()| out.flush())
                     .map_err(|error| RuntimeError::new(error.to_string()))?;
@@ -10986,15 +11199,63 @@ fn print_workspace_trust(revoke: bool) -> Result<(), Box<dyn std::error::Error>>
 /// can see why a repository's setting had no effect. Errors are skipped here; the
 /// command reports them when it loads config.
 fn print_ignored_settings_warnings() {
-    let Ok(cwd) = env::current_dir() else {
-        return;
-    };
-    let Ok(config) = ConfigLoader::default_for(&cwd).load() else {
-        return;
-    };
-    for note in config.ignored_settings() {
+    for note in workspace_notes() {
         eprintln!("warning: {note}");
     }
+}
+
+/// Provider id used in settings and `--provider`, for a provider kind.
+fn provider_id(kind: ProviderKind) -> &'static str {
+    match kind {
+        ProviderKind::Anthropic => "anthropic",
+        ProviderKind::OpenAi => "openai",
+        ProviderKind::Xai => "xai",
+        ProviderKind::Frontal => "frontal",
+        ProviderKind::Bedrock => "bedrock",
+        ProviderKind::Azure => "azure",
+        ProviderKind::Ollama => "ollama",
+    }
+}
+
+/// The working directory, with the home directory shortened to `~`.
+fn display_directory() -> String {
+    let Ok(cwd) = env::current_dir() else {
+        return "unknown directory".to_string();
+    };
+    match env::var("HOME") {
+        Ok(home) if !home.is_empty() => match cwd.strip_prefix(&home) {
+            Ok(rest) if rest.as_os_str().is_empty() => "~".to_string(),
+            Ok(rest) => format!("~/{}", rest.display()),
+            Err(_) => cwd.display().to_string(),
+        },
+        _ => cwd.display().to_string(),
+    }
+}
+
+/// One-line form of a workspace note for the banner.
+fn banner_note(note: &str) -> String {
+    if note.contains("withheld until this workspace is trusted") {
+        "Workspace not trusted · run `frontal-code trust` to enable".to_string()
+    } else {
+        note.to_string()
+    }
+}
+
+/// Notes for settings withheld in this workspace, with the workspace prefix removed
+/// from each path so they read well inside the REPL banner.
+fn workspace_notes() -> Vec<String> {
+    let Ok(cwd) = env::current_dir() else {
+        return Vec::new();
+    };
+    let Ok(config) = ConfigLoader::default_for(&cwd).load() else {
+        return Vec::new();
+    };
+    let prefix = format!("{}/", cwd.display());
+    config
+        .ignored_settings()
+        .iter()
+        .map(|note| note.replace(&prefix, ""))
+        .collect()
 }
 
 fn convert_messages(messages: &[ConversationMessage]) -> Vec<InputMessage> {
@@ -11523,6 +11784,13 @@ mod tests {
         );
     }
 
+    /// Clears the model and provider overrides a developer may have exported, so
+    /// argument-parsing tests see the built-in defaults.
+    fn clear_model_env() {
+        std::env::remove_var("FRONTAL_CODE_MODEL");
+        std::env::remove_var("FRONTAL_CODE_DEFAULT_PROVIDER");
+    }
+
     fn env_lock() -> MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
@@ -11589,6 +11857,7 @@ mod tests {
     #[test]
     fn defaults_to_repl_when_no_args() {
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -11773,6 +12042,7 @@ mod tests {
     #[test]
     fn parses_prompt_subcommand() {
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -11799,6 +12069,7 @@ mod tests {
     #[test]
     fn parses_bare_prompt_and_json_output_flag() {
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -11827,6 +12098,7 @@ mod tests {
     #[test]
     fn resolves_model_aliases_in_args() {
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -11863,6 +12135,7 @@ mod tests {
     #[test]
     fn parses_provider_flag() {
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -11929,6 +12202,8 @@ mod tests {
 
     #[test]
     fn parses_permission_mode_flag() {
+        let _env_guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -11947,6 +12222,7 @@ mod tests {
     #[test]
     fn parses_allowed_tools_flags_with_aliases_and_lists() {
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -12009,6 +12285,7 @@ mod tests {
         // Compares against `default_permission_mode()`, which reads the
         // environment that sibling tests mutate.
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -12818,6 +13095,7 @@ mod tests {
     #[test]
     fn multi_word_prompt_still_uses_shorthand_prompt_mode() {
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -12843,6 +13121,7 @@ mod tests {
         // which reads RUSTY_CLAUDE_PERMISSION_MODE. Sibling tests mutate that
         // variable, so hold the env lock for the whole test.
         let _guard = env_lock();
+        clear_model_env();
         let _cwd_guard = cwd_lock()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -13411,6 +13690,7 @@ mod tests {
             .startup_banner()
         });
 
+        assert!(banner.contains("Frontal Code"));
         assert!(banner.contains("Tab"));
         assert!(banner.contains("workflow completions"));
 
@@ -14389,6 +14669,8 @@ UU conflicted.rs",
 
     #[test]
     fn managed_sessions_default_to_jsonl_and_resolve_legacy_json() {
+        let _env_guard = env_lock();
+        clear_model_env();
         let _guard = cwd_lock().lock().expect("cwd lock");
         let workspace = temp_workspace("session-resolution");
         std::fs::create_dir_all(&workspace).expect("workspace should create");
@@ -14427,6 +14709,8 @@ UU conflicted.rs",
 
     #[test]
     fn latest_session_alias_resolves_most_recent_managed_session() {
+        let _env_guard = env_lock();
+        clear_model_env();
         let _guard = cwd_lock().lock().expect("cwd lock");
         let workspace = temp_workspace("latest-session-alias");
         std::fs::create_dir_all(&workspace).expect("workspace should create");
@@ -14548,7 +14832,7 @@ UU conflicted.rs",
     #[test]
     fn tool_rendering_helpers_compact_output() {
         let start = format_tool_call_start("read_file", r#"{"path":"src/main.rs"}"#);
-        assert!(start.contains("read_file"));
+        assert!(start.contains("Read"));
         assert!(start.contains("src/main.rs"));
 
         let done = format_tool_result(
@@ -14556,7 +14840,7 @@ UU conflicted.rs",
             r#"{"file":{"filePath":"src/main.rs","content":"hello","numLines":1,"startLine":1,"totalLines":1}}"#,
             false,
         );
-        assert!(done.contains("📄 Read src/main.rs"));
+        assert!(done.contains("Read src/main.rs"));
         assert!(done.contains("hello"));
     }
 

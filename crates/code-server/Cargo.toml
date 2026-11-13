@@ -9,7 +9,7 @@ publish.workspace = true
 name = "code-server"
 
 [dependencies]
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.8", features = ["ws"] }
 futures-util = "0.3"
 code-events = { path = "../code-events" }
 code-integrations = { path = "../code-integrations" }
@@ -21,11 +21,11 @@ code-tools = { path = "../code-tools" }
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 hex = "0.4"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-getrandom = "0.2"
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "query", "rustls", "stream"] }
+getrandom = "0.4"
 tokio-postgres = "0.7"
 tokio-postgres-rustls = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

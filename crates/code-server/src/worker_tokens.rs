@@ -402,7 +402,7 @@ fn ttl_as_secs(ttl_secs: u64) -> f64 {
 
 async fn issue(db: &mut Client, task_id: &str, ttl_secs: f64) -> Result<String, String> {
     let mut bytes = [0_u8; 32];
-    getrandom::getrandom(&mut bytes).map_err(|error| format!("random source: {error}"))?;
+    getrandom::fill(&mut bytes).map_err(|error| format!("random source: {error}"))?;
     let token = hex::encode(bytes);
     let hash = hash_token(&token);
 
@@ -565,7 +565,7 @@ pub(crate) mod tests {
     /// other's tokens.
     pub(crate) fn unique_task(prefix: &str) -> String {
         let mut bytes = [0_u8; 6];
-        getrandom::getrandom(&mut bytes).expect("random");
+        getrandom::fill(&mut bytes).expect("random");
         format!("{prefix}-{}", hex::encode(bytes))
     }
 

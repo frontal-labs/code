@@ -1931,6 +1931,7 @@ pub fn render_slash_command_help() -> String {
         "Workspace & git",
         "Discovery & debugging",
         "Analysis & automation",
+        "Appearance & input",
     ];
 
     for category in categories {

@@ -19,7 +19,8 @@ fn frontal_code_prints_the_same_version_as_code() {
 
 #[test]
 fn frontal_code_passes_the_exit_status_through() {
-    let args = ["definitely-not-a-subcommand"];
+    // An unknown flag is rejected before any provider call, so the test never reaches the network.
+    let args = ["--definitely-not-a-flag"];
     let code = run(env!("CARGO_BIN_EXE_code"), &args);
     let frontal = run(env!("CARGO_BIN_EXE_frontal-code"), &args);
     assert!(!code.status.success());

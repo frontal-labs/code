@@ -148,6 +148,31 @@ fn env_vars_for(provider: &str) -> &'static [&'static str] {
     }
 }
 
+/// Short label for how a provider is reached, such as "Anthropic subscription" or
+/// `OpenAI API key`. Uses the client's precedence: an API key, then an auth token,
+/// then a saved login.
+pub fn access_label(provider: &str) -> String {
+    let (name, key_var, token_var) = match provider {
+        "anthropic" => ("Anthropic", "FRONTAL_API_KEY", Some("FRONTAL_AUTH_TOKEN")),
+        "openai" => ("OpenAI", "OPENAI_API_KEY", None),
+        other => return format!("via {other}"),
+    };
+    let env_set = |var: &str| std::env::var(var).is_ok_and(|value| !value.is_empty());
+    let kind = if env_set(key_var) {
+        "API key"
+    } else if token_var.is_some_and(env_set) {
+        "auth token"
+    } else if matches!(
+        load_oauth_credentials_for(credentials_key_for_provider(provider)),
+        Ok(Some(_))
+    ) {
+        "subscription"
+    } else {
+        return format!("{name} not signed in");
+    };
+    format!("{name} {kind}")
+}
+
 /// Reads the login endpoints from user-level settings only. Project settings are not
 /// consulted, so a repository cannot send the user's authorization code elsewhere.
 fn load_provider_oauth_config(cwd: &Path, provider: &str) -> Result<OAuthConfig, String> {

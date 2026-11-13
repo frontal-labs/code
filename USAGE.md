@@ -134,6 +134,33 @@ frontal-code
 frontal-code
 ```
 
+Each turn ends with a dim summary line: wall time, input and output tokens, the estimated
+cost when the model's pricing is known, and the number of tool calls.
+
+Keyboard shortcuts (also shown by `?` on an empty prompt and by `/keybindings`):
+
+| Key | Action |
+| --- | --- |
+| `?` (empty prompt) | Show the shortcuts list |
+| `Enter` | Send the message |
+| `Alt+Enter`, `Ctrl-J` | Insert a newline |
+| `Up` / `Down` | Previous and next prompt from history |
+| `Ctrl-R` | Search prompt history |
+| `Right` | Accept the grey suggestion |
+| `Tab` | Complete slash commands, modes, recent sessions, and `@` file paths |
+| `Shift+Tab` | Cycle the permission mode |
+| `Ctrl-L` | Clear the screen |
+| `Ctrl-C` | Clear the line; press twice on an empty prompt to exit |
+| `Ctrl-D` | Exit on an empty prompt |
+
+Prompt history is saved to `repl_history` in the config home, so it survives restarts.
+
+Two prompt forms bypass the model:
+
+- `!<command>` runs a shell command in the current directory and shows its output.
+- `@<path>` in a message attaches that workspace file to the prompt. Files must be inside the
+  workspace, text, and at most 64 KB; up to five files per message.
+
 ### One-shot prompt
 
 ```bash

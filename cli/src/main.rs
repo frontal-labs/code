@@ -2430,7 +2430,6 @@ fn check_core_config_health(config_manager: &ConfigurationManager) -> Diagnostic
         format!("Plugins enabled: {}", config_manager.are_plugins_enabled()),
         format!("Caching enabled: {}", config_manager.is_caching_enabled()),
         format!("Metrics enabled: {}", config_manager.are_metrics_enabled()),
-        format!("UI theme: {}", config_manager.ui_theme()),
     ];
 
     // Check provider configurations
@@ -2477,7 +2476,6 @@ fn check_core_config_health(config_manager: &ConfigurationManager) -> Diagnostic
             "metrics_enabled".to_string(),
             json!(config_manager.are_metrics_enabled()),
         ),
-        ("ui_theme".to_string(), json!(config_manager.ui_theme())),
     ]))
 }
 
@@ -5490,14 +5488,12 @@ fn run_resume_command(
         | SlashCommand::Plan { .. }
         | SlashCommand::Review { .. }
         | SlashCommand::Tasks { .. }
-        | SlashCommand::Theme { .. }
         | SlashCommand::Voice { .. }
         | SlashCommand::Usage { .. }
         | SlashCommand::Rename { .. }
         | SlashCommand::Copy { .. }
         | SlashCommand::Hooks { .. }
         | SlashCommand::Context { .. }
-        | SlashCommand::Color { .. }
         | SlashCommand::Effort { .. }
         | SlashCommand::Branch { .. }
         | SlashCommand::Rewind { .. }
@@ -6310,7 +6306,7 @@ impl LiveCli {
     }
 
     fn startup_banner(&self) -> String {
-        "\x1b[38;5;208mCode\x1b[0m\n\n\
+        "\x1b[1mCode\x1b[0m\n\n\
   Session details are redacted by default.\n\n\
   Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context · \x1b[2m/resume latest\x1b[0m to resume · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship · \x1b[2mTab\x1b[0m for workflow completions · \x1b[2mShift+Enter\x1b[0m for newline"
             .to_string()
@@ -6668,14 +6664,12 @@ impl LiveCli {
             | SlashCommand::Plan { .. }
             | SlashCommand::Review { .. }
             | SlashCommand::Tasks { .. }
-            | SlashCommand::Theme { .. }
             | SlashCommand::Voice { .. }
             | SlashCommand::Usage { .. }
             | SlashCommand::Rename { .. }
             | SlashCommand::Copy { .. }
             | SlashCommand::Hooks { .. }
             | SlashCommand::Context { .. }
-            | SlashCommand::Color { .. }
             | SlashCommand::Effort { .. }
             | SlashCommand::Branch { .. }
             | SlashCommand::Rewind { .. }
@@ -10207,7 +10201,7 @@ fn format_tool_call_start(name: &str, input: &str) -> String {
                 .get("content")
                 .and_then(|value| value.as_str())
                 .map_or(0, |content| content.lines().count());
-            format!("\x1b[1;32m✏️ Writing {path}\x1b[0m \x1b[2m({lines} lines)\x1b[0m")
+            format!("\x1b[1m✏️ Writing {path}\x1b[0m \x1b[2m({lines} lines)\x1b[0m")
         }
         "edit_file" | "Edit" => {
             let path = extract_tool_path(&parsed);
@@ -10222,7 +10216,7 @@ fn format_tool_call_start(name: &str, input: &str) -> String {
                 .and_then(|value| value.as_str())
                 .unwrap_or_default();
             format!(
-                "\x1b[1;33m📝 Editing {path}\x1b[0m{}",
+                "\x1b[1m📝 Editing {path}\x1b[0m{}",
                 format_patch_preview(old_value, new_value)
                     .map(|preview| format!("\n{preview}"))
                     .unwrap_or_default()
@@ -10240,22 +10234,22 @@ fn format_tool_call_start(name: &str, input: &str) -> String {
 
     let border = "─".repeat(name.len() + 8);
     format!(
-        "\x1b[38;5;245m╭─ \x1b[1;36m{name}\x1b[0;38;5;245m ─╮\x1b[0m\n\x1b[38;5;245m│\x1b[0m {detail}\n\x1b[38;5;245m╰{border}╯\x1b[0m"
+        "\x1b[38;5;245m╭─ \x1b[1m{name}\x1b[0;38;5;245m ─╮\x1b[0m\n\x1b[38;5;245m│\x1b[0m {detail}\n\x1b[38;5;245m╰{border}╯\x1b[0m"
     )
 }
 
 fn format_tool_result(name: &str, output: &str, is_error: bool) -> String {
     let icon = if is_error {
-        "\x1b[1;31m✗\x1b[0m"
+        "\x1b[1m✗\x1b[0m"
     } else {
-        "\x1b[1;32m✓\x1b[0m"
+        "\x1b[1m✓\x1b[0m"
     };
     if is_error {
         let summary = truncate_for_summary(output.trim(), 160);
         return if summary.is_empty() {
             format!("{icon} \x1b[38;5;245m{name}\x1b[0m")
         } else {
-            format!("{icon} \x1b[38;5;245m{name}\x1b[0m\n\x1b[38;5;203m{summary}\x1b[0m")
+            format!("{icon} \x1b[38;5;245m{name}\x1b[0m\n{summary}")
         };
     }
 
@@ -10306,7 +10300,7 @@ fn format_patch_preview(old_value: &str, new_value: &str) -> Option<String> {
         return None;
     }
     Some(format!(
-        "\x1b[38;5;203m- {}\x1b[0m\n\x1b[38;5;70m+ {}\x1b[0m",
+        "\x1b[2m- {}\x1b[0m\n\x1b[1m+ {}\x1b[0m",
         truncate_for_summary(first_visible_line(old_value), 72),
         truncate_for_summary(first_visible_line(new_value), 72)
     ))
@@ -10362,7 +10356,7 @@ fn format_bash_result(icon: &str, parsed: &serde_json::Value) -> String {
     if let Some(stderr) = parsed.get("stderr").and_then(|value| value.as_str()) {
         if !stderr.trim().is_empty() {
             lines.push(format!(
-                "\x1b[38;5;203m{}\x1b[0m",
+                "\x1b[2m{}\x1b[0m",
                 truncate_output_for_display(
                     stderr,
                     TOOL_OUTPUT_DISPLAY_MAX_LINES,
@@ -10416,7 +10410,7 @@ fn format_write_result(icon: &str, parsed: &serde_json::Value) -> String {
         .and_then(|value| value.as_str())
         .map_or(0, |content| content.lines().count());
     format!(
-        "{icon} \x1b[1;32m✏️ {} {path}\x1b[0m \x1b[2m({line_count} lines)\x1b[0m",
+        "{icon} \x1b[1m✏️ {} {path}\x1b[0m \x1b[2m({line_count} lines)\x1b[0m",
         if kind == "create" { "Wrote" } else { "Updated" },
     )
 }
@@ -10428,8 +10422,8 @@ fn format_structured_patch_preview(parsed: &serde_json::Value) -> Option<String>
         let lines = hunk.get("lines")?.as_array()?;
         for line in lines.iter().filter_map(|value| value.as_str()).take(6) {
             match line.chars().next() {
-                Some('+') => preview.push(format!("\x1b[38;5;70m{line}\x1b[0m")),
-                Some('-') => preview.push(format!("\x1b[38;5;203m{line}\x1b[0m")),
+                Some('+') => preview.push(format!("\x1b[1m{line}\x1b[0m")),
+                Some('-') => preview.push(format!("\x1b[2m{line}\x1b[0m")),
                 _ => preview.push(line.to_string()),
             }
         }
@@ -10465,8 +10459,8 @@ fn format_edit_result(icon: &str, parsed: &serde_json::Value) -> String {
     });
 
     match preview {
-        Some(preview) => format!("{icon} \x1b[1;33m📝 Edited {path}{suffix}\x1b[0m\n{preview}"),
-        None => format!("{icon} \x1b[1;33m📝 Edited {path}{suffix}\x1b[0m"),
+        Some(preview) => format!("{icon} \x1b[1m📝 Edited {path}{suffix}\x1b[0m\n{preview}"),
+        None => format!("{icon} \x1b[1m📝 Edited {path}{suffix}\x1b[0m"),
     }
 }
 

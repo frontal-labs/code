@@ -25,7 +25,6 @@ mod tests {
                     );
                     println!("Cache directory: {}", config.paths.cache_dir);
                     println!("Telemetry enabled: {}", config.features.enable_telemetry);
-                    println!("UI theme: {}", config.ui.theme);
                     println!(
                         "Experimental features enabled: {}",
                         config.experimental.enable_new_features

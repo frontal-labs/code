@@ -25,17 +25,17 @@ pub struct ColorTheme {
 impl Default for ColorTheme {
     fn default() -> Self {
         Self {
-            heading: Color::Cyan,
-            emphasis: Color::Magenta,
-            strong: Color::Yellow,
-            inline_code: Color::Green,
-            link: Color::Blue,
+            heading: Color::White,
+            emphasis: Color::Reset,
+            strong: Color::Reset,
+            inline_code: Color::White,
+            link: Color::White,
             quote: Color::DarkGrey,
-            table_border: Color::DarkCyan,
+            table_border: Color::DarkGrey,
             code_block_border: Color::DarkGrey,
             spinner_active: Color::Blue,
-            spinner_done: Color::Green,
-            spinner_failed: Color::Red,
+            spinner_done: Color::White,
+            spinner_failed: Color::White,
         }
     }
 }
@@ -178,7 +178,6 @@ impl RenderState {
             style = match level {
                 1 => style.with(theme.heading),
                 2 => style.white(),
-                3 => style.with(Color::Blue),
                 _ => style.with(Color::Grey),
             };
         } else if self.strong > 0 {

@@ -66,8 +66,6 @@
     "max_memory_usage_mb": 2048
   },
   "ui": {
-    "theme": "default",
-    "enable_colors": true,
     "show_progress_bars": true,
     "confirm_dangerous_operations": true
   },

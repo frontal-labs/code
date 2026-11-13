@@ -40,7 +40,7 @@ The main configuration file is `config/project.json`. It contains:
 - **Project settings**: name, version, description
 - **Runtime configuration**: default AI provider, timeouts, concurrency limits
 - **Feature flags**: telemetry, plugins, caching, metrics, tracing
-- **UI settings**: theme, colors, progress bars
+- **UI settings**: progress bars
 - **Service configuration**: database, Redis, memory settings
 - **Sandbox settings**: Docker configuration, execution limits
 
@@ -72,8 +72,6 @@ The system looks for `project.json` in this order:
     "enable_tracing": false
   },
   "ui": {
-    "theme": "default",
-    "enable_colors": true,
     "show_progress_bars": true
   }
 }

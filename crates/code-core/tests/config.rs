@@ -114,7 +114,6 @@ fn config_serialize_minimal_json() {
             "enable_hot_reload": true, "max_file_size_mb": 50, "max_memory_usage_mb": 1024
         },
         "ui": {
-            "theme": "dark", "enable_colors": false,
             "show_progress_bars": false, "confirm_dangerous_operations": false
         },
         "experimental": {
@@ -127,7 +126,6 @@ fn config_serialize_minimal_json() {
     assert_eq!(config.runtime.default_provider, "test");
     assert!(!config.features.enable_telemetry);
     assert!(config.sandbox.enable_docker);
-    assert_eq!(config.ui.theme, "dark");
     assert_eq!(config.experimental.beta_features.len(), 2);
 }
 
@@ -240,8 +238,6 @@ fn experimental_config_defaults() {
 #[test]
 fn ui_config_defaults() {
     let config = ProjectConfig::default();
-    assert_eq!(config.ui.theme, "default");
-    assert!(config.ui.enable_colors);
     assert!(config.ui.show_progress_bars);
     assert!(config.ui.confirm_dangerous_operations);
 }

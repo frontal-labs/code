@@ -281,13 +281,6 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
         resume_supported: true,
     },
     SlashCommandSpec {
-        name: "theme",
-        aliases: &[],
-        summary: "Switch the terminal color theme",
-        argument_hint: Some("[theme-name]"),
-        resume_supported: true,
-    },
-    SlashCommandSpec {
         name: "vim",
         aliases: &[],
         summary: "Toggle vim keybinding mode",
@@ -369,13 +362,6 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
         aliases: &[],
         summary: "Inspect or manage the conversation context",
         argument_hint: Some("[show|clear]"),
-        resume_supported: true,
-    },
-    SlashCommandSpec {
-        name: "color",
-        aliases: &[],
-        summary: "Configure terminal color settings",
-        argument_hint: Some("[scheme]"),
         resume_supported: true,
     },
     SlashCommandSpec {
@@ -1135,9 +1121,6 @@ pub enum SlashCommand {
     Tasks {
         args: Option<String>,
     },
-    Theme {
-        name: Option<String>,
-    },
     Voice {
         mode: Option<String>,
     },
@@ -1155,9 +1138,6 @@ pub enum SlashCommand {
     },
     Context {
         action: Option<String>,
-    },
-    Color {
-        scheme: Option<String>,
     },
     Effort {
         level: Option<String>,
@@ -1391,14 +1371,12 @@ pub fn validate_slash_command_input(
         "plan" => SlashCommand::Plan { mode: remainder },
         "review" => SlashCommand::Review { scope: remainder },
         "tasks" => SlashCommand::Tasks { args: remainder },
-        "theme" => SlashCommand::Theme { name: remainder },
         "voice" => SlashCommand::Voice { mode: remainder },
         "usage" => SlashCommand::Usage { scope: remainder },
         "rename" => SlashCommand::Rename { name: remainder },
         "copy" => SlashCommand::Copy { target: remainder },
         "hooks" => SlashCommand::Hooks { args: remainder },
         "context" => SlashCommand::Context { action: remainder },
-        "color" => SlashCommand::Color { scheme: remainder },
         "effort" => SlashCommand::Effort { level: remainder },
         "branch" => SlashCommand::Branch { name: remainder },
         "rewind" => SlashCommand::Rewind { steps: remainder },
@@ -1835,8 +1813,8 @@ fn slash_command_category(name: &str) -> &'static str {
         "bughunter" | "ultraplan" | "review" | "security-review" | "advisor" | "insights" => {
             "Analysis & automation"
         }
-        "theme" | "vim" | "voice" | "color" | "effort" | "fast" | "brief" | "output-style"
-        | "keybindings" | "stickers" => "Appearance & input",
+        "vim" | "voice" | "effort" | "fast" | "brief" | "output-style" | "keybindings"
+        | "stickers" => "Appearance & input",
         "copy" | "share" | "feedback" | "summary" | "tag" | "thinkback" | "plan" | "exit"
         | "upgrade" | "rewind" => "Communication & control",
         _ => "Other",
@@ -3959,14 +3937,12 @@ pub fn handle_slash_command(
         | SlashCommand::Plan { .. }
         | SlashCommand::Review { .. }
         | SlashCommand::Tasks { .. }
-        | SlashCommand::Theme { .. }
         | SlashCommand::Voice { .. }
         | SlashCommand::Usage { .. }
         | SlashCommand::Rename { .. }
         | SlashCommand::Copy { .. }
         | SlashCommand::Hooks { .. }
         | SlashCommand::Context { .. }
-        | SlashCommand::Color { .. }
         | SlashCommand::Effort { .. }
         | SlashCommand::Branch { .. }
         | SlashCommand::Rewind { .. }
@@ -4513,7 +4489,7 @@ mod tests {
         assert!(help.contains("/agents [list|help]"));
         assert!(help.contains("/skills [list|install <path>|help|<skill> [args]]"));
         assert!(help.contains("aliases: /skill"));
-        assert_eq!(slash_command_specs().len(), 139);
+        assert_eq!(slash_command_specs().len(), 137);
         assert!(resume_supported_slash_commands().len() >= 39);
     }
 

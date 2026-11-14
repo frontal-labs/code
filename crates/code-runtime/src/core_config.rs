@@ -122,18 +122,6 @@ impl ConfigurationManager {
         self.core_config.features.enable_metrics
     }
 
-    /// Get UI theme from core config
-    #[must_use]
-    pub fn ui_theme(&self) -> &str {
-        &self.core_config.ui.theme
-    }
-
-    /// Check if UI colors are enabled from core config
-    #[must_use]
-    pub fn are_ui_colors_enabled(&self) -> bool {
-        self.core_config.ui.enable_colors
-    }
-
     /// Get cache directory from core config
     #[must_use]
     pub fn cache_dir(&self) -> &str {
@@ -215,8 +203,6 @@ mod tests {
         assert!(!config.features.enable_hot_reload);
 
         // Test UI config
-        assert_eq!(config.ui.theme, "default");
-        assert!(config.ui.enable_colors);
         assert!(config.ui.show_progress_bars);
         assert!(config.ui.confirm_dangerous_operations);
 

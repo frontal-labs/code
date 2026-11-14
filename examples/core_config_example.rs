@@ -117,8 +117,6 @@ fn print_core_config(core_config: &ProjectConfig) {
     );
 
     println!("  UI Configuration:");
-    println!("    Theme: {}", core_config.ui.theme);
-    println!("    Colors Enabled: {}", core_config.ui.enable_colors);
     println!(
         "    Progress Bars Enabled: {}",
         core_config.ui.show_progress_bars

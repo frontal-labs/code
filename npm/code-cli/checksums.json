@@ -1,0 +1,10 @@
+{
+  "version": "0.2.2",
+  "assets": {
+    "code-cli-aarch64-apple-darwin": "adaa4d221c55440e6f94de36f01d636975b1a5b924e107cf1ea9c259d0ba53fc",
+    "code-cli-x86_64-apple-darwin": "62e213f686f8877e1631d436905e679485ca9440141e4b4ccff02c80dee31bd8",
+    "code-cli-x86_64-unknown-linux-gnu": "eef77096fa93c07dda93b43b42dcd302cbff1153dc1517e1f0c28edeb28d4d47",
+    "code-cli-aarch64-unknown-linux-gnu": "97911acf058dc60f32109a788060c4591dfe2d3f8bfdfbb0781a616603c44be4",
+    "code-cli-x86_64-pc-windows-msvc.exe": "ca93fa94a8af77cce3823d247c6c59a633bcc9f6c4778ea8520a00770d4e559e"
+  }
+}

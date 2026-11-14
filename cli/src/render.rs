@@ -7,6 +7,44 @@ use crossterm::terminal::{Clear, ClearType};
 use crossterm::{execute, queue};
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
+/// Removes emoji and pictographic symbols, plus the joiners and variation selectors that
+/// build them. Applied to assistant text only, so tool output keeps its exact content.
+pub fn strip_emoji(text: &str) -> String {
+    text.chars().filter(|c| !is_emoji_char(*c)).collect()
+}
+
+fn is_emoji_char(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x00A9
+            | 0x00AE
+            | 0x200D
+            | 0x203C
+            | 0x2049
+            | 0x2122
+            | 0x2139
+            | 0x20E3
+            | 0x2194..=0x2199
+            | 0x231A..=0x231B
+            | 0x23E9..=0x23FA
+            | 0x25AA..=0x25AB
+            | 0x25B6
+            | 0x25C0
+            | 0x25FB..=0x25FE
+            | 0x2600..=0x27BF
+            | 0x2B05..=0x2B07
+            | 0x2B1B..=0x2B1C
+            | 0x2B50
+            | 0x2B55
+            | 0x3030
+            | 0x303D
+            | 0x3297
+            | 0x3299
+            | 0xFE0F
+            | 0x1F000..=0x1FAFF
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ColorTheme {
     heading: Color,
@@ -25,17 +63,17 @@ pub struct ColorTheme {
 impl Default for ColorTheme {
     fn default() -> Self {
         Self {
-            heading: Color::Cyan,
-            emphasis: Color::Magenta,
-            strong: Color::Yellow,
-            inline_code: Color::Green,
-            link: Color::Blue,
+            heading: Color::White,
+            emphasis: Color::Reset,
+            strong: Color::Reset,
+            inline_code: Color::White,
+            link: Color::White,
             quote: Color::DarkGrey,
-            table_border: Color::DarkCyan,
+            table_border: Color::DarkGrey,
             code_block_border: Color::DarkGrey,
-            spinner_active: Color::Blue,
-            spinner_done: Color::Green,
-            spinner_failed: Color::Red,
+            spinner_active: Color::AnsiValue(33),
+            spinner_done: Color::White,
+            spinner_failed: Color::White,
         }
     }
 }
@@ -178,7 +216,6 @@ impl RenderState {
             style = match level {
                 1 => style.with(theme.heading),
                 2 => style.white(),
-                3 => style.with(Color::Blue),
                 _ => style.with(Color::Grey),
             };
         } else if self.strong > 0 {
@@ -664,6 +701,13 @@ fn strip_ansi(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn strip_emoji_removes_pictographs_and_keeps_text_and_arrows() {
+        assert_eq!(super::strip_emoji("Hi 👋 there 🚀!"), "Hi  there !");
+        assert_eq!(super::strip_emoji("ship ✅ it ❌"), "ship  it ");
+        assert_eq!(super::strip_emoji("a → é"), "a → é");
+    }
+
     use super::{strip_ansi, MarkdownStreamState, Spinner, TerminalRenderer};
 
     #[test]

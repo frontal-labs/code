@@ -227,7 +227,7 @@ mod tests {
         };
         let sink = AuditSink::connect(settings.clone()).expect("connect audit sink");
         let mut bytes = [0_u8; 6];
-        getrandom::getrandom(&mut bytes).expect("random");
+        getrandom::fill(&mut bytes).expect("random");
         let task = format!("audit-test-{}", hex::encode(bytes));
         sink.emit("token.issued", &task, "ttl_secs=60");
 

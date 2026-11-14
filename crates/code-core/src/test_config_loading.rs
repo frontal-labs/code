@@ -20,7 +20,6 @@ mod tests {
                 );
                 println!("Cache directory: {}", config.paths.cache_dir);
                 println!("Telemetry enabled: {}", config.features.enable_telemetry);
-                println!("UI theme: {}", config.ui.theme);
             }
             Err(e) => {
                 println!("Could not load config file (this is expected in CI): {e}");

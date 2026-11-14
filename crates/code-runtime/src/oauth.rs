@@ -413,7 +413,7 @@ pub fn parse_oauth_callback_query(query: &str) -> Result<OAuthCallbackParams, St
 // and state generation broke and OAuth login could not start there.
 fn generate_random_token(bytes: usize) -> io::Result<String> {
     let mut buffer = vec![0_u8; bytes];
-    getrandom::getrandom(&mut buffer).map_err(|error| io::Error::other(error.to_string()))?;
+    getrandom::fill(&mut buffer).map_err(|error| io::Error::other(error.to_string()))?;
     Ok(base64url_encode(&buffer))
 }
 

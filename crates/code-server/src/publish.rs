@@ -522,7 +522,7 @@ pub(crate) fn github_owner_repo(repo_url: &str) -> Option<(String, String)> {
 
 fn random_hex(bytes: usize) -> Result<String, String> {
     let mut buffer = vec![0_u8; bytes];
-    getrandom::getrandom(&mut buffer).map_err(|error| format!("random source: {error}"))?;
+    getrandom::fill(&mut buffer).map_err(|error| format!("random source: {error}"))?;
     Ok(hex::encode(buffer))
 }
 

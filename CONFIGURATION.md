@@ -65,8 +65,6 @@ The main configuration file is `config/project.json`:
     "max_memory_usage_mb": 2048
   },
   "ui": {
-    "theme": "default",
-    "enable_colors": true,
     "show_progress_bars": true,
     "confirm_dangerous_operations": true
   },
@@ -122,8 +120,6 @@ The main configuration file is `config/project.json`:
 - `max_memory_usage_mb`: Maximum memory usage
 
 #### UI
-- `theme`: UI theme (`default`, `dark`, `light`)
-- `enable_colors`: Enable colored output
 - `show_progress_bars`: Show progress bars
 - `confirm_dangerous_operations`: Confirm dangerous operations
 

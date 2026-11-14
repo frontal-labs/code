@@ -6239,12 +6239,6 @@ enum ConfigKind {
 
 fn supported_config_setting(setting: &str) -> Option<ConfigSettingSpec> {
     Some(match setting {
-        "theme" => ConfigSettingSpec {
-            scope: ConfigScope::Global,
-            kind: ConfigKind::String,
-            path: &["theme"],
-            options: None,
-        },
         "editorMode" => ConfigSettingSpec {
             scope: ConfigScope::Global,
             kind: ConfigKind::String,

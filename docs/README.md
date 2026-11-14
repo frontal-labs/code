@@ -2,7 +2,7 @@
 
 Welcome to the Frontal Code CLI documentation hub. This comprehensive guide covers everything you need to know about using Frontal Code, the high-performance Rust-based AI agent harness.
 
-## 📚 Documentation Overview
+## Documentation Overview
 
 ### Getting Started
 - **[Quick Start](../README.md#quick-start)** - Get up and running in minutes
@@ -29,7 +29,7 @@ Welcome to the Frontal Code CLI documentation hub. This comprehensive guide cove
 - **[FAQ](./FAQ.md)** - Frequently asked questions
 - **[Development](../DEVELOPMENT.md)** - Contributing and development guide
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -71,7 +71,7 @@ frontal-code config set runtime.default_model "claude-sonnet-5-5"
 frontal-code config show
 ```
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 Frontal Code is built as a modular Rust workspace with the following key components:
 
@@ -98,15 +98,15 @@ Frontal Code is built as a modular Rust workspace with the following key compone
 
 ### Key Features
 
-- **🔧 Tool System**: Comprehensive built-in tools for file operations, shell commands, web access
-- **🔌 Plugin Architecture**: Extensible plugin system for custom tools and providers
-- **🛡️ Security**: Advanced permission system with sandboxing
-- **⚡ Performance**: Rust-based implementation with async I/O and caching
-- **🔄 MCP Support**: Model Context Protocol integration for external tools
-- **💾 Session Management**: Persistent sessions with resume capability
-- **📊 Monitoring**: Built-in performance monitoring and diagnostics
+- **Tool System**: Comprehensive built-in tools for file operations, shell commands, web access
+- **Plugin Architecture**: Extensible plugin system for custom tools and providers
+- **Security**: Advanced permission system with sandboxing
+- **Performance**: Rust-based implementation with async I/O and caching
+- **MCP Support**: Model Context Protocol integration for external tools
+- **Session Management**: Persistent sessions with resume capability
+- **Monitoring**: Built-in performance monitoring and diagnostics
 
-## 📖 Documentation Structure
+## Documentation Structure
 
 ### By User Role
 
@@ -155,7 +155,7 @@ Frontal Code is built as a modular Rust workspace with the following key compone
 - Troubleshooting
 - Monitoring and logging
 
-## 🛠️ Common Workflows
+## Common Workflows
 
 ### Development Workflow
 
@@ -205,7 +205,7 @@ frontal-code plugin test my-plugin
 frontal-code plugin publish
 ```
 
-## 🔍 Navigation Tips
+## Navigation Tips
 
 ### Finding Information
 
@@ -234,7 +234,7 @@ frontal-code tutorial start
 frontal-code tutorial list
 ```
 
-## 🤝 Contributing to Documentation
+## Contributing to Documentation
 
 ### How to Contribute
 
@@ -258,7 +258,7 @@ frontal-code tutorial list
 - **Videos** - Tutorial videos and screencasts
 - **Templates** - Configuration and workflow templates
 
-## 📞 Getting Help
+## Getting Help
 
 ### Built-in Help
 
@@ -285,7 +285,7 @@ frontal-code help repl
 
 For enterprise support and consulting, visit the Frontal Code website or contact the team directly.
 
-## 🗺️ Roadmap
+## Roadmap
 
 ### Documentation Roadmap
 
@@ -302,11 +302,11 @@ For enterprise support and consulting, visit the Frontal Code website or contact
 - **Enterprise features** - Documentation for enterprise deployments
 - **Performance tuning** - Advanced optimization guides
 
-## 📄 License
+## License
 
 This documentation is licensed under the same MIT license as the Frontal Code project. See the [LICENSE](../LICENSE.md) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Thanks to all contributors who have helped build and improve this documentation. Special thanks to the community for feedback, examples, and contributions.
 

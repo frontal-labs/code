@@ -100,8 +100,6 @@ pub struct FeatureConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiConfig {
-    pub theme: String,
-    pub enable_colors: bool,
     pub show_progress_bars: bool,
     pub confirm_dangerous_operations: bool,
 }
@@ -183,8 +181,6 @@ impl Default for ProjectConfig {
                 max_memory_usage_mb: 2048,
             },
             ui: UiConfig {
-                theme: "default".to_string(),
-                enable_colors: true,
                 show_progress_bars: true,
                 confirm_dangerous_operations: true,
             },

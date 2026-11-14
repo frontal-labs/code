@@ -61,7 +61,7 @@ Frontal Code now uses a centralized configuration system located at `config/proj
 - **Project settings**: name, version, description
 - **Runtime configuration**: default AI provider, timeouts, concurrency limits
 - **Feature flags**: telemetry, plugins, caching, metrics, tracing
-- **UI settings**: theme, colors, progress bars
+- **UI settings**: progress bars
 - **Service configuration**: database, Redis, memory settings
 - **Sandbox settings**: Docker configuration, execution limits
 

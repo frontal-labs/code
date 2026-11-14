@@ -26,6 +26,7 @@ filegroup(
         "//:Cargo.lock",
         "//:Cargo.toml",
         "//:config_project",
+        "//:docs/ANALYTICS.md",
         "//:mock_parity_scenarios.json",
         "//:.cargo/config.toml",
         "//:rust-toolchain.toml",

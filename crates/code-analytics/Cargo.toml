@@ -1,0 +1,24 @@
+[package]
+name = "code-analytics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# `posthog` pulls in the PostHog transport. Without it only the no-op and
+# in-memory sinks exist, and the crate has no network dependencies.
+default = ["posthog"]
+posthog = ["dep:posthog-rs"]
+
+[dependencies]
+code-telemetry = { path = "../code-telemetry" }
+serde_json.workspace = true
+uuid.workspace = true
+# `test-harness` only exposes `Client::pending_events()` (an empty feature with no
+# extra dependencies). The sink needs that count to wait for background retries
+# before shutdown. The version is pinned exactly, so this cannot drift silently.
+posthog-rs = { workspace = true, optional = true, features = ["test-harness"] }
+
+[lints]
+workspace = true

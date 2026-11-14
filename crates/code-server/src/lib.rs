@@ -5458,7 +5458,11 @@ mod tests {
     use std::path::PathBuf;
     use tower::util::ServiceExt;
 
-    const TEST_WEBHOOK_SECRET: &str = "test-webhook-secret";
+    fn random_webhook_secret() -> String {
+        let mut bytes = [0u8; 32];
+        getrandom::fill(&mut bytes).expect("OS entropy available");
+        hex::encode(bytes)
+    }
 
     fn sign_webhook_body(secret: &str, body: &[u8]) -> String {
         let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac accepts key");
@@ -5467,10 +5471,11 @@ mod tests {
     }
 
     /// Build a correctly signed webhook request for `source`.
-    fn webhook_request(
+    fn webhook_request_with_secret(
         source: &str,
         extra_headers: &[(&str, &str)],
         payload: &serde_json::Value,
+        secret: &str,
     ) -> Request<Body> {
         let body = serde_json::to_vec(payload).expect("payload should serialize");
         let mut builder = Request::builder()
@@ -5479,7 +5484,7 @@ mod tests {
             .header("content-type", "application/json")
             .header(
                 format!("x-{source}-signature"),
-                sign_webhook_body(TEST_WEBHOOK_SECRET, &body),
+                sign_webhook_body(secret, &body),
             );
         for (key, value) in extra_headers {
             builder = builder.header(*key, *value);
@@ -8859,10 +8864,8 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_webhook_route_correlates_pull_request_event_to_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -8896,7 +8899,7 @@ mod tests {
         let task_id = created["task_id"].as_str().unwrap().to_string();
 
         let webhook_response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[("x-github-event", "pull_request")],
                 &json!({
@@ -8921,6 +8924,7 @@ mod tests {
                         "login": "octocat"
                     }
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -8986,10 +8990,8 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_webhook_route_persists_closed_merge_state_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -9020,7 +9022,7 @@ mod tests {
         let task_id = created["task_id"].as_str().unwrap().to_string();
 
         let webhook_response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[("x-github-event", "pull_request")],
                 &json!({
@@ -9041,6 +9043,7 @@ mod tests {
                         "login": "octocat"
                     }
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9100,10 +9103,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_review_webhook_requests_followup_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -9134,7 +9135,7 @@ mod tests {
         let task_id = created["task_id"].as_str().unwrap().to_string();
 
         let webhook_response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[("x-github-event", "pull_request_review")],
                 &json!({
@@ -9155,6 +9156,7 @@ mod tests {
                         "login": "reviewer"
                     }
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9205,10 +9207,8 @@ mod tests {
     #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
     async fn github_review_approval_webhook_clears_followup_for_hosted_task() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -9251,7 +9251,7 @@ mod tests {
         );
 
         let webhook_response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[("x-github-event", "pull_request_review")],
                 &json!({
@@ -9272,6 +9272,7 @@ mod tests {
                         "login": "reviewer"
                     }
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9322,15 +9323,13 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_route_emits_unmatched_event_without_task_binding() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
         let response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[("x-github-event", "issue_comment")],
                 &json!({
@@ -9348,6 +9347,7 @@ mod tests {
                         "login": "reviewer"
                     }
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9384,7 +9384,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FRONTAL_CODE_LINEAR_WEBHOOK_SECRET", Some("secret"));
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_LINEAR_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
@@ -9427,7 +9428,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET", Some("secret"));
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
@@ -9470,10 +9472,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_matches_task_and_updates_context() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_LINEAR_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_LINEAR_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -9509,7 +9509,7 @@ mod tests {
 
         let webhook_response = router
             .clone()
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "linear",
                 &[],
                 &json!({
@@ -9522,6 +9522,7 @@ mod tests {
                     },
                     "actor": { "id": "user-1" }
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9545,21 +9546,20 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn linear_webhook_no_match_returns_accepted() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_LINEAR_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_LINEAR_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
         let response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "linear",
                 &[],
                 &json!({
                     "type": "issue.updated",
                     "issue": { "id": "iss_nonexistent", "identifier": "LIN-99" }
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9570,10 +9570,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_matches_task_and_updates_context() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
@@ -9608,7 +9606,7 @@ mod tests {
 
         let webhook_response = router
             .clone()
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "graphite",
                 &[],
                 &json!({
@@ -9618,6 +9616,7 @@ mod tests {
                     "base_branch": "main",
                     "actor": "user-1"
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9641,21 +9640,20 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn graphite_webhook_no_match_returns_accepted() {
         let _lock = CONNECTOR_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GRAPHITE_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::default());
         let router = app(state.clone());
 
         let response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "graphite",
                 &[],
                 &json!({
                     "type": "stack.updated",
                     "stack_id": "stack_nonexistent"
                 }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9666,7 +9664,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_rejects_invalid_signature_when_secret_set() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::new(10));
 
         let payload = json!({
@@ -9696,7 +9695,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn github_webhook_accepts_valid_x_hub_signature_256() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some("secret"));
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(ServerState::new(10));
 
         let payload = json!({
@@ -9713,7 +9713,7 @@ mod tests {
                     .uri("/v1/webhooks/github")
                     .header("content-type", "application/json")
                     .header("x-github-event", "pull_request")
-                    .header("x-hub-signature-256", sign_webhook_body("secret", &body))
+                    .header("x-hub-signature-256", sign_webhook_body(&secret, &body))
                     .body(Body::from(body))
                     .unwrap(),
             )
@@ -9868,14 +9868,16 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_rejects_delivery_when_no_secret_is_configured() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
+        let secret = random_webhook_secret();
         let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", None);
         let router = app(Arc::new(ServerState::default()));
 
         let response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[("x-github-event", "pull_request")],
                 &json!({ "action": "opened" }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9889,14 +9891,16 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_rejects_delivery_when_secret_is_blank() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
+        let secret = random_webhook_secret();
         let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some("   "));
         let router = app(Arc::new(ServerState::default()));
 
         let response = router
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[],
                 &json!({ "action": "opened" }),
+                &secret,
             ))
             .await
             .unwrap();
@@ -9951,10 +9955,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn webhook_routes_remain_public_when_control_plane_api_key_is_configured() {
         let _lock = GITHUB_WEBHOOK_ENV_LOCK.lock().unwrap();
-        let _secret = EnvVarGuard::set(
-            "FRONTAL_CODE_GITHUB_WEBHOOK_SECRET",
-            Some(TEST_WEBHOOK_SECRET),
-        );
+        let secret = random_webhook_secret();
+        let _secret = EnvVarGuard::set("FRONTAL_CODE_GITHUB_WEBHOOK_SECRET", Some(&secret));
         let state = Arc::new(
             ServerState::new(10).with_control_plane_api_key(Some("top-secret".to_string())),
         );
@@ -9966,10 +9968,11 @@ mod tests {
         });
 
         let response = super::app(state)
-            .oneshot(webhook_request(
+            .oneshot(webhook_request_with_secret(
                 "github",
                 &[("x-github-event", "pull_request")],
                 &payload,
+                &secret,
             ))
             .await
             .unwrap();

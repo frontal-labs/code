@@ -69,9 +69,15 @@ pub fn extract_signature(headers: &BTreeMap<String, String>, header_name: &str) 
 mod tests {
     use super::*;
 
+    fn random_secret() -> String {
+        let mut bytes = [0u8; 32];
+        getrandom::fill(&mut bytes).expect("OS entropy available");
+        hex::encode(bytes)
+    }
+
     #[test]
     fn test_hmac_signature_verification() {
-        let secret = "test_secret".to_string();
+        let secret = random_secret();
         let authenticator = HmacAuthenticator::new(secret, "X-Hub-Signature-256".to_string());
 
         let payload = b"test payload";
@@ -85,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_signature_format() {
-        let secret = "test_secret".to_string();
+        let secret = random_secret();
         let authenticator = HmacAuthenticator::new(secret, "X-Hub-Signature-256".to_string());
 
         let signature = authenticator.sign(b"test");

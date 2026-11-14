@@ -34,14 +34,14 @@ mod imp {
         Some(path)
     }
 
-    /// Escape a string for inclusion in a single-quoted `AppleScript` literal.
+    /// Escape a string for inclusion in a double-quoted `AppleScript` literal.
     /// `"` becomes `\"` and backslashes become `\\`; newlines are folded to
     /// spaces so the notification body stays one line.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn escape_applescript(value: &str) -> String {
         value
             .replace('\\', "\\\\")
-            .replace('"', "\\\\\"")
+            .replace('"', "\\\"")
             .replace(['\n', '\r'], " ")
     }
 
@@ -178,8 +178,17 @@ mod tests {
     #[test]
     #[cfg(target_os = "macos")]
     fn escape_applescript_escapes_quotes_and_backslashes() {
-        let escaped = imp::escape_applescript("say \"hi\" \\ there");
-        assert!(escaped.contains("\\\""));
-        assert!(escaped.contains("\\\\"));
+        // A double quote gets exactly one escaping backslash; a backslash is
+        // doubled. The full output is asserted so a regression to two backslashes
+        // before a quote (which would terminate the AppleScript string early)
+        // is caught.
+        assert_eq!(imp::escape_applescript("say \"hi\""), "say \\\"hi\\\"");
+        assert_eq!(imp::escape_applescript("a\\b"), "a\\\\b");
+        assert_eq!(
+            imp::escape_applescript("say \"hi\" \\ there"),
+            "say \\\"hi\\\" \\\\".to_string() + " there",
+        );
+        assert_eq!(imp::escape_applescript("line1\nline2"), "line1 line2");
+        assert_eq!(imp::escape_applescript("no special"), "no special");
     }
 }

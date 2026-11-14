@@ -26,6 +26,8 @@ futures-util = "0.3"
 code-events = { path = "../crates/code-events" }
 code-repo = { path = "../crates/code-repo" }
 pulldown-cmark = "0.13"
+similar = "2"
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
 ratatui = "0.30"
 rustyline = "19"
 code-runtime = { path = "../crates/code-runtime" }

@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -791,7 +791,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let mut permission_mode_override = None;
     let mut wants_help = false;
     let mut wants_version = false;
-    let mut wants_tui = false;
+    let mut wants_repl = false;
     let mut allowed_tool_values = Vec::new();
     let mut rest = Vec::new();
     let mut dash_p_prompt: Option<String> = None;
@@ -855,8 +855,8 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 permission_mode_override = Some(PermissionMode::DangerFullAccess);
                 index += 1;
             }
-            "--tui" => {
-                wants_tui = true;
+            "--repl" => {
+                wants_repl = true;
                 index += 1;
             }
             "-p" => {
@@ -927,16 +927,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
         rest.insert(0, "prompt".to_string());
     }
 
-    if wants_tui && rest.is_empty() {
-        let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
-        return Ok(CliAction::Repl {
-            model,
-            provider,
-            allowed_tools,
-            permission_mode,
-            tui: true,
-        });
-    }
     if rest.is_empty() {
         let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
         return Ok(CliAction::Repl {
@@ -944,7 +934,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             provider,
             allowed_tools,
             permission_mode,
-            tui: false,
+            tui: !wants_repl,
         });
     }
     if rest.first().map(String::as_str) == Some("--resume") {
@@ -5583,7 +5573,8 @@ fn run_repl_with_provider(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut cli =
         LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?;
-    if tui {
+    // The full-screen TUI needs a real terminal; piped input and output use the REPL.
+    if tui && io::stdin().is_terminal() && io::stdout().is_terminal() {
         return cli.run_tui();
     }
     drive_repl(cli)
@@ -12064,7 +12055,7 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
     writeln!(out, "  --allowedTools TOOLS       Restrict enabled tools (repeatable; comma-separated aliases supported)")?;
     writeln!(
         out,
-        "  --tui                      Start the REPL in full-screen TUI mode"
+        "  --repl                     Use the line-based REPL instead of the full-screen TUI"
     )?;
     writeln!(
         out,
@@ -12498,7 +12489,7 @@ mod tests {
                 provider: None,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
-                tui: false,
+                tui: true,
             }
         );
     }
@@ -12845,7 +12836,7 @@ mod tests {
                 provider: None,
                 allowed_tools: None,
                 permission_mode: PermissionMode::ReadOnly,
-                tui: false,
+                tui: true,
             }
         );
     }
@@ -12875,7 +12866,7 @@ mod tests {
                         .collect()
                 ),
                 permission_mode: crate::default_permission_mode(),
-                tui: false,
+                tui: true,
             }
         );
     }

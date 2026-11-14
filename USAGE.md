@@ -128,6 +128,16 @@ frontal-code
 /doctor
 ```
 
+### Interactive session (full-screen TUI)
+
+Running `frontal-code` with no arguments opens the full-screen TUI. Use `frontal-code --repl`
+for the line-based REPL. Piped input and output always use the REPL.
+
+The TUI has a top bar with buttons (Model, Mode, Sessions, Trace, Help), a scrollable
+conversation, an optional trace panel (Ctrl-T) that logs timings, usage, and permission
+decisions, and the composer. Press `F1` or `?` for the full shortcut list, and `Ctrl-K` for
+the command palette.
+
 ### Interactive REPL
 
 ```bash

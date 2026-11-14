@@ -8,8 +8,12 @@
     "helpers:pinGitHubActionDigests"
   ],
   "labels": ["dependencies", "devops"],
-  "dependencyDashboardLabels": ["dependencies", "devops"],
-  "vulnerabilityAlerts": false,
+  "dependencyDashboard": {
+    "labels": ["dependencies", "devops"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": false
+  },
   "prConcurrentLimit": 10,
   "prHourlyLimit": 2,
   "rangeStrategy": "bump",
@@ -24,7 +28,7 @@
     "**/.frontal-code/**",
     "**/vendor/**"
   ],
-  "postUpdateOptions": ["gomodTidy", "cargoUpdateLockFile"],
+  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
       "description": "Group all non-major dev/runtime dependency updates into a single PR.",

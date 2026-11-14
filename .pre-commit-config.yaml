@@ -82,7 +82,12 @@ repos:
 
       - id: renovate-config-validator
         name: renovate config validator
-        entry: npx --yes --package renovate -- renovate-config-validator renovate.json
+        # Pin to renovate@44 to match the Renovate major pinned in
+        # .github/workflows/renovate.yml (renovate-version: "44"). The latest
+        # stable major validates a different option schema and rejects config
+        # that the pinned runtime accepts (e.g. cargoUpdateLockFile handling
+        # and dependencyDashboard option shape differ between majors).
+        entry: npx --yes --package renovate@44 -- renovate-config-validator renovate.json
         language: system
         files: '^(renovate\.json|\.github/renovate\.json)$'
         pass_filenames: false

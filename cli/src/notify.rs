@@ -46,7 +46,8 @@ mod imp {
     }
 
     /// Build the `terminal-notifier` argv when the binary is on `PATH`.
-    fn terminal_notifier_args(
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn terminal_notifier_args(
         title: &str,
         subtitle: &str,
         body: &str,
@@ -63,7 +64,7 @@ mod imp {
             args.push(subtitle.to_string());
         }
         if let Some(icon) = icon {
-            args.push("-content-image".to_string());
+            args.push("-contentImage".to_string());
             args.push(icon.to_string_lossy().into_owned());
         }
         args
@@ -190,5 +191,18 @@ mod tests {
         );
         assert_eq!(imp::escape_applescript("line1\nline2"), "line1 line2");
         assert_eq!(imp::escape_applescript("no special"), "no special");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn terminal_notifier_args_uses_content_image_spelling() {
+        let icon = std::path::PathBuf::from("/tmp/logo.png");
+        let args = imp::terminal_notifier_args("Title", "model", "body", Some(&icon));
+        // terminal-notifier uses the camelCase `-contentImage` option (not the
+        // kebab-case `-content-image`), which is how the logo is attached.
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["-contentImage", "/tmp/logo.png"]));
+        assert!(!args.iter().any(|a| a == "-content-image"));
     }
 }

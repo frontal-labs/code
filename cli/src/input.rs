@@ -323,6 +323,7 @@ impl LineEditor {
                     .last_ctrl_c
                     .is_some_and(|at| at.elapsed() < EXIT_CONFIRM_WINDOW);
                 if armed {
+                    crate::analytics::mark_interrupted();
                     return Ok(ReadOutcome::Exit);
                 }
                 self.last_ctrl_c = Some(Instant::now());

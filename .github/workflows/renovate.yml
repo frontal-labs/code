@@ -15,8 +15,9 @@ on:
       - .github/workflows/renovate.yml
 
 # Renovate needs write access to open/update PRs and manage its own branches.
-# security-events: read is required so Renovate can access vulnerability alerts
-# and include advisory info in its dependency dashboard.
+# security-events: read is granted so that if Dependabot security alerts are
+# enabled at the org level, Renovate can read them. vulnerabilityAlerts is
+# currently disabled in renovate.json (Dependabot is not enabled for this repo).
 permissions:
   contents: write
   pull-requests: write
@@ -37,6 +38,11 @@ jobs:
         uses: renovatebot/github-action@v42.0.3
         with:
           configurationFile: renovate.json
+          # Pin Renovate to major 44 (latest stable). The action defaults to
+          # major 40, which has a crates.io version-metadata bug
+          # (renovatebot/renovate#37537) that causes "Release interceptor
+          # failed for crate" warnings. Fixed in Renovate 41+.
+          renovate-version: "44"
           token: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}
         env:
           RENOVATE_REPOSITORIES: ${{ github.repository }}

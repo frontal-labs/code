@@ -9,6 +9,7 @@
   ],
   "labels": ["dependencies", "devops"],
   "dependencyDashboardLabels": ["dependencies", "devops"],
+  "vulnerabilityAlerts": false,
   "prConcurrentLimit": 10,
   "prHourlyLimit": 2,
   "rangeStrategy": "bump",

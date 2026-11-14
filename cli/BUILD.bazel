@@ -5,7 +5,10 @@ filegroup(
     srcs = glob(
         ["**/*.rs"],
         exclude = ["**/target/**"],
-    ) + ["Cargo.toml"],
+    ) + [
+        "Cargo.toml",
+        "assets/logo.png",
+    ],
 )
 
 filegroup(

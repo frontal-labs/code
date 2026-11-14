@@ -9,6 +9,7 @@
     clippy::needless_pass_by_value,
     clippy::too_many_arguments
 )]
+mod analytics;
 mod auth;
 mod init;
 mod input;
@@ -146,16 +147,103 @@ fn main() {
 Run `frontal-code --help` for usage."
             );
         }
-        std::process::exit(1);
+        analytics::exit(1);
     }
+    analytics::shutdown();
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().skip(1).collect();
+    let mut args: Vec<String> = env::args().skip(1).collect();
+    let no_analytics = remove_flag(&mut args, "--no-analytics");
     let action = parse_args(&args)?;
+    if matches!(action, CliAction::Repl { .. }) {
+        analytics::prompt_first_run(no_analytics);
+    }
+    analytics::init(no_analytics);
     if !matches!(action, CliAction::Repl { .. }) {
         print_ignored_settings_warnings();
     }
+
+    let command = analytics_command(&action);
+    let session_mode = analytics_session_mode(&action);
+    let started = Instant::now();
+    if let Some(mode) = session_mode {
+        analytics::capture(&code_analytics::Event::SessionStarted { mode });
+    }
+    let result = dispatch(action);
+    let succeeded = result.is_ok();
+    if session_mode.is_some() {
+        analytics::capture(&code_analytics::Event::SessionEnded {
+            duration_secs: code_analytics::duration_secs(started.elapsed()),
+            turns: analytics::client().turns_completed(),
+            exit: match (succeeded, analytics::was_interrupted()) {
+                (true, false) => code_analytics::ExitKind::Ok,
+                (true, true) => code_analytics::ExitKind::Interrupted,
+                (false, _) => code_analytics::ExitKind::Error,
+            },
+        });
+    }
+    analytics::capture(&code_analytics::Event::CommandRun {
+        command,
+        outcome: code_analytics::Outcome::from_success(succeeded),
+        duration_ms: code_analytics::duration_ms(started.elapsed()),
+    });
+    result
+}
+
+/// Removes every occurrence of a boolean flag and reports whether it was present.
+fn remove_flag(args: &mut Vec<String>, flag: &str) -> bool {
+    let before = args.len();
+    args.retain(|arg| arg != flag);
+    args.len() != before
+}
+
+#[cfg(test)]
+mod remove_flag_tests {
+    use super::remove_flag;
+
+    #[test]
+    fn removes_every_occurrence_and_reports_presence() {
+        let mut args = vec!["--no-analytics".to_string(), "version".to_string()];
+        assert!(remove_flag(&mut args, "--no-analytics"));
+        assert_eq!(args, vec!["version".to_string()]);
+        assert!(!remove_flag(&mut args, "--no-analytics"));
+    }
+}
+
+fn analytics_command(action: &CliAction) -> code_analytics::CommandKind {
+    use code_analytics::CommandKind;
+    match action {
+        CliAction::Prompt { .. } => CommandKind::Prompt,
+        CliAction::Repl { .. } => CommandKind::Repl,
+        CliAction::Doctor { .. } => CommandKind::Doctor,
+        CliAction::Init { .. } => CommandKind::Init,
+        CliAction::Status { .. } => CommandKind::Status,
+        CliAction::Config { .. } => CommandKind::Config,
+        CliAction::Login { .. } => CommandKind::Login,
+        CliAction::Logout { .. } => CommandKind::Logout,
+        CliAction::Plugins { .. } => CommandKind::Plugins,
+        CliAction::Mcp { .. } => CommandKind::Mcp,
+        CliAction::Skills { .. } => CommandKind::Skills,
+        CliAction::Agents { .. } => CommandKind::Agents,
+        CliAction::Hosted { .. } => CommandKind::Hosted,
+        CliAction::Telemetry { .. } => CommandKind::Telemetry,
+        _ => CommandKind::Other,
+    }
+}
+
+fn analytics_session_mode(action: &CliAction) -> Option<code_analytics::SessionMode> {
+    use code_analytics::SessionMode;
+    match action {
+        CliAction::Prompt { .. } => Some(SessionMode::Prompt),
+        CliAction::Repl { .. } => Some(SessionMode::Repl),
+        CliAction::ResumeSession { .. } => Some(SessionMode::Resume),
+        CliAction::Hosted { .. } => Some(SessionMode::Hosted),
+        _ => None,
+    }
+}
+
+fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
     match action {
         CliAction::DumpManifests { output_format } => dump_manifests(output_format)?,
         CliAction::BootstrapPlan { output_format } => print_bootstrap_plan(output_format)?,
@@ -206,7 +294,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         CliAction::Sandbox { output_format } => print_sandbox_status_snapshot(output_format)?,
         CliAction::Login { provider } => {
             let cwd = env::current_dir()?;
-            println!("{}", auth::login(&provider, &cwd)?);
+            let result = auth::login(&provider, &cwd);
+            analytics::capture(&code_analytics::Event::LoginCompleted {
+                provider: analytics::provider_for_name(&provider),
+                outcome: code_analytics::Outcome::from_success(result.is_ok()),
+            });
+            println!("{}", result?);
         }
         CliAction::Logout { provider } => println!("{}", auth::logout(&provider)?),
         CliAction::AuthStatus => println!("{}", auth::status()?),
@@ -317,15 +410,27 @@ fn telemetry_config_entry(
 fn build_cli_session_tracer(
     session_id: &str,
     runtime_config: Option<&code_runtime::RuntimeConfig>,
+    model: &str,
+    provider: Option<&str>,
 ) -> Option<SessionTracer> {
     let resolution = resolve_telemetry_config(runtime_config);
-    if !resolution.enabled {
+    let local_sink: Option<Arc<dyn code_telemetry::TelemetrySink>> = if resolution.enabled {
+        resolution
+            .path
+            .and_then(|path| JsonlTelemetrySink::new(path).ok())
+            .map(|sink| Arc::new(sink) as Arc<dyn code_telemetry::TelemetrySink>)
+    } else {
+        None
+    };
+
+    let analytics_client = analytics::client();
+    if local_sink.is_none() && !analytics_client.is_enabled() {
         return None;
     }
-    resolution
-        .path
-        .and_then(|path| JsonlTelemetrySink::new(path).ok())
-        .map(|sink| SessionTracer::new(session_id.to_string(), Arc::new(sink)))
+
+    let provider = analytics::provider_for_session(model, provider);
+    let sink = code_analytics::AnalyticsTelemetrySink::new(local_sink, analytics_client, provider);
+    Some(SessionTracer::new(session_id.to_string(), Arc::new(sink)))
 }
 
 fn attach_session_tracer(
@@ -2406,11 +2511,11 @@ fn render_doctor_report() -> Result<DoctorReport, Box<dyn std::error::Error>> {
 
     // Add core configuration information to the report
     let core_info = format!(
-        "Core Configuration:\n  Default Provider: {}\n  Max Concurrent Requests: {}\n  Request Timeout: {}s\n  Telemetry Enabled: {}\n  Plugins Enabled: {}\n  Caching Enabled: {}",
+        "Core Configuration:\n  Default Provider: {}\n  Max Concurrent Requests: {}\n  Request Timeout: {}s\n  Product Analytics: {}\n  Plugins Enabled: {}\n  Caching Enabled: {}",
         config_manager.default_provider(),
         config_manager.max_concurrent_requests(),
         config_manager.request_timeout_seconds(),
-        config_manager.is_telemetry_enabled(),
+        analytics::client().is_enabled(),
         config_manager.are_plugins_enabled(),
         config_manager.is_caching_enabled()
     );
@@ -2439,8 +2544,8 @@ fn check_core_config_health(config_manager: &ConfigurationManager) -> Diagnostic
             config_manager.request_timeout_seconds()
         ),
         format!(
-            "Telemetry enabled: {}",
-            config_manager.is_telemetry_enabled()
+            "Product analytics enabled: {}",
+            analytics::client().is_enabled()
         ),
         format!("Plugins enabled: {}", config_manager.are_plugins_enabled()),
         format!("Caching enabled: {}", config_manager.is_caching_enabled()),
@@ -2476,8 +2581,8 @@ fn check_core_config_health(config_manager: &ConfigurationManager) -> Diagnostic
             json!(config_manager.request_timeout_seconds()),
         ),
         (
-            "telemetry_enabled".to_string(),
-            json!(config_manager.is_telemetry_enabled()),
+            "analytics_enabled".to_string(),
+            json!(analytics::client().is_enabled()),
         ),
         (
             "plugins_enabled".to_string(),
@@ -4797,7 +4902,7 @@ fn resume_session(session_path: &Path, commands: &[String], output_format: CliOu
             Ok(handle) => handle.path,
             Err(error) => {
                 eprintln!("failed to restore session: {error}");
-                std::process::exit(1);
+                analytics::exit(1);
             }
         }
     };
@@ -4806,7 +4911,7 @@ fn resume_session(session_path: &Path, commands: &[String], output_format: CliOu
         Ok(session) => session,
         Err(error) => {
             eprintln!("failed to restore session: {error}");
-            std::process::exit(1);
+            analytics::exit(1);
         }
     };
 
@@ -4825,11 +4930,11 @@ fn resume_session(session_path: &Path, commands: &[String], output_format: CliOu
             Ok(Some(command)) => command,
             Ok(None) => {
                 eprintln!("unsupported resumed command: {raw_command}");
-                std::process::exit(2);
+                analytics::exit(2);
             }
             Err(error) => {
                 eprintln!("{error}");
-                std::process::exit(2);
+                analytics::exit(2);
             }
         };
         match run_resume_command(&resolved_path, &session, &command) {
@@ -4855,7 +4960,7 @@ fn resume_session(session_path: &Path, commands: &[String], output_format: CliOu
             }
             Err(error) => {
                 eprintln!("{error}");
-                std::process::exit(2);
+                analytics::exit(2);
             }
         }
     }
@@ -8911,6 +9016,10 @@ fn print_telemetry_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let action = action.unwrap_or("status");
     match action {
+        "reset-id" => {
+            analytics::reset_install_id()?;
+            println!("Analytics install ID reset. A new anonymous ID is created on the next event.");
+        }
         "status" => {
             let (_cwd, runtime_config) = load_runtime_config_for_current_dir_or_empty()?;
             match output_format {
@@ -8978,6 +9087,8 @@ fn render_telemetry_report(target: Option<&str>) -> Result<String, Box<dyn std::
         lines.push("Effective telemetry".to_string());
     }
     lines.extend(telemetry_text_detail_lines(&resolution, &runtime_config));
+    lines.push("Product analytics".to_string());
+    lines.push(report_row("Status", analytics::status_line()));
     Ok(lines.join("\n"))
 }
 
@@ -10064,7 +10175,7 @@ fn build_runtime_with_plugin_state(
         mcp_state,
     } = runtime_plugin_state;
     plugin_registry.initialize()?;
-    let session_tracer = build_cli_session_tracer(session_id, Some(&runtime_config));
+    let session_tracer = build_cli_session_tracer(session_id, Some(&runtime_config), &model, None);
     let tool_registry = match session_tracer.clone() {
         Some(tracer) => tool_registry.with_session_tracer(tracer),
         None => tool_registry,
@@ -10145,7 +10256,12 @@ fn build_runtime_with_plugin_state_and_provider(
         mcp_state,
     } = runtime_plugin_state;
     plugin_registry.initialize()?;
-    let session_tracer = build_cli_session_tracer(session_id, Some(&runtime_config));
+    let session_tracer = build_cli_session_tracer(
+        session_id,
+        Some(&runtime_config),
+        &model,
+        provider.as_deref(),
+    );
     let tool_registry = match session_tracer.clone() {
         Some(tracer) => tool_registry.with_session_tracer(tracer),
         None => tool_registry,
@@ -12051,6 +12167,10 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
     writeln!(
         out,
         "  --dangerously-skip-permissions  Skip all permission checks"
+    )?;
+    writeln!(
+        out,
+        "  --no-analytics             Do not send product analytics for this run (see docs/ANALYTICS.md)"
     )?;
     writeln!(out, "  --allowedTools TOOLS       Restrict enabled tools (repeatable; comma-separated aliases supported)")?;
     writeln!(

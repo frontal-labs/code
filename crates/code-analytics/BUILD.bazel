@@ -1,0 +1,60 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(
+        ["**/*.rs"],
+        exclude = ["**/target/**"],
+    ) + ["Cargo.toml"],
+)
+
+filegroup(
+    name = "test_srcs",
+    srcs = glob(["tests/**/*.rs"]),
+)
+
+sh_test(
+    name = "test",
+    timeout = "eternal",
+    srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
+    args = [
+        "code-analytics",
+        "test",
+    ],
+    tags = [
+        "rust",
+        "test",
+    ],
+    local = 1,
+)
+
+sh_test(
+    name = "fmt",
+    size = "small",
+    srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
+    args = [
+        "code-analytics",
+        "fmt-check",
+    ],
+    tags = [
+        "fmt",
+        "rust",
+    ],
+)
+
+sh_test(
+    name = "lint",
+    timeout = "eternal",
+    srcs = ["//tools:crate.sh"],
+    data = ["//:cargo_workspace"],
+    args = [
+        "code-analytics",
+        "clippy",
+    ],
+    tags = [
+        "lint",
+        "rust",
+    ],
+)

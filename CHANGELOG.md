@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Opt-in, anonymous product analytics through the new `code-analytics` crate, sent to PostHog. It is off by default. Opt in with `"analytics": { "enabled": true }` in user settings, or `FRONTAL_CODE_ANALYTICS_ENABLED=1`. Seven events cover sessions, commands, turns, tools, errors, and logins. No prompts, paths, tool arguments, or error text are sent. See `docs/ANALYTICS.md` for the full list and the opt-out options (`FRONTAL_CODE_ANALYTICS_DISABLED`, `DO_NOT_TRACK`, `CI`, `--no-analytics`).
+- The interactive REPL asks once whether to share anonymous usage events. The default is no, and the answer is saved to user settings. `frontal-code telemetry reset-id` deletes the anonymous install ID.
+
+### Removed
+- `features.enable_telemetry` in the core project config. The CLI never read it, so it changed nothing. Config files that still contain the key load as before. Use `analytics.enabled` for product analytics, or `telemetry` for local event tracing.
+
 ## [0.2.2] - 2026-11-11
 
 ### Added

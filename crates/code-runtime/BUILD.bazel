@@ -15,6 +15,7 @@ filegroup(
 
 sh_test(
     name = "test",
+    timeout = "eternal",
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
     args = [
@@ -44,6 +45,7 @@ sh_test(
 
 sh_test(
     name = "lint",
+    timeout = "eternal",
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
     args = [

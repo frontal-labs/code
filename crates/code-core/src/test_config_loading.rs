@@ -19,7 +19,6 @@ mod tests {
                     config.runtime.max_concurrent_requests
                 );
                 println!("Cache directory: {}", config.paths.cache_dir);
-                println!("Telemetry enabled: {}", config.features.enable_telemetry);
             }
             Err(e) => {
                 println!("Could not load config file (this is expected in CI): {e}");

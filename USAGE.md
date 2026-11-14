@@ -65,7 +65,6 @@ The system looks for `project.json` in this order:
     "log_level": "info"
   },
   "features": {
-    "enable_telemetry": true,
     "enable_plugins": true,
     "enable_caching": true,
     "enable_metrics": true,

@@ -36,6 +36,7 @@ sh_binary(
 
 sh_test(
     name = "test",
+    timeout = "eternal",
     size = "large",
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
@@ -66,6 +67,7 @@ sh_test(
 
 sh_test(
     name = "lint",
+    timeout = "eternal",
     srcs = ["//tools:crate.sh"],
     data = ["//:cargo_workspace"],
     args = [

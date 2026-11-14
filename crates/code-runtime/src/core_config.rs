@@ -98,12 +98,6 @@ impl ConfigurationManager {
         &self.core_config.runtime.log_level
     }
 
-    /// Check if telemetry is enabled from core config
-    #[must_use]
-    pub fn is_telemetry_enabled(&self) -> bool {
-        self.core_config.features.enable_telemetry
-    }
-
     /// Check if plugins are enabled from core config
     #[must_use]
     pub fn are_plugins_enabled(&self) -> bool {
@@ -195,7 +189,6 @@ mod tests {
         assert_eq!(config.runtime.log_level, "info");
 
         // Test feature flags
-        assert!(config.features.enable_telemetry);
         assert!(config.features.enable_plugins);
         assert!(config.features.enable_caching);
         assert!(config.features.enable_metrics);

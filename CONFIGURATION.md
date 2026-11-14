@@ -55,7 +55,6 @@ The main configuration file is `config/project.json`:
   },
   "features": {
     "auto_compaction_threshold": 100,
-    "enable_telemetry": true,
     "enable_plugins": true,
     "enable_caching": true,
     "enable_metrics": true,
@@ -109,7 +108,6 @@ The main configuration file is `config/project.json`:
 - `logs_dir`: Logs directory
 
 #### Features
-- `enable_telemetry`: Enable telemetry collection
 - `enable_plugins`: Enable plugin system
 - `enable_caching`: Enable response caching
 - `enable_metrics`: Enable metrics collection
@@ -155,7 +153,6 @@ let config = ProjectConfig::load_or_default();
 
 // Access configuration values
 println!("Default provider: {}", config.runtime.default_provider);
-println!("Telemetry enabled: {}", config.features.enable_telemetry);
 
 // Provider-specific methods
 if config.is_provider_enabled("anthropic") {
@@ -206,7 +203,11 @@ export RUSTY_CLAUDE_PERMISSION_MODE="workspace-write"
 export FRONTAL_CODE_LOG_LEVEL="debug"
 
 # Feature flags
-export FRONTAL_CODE_ENABLE_TELEMETRY="false"
+# Product analytics is off unless opted in. These force it off.
+export FRONTAL_CODE_ANALYTICS_DISABLED="1"
+export DO_NOT_TRACK="1"
+# Local JSONL event tracing (stays on this machine)
+export FRONTAL_CODE_TELEMETRY_PATH="$HOME/.frontal-code/telemetry.jsonl"
 export FRONTAL_CODE_ENABLE_PLUGINS="true"
 export FRONTAL_CODE_ENABLE_CACHING="true"
 
@@ -438,7 +439,6 @@ if enabled_providers == 0 {
     "permission_mode": "workspace-write"
   },
   "features": {
-    "enable_telemetry": false,
     "enable_tracing": true,
     "enable_hot_reload": true
   },
@@ -461,7 +461,6 @@ if enabled_providers == 0 {
     "request_timeout_seconds": 60
   },
   "features": {
-    "enable_telemetry": true,
     "enable_tracing": true,
     "enable_hot_reload": false
   },
@@ -482,7 +481,6 @@ if enabled_providers == 0 {
     "default_provider": "anthropic"
   },
   "features": {
-    "enable_telemetry": false,
     "enable_plugins": false,
     "enable_caching": false,
     "enable_metrics": false

@@ -78,11 +78,11 @@ pub use compact::{
 };
 pub use config::parse_permission_mode_label;
 pub use config::{
-    ConfigEntry, ConfigError, ConfigLoader, ConfigSource, McpConfigCollection,
+    default_config_home, ConfigEntry, ConfigError, ConfigLoader, ConfigSource, McpConfigCollection,
     McpManagedProxyServerConfig, McpOAuthConfig, McpRemoteServerConfig, McpSdkServerConfig,
     McpServerConfig, McpStdioServerConfig, McpTransport, McpWebSocketServerConfig, OAuthConfig,
-    ResolvedPermissionMode, RuntimeConfig, RuntimeFeatureConfig, RuntimeHookConfig,
-    RuntimePermissionRuleConfig, RuntimePluginConfig, RuntimeTelemetryConfig,
+    ResolvedPermissionMode, RuntimeAnalyticsConfig, RuntimeConfig, RuntimeFeatureConfig,
+    RuntimeHookConfig, RuntimePermissionRuleConfig, RuntimePluginConfig, RuntimeTelemetryConfig,
     ScopedMcpServerConfig, FRONTAL_CODE_SETTINGS_SCHEMA_NAME,
 };
 pub use conversation::{

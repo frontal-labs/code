@@ -18,10 +18,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         "  Max concurrent requests: {}",
         core_config.runtime.max_concurrent_requests
     );
-    println!(
-        "  Telemetry enabled: {}",
-        core_config.features.enable_telemetry
-    );
 
     let config = ApiServiceConfig::from_env()?;
     code_api::service::serve(config).await

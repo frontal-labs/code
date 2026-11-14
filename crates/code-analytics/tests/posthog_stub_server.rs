@@ -236,15 +236,61 @@ fn retries_after_a_server_error() {
     assert!(bodies.iter().all(|body| body.contains("error_occurred")));
 }
 
+/// A host that accepts a connection and immediately closes it, so every
+/// request fails fast with a connection error on every platform.
+///
+/// Binding a port and dropping the listener is *not* enough: on Windows a
+/// connect to that port can hang for minutes instead of being refused, which
+/// turns the bounded-shutdown assertion into a multi-minute stall.
+struct RefusingHost {
+    url: String,
+    stop: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl RefusingHost {
+    fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("probe should bind");
+        listener
+            .set_nonblocking(true)
+            .expect("probe should be non-blocking");
+        let url = format!("http://{}", listener.local_addr().expect("local addr"));
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread_stop = Arc::clone(&stop);
+        let handle = thread::spawn(move || {
+            while !thread_stop.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    // Drop the accepted stream: the client sees the connection
+                    // closed mid-request, which is a fast, portable failure.
+                    Ok((_, _)) => {}
+                    Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        Self {
+            url,
+            stop,
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for RefusingHost {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 #[test]
 fn capture_never_blocks_and_shutdown_is_bounded_when_host_is_down() {
-    // Bind then drop to get a port that refuses connections.
-    let port = TcpListener::bind("127.0.0.1:0")
-        .expect("probe should bind")
-        .local_addr()
-        .expect("local addr")
-        .port();
-    let client = enabled_builder(&format!("http://127.0.0.1:{port}")).build();
+    let host = RefusingHost::start();
+    let client = enabled_builder(&host.url).build();
 
     let capture_started = Instant::now();
     for _ in 0..200 {

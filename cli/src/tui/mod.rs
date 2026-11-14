@@ -1,65 +1,73 @@
 //! Full-screen TUI for the interactive REPL (`frontal-code --tui`).
 //!
-//! The TUI renders a Claude-Code-style conversation: a header with the model,
-//! a live transcript (assistant text, tool calls, tool results, and captured
-//! slash command output appear as the turn runs), a status bar with provider /
-//! mode / context / cost, and an inline composer with history at the bottom.
+//! The TUI shows the same interface as the line-based REPL. The conversation
+//! scrolls above a frame drawn like the REPL's: a rule, the `❯` input row, a
+//! rule, and the footer (model, access, branch, mode, and context). Banner,
+//! tool headlines, tool results, turn summaries, shortcuts, and permission
+//! prompts are the REPL's own strings, rendered through [`ansi`].
 //!
 //! Architecture: a single UI thread owns the terminal. Turns run on a worker
-//! thread through the same runtime entry points the line-based REPL uses
-//! (`prepare_turn_runtime` + `run_turn_stream`); the worker ships [`UiEvent`]s
-//! over an `mpsc` channel and the UI thread applies them to shared
-//! [`TuiState`]. The finished runtime is handed back over a return channel and
-//! reinstalled into the CLI, so sessions keep accumulating across turns
-//! exactly like the line-based REPL. Slash commands run inline on the UI
-//! thread (their output is captured into the transcript, or a banner explains
-//! when a command must run in the line-based REPL).
+//! thread through the same runtime entry points the REPL uses
+//! (`prepare_turn_runtime` + `run_turn_stream`). The worker ships [`UiEvent`]s
+//! over an `mpsc` channel, including each tool result as it completes, and the
+//! UI thread applies them to shared [`TuiState`]. Keys that need the CLI
+//! (permission mode, completion, clearing) become [`Action`]s the UI thread
+//! applies between frames.
 
+mod ansi;
 mod transcript;
 
-use std::io::{self, Read, Write};
+use std::fmt::Write as _;
+use std::io::{self, Write};
+use std::path::PathBuf;
+use std::process::Command as ProcessCommand;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use crossterm::event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::{Frame, Terminal};
+use rustyline::history::{DefaultHistory, History};
 
 use code_runtime::{
-    pricing_for_model, AssistantEvent, ContentBlock, EventSink, PermissionMode,
-    PermissionPromptDecision, PermissionPrompter, PermissionRequest,
+    pricing_for_model, AssistantEvent, EventSink, PermissionMode, PermissionPromptDecision,
+    PermissionPrompter, PermissionRequest, TokenUsage,
 };
 
-use crate::tui::transcript::{ToolStatus, Transcript};
-use crate::{format_auto_compaction_notice, LiveCli, SlashCommand};
+use crate::tui::transcript::Transcript;
+use crate::{
+    collect_tool_uses, format_auto_compaction_notice, format_turn_summary, mentions, LiveCli,
+    SlashCommand,
+};
 
 type CrosstermTerminal = Terminal<CrosstermBackend<io::Stdout>>;
 
+/// A second Ctrl-C within this window exits, as in the REPL.
+const EXIT_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
+/// The theme's spinner blue, as in the REPL.
+const SPINNER_COLOR: Color = Color::Indexed(33);
+const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const MAX_COMPLETION_LIST: usize = 12;
+
 /// Runs the full-screen TUI on `cli` and returns when the user exits.
 ///
-/// `run_slash_command` is a thin callback into [`LiveCli`] that handles one
-/// parsed slash command, writing its output into `buffer`. Keeping it as a
-/// callback means this module never reaches into `LiveCli`'s private fields
-/// except through the accessors declared on `LiveCli` itself.
+/// `run_slash_command` handles one parsed slash command, writing its output into
+/// `buffer`, so this module never reaches into `LiveCli`'s private fields.
 pub(crate) fn run<F>(
     cli: &mut LiveCli,
     run_slash_command: &mut F,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: FnMut(
-        &mut LiveCli,
-        SlashCommand,
-        &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>>,
+    F: FnMut(&mut LiveCli, SlashCommand, &mut Vec<u8>) -> Result<bool, Box<dyn std::error::Error>>,
 {
     if !terminal_supported() {
         return Err(
@@ -69,13 +77,11 @@ where
     }
 
     let mut terminal = prepare_terminal()?;
-    let state = Arc::new(Mutex::new(TuiState::from_cli(cli)));
+    let state = Arc::new(Mutex::new(TuiState::new(cli)));
+    lock(&state).transcript.push_ansi(&cli.startup_banner());
     let result = run_loop(cli, &mut terminal, &state, run_slash_command);
     teardown_terminal(&mut terminal);
-    let should_persist = state
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .should_persist;
+    let should_persist = lock(&state).should_persist;
     if should_persist {
         let _ = cli.persist_session();
     }
@@ -86,51 +92,78 @@ where
 // Screen state
 // ---------------------------------------------------------------------------
 
+/// A permission request waiting for the user's y, n, or a.
+struct PendingPermission {
+    tool: String,
+}
+
+/// Work that needs the CLI, requested by a key and applied by the UI loop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Action {
+    CyclePermission,
+    ClearScreen,
+    Complete,
+}
+
 struct TuiState {
-    model: String,
-    provider: String,
-    mode: String,
-    context_tokens: usize,
-    cost_usd: f64,
     transcript: Transcript,
+    footer: String,
     draft: String,
     cursor: usize,
     history: Vec<String>,
     history_cursor: Option<usize>,
+    history_path: Option<PathBuf>,
+    completions: Vec<String>,
+    mention_paths: Vec<String>,
     busy: bool,
+    turn_started: Option<Instant>,
     frame_index: usize,
-    status_line: Option<String>,
-    error: Option<String>,
+    permission: Option<PendingPermission>,
+    permission_tx: Option<Sender<char>>,
+    ctrl_c_armed: Option<Instant>,
+    pending_action: Option<Action>,
     quit: bool,
     should_persist: bool,
-    session_started: Instant,
-    turn_started: Option<Instant>,
 }
 
 impl TuiState {
-    fn from_cli(cli: &LiveCli) -> Self {
-        Self {
-            model: cli.model().to_string(),
-            provider: cli.provider().map_or_else(|| "default".to_string(), str::to_string),
-            mode: cli.permission_mode().as_str().to_string(),
-            context_tokens: cli.estimated_tokens(),
-            cost_usd: cli.cumulative_cost_usd(),
+    fn new(cli: &LiveCli) -> Self {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let history_path = crate::ConfigLoader::default_for(&cwd)
+            .config_home()
+            .join("repl_history");
+        let mut history = DefaultHistory::new();
+        let _ = history.load(&history_path);
+        let mut state = Self {
             transcript: Transcript::default(),
+            footer: String::new(),
             draft: String::new(),
             cursor: 0,
-            history: Vec::new(),
+            history: history.iter().cloned().collect(),
             history_cursor: None,
+            history_path: Some(history_path),
+            completions: Vec::new(),
+            mention_paths: Vec::new(),
             busy: false,
+            turn_started: None,
             frame_index: 0,
-            status_line: Some(
-                "Type /help for commands · /status for live context · /exit to quit".to_string(),
-            ),
-            error: None,
+            permission: None,
+            permission_tx: None,
+            ctrl_c_armed: None,
+            pending_action: None,
             quit: false,
             should_persist: false,
-            session_started: Instant::now(),
-            turn_started: None,
-        }
+        };
+        state.refresh_from_cli(cli);
+        state
+    }
+
+    /// Recomputes the values derived from the CLI: footer, completions, and mentions.
+    fn refresh_from_cli(&mut self, cli: &LiveCli) {
+        self.footer = cli.input_footer();
+        self.completions = cli.repl_completion_candidates().unwrap_or_default();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        self.mention_paths = mentions::workspace_files(&cwd);
     }
 
     fn insert_at_cursor(&mut self, text: &str) {
@@ -149,6 +182,23 @@ impl TuiState {
         }
     }
 
+    fn set_draft(&mut self, text: String) {
+        self.cursor = text.chars().count();
+        self.draft = text;
+    }
+
+    /// The grey completion of the draft from history, shown when the cursor is at the end.
+    fn history_suggestion(&self) -> Option<String> {
+        if self.draft.is_empty() || self.cursor != self.draft.chars().count() {
+            return None;
+        }
+        self.history
+            .iter()
+            .rev()
+            .find(|entry| entry.len() > self.draft.len() && entry.starts_with(&self.draft))
+            .map(|entry| entry[self.draft.len()..].to_string())
+    }
+
     fn push_history(&mut self, line: String) {
         if let Some(position) = self.history_cursor {
             self.history.insert(position, line);
@@ -156,46 +206,51 @@ impl TuiState {
             self.history.push(line);
         }
         self.history_cursor = None;
+        self.save_history();
+    }
+
+    /// Writes history in the same file the line-based REPL uses.
+    fn save_history(&self) {
+        let Some(path) = &self.history_path else {
+            return;
+        };
+        let mut history = DefaultHistory::new();
+        for entry in &self.history {
+            let _ = history.add(entry);
+        }
+        let _ = history.save(path);
     }
 }
 
-/// A point-in-time copy of [`TuiState`] handed to the draw closure so no lock
-/// is held while ratatui writes to the terminal.
+/// A point-in-time copy of [`TuiState`] handed to the draw pass so no lock is
+/// held while ratatui writes to the terminal.
 #[derive(Debug, Clone)]
 struct Snapshot {
-    model: String,
-    provider: String,
-    mode: String,
-    context_tokens: usize,
-    cost_usd: f64,
-    busy: bool,
-    frame_index: usize,
-    transcript: crate::tui::transcript::TranscriptSnapshot,
-    status_line: Option<String>,
-    error: Option<String>,
+    footer: String,
     draft: String,
     cursor: usize,
-    session_secs: u64,
-    turn_secs: Option<u64>,
+    suggestion: Option<String>,
+    busy: bool,
+    frame_index: usize,
+    turn_secs: u64,
+    permission_tool: Option<String>,
+    transcript: transcript::TranscriptSnapshot,
 }
 
 impl TuiState {
     fn snapshot(&self) -> Snapshot {
         Snapshot {
-            model: self.model.clone(),
-            provider: self.provider.clone(),
-            mode: self.mode.clone(),
-            context_tokens: self.context_tokens,
-            cost_usd: self.cost_usd,
-            busy: self.busy,
-            frame_index: self.frame_index,
-            transcript: self.transcript.snapshot(),
-            status_line: self.status_line.clone(),
-            error: self.error.clone(),
+            footer: self.footer.clone(),
             draft: self.draft.clone(),
             cursor: self.cursor,
-            session_secs: self.session_started.elapsed().as_secs(),
-            turn_secs: self.turn_started.map(|started| started.elapsed().as_secs()),
+            suggestion: self.history_suggestion(),
+            busy: self.busy,
+            frame_index: self.frame_index,
+            turn_secs: self
+                .turn_started
+                .map_or(0, |started| started.elapsed().as_secs()),
+            permission_tool: self.permission.as_ref().map(|prompt| prompt.tool.clone()),
+            transcript: self.transcript.snapshot(),
         }
     }
 }
@@ -238,270 +293,251 @@ fn run_loop<F>(
     run_slash_command: &mut F,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: FnMut(
-        &mut LiveCli,
-        SlashCommand,
-        &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>>,
+    F: FnMut(&mut LiveCli, SlashCommand, &mut Vec<u8>) -> Result<bool, Box<dyn std::error::Error>>,
 {
     let (ui_tx, ui_rx) = channel::<UiEvent>();
     let (turn_tx, turn_rx) = channel::<String>();
     let (turn_done_tx, turn_done_rx) = channel::<(crate::BuiltRuntime, crate::HookAbortMonitor)>();
-    let (permission_tx, mut permission_rx) = channel::<char>();
-    let mut pending_turn: Option<PendingTurn> = None;
-    let mut last_redraw = Instant::now();
 
-    'outer: loop {
-        // Drain any UI events queued by the turn worker.
+    loop {
+        // Apply events from the turn worker.
         while let Ok(event) = ui_rx.try_recv() {
             apply_ui_event(state, event);
         }
 
-        // Kick off a newly submitted line (unless one turn is already running).
-        if pending_turn.is_none() {
+        // Dispatch a submitted line once no turn is running.
+        if !lock(state).busy {
             if let Ok(line) = turn_rx.try_recv() {
-                pending_turn = Some(PendingTurn { line });
+                dispatch_line(cli, state, &ui_tx, &turn_done_tx, line, run_slash_command);
             }
         }
 
-        // Reinstall a finished turn's runtime into the CLI.
+        // Reinstall a finished turn's runtime and refresh what depends on it.
         if let Ok((runtime, _hook_abort_monitor)) = turn_done_rx.try_recv() {
-            if let Err(error) = cli.replace_runtime(runtime) {
-                let mut guard = lock(state);
-                guard.busy = false;
-                guard.error = Some(format!("failed to update session after turn: {error}"));
+            match cli.replace_runtime(runtime) {
+                Ok(()) => {}
+                Err(error) => {
+                    let mut guard = lock(state);
+                    guard.transcript.push_ansi(&format!(
+                        "error: failed to update session after turn: {error}"
+                    ));
+                }
             }
+            lock(state).refresh_from_cli(cli);
         }
 
-        // Dispatch the pending line: slash commands inline, turns on a worker.
-        if let Some(pending) = pending_turn.take() {
-            let permission_rx = std::mem::replace(&mut permission_rx, channel::<char>().1);
-            dispatch_line(
-                cli,
-                state,
-                &ui_tx,
-                &turn_done_tx,
-                permission_rx,
-                pending,
-                run_slash_command,
-            );
+        let pending = lock(state).pending_action.take();
+        if let Some(action) = pending {
+            apply_action(cli, state, action);
         }
 
         if lock(state).quit {
-            break 'outer;
+            break;
         }
 
         draw(terminal, state);
 
-        let frame_budget = Duration::from_millis(80);
-        let timeout = frame_budget.saturating_sub(last_redraw.elapsed());
-        match crossterm::event::poll(timeout) {
+        match crossterm::event::poll(Duration::from_millis(80)) {
             Ok(true) => match crossterm::event::read() {
-                Ok(Event::Resize(width, height)) => {
-                    let _ = terminal.resize(ratatui::layout::Rect::default());
-                }
                 Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
                     if handle_key(key, state, &turn_tx) {
-                        break 'outer;
+                        break;
                     }
                 }
                 Ok(_) => {}
-                Err(error) => {
-                    eprintln!("warning: failed to read terminal event: {error}");
-                }
+                Err(error) => eprintln!("warning: failed to read terminal event: {error}"),
             },
             Ok(false) => {}
             Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => {
-                eprintln!("warning: failed to poll terminal events: {error}");
-            }
+            Err(error) => eprintln!("warning: failed to poll terminal events: {error}"),
         }
-        last_redraw = Instant::now();
     }
 
-    // If a turn is still running when the user exits, wait for it to finish so
-    // the session ends in a consistent state.
-    if pending_turn.is_some() || turn_done_rx.try_recv().is_ok() {
-        while let Ok(event) = ui_rx.try_recv() {
+    // A turn still running at exit finishes first, so the session stays consistent.
+    if lock(state).busy {
+        while let Ok(event) = ui_rx.recv_timeout(Duration::from_millis(50)) {
             apply_ui_event(state, event);
-        }
-        let guard = lock(state);
-        if guard.busy {
-            drop(guard);
-            if let Ok((runtime, _hook_abort_monitor)) = turn_done_rx.recv() {
-                let _ = cli.replace_runtime(runtime);
+            if !lock(state).busy {
+                break;
             }
+        }
+        if let Ok((runtime, _hook_abort_monitor)) = turn_done_rx.recv() {
+            let _ = cli.replace_runtime(runtime);
         }
     }
 
     Ok(())
 }
 
-/// A submitted line that has not been dispatched to a worker yet.
-struct PendingTurn {
-    line: String,
-}
-
-/// Dispatches one submitted line: `/exit` quits, other slash commands run
-/// inline with captured output, and everything else starts a streaming turn
-/// on a worker thread.
+/// Runs a submitted line: `/exit` quits, `!` runs a shell command, slash commands run
+/// inline with their output captured, and everything else starts a turn.
 fn dispatch_line<F>(
     cli: &mut LiveCli,
     state: &Arc<Mutex<TuiState>>,
     ui_tx: &Sender<UiEvent>,
     turn_done_tx: &Sender<(crate::BuiltRuntime, crate::HookAbortMonitor)>,
-    permission_rx: Receiver<char>,
-    pending: PendingTurn,
+    line: String,
     run_slash_command: &mut F,
 ) where
-    F: FnMut(
-        &mut LiveCli,
-        SlashCommand,
-        &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>>,
+    F: FnMut(&mut LiveCli, SlashCommand, &mut Vec<u8>) -> Result<bool, Box<dyn std::error::Error>>,
 {
-    let line = pending.line;
+    let trimmed = line.trim().to_string();
 
-    // `/exit` is intercepted here because `handle_repl_command` treats it as
-    // unavailable; the TUI handles it directly.
-    if line.trim() == "/exit" || line.trim() == "/quit" {
+    if matches!(trimmed.as_str(), "/exit" | "/quit") {
         let mut guard = lock(state);
         guard.quit = true;
         guard.should_persist = true;
         return;
     }
 
-    let parsed = match crate::SlashCommand::parse(&line) {
-        Ok(Some(command)) => Some(command),
-        Ok(None) => None,
+    if let Some(command) = trimmed.strip_prefix('!') {
+        let mut guard = lock(state);
+        guard.transcript.push_user(&trimmed);
+        let output = capture_shell_command(command.trim());
+        guard.transcript.push_ansi(&output);
+        return;
+    }
+
+    let parsed = match SlashCommand::parse(&trimmed) {
+        Ok(parsed) => parsed,
         Err(error) => {
-            let mut guard = lock(state);
-            guard.error = Some(error.to_string());
+            lock(state).transcript.push_ansi(&format!("{error}"));
             return;
         }
     };
 
     if let Some(command) = parsed {
         let mut buffer: Vec<u8> = Vec::new();
-        let handled = match run_slash_command(cli, command, &mut buffer) {
-            Ok(handled) => handled,
-            Err(error) => {
-                let _ = ui_tx.send(UiEvent::Output(format!("error: {error}")));
-                return;
+        let outcome = run_slash_command(cli, command, &mut buffer);
+        let mut guard = lock(state);
+        match outcome {
+            Ok(handled) => {
+                if !buffer.is_empty() {
+                    guard
+                        .transcript
+                        .push_ansi(&String::from_utf8_lossy(&buffer));
+                }
+                if handled {
+                    guard.refresh_from_cli(cli);
+                }
             }
-        };
-        if !buffer.is_empty() {
-            let _ = ui_tx.send(UiEvent::Output(
-                String::from_utf8_lossy(&buffer).into_owned(),
-            ));
-        }
-        if handled {
-            // The command cleared the session (e.g. `/clear`): refresh the
-            // derived status values from the CLI's new state.
-            let mut guard = lock(state);
-            guard.context_tokens = cli.estimated_tokens();
-            guard.cost_usd = cli.cumulative_cost_usd();
-            guard.mode = cli.permission_mode().as_str().to_string();
-            guard.model = cli.model().to_string();
-            guard.provider = cli.provider().map_or_else(|| "default".to_string(), str::to_string);
+            Err(error) => guard.transcript.push_ansi(&format!("error: {error}")),
         }
         return;
     }
 
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let (prompt, attached) = mentions::expand(&trimmed, &cwd);
+    if !attached.is_empty() {
+        lock(state)
+            .transcript
+            .push_ansi(&format!("\x1b[2mAttached {}\x1b[0m", attached.join(", ")));
+    }
     start_turn(
         cli,
         state,
-        line,
+        trimmed,
+        prompt,
         ui_tx.clone(),
         turn_done_tx.clone(),
-        permission_rx,
     );
 }
 
-/// Starts a streaming turn on a worker thread. The worker owns a freshly
-/// built runtime and ships UI events + the finished runtime back to the main
-/// loop.
+/// Runs a shell command and returns its output as text for the transcript.
+fn capture_shell_command(command: &str) -> String {
+    if command.is_empty() {
+        return "usage: !<command>".to_string();
+    }
+    match ProcessCommand::new("sh").arg("-c").arg(command).output() {
+        Ok(output) => {
+            let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+            text.push_str(&String::from_utf8_lossy(&output.stderr));
+            if !output.status.success() {
+                let code = output
+                    .status
+                    .code()
+                    .map_or_else(|| "signal".to_string(), |code| code.to_string());
+                let _ = write!(text, "\x1b[2mexit {code}\x1b[0m");
+            }
+            text
+        }
+        Err(error) => format!("error: {error}"),
+    }
+}
+
+/// Starts a streaming turn on a worker thread. The worker owns a freshly built runtime
+/// and ships UI events and the finished runtime back to the UI loop.
 fn start_turn(
     cli: &mut LiveCli,
     state: &Arc<Mutex<TuiState>>,
-    line: String,
+    display: String,
+    prompt: String,
     ui_tx: Sender<UiEvent>,
     turn_done_tx: Sender<(crate::BuiltRuntime, crate::HookAbortMonitor)>,
-    permission_rx: Receiver<char>,
 ) {
     let (runtime, hook_abort_monitor) = match cli.prepare_turn_runtime(false) {
         Ok(pair) => pair,
         Err(error) => {
-            let _ = ui_tx.send(UiEvent::TurnEnd {
-                ok: false,
-                error: Some(error.to_string()),
-                status: None,
-            });
+            lock(state).transcript.push_ansi(&format!("error: {error}"));
             return;
         }
     };
 
     let model = cli.model().to_string();
     let permission_mode = cli.permission_mode();
+    let (permission_tx, permission_rx) = channel::<char>();
 
-    let mut guard = lock(state);
-    guard.transcript.push_user(&line);
-    guard.busy = true;
-    guard.turn_started = Some(Instant::now());
-    guard.status_line = Some("working…".to_string());
-    guard.error = None;
-    drop(guard);
+    {
+        let mut guard = lock(state);
+        guard.transcript.push_user(&display);
+        guard.busy = true;
+        guard.turn_started = Some(Instant::now());
+        guard.permission_tx = Some(permission_tx);
+    }
 
     std::thread::spawn(move || {
         let mut runtime = runtime;
+        let started = Instant::now();
+
+        // Each tool result reaches the transcript as soon as it completes.
+        let observer_tx = ui_tx.clone();
+        crate::set_tool_result_observer(move |name, output, is_error| {
+            let _ = observer_tx.send(UiEvent::ToolResult {
+                name: name.to_string(),
+                output: output.to_string(),
+                is_error,
+            });
+        });
+
         let mut prompter = TuiPermissionPrompter {
             current_mode: permission_mode,
             tx: ui_tx.clone(),
             rx: permission_rx,
         };
         let mut sink = TuiEventSink { tx: ui_tx.clone() };
-        let result = runtime.run_turn_stream(&line, Some(&mut prompter), &mut sink);
+        let result = runtime.run_turn_stream(&prompt, Some(&mut prompter), &mut sink);
+        crate::clear_tool_result_observer();
 
-        let (ok, error, status) = match &result {
+        match &result {
             Ok(summary) => {
-                let status = summary
-                    .auto_compaction
-                    .map(|event| format_auto_compaction_notice(event.removed_message_count))
-                    .or_else(|| {
-                        Some(format!(
-                            "turn complete · {} iteration(s)",
-                            summary.iterations
-                        ))
-                    });
-                (true, None, status)
-            }
-            Err(error) => (false, Some(error.to_string()), None),
-        };
-
-        // The runtime only exposes tool results on the TurnSummary (they are
-        // not part of the per-call AssistantEvent stream), so push them into
-        // the transcript now, before the final TurnEnd flushes the pending
-        // assistant text.
-        if let Ok(summary) = &result {
-            for message in &summary.tool_results {
-                for block in &message.blocks {
-                    if let ContentBlock::ToolResult {
-                        tool_name,
-                        output,
-                        is_error,
-                        ..
-                    } = block
-                    {
-                        let _ = ui_tx.send(UiEvent::ToolResult {
-                            status: if *is_error {
-                                ToolStatus::Failed
-                            } else {
-                                ToolStatus::Completed
-                            },
-                            output: format!("{tool_name}: {output}"),
-                        });
-                    }
+                let tool_calls = collect_tool_uses(summary).len();
+                let _ = ui_tx.send(UiEvent::Notice(format_turn_summary(
+                    summary,
+                    &model,
+                    started.elapsed(),
+                    tool_calls,
+                )));
+                if let Some(event) = summary.auto_compaction {
+                    let _ = ui_tx.send(UiEvent::Notice(format_auto_compaction_notice(
+                        event.removed_message_count,
+                    )));
                 }
+                let _ = ui_tx.send(UiEvent::TurnEnd { error: None });
+            }
+            Err(error) => {
+                let _ = ui_tx.send(UiEvent::TurnEnd {
+                    error: Some(error.to_string()),
+                });
             }
         }
 
@@ -514,18 +550,117 @@ fn start_turn(
                 .total_cost_usd(),
             None => 0.0,
         };
-
         let _ = ui_tx.send(UiEvent::ContextTokens(context_tokens));
         let _ = ui_tx.send(UiEvent::CostUsd(cost_usd));
-        let _ = ui_tx.send(UiEvent::TurnEnd { ok, error, status });
 
-        // Hand the finished runtime back to the UI thread so the session keeps
-        // accumulating across turns. If the loop already exited, dropping the
-        // runtime here still runs its shutdown (MCP servers, plugins).
-        if turn_done_tx.send((runtime, hook_abort_monitor)).is_err() {
-            // The UI loop exited; dropping ends the runtime's lifecycle.
-        }
+        // Hand the runtime back so the session keeps accumulating across turns.
+        let _ = turn_done_tx.send((runtime, hook_abort_monitor));
     });
+}
+
+// ---------------------------------------------------------------------------
+// Actions that need the CLI
+// ---------------------------------------------------------------------------
+
+fn apply_action(cli: &mut LiveCli, state: &Arc<Mutex<TuiState>>, action: Action) {
+    match action {
+        Action::CyclePermission => {
+            let next = crate::next_permission_mode(cli.permission_mode().as_str());
+            match cli.switch_permission_mode(next) {
+                Ok(previous) => {
+                    let mut guard = lock(state);
+                    guard.transcript.push_ansi(&format!(
+                        "\x1b[2mPermission mode: {previous} -> {next}\x1b[0m"
+                    ));
+                    guard.refresh_from_cli(cli);
+                }
+                Err(error) => lock(state).transcript.push_ansi(&format!("error: {error}")),
+            }
+        }
+        Action::ClearScreen => {
+            let mut guard = lock(state);
+            guard.transcript.clear();
+            guard.transcript.push_ansi(&cli.startup_banner());
+        }
+        Action::Complete => complete_draft(state),
+    }
+}
+
+/// Completes the word at the cursor: a slash command for a leading `/`, or a workspace
+/// path for `@`. A single match is inserted; several matches insert their common prefix
+/// and are listed.
+fn complete_draft(state: &Arc<Mutex<TuiState>>) {
+    let mut guard = lock(state);
+    let draft = guard.draft.clone();
+
+    let (start, candidates): (usize, Vec<String>) =
+        if draft.starts_with('/') && !draft.contains(' ') {
+            (
+                0,
+                guard
+                    .completions
+                    .iter()
+                    .filter(|candidate| candidate.starts_with(&draft))
+                    .cloned()
+                    .collect(),
+            )
+        } else {
+            let start = draft
+                .rfind(char::is_whitespace)
+                .map_or(0, |index| index + 1);
+            let word = &draft[start..];
+            let Some(prefix) = word.strip_prefix('@') else {
+                return;
+            };
+            (
+                start,
+                guard
+                    .mention_paths
+                    .iter()
+                    .filter(|path| path.starts_with(prefix))
+                    .map(|path| format!("@{path}"))
+                    .collect(),
+            )
+        };
+
+    if candidates.is_empty() {
+        return;
+    }
+    let current = &draft[start..];
+    let replacement = if candidates.len() == 1 {
+        candidates[0].clone()
+    } else {
+        let common = common_prefix(&candidates);
+        if common.len() <= current.len() {
+            if candidates.len() > MAX_COMPLETION_LIST {
+                guard.transcript.push_ansi(&format!(
+                    "\x1b[2m{} matches, keep typing to narrow them\x1b[0m",
+                    candidates.len()
+                ));
+            } else {
+                guard
+                    .transcript
+                    .push_ansi(&format!("\x1b[2m{}\x1b[0m", candidates.join("  ")));
+            }
+            return;
+        }
+        common
+    };
+    let updated = format!("{}{}", &draft[..start], replacement);
+    guard.set_draft(updated);
+}
+
+fn common_prefix(values: &[String]) -> String {
+    let Some(first) = values.first() else {
+        return String::new();
+    };
+    let mut prefix = first.clone();
+    for value in &values[1..] {
+        while !value.starts_with(&prefix) {
+            prefix.pop();
+        }
+    }
+    prefix
 }
 
 // ---------------------------------------------------------------------------
@@ -552,10 +687,9 @@ impl EventSink for TuiEventSink {
     }
 }
 
-/// Permission prompter that renders the request in the transcript and blocks
-/// until the UI thread routes the user's y/n decision through a per-prompt
-/// channel. (Raw mode is owned by the UI thread, so the worker cannot read
-/// stdin directly.)
+/// Permission prompter that shows the REPL's prompt in the transcript and waits for the
+/// user's choice. The UI thread routes the key through a per-turn channel, so the worker
+/// never reads the terminal itself.
 struct TuiPermissionPrompter {
     current_mode: PermissionMode,
     tx: Sender<UiEvent>,
@@ -564,22 +698,34 @@ struct TuiPermissionPrompter {
 
 impl PermissionPrompter for TuiPermissionPrompter {
     fn decide(&mut self, request: &PermissionRequest) -> PermissionPromptDecision {
+        let always_allowed = crate::ALWAYS_ALLOWED_TOOLS
+            .lock()
+            .is_ok_and(|set| set.contains(&request.tool_name));
+        if always_allowed {
+            return PermissionPromptDecision::Allow;
+        }
+
         let _ = self.tx.send(UiEvent::PermissionRequest {
             tool: request.tool_name.clone(),
+            required_mode: request.required_mode.as_str().to_string(),
+            current_mode: self.current_mode.as_str().to_string(),
             reason: request.reason.clone(),
+            input: request.input.clone(),
         });
 
-        let choice = self.rx.recv().unwrap_or('n');
-        match choice {
+        match self.rx.recv().unwrap_or('n') {
             'y' => PermissionPromptDecision::Allow,
-            'n' => PermissionPromptDecision::Deny {
-                reason: format!(
-                    "denied by user (requested {} mode)",
-                    request.required_mode.as_str()
-                ),
-            },
+            'a' => {
+                if let Ok(mut set) = crate::ALWAYS_ALLOWED_TOOLS.lock() {
+                    set.insert(request.tool_name.clone());
+                }
+                PermissionPromptDecision::Allow
+            }
             _ => PermissionPromptDecision::Deny {
-                reason: "permission prompt cancelled".to_string(),
+                reason: format!(
+                    "tool '{}' denied by user approval prompt",
+                    request.tool_name
+                ),
             },
         }
     }
@@ -592,123 +738,165 @@ impl PermissionPrompter for TuiPermissionPrompter {
 /// Returns `true` when the TUI should exit.
 fn handle_key(key: KeyEvent, state: &Arc<Mutex<TuiState>>, turn_tx: &Sender<String>) -> bool {
     let mut guard = lock(state);
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+
+    // A pending permission prompt takes every key first, even during a turn.
+    if let Some(prompt) = guard.permission.take() {
+        let choice = match key.code {
+            KeyCode::Char('y' | 'Y') => Some('y'),
+            KeyCode::Char('a' | 'A') => Some('a'),
+            KeyCode::Char('n' | 'N') | KeyCode::Esc => Some('n'),
+            KeyCode::Char('c') if ctrl => Some('n'),
+            _ => None,
+        };
+        match choice {
+            Some(choice) => {
+                if let Some(tx) = guard.permission_tx.take() {
+                    let _ = tx.send(choice);
+                }
+                let decision = match choice {
+                    'y' => "allowed once",
+                    'a' => "allowed for this session",
+                    _ => "denied",
+                };
+                guard
+                    .transcript
+                    .push_ansi(&format!("\x1b[2m  {} {decision}\x1b[0m", prompt.tool));
+            }
+            None => guard.permission = Some(prompt),
+        }
+        return false;
+    }
+
+    // Ctrl-C clears the draft; on an empty prompt it exits on the second press.
+    if key.code == KeyCode::Char('c') && ctrl {
+        if !guard.draft.is_empty() {
+            guard.draft.clear();
+            guard.cursor = 0;
+            guard.history_cursor = None;
+            guard.ctrl_c_armed = None;
+            return false;
+        }
+        let armed = guard
+            .ctrl_c_armed
+            .is_some_and(|at| at.elapsed() < EXIT_CONFIRM_WINDOW);
+        if armed {
+            guard.quit = true;
+            guard.should_persist = true;
+            return true;
+        }
+        guard.ctrl_c_armed = Some(Instant::now());
+        guard
+            .transcript
+            .push_ansi("\x1b[2mPress Ctrl-C again to exit\x1b[0m");
+        return false;
+    }
+
+    if key.code == KeyCode::Char('d') && ctrl {
+        if guard.draft.is_empty() && !guard.busy {
+            guard.quit = true;
+            guard.should_persist = true;
+            return true;
+        }
+        return false;
+    }
+
     if guard.busy {
         return false;
     }
 
-    // Shift+Enter requests a newline inside the draft; most terminals send
-    // this as Ctrl+J, but also accept the explicit shift-modified Enter.
-    if key.code == KeyCode::Enter
-        && (key.modifiers.contains(KeyModifiers::CONTROL)
-            || key.modifiers.contains(KeyModifiers::SHIFT))
-    {
-        guard.insert_at_cursor("\n");
-        guard.history_cursor = None;
+    // Enter sends; Alt+Enter, Ctrl+J, and Shift+Enter insert a newline.
+    if key.code == KeyCode::Enter {
+        if ctrl
+            || key.modifiers.contains(KeyModifiers::SHIFT)
+            || key.modifiers.contains(KeyModifiers::ALT)
+        {
+            guard.insert_at_cursor("\n");
+            guard.history_cursor = None;
+            return false;
+        }
+        let trimmed = guard.draft.trim().to_string();
+        if trimmed.is_empty() {
+            return false;
+        }
+        guard.push_history(trimmed.clone());
+        guard.draft.clear();
+        guard.cursor = 0;
+        guard.ctrl_c_armed = None;
+        if turn_tx.send(trimmed).is_err() {
+            guard
+                .transcript
+                .push_ansi("error: internal error: TUI event channel closed");
+        }
+        return false;
+    }
+
+    if key.code == KeyCode::Char('l') && ctrl {
+        guard.pending_action = Some(Action::ClearScreen);
         return false;
     }
 
     match key.code {
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            if guard.draft.is_empty() {
-                guard.status_line = Some("press /exit to quit (or Ctrl+D)".to_string());
-            } else {
-                guard.draft.clear();
-                guard.cursor = 0;
+        KeyCode::BackTab => guard.pending_action = Some(Action::CyclePermission),
+        KeyCode::Tab => {
+            if guard.draft.starts_with('/') || guard.draft.contains('@') {
+                guard.pending_action = Some(Action::Complete);
             }
-            false
         }
-        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            guard.quit = true;
-            guard.should_persist = true;
-            true
-        }
-        KeyCode::Enter => {
-            let trimmed = guard.draft.trim().to_string();
-            if trimmed.is_empty() {
-                return false;
-            }
-            guard.push_history(trimmed.clone());
-            guard.draft.clear();
-            guard.cursor = 0;
-            guard.error = None;
-            guard.busy = true;
-            guard.status_line = Some("working…".to_string());
-            if turn_tx.send(trimmed).is_err() {
-                guard.busy = false;
-                guard.error = Some("internal error: TUI event channel closed".to_string());
-            }
-            false
+        KeyCode::Char('?') if guard.draft.is_empty() => {
+            guard.transcript.push_ansi(&crate::render_shortcuts());
         }
         KeyCode::Backspace => {
             guard.backspace();
             guard.history_cursor = None;
-            false
         }
-        KeyCode::Left => {
-            guard.cursor = guard.cursor.saturating_sub(1);
-            false
-        }
+        KeyCode::Left => guard.cursor = guard.cursor.saturating_sub(1),
         KeyCode::Right => {
-            guard.cursor = (guard.cursor + 1).min(guard.draft.chars().count());
-            false
+            if let Some(suggestion) = guard.history_suggestion() {
+                guard.insert_at_cursor(&suggestion);
+            } else {
+                guard.cursor = (guard.cursor + 1).min(guard.draft.chars().count());
+            }
         }
-        KeyCode::Home => {
-            guard.cursor = 0;
-            false
-        }
-        KeyCode::End => {
-            guard.cursor = guard.draft.chars().count();
-            false
-        }
+        KeyCode::Home => guard.cursor = 0,
+        KeyCode::End => guard.cursor = guard.draft.chars().count(),
         KeyCode::Up => {
             let len = guard.history.len();
             if len > 0 {
                 let position = match guard.history_cursor {
                     None => len - 1,
-                    Some(current) => (current + len - 1) % len,
+                    Some(current) => current.saturating_sub(1),
                 };
                 guard.history_cursor = Some(position);
                 let entry = guard.history[position].clone();
-                guard.draft = entry;
-                guard.cursor = guard.draft.chars().count();
+                guard.set_draft(entry);
             }
-            false
         }
         KeyCode::Down => {
-            let len = guard.history.len();
             if let Some(current) = guard.history_cursor {
                 let next = current + 1;
-                if next >= len {
+                if next >= guard.history.len() {
                     guard.history_cursor = None;
-                    guard.draft.clear();
-                    guard.cursor = 0;
+                    guard.set_draft(String::new());
                 } else {
                     guard.history_cursor = Some(next);
                     let entry = guard.history[next].clone();
-                    guard.draft = entry;
-                    guard.cursor = guard.draft.chars().count();
+                    guard.set_draft(entry);
                 }
             }
-            false
-        }
-        KeyCode::Tab => {
-            guard.insert_at_cursor("    ");
-            guard.history_cursor = None;
-            false
         }
         KeyCode::Esc => {
             guard.draft.clear();
             guard.cursor = 0;
             guard.history_cursor = None;
-            false
         }
-        KeyCode::Char(character) => {
+        KeyCode::Char(character) if !ctrl => {
             guard.insert_at_cursor(&character.to_string());
             guard.history_cursor = None;
-            false
         }
-        _ => false,
+        _ => {}
     }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -722,22 +910,24 @@ enum UiEvent {
         input: String,
     },
     ToolResult {
-        status: ToolStatus,
+        name: String,
         output: String,
+        is_error: bool,
     },
-    Usage(code_runtime::TokenUsage),
+    Usage(TokenUsage),
     MessageStop,
-    Output(String),
+    Notice(String),
     PermissionRequest {
         tool: String,
+        required_mode: String,
+        current_mode: String,
         reason: Option<String>,
+        input: String,
     },
     ContextTokens(usize),
     CostUsd(f64),
     TurnEnd {
-        ok: bool,
         error: Option<String>,
-        status: Option<String>,
     },
 }
 
@@ -746,41 +936,48 @@ fn apply_ui_event(state: &Arc<Mutex<TuiState>>, event: UiEvent) {
     match event {
         UiEvent::Text(delta) => guard.transcript.push_text(&delta),
         UiEvent::ToolStart { name, input } => guard.transcript.push_tool_start(&name, &input),
-        UiEvent::ToolResult { status, output } => {
-            guard.transcript.push_tool_result(status, &output);
-        }
-        UiEvent::Usage(usage) => {
-            guard.cost_usd += usage
-                .estimate_cost_usd_with_pricing(match pricing_for_model(&guard.model) {
-                    Some(pricing) => pricing,
-                    None => return,
-                })
-                .total_cost_usd();
-        }
+        UiEvent::ToolResult {
+            name,
+            output,
+            is_error,
+        } => guard.transcript.push_tool_result(&name, &output, is_error),
         UiEvent::MessageStop => guard.transcript.end_turn(),
-        UiEvent::Output(output) => guard.transcript.push_output(&output),
-        UiEvent::PermissionRequest { tool, reason } => {
-            let reason = reason.unwrap_or_default();
-            guard.transcript.push_output(&format!(
-                "permission requested: {tool}\n  {reason}\n  [y] allow · [n] deny"
-            ));
+        UiEvent::Notice(text) => {
+            guard.transcript.end_turn();
+            guard.transcript.push_ansi(&text);
         }
-        UiEvent::ContextTokens(tokens) => guard.context_tokens = tokens,
-        UiEvent::CostUsd(cost) => guard.cost_usd = cost,
-        UiEvent::TurnEnd { ok, error, status } => {
+        UiEvent::PermissionRequest {
+            tool,
+            required_mode,
+            current_mode,
+            reason,
+            input,
+        } => {
+            guard.transcript.flush_text();
+            let mut text = format!(
+                "\n\x1b[1m{tool}\x1b[0m needs {required_mode} (current mode: {current_mode})\n"
+            );
+            if let Some(reason) = reason {
+                let _ = writeln!(text, "  \x1b[2m{reason}\x1b[0m");
+            }
+            let _ = write!(
+                text,
+                "  \x1b[2m{}\x1b[0m",
+                crate::truncate_for_summary(&input, 160)
+            );
+            guard.transcript.push_ansi(&text);
+            guard.permission = Some(PendingPermission { tool });
+        }
+        UiEvent::Usage(_) | UiEvent::ContextTokens(_) | UiEvent::CostUsd(_) => {}
+        UiEvent::TurnEnd { error } => {
+            guard.transcript.end_turn();
+            if let Some(error) = error {
+                guard.transcript.push_ansi(&format!("error: {error}"));
+            }
             guard.busy = false;
-            let secs = guard
-                .turn_started
-                .map_or(0, |started| started.elapsed().as_secs());
             guard.turn_started = None;
-            guard.status_line = status.or_else(|| {
-                if ok {
-                    Some(format!("done in {secs}s"))
-                } else {
-                    Some("turn failed".to_string())
-                }
-            });
-            guard.error = error;
+            guard.permission = None;
+            guard.permission_tx = None;
         }
     }
 }
@@ -802,147 +999,122 @@ fn draw(terminal: &mut CrosstermTerminal, state: &Arc<Mutex<TuiState>>) {
     let _ = terminal.draw(|frame| render_frame(frame, &snapshot));
 }
 
+/// The composer is the REPL's frame: rule, input rows, rule, footer.
+fn composer_height(snapshot: &Snapshot) -> u16 {
+    let input_rows = if snapshot.permission_tool.is_some() {
+        1
+    } else {
+        snapshot.draft.split('\n').count().clamp(1, 6)
+    };
+    let input_rows = u16::try_from(input_rows).unwrap_or(1);
+    input_rows + 3
+}
+
 fn render_frame(frame: &mut Frame, snapshot: &Snapshot) {
     let area = frame.area();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Min(1),
-            Constraint::Length(1),
-            Constraint::Length(3),
-        ])
-        .split(area);
-
-    render_header(frame, chunks[0], snapshot);
-    render_transcript(frame, chunks[1], snapshot);
-    render_status(frame, chunks[2], snapshot);
-    render_composer(frame, chunks[3], snapshot);
+    let composer = composer_height(snapshot).min(area.height.saturating_sub(1));
+    let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(composer)]).split(area);
+    render_transcript(frame, chunks[0], snapshot);
+    render_composer(frame, chunks[1], snapshot);
 }
 
-fn render_header(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snapshot) {
-    let title = format!("  Frontal Code · {} · {}", snapshot.model, snapshot.mode);
-    frame.render_widget(
-        Paragraph::new(title).style(
-            Style::default()
-                .fg(Color::Reset)
-                .add_modifier(Modifier::BOLD),
-        ),
-        area,
-    );
-}
-
-fn render_status(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snapshot) {
-    let context = format_tokens(snapshot.context_tokens);
-    let timer = if let Some(secs) = snapshot.turn_secs {
-        format!(" {secs}s")
-    } else {
-        format!(
-            " up {}m {:02}s",
-            snapshot.session_secs / 60,
-            snapshot.session_secs % 60
-        )
-    };
-    let label = if let Some(status) = &snapshot.status_line {
-        format!(
-            "  {status} · {provider} · {mode} · {context} ctx · ${cost:.4}{timer}",
-            provider = snapshot.provider,
-            mode = snapshot.mode,
-            cost = snapshot.cost_usd
-        )
-    } else if snapshot.busy {
-        format!(
-            "  {provider} · {mode} · {context} ctx · ${cost:.4}{timer} · working…",
-            provider = snapshot.provider,
-            mode = snapshot.mode,
-            cost = snapshot.cost_usd
-        )
-    } else {
-        format!(
-            "  {provider} · {mode} · {context} ctx · ${cost:.4}{timer}",
-            provider = snapshot.provider,
-            mode = snapshot.mode,
-            cost = snapshot.cost_usd
-        )
-    };
-    let style = if snapshot.busy {
-        Style::default().fg(Color::Reset)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    frame.render_widget(Paragraph::new(label).style(style), area);
-}
-
-fn render_composer(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snapshot) {
-    let prompt_style = Style::default()
-        .fg(Color::Reset)
-        .add_modifier(Modifier::BOLD);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray))
-        .title(Line::from(vec![
-            Span::styled(" input ", prompt_style),
-            Span::styled(
-                "  ·  Enter to send · Shift+Enter for newline · /help · /exit to quit",
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let (left, right) = split_at_cursor(&snapshot.draft, snapshot.cursor);
-    let line = Line::from(vec![
-        Span::styled("> ", prompt_style),
-        Span::raw(&left),
-        Span::styled("█", prompt_style),
-        Span::raw(&right),
-    ]);
-    frame.render_widget(Paragraph::new(line).wrap(Wrap { trim: false }), inner);
-}
-
-fn render_transcript(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snapshot) {
+fn render_transcript(frame: &mut Frame, area: Rect, snapshot: &Snapshot) {
     let mut lines: Vec<Line<'static>> = snapshot.transcript.lines.clone();
-
-    // Live in-progress text (not yet ended by a MessageStop).
     if !snapshot.transcript.pending_text.is_empty() {
         for paragraph in snapshot.transcript.pending_text.split('\n') {
             lines.push(Line::from(Span::raw(paragraph.to_string())));
         }
     }
-
-    if lines.is_empty() && !snapshot.busy {
-        lines.push(Line::from(
-            "  Ask me anything. Try /help for commands, /status for live context.",
-        ));
-    }
-
-    if snapshot.busy {
-        let glyph = braille_frame(snapshot.frame_index);
-        let tool = snapshot
-            .transcript
-            .active_tool
-            .clone()
-            .unwrap_or_else(|| "thinking".to_string());
+    if snapshot.busy && snapshot.permission_tool.is_none() {
+        let glyph = SPINNER_FRAMES[snapshot.frame_index % SPINNER_FRAMES.len()];
         lines.push(Line::from(Span::styled(
-            format!("  {glyph} {tool}…"),
-            Style::default().fg(Color::Blue),
+            format!("{glyph} Thinking... {}s", snapshot.turn_secs),
+            Style::default().fg(SPINNER_COLOR),
         )));
     }
 
-    if let Some(error) = &snapshot.error {
-        lines.push(Line::from(Span::styled(
-            format!("  ✗ {error}"),
-            Style::default().fg(Color::Reset),
+    // Keep the newest lines in view: estimate wrapped height per line.
+    let width = usize::from(area.width.max(1));
+    let total: usize = lines
+        .iter()
+        .map(|line| line.width().max(1).div_ceil(width))
+        .sum();
+    let offset = total.saturating_sub(usize::from(area.height));
+    let offset = u16::try_from(offset).unwrap_or(u16::MAX);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .scroll((offset, 0)),
+        area,
+    );
+}
+
+fn render_composer(frame: &mut Frame, area: Rect, snapshot: &Snapshot) {
+    let rule = Line::from(Span::styled(
+        "─".repeat(usize::from(area.width)),
+        Style::default().fg(Color::DarkGray),
+    ));
+    let mut lines = vec![rule.clone()];
+    let mut cursor_position = None;
+
+    if let Some(tool) = &snapshot.permission_tool {
+        lines.push(Line::from(format!(
+            "Allow?  [y] yes   [n] no   [a] always for {tool}  > "
         )));
+    } else if snapshot.draft.is_empty() {
+        lines.push(Line::from(vec![
+            Span::raw("❯ "),
+            Span::styled(
+                crate::input::PLACEHOLDER.to_string(),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        cursor_position = Some((2, 0));
+    } else {
+        let (before, _after) = split_at_cursor(&snapshot.draft, snapshot.cursor);
+        let total_rows = snapshot.draft.split('\n').count();
+        for (index, text) in snapshot.draft.split('\n').enumerate() {
+            let prefix = if index == 0 { "❯ " } else { "  " };
+            let mut spans = vec![Span::raw(prefix), Span::raw(text.to_string())];
+            if index == total_rows - 1 {
+                if let Some(suggestion) = &snapshot.suggestion {
+                    spans.push(Span::styled(
+                        suggestion.clone(),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+            }
+            lines.push(Line::from(spans));
+        }
+        let cursor_row = before.matches('\n').count();
+        let cursor_col = before
+            .rsplit('\n')
+            .next()
+            .map_or(0, |line| line.chars().count());
+        cursor_position = Some((2 + cursor_col, cursor_row));
     }
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray))
-        .title(" conversation ");
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+    lines.push(rule);
+    let footer_line = ansi::lines(&snapshot.footer)
+        .into_iter()
+        .next()
+        .unwrap_or_default();
+    lines.push(footer_line);
+
+    frame.render_widget(Paragraph::new(lines), area);
+
+    if snapshot.permission_tool.is_none() {
+        if let Some((column, row)) = cursor_position {
+            let x = area.x.saturating_add(u16::try_from(column).unwrap_or(0));
+            let y = area
+                .y
+                .saturating_add(1)
+                .saturating_add(u16::try_from(row).unwrap_or(0));
+            if x < area.right() && y < area.bottom() {
+                frame.set_cursor_position((x, y));
+            }
+        }
+    }
 }
 
 fn split_at_cursor(draft: &str, cursor: usize) -> (String, String) {
@@ -958,33 +1130,9 @@ fn split_at_cursor(draft: &str, cursor: usize) -> (String, String) {
     (left, right)
 }
 
-fn braille_frame(index: usize) -> &'static str {
-    const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    FRAMES[index % FRAMES.len()]
-}
-
-fn format_tokens(tokens: usize) -> String {
-    if tokens >= 1_000 {
-        // Token counts are bounded well below u32::MAX in practice.
-        // SAFETY: tokens / 100 cannot exceed u32::MAX for any realistic
-        // context window (would require > 4.3e12 tokens).
-        let tenths_of_k = u32::try_from(tokens / 100).unwrap_or(u32::MAX);
-        format!("{:.1}k", f64::from(tenths_of_k) / 10.0)
-    } else {
-        tokens.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn format_tokens_compacts_thousands() {
-        assert_eq!(format_tokens(999), "999");
-        assert_eq!(format_tokens(1_500), "1.5k");
-        assert_eq!(format_tokens(24_000), "24.0k");
-    }
 
     #[test]
     fn split_at_cursor_bounds() {
@@ -1006,10 +1154,120 @@ mod tests {
         );
     }
 
-    #[test]
-    fn braille_cycles_within_len() {
-        for index in 0..20 {
-            assert_ne!(braille_frame(index), "");
+    fn frame_text(snapshot: &Snapshot, width: u16, height: u16) -> Vec<String> {
+        let mut terminal =
+            Terminal::new(ratatui::backend::TestBackend::new(width, height)).expect("terminal");
+        terminal
+            .draw(|frame| render_frame(frame, snapshot))
+            .expect("draw");
+        let buffer = terminal.backend().buffer().clone();
+        (0..height)
+            .map(|y| {
+                (0..width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    fn snapshot_with(draft: &str, permission_tool: Option<&str>) -> Snapshot {
+        let mut transcript = Transcript::default();
+        transcript.push_ansi("\x1b[1mFrontal Code\x1b[0m \x1b[90mv0.3.0\x1b[0m");
+        Snapshot {
+            footer: "\x1b[90mFrontal Code · \x1b[0mclaude-sonnet-4-6\x1b[90m · API key · branch main\x1b[0m"
+                .to_string(),
+            draft: draft.to_string(),
+            cursor: draft.chars().count(),
+            suggestion: None,
+            busy: false,
+            frame_index: 0,
+            turn_secs: 0,
+            permission_tool: permission_tool.map(str::to_string),
+            transcript: transcript.snapshot(),
         }
+    }
+
+    #[test]
+    fn composer_uses_the_repl_frame() {
+        let lines = frame_text(&snapshot_with("", None), 70, 8);
+        let bottom = lines.len() - 1;
+        assert!(lines[bottom].starts_with("Frontal Code · claude-sonnet-4-6"));
+        assert!(lines[bottom - 1].starts_with('─'));
+        assert!(lines[bottom - 2].starts_with("❯ Ask Frontal Code"));
+        assert!(lines[bottom - 3].starts_with('─'));
+    }
+
+    #[test]
+    fn composer_shows_the_typed_draft_and_permission_prompt() {
+        let typed = frame_text(&snapshot_with("explain this", None), 70, 8);
+        assert!(typed.iter().any(|line| line.starts_with("❯ explain this")));
+
+        let prompt = frame_text(&snapshot_with("", Some("write_file")), 90, 8);
+        assert!(prompt
+            .iter()
+            .any(|line| line.contains("Allow?  [y] yes   [n] no   [a] always for write_file")));
+    }
+
+    #[test]
+    fn transcript_shows_the_banner_above_the_frame() {
+        let lines = frame_text(&snapshot_with("", None), 70, 8);
+        assert!(lines[0].contains("Frontal Code v0.3.0"));
+    }
+
+    fn bare_state(draft: &str, completions: &[&str], mentions: &[&str]) -> Arc<Mutex<TuiState>> {
+        Arc::new(Mutex::new(TuiState {
+            transcript: Transcript::default(),
+            footer: String::new(),
+            draft: draft.to_string(),
+            cursor: draft.chars().count(),
+            history: Vec::new(),
+            history_cursor: None,
+            history_path: None,
+            completions: completions.iter().map(ToString::to_string).collect(),
+            mention_paths: mentions.iter().map(ToString::to_string).collect(),
+            busy: false,
+            turn_started: None,
+            frame_index: 0,
+            permission: None,
+            permission_tx: None,
+            ctrl_c_armed: None,
+            pending_action: None,
+            quit: false,
+            should_persist: false,
+        }))
+    }
+
+    #[test]
+    fn tab_completes_slash_commands_and_workspace_paths() {
+        let state = bare_state("/mo", &["/model", "/model opus", "/status"], &[]);
+        complete_draft(&state);
+        assert_eq!(lock(&state).draft, "/model");
+
+        let state = bare_state("look at @src/ma", &[], &["src/main.rs", "README.md"]);
+        complete_draft(&state);
+        assert_eq!(lock(&state).draft, "look at @src/main.rs");
+    }
+
+    #[test]
+    fn tab_lists_several_matches_without_changing_the_draft() {
+        let state = bare_state("/mo", &["/model opus", "/model sonnet"], &[]);
+        complete_draft(&state);
+        assert_eq!(lock(&state).draft, "/model ");
+    }
+
+    #[test]
+    fn history_suggestion_is_the_rest_of_the_latest_match() {
+        let state = bare_state("!ech", &[], &[]);
+        lock(&state).history = vec!["!echo one".to_string(), "/help".to_string()];
+        assert_eq!(lock(&state).history_suggestion().as_deref(), Some("o one"));
+    }
+
+    #[test]
+    fn common_prefix_of_candidates() {
+        let candidates = vec!["/model opus".to_string(), "/model sonnet".to_string()];
+        assert_eq!(common_prefix(&candidates), "/model ");
+        assert_eq!(common_prefix(&[]), "");
     }
 }

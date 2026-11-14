@@ -395,7 +395,8 @@ where
             }
 
             for (tool_use_id, tool_name, input) in pending_tool_uses {
-                let result_message = self.execute_tool_use(iterations, &tool_use_id, &tool_name, &input, prompter)?;
+                let result_message =
+                    self.execute_tool_use(iterations, &tool_use_id, &tool_name, &input, prompter)?;
                 self.record_tool_finished(iterations, &result_message);
                 tool_results.push(result_message);
             }
@@ -424,7 +425,14 @@ where
         &mut self,
         iterations: usize,
         sink: &mut Option<&mut dyn EventSink>,
-    ) -> Result<(ConversationMessage, Option<TokenUsage>, Vec<PromptCacheEvent>), RuntimeError> {
+    ) -> Result<
+        (
+            ConversationMessage,
+            Option<TokenUsage>,
+            Vec<PromptCacheEvent>,
+        ),
+        RuntimeError,
+    > {
         // A model can end a turn with nothing in it. Ask again with the same context
         // rather than failing the whole turn; the empty reply is not recorded.
         let mut empty_replies = 0;
@@ -531,18 +539,9 @@ where
                 output = merge_hook_feedback(pre_hook_result.messages(), output, false);
 
                 let post_hook_result = if is_error {
-                    self.run_post_tool_use_failure_hook(
-                        tool_name,
-                        &effective_input,
-                        &output,
-                    )
+                    self.run_post_tool_use_failure_hook(tool_name, &effective_input, &output)
                 } else {
-                    self.run_post_tool_use_hook(
-                        tool_name,
-                        &effective_input,
-                        &output,
-                        false,
-                    )
+                    self.run_post_tool_use_hook(tool_name, &effective_input, &output, false)
                 };
                 if post_hook_result.is_denied()
                     || post_hook_result.is_failed()

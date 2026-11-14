@@ -6472,7 +6472,7 @@ impl LiveCli {
         let mut run_slash_command = |cli: &mut LiveCli,
                                      command,
                                      buffer: &mut Vec<u8>|
-            -> Result<bool, Box<dyn std::error::Error>> {
+         -> Result<bool, Box<dyn std::error::Error>> {
             cli.handle_repl_command_into(command, buffer)
         };
         crate::tui::run(self, &mut run_slash_command)
@@ -11653,6 +11653,31 @@ impl CliToolExecutor {
     }
 }
 
+/// Receives the tool name, output, and error flag of each completed tool call.
+type ToolResultObserver = Box<dyn Fn(&str, &str, bool)>;
+
+thread_local! {
+    /// Set by the full-screen TUI's turn worker to hear each tool result as it completes.
+    static TOOL_RESULT_OBSERVER: std::cell::RefCell<Option<ToolResultObserver>> =
+        std::cell::RefCell::new(None);
+}
+
+fn set_tool_result_observer(observer: impl Fn(&str, &str, bool) + 'static) {
+    TOOL_RESULT_OBSERVER.with(|slot| *slot.borrow_mut() = Some(Box::new(observer)));
+}
+
+fn clear_tool_result_observer() {
+    TOOL_RESULT_OBSERVER.with(|slot| *slot.borrow_mut() = None);
+}
+
+fn report_tool_result(tool_name: &str, output: &str, is_error: bool) {
+    TOOL_RESULT_OBSERVER.with(|slot| {
+        if let Some(observer) = slot.borrow().as_ref() {
+            observer(tool_name, output, is_error);
+        }
+    });
+}
+
 impl ToolExecutor for CliToolExecutor {
     fn execute(&mut self, tool_name: &str, input: &str) -> Result<String, ToolError> {
         if self
@@ -11677,6 +11702,7 @@ impl ToolExecutor for CliToolExecutor {
         };
         match result {
             Ok(output) => {
+                report_tool_result(tool_name, &output, false);
                 if self.emit_output {
                     let markdown = format_tool_result(tool_name, &output, false);
                     self.renderer
@@ -11686,6 +11712,7 @@ impl ToolExecutor for CliToolExecutor {
                 Ok(output)
             }
             Err(error) => {
+                report_tool_result(tool_name, &error.to_string(), true);
                 if self.emit_output {
                     let markdown = format_tool_result(tool_name, &error.to_string(), true);
                     self.renderer

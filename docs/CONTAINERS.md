@@ -352,8 +352,8 @@ services:
   frontal-code:
     image: frontal-code/cli:v0.1.0
     environment:
-      - FRONTAL_CODE_TELEMETRY_ENABLED=true
-      - FRONTAL_CODE_TELEMETRY_ENDPOINT=http://prometheus:9090/metrics
+      - FRONTAL_CODE_TELEMETRY_PATH=/var/log/frontal-code/telemetry.jsonl
+      - FRONTAL_CODE_ANALYTICS_DISABLED=1
     depends_on:
       - prometheus
       - grafana

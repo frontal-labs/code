@@ -91,7 +91,6 @@ The system looks for `project.json` in this order:
     "log_level": "info"
   },
   "features": {
-    "enable_telemetry": true,
     "enable_plugins": true,
     "enable_caching": true,
     "enable_metrics": true
@@ -109,7 +108,6 @@ let config = ProjectConfig::load_or_default();
 
 // Access configuration values
 println!("Default provider: {}", config.runtime.default_provider);
-println!("Telemetry enabled: {}", config.features.enable_telemetry);
 ```
 
 For more details, see the [Configuration guide](./CONFIGURATION.md).

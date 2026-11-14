@@ -418,7 +418,6 @@ let config = ProjectConfig::load_or_default();
 
 // Access configuration values
 println!("Default provider: {}", config.runtime.default_provider);
-println!("Telemetry enabled: {}", config.features.enable_telemetry);
 
 // Provider configuration
 if config.is_provider_enabled("anthropic") {
@@ -473,7 +472,6 @@ pub struct RuntimeConfig {
 ```rust
 pub struct FeatureConfig {
     pub auto_compaction_threshold: u32,
-    pub enable_telemetry: bool,
     pub enable_plugins: bool,
     pub enable_caching: bool,
     pub enable_metrics: bool,

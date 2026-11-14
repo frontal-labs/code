@@ -147,7 +147,10 @@ pub fn notify_turn_end(model: &str, body: &str, error: Option<&str>) -> bool {
 /// Collapse a value to a single line, capped at `limit` characters with an
 /// ellipsis. Notification bodies should never wrap or swallow the whole banner.
 fn truncate_one_line(value: &str, limit: usize) -> String {
-    let flat: String = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Only the first line may appear in a notification banner; a second line
+    // is detail the banner has no room for.
+    let first_line = value.split(['\n', '\r']).next().unwrap_or("");
+    let flat: String = first_line.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut chars = flat.chars();
     let truncated: String = chars.by_ref().take(limit).collect();
     if chars.next().is_some() {
@@ -164,8 +167,18 @@ mod tests {
     #[test]
     fn truncates_and_collapses_whitespace() {
         assert_eq!(truncate_one_line("hello   world", 5), "hello…");
-        assert_eq!(truncate_one_line("a\nb\nc", 10), "a b c");
         assert_eq!(truncate_one_line("short", 10), "short");
+    }
+
+    #[test]
+    fn truncate_one_line_selects_only_the_first_line() {
+        // Only the first line reaches the banner; later lines are excluded even
+        // when the limit would have left room for them.
+        assert_eq!(truncate_one_line("a\nb\nc", 10), "a");
+        assert_eq!(truncate_one_line("Done.\nAdditional details", 120), "Done.");
+        assert_eq!(truncate_one_line("Title line\nmore\ntail", 5), "Title…");
+        // CRLF line endings are treated as a line break too.
+        assert_eq!(truncate_one_line("head\r\ntail", 10), "head");
     }
 
     #[test]

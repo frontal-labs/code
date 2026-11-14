@@ -647,11 +647,15 @@ fn start_turn(
                         event.removed_message_count,
                     )));
                 }
-                let _ = ui_tx.send(UiEvent::TurnEnd { error: None });
+                let _ = ui_tx.send(UiEvent::TurnEnd {
+                    error: None,
+                    body: crate::final_assistant_text(summary),
+                });
             }
             Err(error) => {
                 let _ = ui_tx.send(UiEvent::TurnEnd {
                     error: Some(error.to_string()),
+                    body: String::new(),
                 });
             }
         }
@@ -1324,6 +1328,7 @@ enum UiEvent {
     CostUsd(f64),
     TurnEnd {
         error: Option<String>,
+        body: String,
     },
 }
 
@@ -1399,7 +1404,7 @@ fn apply_ui_event(state: &mut TuiState, event: UiEvent) {
             state.permission = Some(PendingPermission { tool });
         }
         UiEvent::CostUsd(_) => {}
-        UiEvent::TurnEnd { error } => {
+        UiEvent::TurnEnd { error, body } => {
             state.transcript.end_stream();
             let elapsed = state.turn_started.map_or(Duration::ZERO, |at| at.elapsed());
             state.busy = false;
@@ -1407,7 +1412,7 @@ fn apply_ui_event(state: &mut TuiState, event: UiEvent) {
             state.permission = None;
             state.permission_tx = None;
             state.phase = Phase::Idle;
-            match error {
+            match error.as_ref() {
                 Some(error) => {
                     state
                         .transcript
@@ -1422,6 +1427,10 @@ fn apply_ui_event(state: &mut TuiState, event: UiEvent) {
                     transcript::format_duration(elapsed)
                 )),
             }
+            // Surface the result on the desktop in case the user stepped away.
+            // The model comes from the turn's summary line, which we already
+            // pushed above as a Notice; re-derive it here from the trace.
+            crate::notify::notify_turn_end(&state.model, &body, error.as_deref());
         }
     }
 }

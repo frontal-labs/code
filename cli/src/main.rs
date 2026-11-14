@@ -14,6 +14,7 @@ mod auth;
 mod init;
 mod input;
 mod mentions;
+mod notify;
 mod render;
 mod thinking;
 mod tui;
@@ -6846,6 +6847,7 @@ impl LiveCli {
                     );
                 }
                 self.persist_session()?;
+                notify::notify_turn_end(&self.model, &final_assistant_text(&summary), None);
                 Ok(())
             }
             Err(error) => {
@@ -6855,6 +6857,7 @@ impl LiveCli {
                     TerminalRenderer::new().color_theme(),
                     &mut stdout,
                 )?;
+                notify::notify_turn_end(&self.model, "", Some(&error.to_string()));
                 Err(Box::new(error))
             }
         }
@@ -10932,7 +10935,7 @@ fn format_context_window_blocked_error(session_id: &str, error: &code_api::ApiEr
     lines.join("\n")
 }
 
-fn final_assistant_text(summary: &code_runtime::TurnSummary) -> String {
+pub(crate) fn final_assistant_text(summary: &code_runtime::TurnSummary) -> String {
     summary
         .assistant_messages
         .last()

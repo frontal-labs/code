@@ -107,13 +107,13 @@ impl Transcript {
             Span::styled(
                 "  ⚙ ".to_string(),
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Reset)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 name.to_string(),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(Color::Reset)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
@@ -130,8 +130,8 @@ impl Transcript {
     /// Records the outcome of a tool call and opens a fresh assistant message.
     pub fn push_tool_result(&mut self, status: ToolStatus, output: &str) {
         let (glyph, style) = match status {
-            ToolStatus::Completed => ("✓", Style::default().fg(Color::Green)),
-            ToolStatus::Failed | ToolStatus::Cancelled => ("✗", Style::default().fg(Color::Red)),
+            ToolStatus::Completed => ("✓", Style::default().fg(Color::Reset)),
+            ToolStatus::Failed | ToolStatus::Cancelled => ("✗", Style::default().fg(Color::Reset)),
         };
         let preview = abbreviate(output, MAX_TOOL_RESULT_CHARS);
         for (index, fragment) in preview.split('\n').take(8).enumerate() {
@@ -183,7 +183,7 @@ impl Transcript {
                 Span::styled(
                     "  > ".to_string(),
                     Style::default()
-                        .fg(Color::Magenta)
+                        .fg(Color::Reset)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(paragraph.to_string()),

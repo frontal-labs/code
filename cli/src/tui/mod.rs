@@ -825,7 +825,7 @@ fn render_header(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snap
     frame.render_widget(
         Paragraph::new(title).style(
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Reset)
                 .add_modifier(Modifier::BOLD),
         ),
         area,
@@ -866,7 +866,7 @@ fn render_status(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snap
         )
     };
     let style = if snapshot.busy {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(Color::Reset)
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -875,7 +875,7 @@ fn render_status(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snap
 
 fn render_composer(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &Snapshot) {
     let prompt_style = Style::default()
-        .fg(Color::Cyan)
+        .fg(Color::Reset)
         .add_modifier(Modifier::BOLD);
     let block = Block::default()
         .borders(Borders::ALL)
@@ -932,7 +932,7 @@ fn render_transcript(frame: &mut Frame, area: ratatui::layout::Rect, snapshot: &
     if let Some(error) = &snapshot.error {
         lines.push(Line::from(Span::styled(
             format!("  ✗ {error}"),
-            Style::default().fg(Color::Red),
+            Style::default().fg(Color::Reset),
         )));
     }
 

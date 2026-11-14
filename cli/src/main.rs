@@ -5740,8 +5740,16 @@ fn drive_repl(mut cli: LiveCli) -> Result<(), Box<dyn std::error::Error>> {
                 if !attached.is_empty() {
                     println!("\x1b[2mAttached {}\x1b[0m", attached.join(", "));
                 }
-                if let Err(error) = cli.run_turn(&prompt) {
-                    eprintln!("error: {error}");
+                match cli.run_turn(&prompt) {
+                    Ok(()) => {
+                        // Desktop notifications are REPL/TUI-only; the turn body
+                        // and model live on the session, so notify after the turn.
+                        notify::notify_turn_end(&cli.model, &cli.last_turn_text, None);
+                    }
+                    Err(error) => {
+                        notify::notify_turn_end(&cli.model, "", Some(&error.to_string()));
+                        eprintln!("error: {error}");
+                    }
                 }
                 editor.set_mention_candidates(mentions::workspace_files(&cwd));
             }
@@ -5795,6 +5803,10 @@ struct LiveCli {
     system_prompt: Vec<String>,
     runtime: BuiltRuntime,
     session: SessionHandle,
+    /// Final assistant text from the most recent successful `run_turn`, kept so
+    /// interactive callers can build a desktop-notification body. Empty until
+    /// a turn succeeds.
+    last_turn_text: String,
 }
 
 struct RuntimePluginState {
@@ -6467,6 +6479,7 @@ impl LiveCli {
             system_prompt,
             runtime,
             session,
+            last_turn_text: String::new(),
         };
         cli.persist_session()?;
         Ok(cli)
@@ -6847,7 +6860,7 @@ impl LiveCli {
                     );
                 }
                 self.persist_session()?;
-                notify::notify_turn_end(&self.model, &final_assistant_text(&summary), None);
+                self.last_turn_text = final_assistant_text(&summary);
                 Ok(())
             }
             Err(error) => {
@@ -6857,7 +6870,6 @@ impl LiveCli {
                     TerminalRenderer::new().color_theme(),
                     &mut stdout,
                 )?;
-                notify::notify_turn_end(&self.model, "", Some(&error.to_string()));
                 Err(Box::new(error))
             }
         }
@@ -7106,7 +7118,15 @@ impl LiveCli {
             }
             SlashCommand::Skills { args } => {
                 match classify_skills_slash_command(args.as_deref()) {
-                    SkillSlashDispatch::Invoke(prompt) => self.run_turn(&prompt)?,
+                    SkillSlashDispatch::Invoke(prompt) => match self.run_turn(&prompt) {
+                        Ok(()) => {
+                            notify::notify_turn_end(&self.model, &self.last_turn_text, None);
+                        }
+                        Err(error) => {
+                            notify::notify_turn_end(&self.model, "", Some(&error.to_string()));
+                            return Err(error);
+                        }
+                    },
                     SkillSlashDispatch::Local => {
                         Self::print_skills(args.as_deref(), CliOutputFormat::Text)?;
                     }

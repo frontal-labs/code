@@ -15,11 +15,14 @@ on:
       - .github/workflows/renovate.yml
 
 # Renovate needs write access to open/update PRs and manage its own branches.
+# security-events: read is required so Renovate can access vulnerability alerts
+# and include advisory info in its dependency dashboard.
 permissions:
   contents: write
   pull-requests: write
   issues: write
   checks: read
+  security-events: read
 
 jobs:
   renovate:

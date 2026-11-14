@@ -10,7 +10,12 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+# RUSTSEC-2025-0141 (bincode is unmaintained): syntect 5 needs bincode to load its bundled
+# syntax and theme dumps. Those dumps are compiled into the binary, so no untrusted data is
+# deserialized at runtime. Remove this entry once syntect moves off bincode.
+ignore = [
+    { id = "RUSTSEC-2025-0141", reason = "syntect bundled grammar dumps only; no untrusted input" },
+]
 
 [licenses]
 version = 2

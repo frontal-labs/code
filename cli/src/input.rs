@@ -17,7 +17,8 @@ use rustyline::{
     EventContext, EventHandler, Helper, KeyCode, KeyEvent, Modifiers, RepeatCount,
 };
 
-const PLACEHOLDER: &str = "Ask Frontal Code to build features, fix bugs, or work on your code";
+pub(crate) const PLACEHOLDER: &str =
+    "Ask Frontal Code to build features, fix bugs, or work on your code";
 
 /// A second Ctrl-C within this window exits; the first one only shows a hint.
 const EXIT_CONFIRM_WINDOW: Duration = Duration::from_secs(2);

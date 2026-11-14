@@ -1,8 +1,14 @@
 use code_webhooks::{HmacAuthenticator, WebhookAuth};
 
+fn random_secret() -> String {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).expect("OS entropy available");
+    hex::encode(bytes)
+}
+
 #[test]
 fn hmac_sign_and_verify() {
-    let auth = HmacAuthenticator::new("secret123".to_string(), "X-Hub-Signature-256".to_string());
+    let auth = HmacAuthenticator::new(random_secret(), "X-Hub-Signature-256".to_string());
     let payload = b"test payload data";
     let signature = auth.sign(payload);
     assert!(signature.starts_with("sha256="));
@@ -11,7 +17,7 @@ fn hmac_sign_and_verify() {
 
 #[test]
 fn hmac_verify_correct_payload() {
-    let auth = HmacAuthenticator::new("secret123".to_string(), "X-Hub-Signature-256".to_string());
+    let auth = HmacAuthenticator::new(random_secret(), "X-Hub-Signature-256".to_string());
     let payload = b"test payload";
     let signature = auth.sign(payload);
     let result = auth.verify(payload, &signature).unwrap();
@@ -20,7 +26,7 @@ fn hmac_verify_correct_payload() {
 
 #[test]
 fn hmac_verify_wrong_payload() {
-    let auth = HmacAuthenticator::new("secret123".to_string(), "X-Hub-Signature-256".to_string());
+    let auth = HmacAuthenticator::new(random_secret(), "X-Hub-Signature-256".to_string());
     let payload = b"test payload";
     let signature = auth.sign(payload);
     let result = auth.verify(b"wrong payload", &signature).unwrap();
@@ -29,14 +35,14 @@ fn hmac_verify_wrong_payload() {
 
 #[test]
 fn hmac_verify_invalid_signature_format() {
-    let auth = HmacAuthenticator::new("secret123".to_string(), "X-Hub-Signature-256".to_string());
+    let auth = HmacAuthenticator::new(random_secret(), "X-Hub-Signature-256".to_string());
     let result = auth.verify(b"test", "invalid-format");
     assert!(result.is_err());
 }
 
 #[test]
 fn hmac_verify_empty_payload() {
-    let auth = HmacAuthenticator::new("secret".to_string(), "X-Hub-Signature-256".to_string());
+    let auth = HmacAuthenticator::new(random_secret(), "X-Hub-Signature-256".to_string());
     let payload = b"";
     let signature = auth.sign(payload);
     let result = auth.verify(payload, &signature).unwrap();

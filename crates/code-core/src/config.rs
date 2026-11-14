@@ -88,7 +88,6 @@ pub struct DevelopmentConfig {
 #[allow(clippy::struct_excessive_bools)]
 pub struct FeatureConfig {
     pub auto_compaction_threshold: u32,
-    pub enable_telemetry: bool,
     pub enable_plugins: bool,
     pub enable_caching: bool,
     pub enable_metrics: bool,
@@ -171,7 +170,6 @@ impl Default for ProjectConfig {
             },
             features: FeatureConfig {
                 auto_compaction_threshold: 100,
-                enable_telemetry: true,
                 enable_plugins: true,
                 enable_caching: true,
                 enable_metrics: true,

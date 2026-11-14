@@ -20,19 +20,7 @@
     "encryption": false
   },
   "telemetry": {
-    "enabled": false,
-    "sample_rate": 0.1,
-    "path": "${FCODE_CONFIG_DIR:-${HOME}/.frontal-code}/telemetry.jsonl",
-    "endpoint": "https://telemetry.frontal-code.ai/v1/events",
-    "batch_size": 10,
-    "flush_interval": "60s",
-    "events": [
-      "session_start",
-      "session_end",
-      "tool_use",
-      "error",
-      "command_completion"
-    ]
+    "enabled": false
   },
   "mcp": {
     "auto_start": [

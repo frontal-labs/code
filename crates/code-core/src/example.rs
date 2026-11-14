@@ -41,7 +41,6 @@ pub fn load_and_use_config() {
     );
 
     // Access feature flags
-    println!("Telemetry enabled: {}", config.features.enable_telemetry);
     println!("Plugins enabled: {}", config.features.enable_plugins);
     println!(
         "Auto-compaction threshold: {}",

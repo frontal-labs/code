@@ -84,6 +84,7 @@ pub struct RuntimeFeatureConfig {
     oauth: BTreeMap<String, OAuthConfig>,
     model: Option<String>,
     telemetry: RuntimeTelemetryConfig,
+    analytics: RuntimeAnalyticsConfig,
     permission_mode: Option<ResolvedPermissionMode>,
     permission_rules: RuntimePermissionRuleConfig,
     sandbox: SandboxConfig,
@@ -95,6 +96,26 @@ pub struct RuntimeFeatureConfig {
 pub struct RuntimeTelemetryConfig {
     enabled: Option<bool>,
     path: Option<String>,
+}
+
+/// Product analytics settings. Only user-level files are read, so a cloned
+/// repository cannot turn collection on or point it at another host.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RuntimeAnalyticsConfig {
+    enabled: Option<bool>,
+    host: Option<String>,
+}
+
+impl RuntimeAnalyticsConfig {
+    #[must_use]
+    pub fn enabled(&self) -> Option<bool> {
+        self.enabled
+    }
+
+    #[must_use]
+    pub fn host(&self) -> Option<&str> {
+        self.host.as_deref()
+    }
 }
 
 /// Hook command lists grouped by lifecycle stage.
@@ -405,6 +426,11 @@ impl ConfigLoader {
             match entry.source {
                 ConfigSource::User => deep_merge_objects(&mut user_merged, &value),
                 ConfigSource::Project | ConfigSource::Local => {
+                    if value.contains_key("analytics") {
+                        ignored_settings.push(format!(
+                            "{path}: analytics is ignored in project and local settings; set it in the user settings file"
+                        ));
+                    }
                     let allow = parse_optional_permission_rules(&value_json)?.allow;
                     if !allow.is_empty() {
                         ignored_settings.push(format!(
@@ -437,6 +463,7 @@ impl ConfigLoader {
         let effective_mode = modes.iter().map(|(_, _, mode)| *mode).min();
 
         let merged_value = JsonValue::Object(merged.clone());
+        let analytics = parse_optional_analytics_config(&JsonValue::Object(user_merged.clone()))?;
         let mut permission_rules = parse_optional_permission_rules(&merged_value)?;
         // Only the user can grant allow rules, so allow comes from user files alone.
         permission_rules.allow =
@@ -451,6 +478,7 @@ impl ConfigLoader {
             oauth: parse_optional_oauth_configs(&merged_value, "merged settings.oauth")?,
             model: parse_optional_model(&merged_value),
             telemetry: parse_optional_telemetry_config(&merged_value)?,
+            analytics,
             permission_mode: effective_mode,
             permission_rules,
             sandbox: parse_optional_sandbox_config(&merged_value)?,
@@ -548,6 +576,11 @@ impl RuntimeConfig {
     }
 
     #[must_use]
+    pub fn analytics(&self) -> &RuntimeAnalyticsConfig {
+        &self.feature_config.analytics
+    }
+
+    #[must_use]
     pub fn permission_mode(&self) -> Option<ResolvedPermissionMode> {
         self.feature_config.permission_mode
     }
@@ -628,6 +661,11 @@ impl RuntimeFeatureConfig {
     #[must_use]
     pub fn telemetry(&self) -> &RuntimeTelemetryConfig {
         &self.telemetry
+    }
+
+    #[must_use]
+    pub fn analytics(&self) -> &RuntimeAnalyticsConfig {
+        &self.analytics
     }
 
     #[must_use]
@@ -1125,6 +1163,22 @@ fn parse_optional_permission_mode(
         return Ok(None);
     };
     parse_permission_mode_label(mode, "merged settings.permissions.defaultMode").map(Some)
+}
+
+fn parse_optional_analytics_config(
+    root: &JsonValue,
+) -> Result<RuntimeAnalyticsConfig, ConfigError> {
+    let Some(object) = root.as_object() else {
+        return Ok(RuntimeAnalyticsConfig::default());
+    };
+    let Some(analytics_value) = object.get("analytics") else {
+        return Ok(RuntimeAnalyticsConfig::default());
+    };
+    let analytics = expect_object(analytics_value, "user settings.analytics")?;
+    Ok(RuntimeAnalyticsConfig {
+        enabled: optional_bool(analytics, "enabled", "user settings.analytics")?,
+        host: optional_string(analytics, "host", "user settings.analytics")?.map(str::to_string),
+    })
 }
 
 fn parse_optional_telemetry_config(
@@ -1888,6 +1942,39 @@ mod tests {
 
         assert_eq!(loaded.telemetry().enabled(), Some(true));
         assert_eq!(loaded.telemetry().path(), Some("/tmp/code-telemetry.jsonl"));
+
+        fs::remove_dir_all(root).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn analytics_is_read_only_from_user_settings() {
+        let root = temp_dir();
+        let cwd = root.join("project");
+        let home = root.join("home").join(".frontal-code");
+        fs::create_dir_all(cwd.join(".frontal-code")).expect("project config dir");
+        fs::create_dir_all(&home).expect("home config dir");
+
+        fs::write(
+            home.join("settings.json"),
+            r#"{"analytics": {"enabled": true, "host": "https://eu.i.posthog.com"}}"#,
+        )
+        .expect("write user analytics settings");
+        fs::write(
+            cwd.join(".frontal-code").join("settings.json"),
+            r#"{"analytics": {"enabled": false, "host": "https://attacker.example"}}"#,
+        )
+        .expect("write project analytics settings");
+
+        let loaded = ConfigLoader::new(&cwd, &home)
+            .load()
+            .expect("config should load");
+
+        assert_eq!(loaded.analytics().enabled(), Some(true));
+        assert_eq!(loaded.analytics().host(), Some("https://eu.i.posthog.com"));
+        assert!(loaded
+            .ignored_settings()
+            .iter()
+            .any(|warning| warning.contains("analytics is ignored")));
 
         fs::remove_dir_all(root).expect("cleanup temp dir");
     }

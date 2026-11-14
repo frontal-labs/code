@@ -64,10 +64,6 @@ fn config_serialize_deserialize_roundtrip() {
     );
     assert_eq!(config.paths.config_home, parsed.paths.config_home);
     assert_eq!(config.sandbox.enable_docker, parsed.sandbox.enable_docker);
-    assert_eq!(
-        config.features.enable_telemetry,
-        parsed.features.enable_telemetry
-    );
 }
 
 #[test]
@@ -108,7 +104,7 @@ fn config_serialize_minimal_json() {
             "enable_test_endpoints": true
         },
         "features": {
-            "auto_compaction_threshold": 50, "enable_telemetry": false,
+            "auto_compaction_threshold": 50,
             "enable_plugins": false, "enable_caching": false,
             "enable_metrics": false, "enable_tracing": true,
             "enable_hot_reload": true, "max_file_size_mb": 50, "max_memory_usage_mb": 1024
@@ -124,7 +120,6 @@ fn config_serialize_minimal_json() {
     let config: ProjectConfig = serde_json::from_str(json).unwrap();
     assert_eq!(config.project.name, "Test");
     assert_eq!(config.runtime.default_provider, "test");
-    assert!(!config.features.enable_telemetry);
     assert!(config.sandbox.enable_docker);
     assert_eq!(config.experimental.beta_features.len(), 2);
 }
@@ -219,7 +214,6 @@ fn sandbox_config_defaults() {
 #[test]
 fn feature_config_defaults() {
     let config = ProjectConfig::default();
-    assert!(config.features.enable_telemetry);
     assert!(config.features.enable_plugins);
     assert!(!config.features.enable_tracing);
     assert_eq!(config.features.max_file_size_mb, 100);

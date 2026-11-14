@@ -24,7 +24,6 @@ mod tests {
                         config.runtime.max_concurrent_requests
                     );
                     println!("Cache directory: {}", config.paths.cache_dir);
-                    println!("Telemetry enabled: {}", config.features.enable_telemetry);
                     println!(
                         "Experimental features enabled: {}",
                         config.experimental.enable_new_features

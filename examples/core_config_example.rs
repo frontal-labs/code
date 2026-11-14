@@ -92,10 +92,6 @@ fn print_core_config(core_config: &ProjectConfig) {
 
     println!("  Feature Flags:");
     println!(
-        "    Telemetry Enabled: {}",
-        core_config.features.enable_telemetry
-    );
-    println!(
         "    Plugins Enabled: {}",
         core_config.features.enable_plugins
     );

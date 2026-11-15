@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - `features.enable_telemetry` in the core project config. The CLI never read it, so it changed nothing. Config files that still contain the key load as before. Use `analytics.enabled` for product analytics, or `telemetry` for local event tracing.
 
+### Changed
+- The hosted-worker model proxy route moved from `/v1/model-proxy/<provider>` to `/v1/proxy/<provider>`. Workers are unaffected: the server generates each worker's proxy URL at container launch, so no client-side change is needed. The route is now explicitly `POST`-only at the router level (it already refused non-`POST` in the handler).
+
 ## [0.2.2] - 2026-11-11
 
 ### Added

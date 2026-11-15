@@ -24,10 +24,10 @@ This document describes how a hosted task runs an agent, where each credential l
       │ creates worker container with:
       │   FRONTAL_CODE_SERVER_API_KEY = task token
       │   OPENAI_API_KEY (or the matching key var) = task token
-      │   OPENAI_BASE_URL = http://frontal-relay:8788/v1/model-proxy/openai
+      │   OPENAI_BASE_URL = http://frontal-relay:8788/v1/proxy/openai
       │   FRONTAL_CODE_SERVER_URL     = http://frontal-relay:8788
       ▼
-  worker ──► relay ──► code-server /v1/model-proxy/openai/... ──► provider
+  worker ──► relay ──► code-server /v1/proxy/openai/... ──► provider
                         (drops the token, adds OPENAI_API_KEY)
   worker ──► relay ──► code-server /v1/tasks/<id>/publish (patch)
                         └─► fresh clone, apply, commit, push with GITHUB_TOKEN

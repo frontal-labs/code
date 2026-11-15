@@ -868,13 +868,13 @@ impl ServerStatePersistence {
 
 fn default_server_state_file() -> Option<PathBuf> {
     let cwd = env::current_dir().ok()?;
-    Some(cwd.join(".code-server").join("state.json"))
+    Some(cwd.join(".frontal-code").join("server").join("state.json"))
 }
 
 fn default_server_workspace_root() -> PathBuf {
     env::current_dir().map_or_else(
         |_| env::temp_dir().join("code-server-workspaces"),
-        |cwd| cwd.join(".code-server").join("workspaces"),
+        |cwd| cwd.join(".frontal-code").join("server").join("workspaces"),
     )
 }
 

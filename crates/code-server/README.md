@@ -102,7 +102,7 @@ curl "http://127.0.0.1:8788/v1/policies/orphans?repository=repo-prod&priority=hi
 For `local-docker`, set:
 
 - `FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`
-- `FRONTAL_CODE_SERVER_WORKSPACE_ROOT=/path/to/server/workspaces`
+- `FRONTAL_CODE_SERVER_WORKSPACE_ROOT=/path/to/project/.frontal-code/server/workspaces`
 - `FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
 - `FRONTAL_CODE_SERVER_CALLBACK_URL=http://host.docker.internal:8788`
 

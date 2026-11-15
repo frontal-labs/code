@@ -7,8 +7,13 @@
 //! stable cache file on first use, so the notification carries our logo even
 //! when the checkout no longer has the source asset.
 //!
+//! Banners are suppressed automatically on macOS when the frontmost app is a
+//! terminal, since the output is already visible there. `FCODE_FORCE_NOTIFY`
+//! (truthy: `1`, `true`, `yes`) overrides that check so a banner always fires.
+//!
 //! Failures are intentionally swallowed: a broken notification must never fail
-//! a turn. Set `FCODE_NO_NOTIFY=1` to disable all notifications.
+//! a turn. Set `FCODE_NO_NOTIFY` to a truthy value (`1`, `true`, `yes`) to
+//! disable all notifications; `0`/`false`/`no`/empty leave them enabled.
 
 #[cfg(target_os = "macos")]
 mod imp {
@@ -85,14 +90,138 @@ mod imp {
         source
     }
 
+    /// Whether `FCODE_NO_NOTIFY` holds a truthy value. Falsy values (`0`,
+    /// `false`, `no`, empty) leave notifications enabled.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn notify_disabled(value: Option<&str>) -> bool {
+        match value {
+            Some(value) => {
+                let lowered = value.trim().to_ascii_lowercase();
+                !lowered.is_empty() && lowered != "0" && lowered != "false" && lowered != "no"
+            }
+            None => false,
+        }
+    }
+
     /// Spawn `program` with `args`; return `true` when it ran and exited 0.
     fn spawn_ok(program: &str, args: &[String]) -> bool {
         let status = Command::new(program).args(args).output();
         status.is_ok_and(|out| out.status.success())
     }
 
+    /// Bundle IDs of well-known macOS terminals.
+    const KNOWN_TERMINALS: &[&str] = &[
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "com.mitchellh.ghostty",
+        "dev.warp.Warp-Stable",
+        "dev.warp.Warp",
+        "io.alacritty.Alacritty",
+        "com.github.wez.wezterm",
+        "net.kovidgoyal.kitty",
+        "co.zeit.hyper",
+        "com.tilenumbers.Tabby",
+        "dev.zed.Zed",
+    ];
+
+    /// Process names of terminals that may not expose a reliable bundle ID.
+    const TERMINAL_NAMES: &[&str] = &[
+        "Terminal",
+        "iTerm2",
+        "Ghostty",
+        "Warp",
+        "Alacritty",
+        "WezTerm",
+        "Hyper",
+        "kitty",
+        "Tabby",
+        "gnome-terminal",
+        "konsole",
+        "xterm",
+        "rxvt",
+    ];
+
+    /// Whether a given frontmost app (identified by bundle ID and process name)
+    /// is a terminal. Used to suppress banners when the user is already looking
+    /// at the terminal where the output is shown.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn is_terminal_app(bundle_id: &str, name: &str) -> bool {
+        if KNOWN_TERMINALS
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case(bundle_id))
+        {
+            return true;
+        }
+        TERMINAL_NAMES.iter().any(|n| n.eq_ignore_ascii_case(name))
+    }
+
+    /// Upper bound for the frontmost-app probe. The check must never hold up
+    /// a turn-end, so a hung `osascript` is abandoned after this window and
+    /// treated as "not active" (fail-open: the banner still fires).
+    const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1500);
+
+    /// Whether the user is actively looking at a terminal window right now.
+    ///
+    /// When the frontmost app is a terminal, the user can already see the
+    /// output, so a banner would be redundant. We compare the frontmost app's
+    /// bundle ID against a set of known terminal bundle IDs and fall back to
+    /// the process name so unusual or custom terminals are caught too.
+    fn terminal_active() -> bool {
+        let script = "tell application \"System Events\"\n\
+                      set frontApp to first application process whose frontmost is true\n\
+                      set bid to \"\"\n\
+                      try\n set bid to bundle identifier of frontApp\n end try\n\
+                      set pname to name of frontApp\n\
+                      return bid & \"|\" & pname\n\
+                      end tell";
+        let output = run_with_timeout(PROBE_TIMEOUT, move || {
+            Command::new("osascript")
+                .arg("-e")
+                .arg(script)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .output()
+        });
+        let Some(Ok(output)) = output else {
+            return false;
+        };
+        let text = String::from_utf8_lossy(&output.stdout);
+        let (bundle_id, name) = match text.split_once('|') {
+            Some((b, n)) => (b.trim(), n.trim()),
+            None => (text.trim(), ""),
+        };
+        is_terminal_app(bundle_id, name)
+    }
+
+    /// Run `work`, returning `None` if it outlives `timeout`. The work runs on
+    /// a detached thread because the OS does not offer a portable way to kill
+    /// a spawned child; abandoning merely stops waiting on it, which is all
+    /// this probe needs.
+    fn run_with_timeout(
+        timeout: std::time::Duration,
+        work: impl FnOnce() -> std::io::Result<std::process::Output> + Send + 'static,
+    ) -> Option<std::io::Result<std::process::Output>> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(work());
+        });
+        rx.recv_timeout(timeout).ok()
+    }
+
     pub fn notify(title: &str, subtitle: &str, body: &str) -> bool {
-        if env::var("FCODE_NO_NOTIFY").is_ok() {
+        if let Some(value) = env::var_os("FCODE_NO_NOTIFY") {
+            if notify_disabled(Some(value.to_string_lossy().as_ref())) {
+                return false;
+            }
+        }
+        // Skip the banner when the user is already looking at the terminal;
+        // the output is on screen, so a notification is redundant.
+        // FCODE_FORCE_NOTIFY (truthy) overrides this check.
+        let force = match env::var_os("FCODE_FORCE_NOTIFY") {
+            Some(value) => notify_disabled(Some(value.to_string_lossy().as_ref())),
+            None => false,
+        };
+        if !force && terminal_active() {
             return false;
         }
         let icon = icon_path();
@@ -121,6 +250,11 @@ mod imp {
 #[cfg(not(target_os = "macos"))]
 mod imp {
     pub fn notify(_title: &str, _subtitle: &str, _body: &str) -> bool {
+        false
+    }
+
+    /// Non-macOS: no banner exists to suppress, so the terminal is never "active".
+    pub(crate) fn terminal_active() -> bool {
         false
     }
 }
@@ -182,6 +316,24 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
+    fn notify_disabled_semantics() {
+        // Only explicit truthy values disable notifications.
+        assert!(imp::notify_disabled(Some("1")));
+        assert!(imp::notify_disabled(Some("true")));
+        assert!(imp::notify_disabled(Some("TRUE")));
+        assert!(imp::notify_disabled(Some("yes")));
+        assert!(imp::notify_disabled(Some(" on ")));
+        // Falsy / empty / unset leave notifications enabled.
+        assert!(!imp::notify_disabled(Some("0")));
+        assert!(!imp::notify_disabled(Some("false")));
+        assert!(!imp::notify_disabled(Some("no")));
+        assert!(!imp::notify_disabled(Some("")));
+        assert!(!imp::notify_disabled(Some("  ")));
+        assert!(!imp::notify_disabled(None));
+    }
+
+    #[test]
     fn notify_turn_end_shortens_long_bodies() {
         let long = "x".repeat(500);
         let body = truncate_one_line(&long, 120);
@@ -217,5 +369,43 @@ mod tests {
             .windows(2)
             .any(|w| w == ["-contentImage", "/tmp/logo.png"]));
         assert!(!args.iter().any(|a| a == "-content-image"));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn is_terminal_app_matches_known_bundle_ids() {
+        // Known terminals by bundle ID.
+        assert!(imp::is_terminal_app("com.apple.Terminal", ""));
+        assert!(imp::is_terminal_app("com.googlecode.iterm2", ""));
+        assert!(imp::is_terminal_app("com.mitchellh.ghostty", ""));
+        assert!(imp::is_terminal_app("dev.warp.Warp-Stable", ""));
+        assert!(imp::is_terminal_app("io.alacritty.Alacritty", ""));
+        assert!(imp::is_terminal_app("com.github.wez.wezterm", ""));
+        assert!(imp::is_terminal_app("net.kovidgoyal.kitty", ""));
+        // Zed embeds a terminal and reports itself as the frontmost app.
+        assert!(imp::is_terminal_app("dev.zed.Zed", ""));
+        // Matching is case-insensitive.
+        assert!(imp::is_terminal_app("COM.APPLE.TERMINAL", ""));
+        // Non-terminals do not match.
+        assert!(!imp::is_terminal_app("com.apple.Safari", ""));
+        assert!(!imp::is_terminal_app("com.apple.finder", ""));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn is_terminal_app_matches_process_names() {
+        // Fallback to process name when the bundle ID is unknown or empty.
+        assert!(imp::is_terminal_app("", "Terminal"));
+        assert!(imp::is_terminal_app("", "iTerm2"));
+        assert!(imp::is_terminal_app("", "Ghostty"));
+        assert!(imp::is_terminal_app("", "Alacritty"));
+        assert!(imp::is_terminal_app("", "kitty"));
+        assert!(imp::is_terminal_app("", "xterm"));
+        // Case-insensitive.
+        assert!(imp::is_terminal_app("", "terminal"));
+        // Non-terminals do not match.
+        assert!(!imp::is_terminal_app("", "Safari"));
+        assert!(!imp::is_terminal_app("", "zed"));
+        assert!(!imp::is_terminal_app("", ""));
     }
 }

@@ -18,6 +18,7 @@ on:
       - USAGE.md
       - Cargo.toml
       - Cargo.lock
+      - cli/**
       - crates/**
       - extensions/slack-agent/**
       - scripts/**

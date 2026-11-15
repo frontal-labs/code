@@ -636,6 +636,8 @@ Each variable below was checked against the source (`cli/src/main.rs`, `crates/c
 | `FRONTAL_CODE_CONFIG_DIR` | Configuration directory. |
 | `FRONTAL_CODE_TELEMETRY_PATH` | Telemetry JSONL output path. |
 | `FRONTAL_CODE_CLI_BIN` | CLI binary used by `code-api` to run prompts. |
+| `FRONTAL_CODE_NO_NOTIFY` | Set to a truthy value (`1`, `true`, `yes`) to disable desktop notifications when a turn ends. `0`/`false`/`no`/empty leave them enabled. |
+| `FRONTAL_CODE_FORCE_NOTIFY` | Set to a truthy value (`1`, `true`, `yes`) to force a notification banner even when the frontmost app is a terminal (macOS only). |
 
 **Not implemented** (documented before, but not read by the code): `FRONTAL_CODE_DEFAULT_PROVIDER`, `FRONTAL_CODE_LOG_LEVEL`, `FRONTAL_CODE_DATA_DIR`, `FRONTAL_CODE_SESSION_DIR`, `RUST_LOG`, `FRONTAL_CODE_PERMISSION_MODE`. The default provider is set in `config/project.json` under `runtime.default_provider`.
 

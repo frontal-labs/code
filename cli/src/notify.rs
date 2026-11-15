@@ -8,12 +8,13 @@
 //! when the checkout no longer has the source asset.
 //!
 //! Banners are suppressed automatically on macOS when the frontmost app is a
-//! terminal, since the output is already visible there. `FCODE_FORCE_NOTIFY`
-//! (truthy: `1`, `true`, `yes`) overrides that check so a banner always fires.
+//! terminal, since the output is already visible there.
+//! `FRONTAL_CODE_FORCE_NOTIFY` (truthy: `1`, `true`, `yes`) overrides that check
+//! so a banner always fires.
 //!
 //! Failures are intentionally swallowed: a broken notification must never fail
-//! a turn. Set `FCODE_NO_NOTIFY` to a truthy value (`1`, `true`, `yes`) to
-//! disable all notifications; `0`/`false`/`no`/empty leave them enabled.
+//! a turn. Set `FRONTAL_CODE_NO_NOTIFY` to a truthy value (`1`, `true`, `yes`)
+//! to disable all notifications; `0`/`false`/`no`/empty leave them enabled.
 
 #[cfg(target_os = "macos")]
 mod imp {
@@ -90,7 +91,7 @@ mod imp {
         source
     }
 
-    /// Whether `FCODE_NO_NOTIFY` holds a truthy value. Falsy values (`0`,
+    /// Whether `FRONTAL_CODE_NO_NOTIFY` holds a truthy value. Falsy values (`0`,
     /// `false`, `no`, empty) leave notifications enabled.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn notify_disabled(value: Option<&str>) -> bool {
@@ -209,15 +210,15 @@ mod imp {
     }
 
     pub fn notify(title: &str, subtitle: &str, body: &str) -> bool {
-        if let Some(value) = env::var_os("FCODE_NO_NOTIFY") {
+        if let Some(value) = env::var_os("FRONTAL_CODE_NO_NOTIFY") {
             if notify_disabled(Some(value.to_string_lossy().as_ref())) {
                 return false;
             }
         }
         // Skip the banner when the user is already looking at the terminal;
         // the output is on screen, so a notification is redundant.
-        // FCODE_FORCE_NOTIFY (truthy) overrides this check.
-        let force = match env::var_os("FCODE_FORCE_NOTIFY") {
+        // FRONTAL_CODE_FORCE_NOTIFY (truthy) overrides this check.
+        let force = match env::var_os("FRONTAL_CODE_FORCE_NOTIFY") {
             Some(value) => notify_disabled(Some(value.to_string_lossy().as_ref())),
             None => false,
         };

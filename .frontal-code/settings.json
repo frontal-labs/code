@@ -16,7 +16,7 @@
       "save_environment": false,
       "save_git_state": true
     },
-    "session_dir": "${FCODE_SESSION_DIR:-${HOME}/.frontal-code/sessions}",
+    "session_dir": "${FRONTAL_CODE_SESSION_DIR:-${HOME}/.frontal-code/sessions}",
     "encryption": false
   },
   "telemetry": {
@@ -28,7 +28,7 @@
     ],
     "timeout": 30,
     "enabled": true,
-    "servers_dir": "${FCODE_MCP_SERVERS_DIR:-${HOME}/.frontal-code/mcp-servers}",
+    "servers_dir": "${FRONTAL_CODE_MCP_SERVERS_DIR:-${HOME}/.frontal-code/mcp-servers}",
     "servers": {
       "filesystem": {
         "command": "npx",

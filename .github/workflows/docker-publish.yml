@@ -12,6 +12,7 @@ on:
     paths:
       - docker/cli.Dockerfile
       - docker/dev.Dockerfile
+      - docker/server.Dockerfile
       - .github/workflows/docker-publish.yml
 
 permissions:
@@ -30,9 +31,11 @@ jobs:
       matrix:
         include:
           - dockerfile: docker/cli.Dockerfile
-            image: frontal-code
+            image: code
           - dockerfile: docker/dev.Dockerfile
-            image: frontal-code-dev
+            image: code-dev
+          - dockerfile: docker/server.Dockerfile
+            image: code-server
 
     steps:
       - uses: actions/checkout@v4

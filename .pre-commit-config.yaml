@@ -5,7 +5,7 @@ repos:
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: check-added-large-files
-        args: ['--maxkb=1000']
+        args: ["--maxkb=1000"]
       - id: check-merge-conflict
       - id: check-toml
       - id: check-json
@@ -16,11 +16,11 @@ repos:
     rev: v1.0
     hooks:
       - id: cargo-check
-        args: ['--workspace', '--all-targets', '--all-features']
+        args: ["--workspace", "--all-targets", "--all-features"]
       - id: clippy
-        args: ['--workspace', '--all-targets', '--all-features', '--', '-D', 'warnings']
+        args: ["--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
       - id: fmt
-        args: ['--']
+        args: ["--"]
 
   # --- Bazel / polyglot tooling (added by the Bzlmod migration) ---------------
   - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
@@ -97,7 +97,7 @@ repos:
         entry: bash scripts/changeset_check.sh
         language: system
         # Only enforce for PRs that change source/config; docs-only changes are exempt.
-        files: '^(crates/|sdks/typescript/|npm/code-cli/|extensions/)'
+        files: "^(crates/|sdks/typescript/|npm/code-cli/|extensions/)"
         pass_filenames: false
 
       - id: third-party-check
@@ -149,8 +149,8 @@ ci:
 
     for more information, see https://pre-commit.ci
   autofix_prs: true
-  autoupdate_branch: ''
-  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: weekly
   skip: []
   submodules: false

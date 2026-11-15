@@ -3,7 +3,7 @@ name: Renovate
 on:
   # Run Renovate on a schedule (kept in sync with the renovate.json `schedule`).
   schedule:
-    - cron: '0 6 * * 1' # Weekly on Monday at 6 AM UTC
+    - cron: "0 6 * * 1" # Weekly on Monday at 6 AM UTC
   # Allow manual triggers and quick retries.
   workflow_dispatch:
   # Re-run when the Renovate config changes.

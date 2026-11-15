@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/npm-cli.yml'
-      - 'npm/code-cli/**'
-      - 'scripts/cli.sh'
+      - ".github/workflows/npm-cli.yml"
+      - "npm/code-cli/**"
+      - "scripts/cli.sh"
   workflow_dispatch:
 
 permissions:

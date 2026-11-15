@@ -16,17 +16,17 @@ webhook_url: https://your-code-server.com/webhook/github
 
 # Repository permissions
 permissions:
-  contents: write          # Read/write repository contents
-  issues: write            # Create and manage issues  
-  pull_requests: write     # Create and manage pull requests
-  checks: write           # Create and manage check runs
-  statuses: write         # Create commit statuses
-  deployments: write      # Manage deployments
-  actions: read          # Read GitHub Actions workflows
-  metadata: read          # Read repository metadata
-  discussions: write      # Create and manage discussions
+  contents: write # Read/write repository contents
+  issues: write # Create and manage issues
+  pull_requests: write # Create and manage pull requests
+  checks: write # Create and manage check runs
+  statuses: write # Create commit statuses
+  deployments: write # Manage deployments
+  actions: read # Read GitHub Actions workflows
+  metadata: read # Read repository metadata
+  discussions: write # Create and manage discussions
   repository_projects: write # Manage repository projects
-  security_events: read   # Read security events
+  security_events: read # Read security events
 
 # Organization permissions (optional, for enterprise features)
 # organization:
@@ -44,23 +44,23 @@ events:
   - issues
   - create
   - delete
-  
-  # CI/CD events  
+
+  # CI/CD events
   - check_run
   - check_suite
   - status
-  
+
   # Security events
   - security_advisory
   - dependabot_alert
   - code_scanning_alert
-  
+
   # Release events
   - release
   - deployment
 
 # Installation configuration
-installation_repositories: all  # Can be changed to "selected" for specific repos
+installation_repositories: all # Can be changed to "selected" for specific repos
 
 # App settings
 public: false

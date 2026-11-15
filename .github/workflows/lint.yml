@@ -4,19 +4,19 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/lint.yml'
-      - 'MODULE.bazel'
-      - '.bazelversion'
-      - '.bazelrc'
-      - 'bazel/**'
-      - 'third_party/**'
-      - 'tools/**'
-      - 'scripts/**'
-      - 'sdks/**'
-      - 'biome.json'
-      - 'ultracite.json'
-      - 'bunfig.toml'
-      - 'package.json'
+      - ".github/workflows/lint.yml"
+      - "MODULE.bazel"
+      - ".bazelversion"
+      - ".bazelrc"
+      - "bazel/**"
+      - "third_party/**"
+      - "tools/**"
+      - "scripts/**"
+      - "sdks/**"
+      - "biome.json"
+      - "ultracite.json"
+      - "bunfig.toml"
+      - "package.json"
   pull_request:
     branches: [main]
   workflow_dispatch:

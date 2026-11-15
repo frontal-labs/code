@@ -2,11 +2,11 @@ name: Dependencies
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   schedule:
-    - cron: '0 6 * * 1'  # Weekly on Monday at 6 AM UTC
+    - cron: "0 6 * * 1" # Weekly on Monday at 6 AM UTC
 
 permissions:
   contents: read
@@ -18,20 +18,20 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'schedule'
     permissions:
-      contents: write        # push the chore/update-dependencies branch
-      pull-requests: write   # open or update the PR
+      contents: write # push the chore/update-dependencies branch
+      pull-requests: write # open or update the PR
 
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Install pinned Rust toolchain
         run: rustup show
-        
+
       - name: Update compatible dependencies
         run: cargo update
-          
+
       - name: Check if changes were made
         id: changes
         run: |
@@ -40,7 +40,7 @@ jobs:
           else
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Create Pull Request
         if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v5
@@ -50,29 +50,29 @@ jobs:
           title: "chore: update dependencies"
           body: |
             Automated dependency update
-            
+
             This PR updates the project dependencies to their latest compatible versions.
-            
+
             Please review the changes and ensure all tests pass before merging.
           branch: chore/update-dependencies
           delete-branch: true
-          
+
   check-outdated:
     name: Check Outdated Dependencies
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install pinned Rust toolchain
         run: rustup show
-        
+
       - name: Check outdated dependencies
         continue-on-error: true
         run: |
           cargo install cargo-outdated
           cargo outdated --root-deps-only
-          
+
       - name: Check for security advisories
         run: |
           cargo install cargo-audit --locked

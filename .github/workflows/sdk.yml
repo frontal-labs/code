@@ -4,15 +4,15 @@ on:
   push:
     branches: [main]
     tags:
-      - 'v*'
+      - "v*"
     paths:
-      - '.github/workflows/sdk.yml'
-      - 'biome.json'
-      - 'ultracite.json'
-      - 'bunfig.toml'
-      - 'package.json'
-      - 'tools/**'
-      - 'sdks/**'
+      - ".github/workflows/sdk.yml"
+      - "biome.json"
+      - "ultracite.json"
+      - "bunfig.toml"
+      - "package.json"
+      - "tools/**"
+      - "sdks/**"
   pull_request:
     branches: [main]
   workflow_dispatch:

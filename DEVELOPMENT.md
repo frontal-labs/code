@@ -150,14 +150,14 @@ cargo audit
 ## Services Overview
 
 ### Core Services
-- **frontal-code**: Main Frontal Code service
+- **code**: Main Frontal Code service
 - **postgres**: PostgreSQL database for structured memory
 - **redis**: Redis for caching and session management
 - **pinecone**: Managed vector database for semantic search
 - **webhook-server**: Webhook receiver for external events
 
 ### Development Services
-- **frontal-code-dev**: Development environment with hot reload
+- **code-dev**: Development environment with hot reload
 
 ## Database Setup
 

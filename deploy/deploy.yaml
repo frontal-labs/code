@@ -29,7 +29,7 @@ mounts:
   destination: "/var/lib/frontal-code/server"
 machines:
   code-prod:
-    image: ghcr.io/frontal-labs/code-server:latest
+    image: ghcr.io/frontal-labs/code/code-server:latest
     name: code-prod
     size: shared-cpu-1x
     region: iad
@@ -53,7 +53,7 @@ machines:
       timeout: "5s"
       grace_period: "10s"
   code-dev:
-    image: ghcr.io/frontal-labs/code-server:latest
+    image: ghcr.io/frontal-labs/code/code-server:latest
     name: code-dev
     size: shared-cpu-1x
     region: iad

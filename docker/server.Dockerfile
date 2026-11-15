@@ -13,7 +13,11 @@ RUN apt-get update \
 WORKDIR /src
 
 COPY Cargo.toml Cargo.lock ./
+COPY cli ./cli
 COPY crates ./crates
+COPY sdks ./sdks
+COPY tests ./tests
+COPY tools ./tools
 
 RUN cargo build --locked --release -p code-server
 

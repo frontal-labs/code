@@ -5,7 +5,7 @@
 //! - Each task gets a random token. The token authorizes only that task's worker
 //!   endpoints (read the task, read its runtime, read and write its GitHub
 //!   integration, and post completion).
-//! - Model calls go through `/v1/model-proxy/{provider}`. The proxy checks the
+//! - Model calls go through `/v1/proxy/{provider}`. The proxy checks the
 //!   token, drops the caller's auth headers, adds the real provider key from the
 //!   server's environment, and streams the upstream response back.
 //! - The token is revoked when the task completes or is cancelled. Tokens are stored
@@ -266,7 +266,7 @@ pub(crate) fn worker_provider_env(
     token: &str,
 ) -> Vec<(String, String)> {
     let base = format!(
-        "{}/v1/model-proxy/{provider_name}",
+        "{}/v1/proxy/{provider_name}",
         proxy_base_url.trim_end_matches('/')
     );
     match provider_name {
@@ -578,7 +578,7 @@ mod tests {
                 ("OPENAI_API_KEY".to_string(), "tok".to_string()),
                 (
                     "OPENAI_BASE_URL".to_string(),
-                    "http://host.docker.internal:8790/v1/model-proxy/openai".to_string()
+                    "http://host.docker.internal:8790/v1/proxy/openai".to_string()
                 ),
             ]
         );
@@ -599,7 +599,7 @@ mod tests {
                 ("OLLAMA_API_KEY".to_string(), "tok".to_string()),
                 (
                     "OLLAMA_BASE_URL".to_string(),
-                    "http://frontal-relay:8788/v1/model-proxy/ollama".to_string()
+                    "http://frontal-relay:8788/v1/proxy/ollama".to_string()
                 ),
             ]
         );
@@ -670,7 +670,7 @@ mod proxy_tests {
     fn worker_request(token: Option<&str>) -> Request {
         let mut builder = Request::builder()
             .method("POST")
-            .uri("/v1/model-proxy/openai/chat/completions?stream=false")
+            .uri("/v1/proxy/openai/chat/completions?stream=false")
             .header("content-type", "application/json");
         if let Some(token) = token {
             builder = builder.header("authorization", format!("Bearer {token}"));

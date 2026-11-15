@@ -1813,8 +1813,8 @@ pub fn app(state: Arc<ServerState>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route(
-            "/v1/model-proxy/{provider}/{*rest}",
-            axum::routing::any(model_proxy_route),
+            "/v1/proxy/{provider}/{*rest}",
+            axum::routing::post(model_proxy_route),
         )
         .route("/v1/webhooks/{source}", post(integration_webhook))
         .route("/v1/oauth/{provider}/callback", get(generic_oauth_callback))

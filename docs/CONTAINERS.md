@@ -207,7 +207,7 @@ The server starts each worker with a small, deliberate environment:
 |---|---|---|
 | `FRONTAL_CODE_SERVER_API_KEY` | A random token for this task only | Authenticates the worker's own calls: read the task and its runtime, read and write its GitHub integration, publish, and complete. |
 | `OPENAI_API_KEY` (or `FRONTAL_API_KEY`, `XAI_API_KEY`, `AZURE_OPENAI_API_KEY`) | The same task token | The CLI's provider client needs a value. Model calls use it to reach the proxy, not the provider. |
-| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `http://frontal-relay:<port>/v1/model-proxy/<provider>` | Sends model traffic through the server. |
+| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `http://frontal-relay:<port>/v1/proxy/<provider>` | Sends model traffic through the server. |
 | `FRONTAL_CODE_SERVER_URL`, `FRONTAL_CODE_HOSTED_WORKER`, `FRONTAL_CODE_HOSTED_TASK_FILE` | Fixed values | Locate the server and the task file. |
 | `FRONTAL_CODE_MAX_OUTPUT_TOKENS` | Copied from the server, if set | Non-secret tuning. |
 
@@ -234,7 +234,7 @@ Every worker runs with `--cap-drop ALL`, `--security-opt no-new-privileges:true`
 
 ### How model calls reach the provider
 
-The worker sends each model request to `/v1/model-proxy/<provider>` on the server. The proxy:
+The worker sends each model request to `/v1/proxy/<provider>` on the server. The proxy:
 
 1. Checks the worker's token. The token must be live (issued for a task that has not completed or been cancelled).
 2. Removes the caller's authorization headers.

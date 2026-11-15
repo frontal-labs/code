@@ -17,13 +17,12 @@ mod mentions;
 mod notify;
 mod render;
 mod thinking;
-mod tui;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
-use std::io::{self, IsTerminal, Read, Write};
+use std::io::{self, Read, Write};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -332,8 +331,7 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
             provider,
             allowed_tools,
             permission_mode,
-            tui,
-        } => run_repl_with_provider(model, provider, allowed_tools, permission_mode, tui)?,
+        } => run_repl_with_provider(model, provider, allowed_tools, permission_mode)?,
         CliAction::HelpTopic(topic) => print_help_topic(topic),
         CliAction::Help { output_format } => print_help(output_format)?,
     }
@@ -544,7 +542,6 @@ enum CliAction {
         provider: Option<String>,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
-        tui: bool,
     },
     HelpTopic(LocalHelpTopic),
     // prompt-mode formatting is only supported for non-interactive runs
@@ -897,7 +894,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let mut permission_mode_override = None;
     let mut wants_help = false;
     let mut wants_version = false;
-    let mut wants_repl = false;
+
     let mut allowed_tool_values = Vec::new();
     let mut rest = Vec::new();
     let mut dash_p_prompt: Option<String> = None;
@@ -959,10 +956,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             }
             "--dangerously-skip-permissions" => {
                 permission_mode_override = Some(PermissionMode::DangerFullAccess);
-                index += 1;
-            }
-            "--repl" => {
-                wants_repl = true;
                 index += 1;
             }
             "-p" => {
@@ -1040,7 +1033,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             provider,
             allowed_tools,
             permission_mode,
-            tui: !wants_repl,
         });
     }
     if rest.first().map(String::as_str) == Some("--resume") {
@@ -1095,7 +1087,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             provider: provider.clone(),
             allowed_tools,
             permission_mode,
-            tui: false,
         }),
         "plugins" => Ok(CliAction::Plugins {
             action: rest.get(1).cloned(),
@@ -5675,14 +5666,8 @@ fn run_repl_with_provider(
     provider: Option<String>,
     allowed_tools: Option<AllowedToolSet>,
     permission_mode: PermissionMode,
-    tui: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cli =
-        LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?;
-    // The full-screen TUI needs a real terminal; piped input and output use the REPL.
-    if tui && io::stdin().is_terminal() && io::stdout().is_terminal() {
-        return cli.run_tui();
-    }
+    let cli = LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?;
     drive_repl(cli)
 }
 
@@ -5742,8 +5727,8 @@ fn drive_repl(mut cli: LiveCli) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 match cli.run_turn(&prompt) {
                     Ok(()) => {
-                        // Desktop notifications are REPL/TUI-only; the turn body
-                        // and model live on the session, so notify after the turn.
+                        // Desktop notifications are interactive-only; the turn
+                        // body and model live on the session, so notify after the turn.
                         notify::notify_turn_end(&cli.model, &cli.last_turn_text, None);
                     }
                     Err(error) => {
@@ -6520,39 +6505,32 @@ impl LiveCli {
         // Logo bitmap (5 columns x 8 rows) as solid squares: each half-block character is one
         // pixel tall, so two pixel rows share each text line.
         const LOGO: [&str; 4] = ["▀▄▀▄▀", "▀▄▀▄ ", "▀▄▀  ", "▀▄   "];
-        const INDENT: &str = "  ";
         const GAP: &str = "   ";
         let info = [
             format!("\x1b[1mFrontal Code\x1b[0m \x1b[90mv{VERSION}\x1b[0m"),
             format!("\x1b[90m{} · {}\x1b[0m", self.model, self.access_label()),
             format!("\x1b[90m{}\x1b[0m", display_directory()),
         ];
-        // One blank line above matches the horizontal indent, since a terminal line is
-        // about twice a column's width.
-        let mut banner = String::from("\n");
+        let mut banner = String::new();
         for (index, logo) in LOGO.iter().enumerate() {
             let line = info.get(index).map_or("", String::as_str);
-            let _ = writeln!(banner, "{INDENT}{logo}{GAP}{line}");
+            let _ = writeln!(banner, "{logo}{GAP}{line}");
         }
-        let _ = writeln!(banner, "\n{INDENT}Session details are redacted by default.");
+        let _ = writeln!(banner, "\nSession details are redacted by default.");
         for note in workspace_notes() {
-            let _ = writeln!(banner, "{INDENT}\x1b[2m{}\x1b[0m", banner_note(&note));
+            let _ = writeln!(banner, "\x1b[2m{}\x1b[0m", banner_note(&note));
         }
         let _ = write!(
             banner,
-            "\n{INDENT}Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context\n\
-{INDENT}\x1b[2m/resume latest\x1b[0m to resume · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship\n\
-{INDENT}\x1b[2mTab\x1b[0m for workflow completions · \x1b[1m?\x1b[0m for shortcuts\n"
+            "\nType \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context\n\
+\x1b[2m/resume latest\x1b[0m to resume · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship\n\
+\x1b[2mTab\x1b[0m for workflow completions · \x1b[1m?\x1b[0m for shortcuts\n"
         );
         banner
     }
 
     pub(crate) fn model(&self) -> &str {
         &self.model
-    }
-
-    pub(crate) fn provider(&self) -> Option<&str> {
-        self.provider.as_deref()
     }
 
     pub(crate) fn permission_mode(&self) -> PermissionMode {
@@ -6573,222 +6551,6 @@ impl LiveCli {
                 .total_cost_usd(),
             None => 0.0,
         }
-    }
-
-    /// Runs the full-screen TUI REPL. Slash command output is captured into
-    /// the transcript; conversational input runs streaming turns whose events
-    /// are applied to the TUI by the render loop.
-    pub(crate) fn run_tui(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut run_slash_command = |cli: &mut LiveCli,
-                                     command,
-                                     buffer: &mut Vec<u8>|
-         -> Result<bool, Box<dyn std::error::Error>> {
-            cli.handle_repl_command_into(command, buffer)
-        };
-        crate::tui::run(self, &mut run_slash_command)
-    }
-
-    /// Like [`Self::handle_repl_command`], but writes all command output into
-    /// `buffer` (used by the TUI to capture slash command output instead of
-    /// writing to the terminal directly).
-    ///
-    /// Commands that drive their own terminal interaction (commit, pr, issue,
-    /// bughunter, ultraplan, ...) are not executed here; they print a pointer
-    /// back to the line-based REPL and return `true` so the TUI can refresh its
-    /// status line.
-    pub(crate) fn handle_repl_command_into(
-        &mut self,
-        command: SlashCommand,
-        buffer: &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let mut out = |text: &str| {
-            let _ = buffer.write_all(text.as_bytes());
-            let _ = buffer.write_all(b"\n");
-        };
-        let mut changed = false;
-        match command {
-            SlashCommand::Help => out(&render_repl_help()),
-            SlashCommand::Status => {
-                let cumulative = self.runtime.usage().cumulative_usage();
-                let latest = self.runtime.usage().current_turn_usage();
-                let report = format_status_report(
-                    &self.model,
-                    StatusUsage {
-                        message_count: self.runtime.session().messages.len(),
-                        turns: self.runtime.usage().turns(),
-                        latest,
-                        cumulative,
-                        estimated_tokens: self.runtime.estimated_tokens(),
-                    },
-                    self.permission_mode.as_str(),
-                    &status_context(Some(&self.session.path)).expect("status context should load"),
-                );
-                out(&report);
-            }
-            SlashCommand::Model { model } => {
-                changed = self.set_model_into(model, buffer)?;
-            }
-            SlashCommand::Permissions { mode } => {
-                changed = self.set_permissions_into(mode, buffer)?;
-            }
-            SlashCommand::Clear { confirm } => {
-                changed = self.clear_session_into(confirm, buffer)?;
-            }
-            SlashCommand::Compact => {
-                self.compact_into(buffer)?;
-            }
-            SlashCommand::Cost => {
-                let estimate = match pricing_for_model(&self.model) {
-                    Some(pricing) => self
-                        .runtime
-                        .usage()
-                        .cumulative_usage()
-                        .estimate_cost_usd_with_pricing(pricing)
-                        .total_cost_usd(),
-                    None => 0.0,
-                };
-                out(&format!(
-                    "Cumulative cost estimate: ${estimate:.4} ({} tokens)",
-                    self.runtime.estimated_tokens()
-                ));
-            }
-            SlashCommand::Resume { session_path } => {
-                changed = self.resume_session_into(session_path, buffer)?;
-            }
-            SlashCommand::Config { section } => {
-                Self::print_config_into(section.as_deref(), buffer)?;
-            }
-            SlashCommand::Telemetry { action, target } => {
-                match action.as_deref().unwrap_or("status") {
-                    "status" => out(&render_telemetry_report(target.as_deref())?),
-                    "on" | "off" => {
-                        let cwd = env::current_dir()?;
-                        let settings_path = update_project_telemetry_settings(
-                            &cwd,
-                            action.as_deref() == Some("on"),
-                            target.as_deref(),
-                        )?;
-                        let loader = ConfigLoader::default_for(&cwd);
-                        let runtime_config = loader.load()?;
-                        out(&telemetry_update_report(
-                            action.as_deref().unwrap_or("status"),
-                            &settings_path,
-                            &runtime_config,
-                        ));
-                    }
-                    other => out(&format!(
-                        "Telemetry\n  Result           unsupported\n  Action           {other}\n  Supported        /telemetry [status|on|off] [project|local]"
-                    )),
-                }
-            }
-            SlashCommand::Mcp { action, target } => {
-                let args = match (action.as_deref(), target.as_deref()) {
-                    (None, None) => None,
-                    (Some(action), None) => Some(action.to_string()),
-                    (Some(action), Some(target)) => Some(format!("{action} {target}")),
-                    (None, Some(target)) => Some(target.to_string()),
-                };
-                Self::print_mcp_into(args.as_deref(), buffer)?;
-            }
-            SlashCommand::Memory => out(&render_memory_report()?),
-            SlashCommand::Init => {
-                run_init(CliOutputFormat::Text)?;
-                out("Project initialization completed.");
-            }
-            SlashCommand::Diff => out(&render_diff_report()?),
-            SlashCommand::Version => {
-                Self::print_version_into(buffer);
-            }
-            SlashCommand::Upgrade => out(&render_upgrade_guidance()),
-            SlashCommand::Export { path } => {
-                self.export_session_into(path.as_deref(), buffer)?;
-            }
-            SlashCommand::Session { action, target } => {
-                changed =
-                    self.handle_session_command_into(action.as_deref(), target.as_deref(), buffer)?;
-            }
-            SlashCommand::Plugins { action, target } => {
-                changed =
-                    self.handle_plugins_command_into(action.as_deref(), target.as_deref(), buffer)?;
-            }
-            SlashCommand::Agents { args } => {
-                out(&handle_agents_slash_command(
-                    args.as_deref(),
-                    &env::current_dir()?,
-                )?);
-            }
-            SlashCommand::Skills { args } => {
-                match classify_skills_slash_command(args.as_deref()) {
-                    // Invoking a skill runs a model turn; that needs the TUI's
-                    // turn pipeline, not this capture path.
-                    SkillSlashDispatch::Invoke(prompt) => {
-                        out(&format!("Skill '{prompt}' runs as a normal prompt in the line-based REPL — exit the TUI and run it there."));
-                    }
-                    SkillSlashDispatch::Local => {
-                        out(&handle_skills_slash_command(
-                            args.as_deref(),
-                            &env::current_dir()?,
-                        )?);
-                    }
-                }
-            }
-            SlashCommand::Doctor => out(&render_doctor_report()?.render()),
-
-            SlashCommand::Bughunter { .. }
-            | SlashCommand::Commit
-            | SlashCommand::Pr { .. }
-            | SlashCommand::Issue { .. }
-            | SlashCommand::Review { .. }
-            | SlashCommand::SecurityReview
-            | SlashCommand::Ultraplan { .. }
-            | SlashCommand::Teleport { .. }
-            | SlashCommand::DebugToolCall
-            | SlashCommand::Vim
-            | SlashCommand::Stats
-            | SlashCommand::Share
-            | SlashCommand::Feedback
-            | SlashCommand::Files
-            | SlashCommand::Fast
-            | SlashCommand::Summary
-            | SlashCommand::Desktop
-            | SlashCommand::Brief
-            | SlashCommand::Advisor
-            | SlashCommand::Stickers
-            | SlashCommand::Insights
-            | SlashCommand::Thinkback
-            | SlashCommand::ReleaseNotes
-            | SlashCommand::Keybindings
-            | SlashCommand::PrivacySettings
-            | SlashCommand::Plan { .. }
-            | SlashCommand::Ide { .. }
-            | SlashCommand::Sandbox
-            | SlashCommand::AddDir { .. }
-            | SlashCommand::Branch { .. }
-            | SlashCommand::Context { .. }
-            | SlashCommand::Copy { .. }
-            | SlashCommand::Effort { .. }
-            | SlashCommand::Hooks { .. }
-            | SlashCommand::OutputStyle { .. }
-            | SlashCommand::Rename { .. }
-            | SlashCommand::Rewind { .. }
-            | SlashCommand::Tag { .. }
-            | SlashCommand::Tasks { .. }
-            | SlashCommand::Usage { .. }
-            | SlashCommand::Voice { .. } => {
-                out(&format!(
-                    "/{command:?} runs in the line-based REPL — exit the TUI and run it there."
-                ));
-            }
-            SlashCommand::Exit => {
-                // Fast path: the TUI intercepts /exit before this is reached.
-                out("Use /exit to leave the TUI (session is saved).");
-            }
-            SlashCommand::Unknown(name) => {
-                out(&format_unknown_slash_command(&name));
-            }
-        }
-        Ok(changed)
     }
 
     fn repl_completion_candidates(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -7280,47 +7042,6 @@ impl LiveCli {
         Ok(true)
     }
 
-    /// Buffer-capturing variant of [`Self::set_model`] for the TUI.
-    fn set_model_into(
-        &mut self,
-        model: Option<String>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let Some(model) = model else {
-            let _ = buffer
-                .write_all(b"Model details are redacted; use the configured provider settings.\n");
-            return Ok(false);
-        };
-
-        let model = resolve_model_alias(&model).to_string();
-
-        if model == self.model {
-            let _ = buffer
-                .write_all(b"Model details are redacted; use the configured provider settings.\n");
-            return Ok(false);
-        }
-
-        let previous = self.model.clone();
-        let session = self.runtime.session().clone();
-        let runtime = build_runtime_with_provider(
-            session,
-            &self.session.id,
-            model.clone(),
-            self.system_prompt.clone(),
-            true,
-            true,
-            self.allowed_tools.clone(),
-            self.permission_mode,
-            self.provider.clone(),
-            None,
-        )?;
-        self.replace_runtime(runtime)?;
-        self.model.clone_from(&model);
-        buffer.write_all(format!("Switched model from {previous} to {model}.\n").as_bytes())?;
-        Ok(true)
-    }
-
     fn set_permissions(
         &mut self,
         mode: Option<String>,
@@ -7377,53 +7098,6 @@ impl LiveCli {
         Ok(previous)
     }
 
-    /// Buffer-capturing variant of [`Self::set_permissions`] for the TUI.
-    fn set_permissions_into(
-        &mut self,
-        mode: Option<String>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let Some(mode) = mode else {
-            buffer
-                .write_all(format_permissions_report(self.permission_mode.as_str()).as_bytes())?;
-            buffer.write_all(b"\n")?;
-            return Ok(false);
-        };
-
-        let normalized = normalize_permission_mode(&mode).ok_or_else(|| {
-            format!(
-                "unsupported permission mode '{mode}'. Use read-only, workspace-write, or danger-full-access."
-            )
-        })?;
-
-        if normalized == self.permission_mode.as_str() {
-            buffer.write_all(format_permissions_report(normalized).as_bytes())?;
-            buffer.write_all(b"\n")?;
-            return Ok(false);
-        }
-
-        let previous = self.permission_mode.as_str().to_string();
-        let session = self.runtime.session().clone();
-        self.permission_mode = permission_mode_from_label(normalized);
-        let runtime = build_runtime_with_provider(
-            session,
-            &self.session.id,
-            self.model.clone(),
-            self.system_prompt.clone(),
-            true,
-            true,
-            self.allowed_tools.clone(),
-            self.permission_mode,
-            self.provider.clone(),
-            None,
-        )?;
-        self.replace_runtime(runtime)?;
-        buffer.write_all(format_permissions_switch_report(&previous, normalized).as_bytes())?;
-        buffer.write_all(b"\n")?;
-        Ok(true)
-    }
-
     fn clear_session(&mut self, confirm: bool) -> Result<bool, Box<dyn std::error::Error>> {
         if !confirm {
             println!(
@@ -7452,43 +7126,6 @@ impl LiveCli {
         )?;
         self.replace_runtime(runtime)?;
         println!("Session cleared; session details are redacted.");
-        Ok(true)
-    }
-
-    /// Buffer-capturing variant of [`Self::clear_session`] for the TUI.
-    fn clear_session_into(
-        &mut self,
-        confirm: bool,
-        buffer: &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        use std::io::Write;
-        if !confirm {
-            buffer.write_all(
-                b"clear: confirmation required; run /clear --confirm to start a fresh session.\n",
-            )?;
-            return Ok(false);
-        }
-
-        let mut session_state = Session::new();
-        session_state.set_metadata(session_metadata_for_new_session(
-            &self.model,
-            self.provider.as_deref(),
-        ));
-        self.session = create_managed_session_handle(&session_state.session_id)?;
-        let runtime = build_runtime_with_provider(
-            session_state.with_persistence_path(self.session.path.clone()),
-            &self.session.id,
-            self.model.clone(),
-            self.system_prompt.clone(),
-            true,
-            true,
-            self.allowed_tools.clone(),
-            self.permission_mode,
-            self.provider.clone(),
-            None,
-        )?;
-        self.replace_runtime(runtime)?;
-        buffer.write_all(b"Session cleared; session details are redacted.\n")?;
         Ok(true)
     }
 
@@ -7529,43 +7166,6 @@ impl LiveCli {
         Ok(true)
     }
 
-    /// Buffer-capturing variant of [`Self::resume_session`] for the TUI.
-    fn resume_session_into(
-        &mut self,
-        session_path: Option<String>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let Some(session_ref) = session_path else {
-            buffer.write_all(render_resume_usage().as_bytes())?;
-            buffer.write_all(b"\n")?;
-            return Ok(false);
-        };
-
-        let handle = resolve_session_reference(&session_ref)?;
-        let session = Session::load_from_path(&handle.path)?;
-        let session_id = session.session_id.clone();
-        let runtime = build_runtime_with_provider(
-            session,
-            &handle.id,
-            self.model.clone(),
-            self.system_prompt.clone(),
-            true,
-            true,
-            self.allowed_tools.clone(),
-            self.permission_mode,
-            self.provider.clone(),
-            None,
-        )?;
-        self.replace_runtime(runtime)?;
-        self.session = SessionHandle {
-            id: session_id,
-            path: handle.path,
-        };
-        buffer.write_all(b"Session resumed; session details are redacted.\n")?;
-        Ok(true)
-    }
-
     fn print_config(
         section: Option<&str>,
         output_format: CliOutputFormat,
@@ -7580,17 +7180,6 @@ impl LiveCli {
                 serde_json::to_string_pretty(&config_json_value(section)?)?
             ),
         }
-        Ok(())
-    }
-
-    /// Buffer-capturing variant of [`Self::print_config`] for the TUI.
-    fn print_config_into(
-        section: Option<&str>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let _ = section;
-        buffer.write_all(b"Config details are redacted; use JSON output for safe metadata.\n")?;
         Ok(())
     }
 
@@ -7625,17 +7214,6 @@ impl LiveCli {
                 println!("{{\"kind\":\"mcp\",\"action\":\"list\",\"redacted\":true}}");
             }
         }
-        Ok(())
-    }
-
-    /// Buffer-capturing variant of [`Self::print_mcp`] for the TUI.
-    fn print_mcp_into(
-        args: Option<&str>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let _ = args;
-        buffer.write_all(b"MCP command completed; details are redacted.\n")?;
         Ok(())
     }
 
@@ -7689,14 +7267,6 @@ impl LiveCli {
         let _ = crate::print_version(output_format);
     }
 
-    /// Buffer-capturing variant of the version report for the TUI.
-    fn print_version_into(buffer: &mut Vec<u8>) {
-        use std::io::Write;
-        let report = render_version_report();
-        let _ = buffer.write_all(report.as_bytes());
-        let _ = buffer.write_all(b"\n");
-    }
-
     fn export_session(
         &self,
         requested_path: Option<&str>,
@@ -7704,19 +7274,6 @@ impl LiveCli {
         let export_path = resolve_export_path(requested_path, self.runtime.session())?;
         fs::write(&export_path, render_export_text(self.runtime.session()))?;
         println!("Export completed; transcript details are redacted.");
-        Ok(())
-    }
-
-    /// Buffer-capturing variant of [`Self::export_session`] for the TUI.
-    fn export_session_into(
-        &self,
-        requested_path: Option<&str>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let export_path = resolve_export_path(requested_path, self.runtime.session())?;
-        fs::write(&export_path, render_export_text(self.runtime.session()))?;
-        buffer.write_all(b"Export completed; transcript details are redacted.\n")?;
         Ok(())
     }
 
@@ -7789,79 +7346,6 @@ impl LiveCli {
         }
     }
 
-    /// Buffer-capturing variant of [`Self::handle_session_command`] for the TUI.
-    fn handle_session_command_into(
-        &mut self,
-        action: Option<&str>,
-        target: Option<&str>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        use std::io::Write;
-        match action {
-            None | Some("list") => {
-                buffer.write_all(render_session_list(&self.session.id)?.as_bytes())?;
-                buffer.write_all(b"\n")?;
-                Ok(false)
-            }
-            Some("switch") => {
-                let Some(target) = target else {
-                    buffer.write_all(b"Usage: /session switch <session-id>\n")?;
-                    return Ok(false);
-                };
-                let handle = resolve_session_reference(target)?;
-                let session = Session::load_from_path(&handle.path)?;
-                let session_id = session.session_id.clone();
-                let runtime = build_runtime_with_provider(
-                    session,
-                    &handle.id,
-                    self.model.clone(),
-                    self.system_prompt.clone(),
-                    true,
-                    true,
-                    self.allowed_tools.clone(),
-                    self.permission_mode,
-                    self.provider.clone(),
-                    None,
-                )?;
-                self.replace_runtime(runtime)?;
-                self.session = SessionHandle {
-                    id: session_id,
-                    path: handle.path,
-                };
-                buffer.write_all(b"Session switched; session details are redacted.\n")?;
-                Ok(true)
-            }
-            Some("fork") => {
-                let forked = self.runtime.fork_session(target.map(ToOwned::to_owned));
-                let handle = create_managed_session_handle(&forked.session_id)?;
-                let forked = forked.with_persistence_path(handle.path.clone());
-                forked.save_to_path(&handle.path)?;
-                let runtime = build_runtime_with_provider(
-                    forked,
-                    &handle.id,
-                    self.model.clone(),
-                    self.system_prompt.clone(),
-                    true,
-                    true,
-                    self.allowed_tools.clone(),
-                    self.permission_mode,
-                    self.provider.clone(),
-                    None,
-                )?;
-                self.replace_runtime(runtime)?;
-                self.session = handle;
-                buffer.write_all(b"Session forked; session details are redacted.\n")?;
-                Ok(true)
-            }
-            Some(other) => {
-                buffer.write_all(format!(
-                    "Unknown /session action '{other}'. Use /session list, /session switch <session-id>, or /session fork [branch-name].\n"
-                ).as_bytes())?;
-                Ok(false)
-            }
-        }
-    }
-
     fn handle_plugins_command(
         &mut self,
         action: Option<&str>,
@@ -7873,27 +7357,6 @@ impl LiveCli {
         let mut manager = build_plugin_manager(&cwd, &loader, &runtime_config);
         let result = handle_plugins_slash_command(action, target, &mut manager)?;
         println!("{}", result.message);
-        if result.reload_runtime {
-            self.reload_runtime_features()?;
-        }
-        Ok(false)
-    }
-
-    /// Buffer-capturing variant of [`Self::handle_plugins_command`] for the TUI.
-    fn handle_plugins_command_into(
-        &mut self,
-        action: Option<&str>,
-        target: Option<&str>,
-        buffer: &mut Vec<u8>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let cwd = env::current_dir()?;
-        let loader = ConfigLoader::default_for(&cwd);
-        let runtime_config = loader.load()?;
-        let mut manager = build_plugin_manager(&cwd, &loader, &runtime_config);
-        let result = handle_plugins_slash_command(action, target, &mut manager)?;
-        buffer.write_all(result.message.as_bytes())?;
-        buffer.write_all(b"\n")?;
         if result.reload_runtime {
             self.reload_runtime_features()?;
         }
@@ -7939,33 +7402,6 @@ impl LiveCli {
         )?;
         self.replace_runtime(runtime)?;
         println!("Compaction completed; session details are redacted.");
-        Ok(())
-    }
-
-    /// Buffer-capturing variant of [`Self::compact`] for the TUI.
-    fn compact_into(&mut self, buffer: &mut Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
-        use std::io::Write;
-        let result = self.runtime.compact(CompactionConfig::default());
-        let mut compacted = self.runtime.session().clone();
-        compacted.apply_compaction(
-            result.compacted_session,
-            &result.removed_messages,
-            Some(&self.session.path),
-        )?;
-        let runtime = build_runtime_with_provider(
-            compacted,
-            &self.session.id,
-            self.model.clone(),
-            self.system_prompt.clone(),
-            true,
-            true,
-            self.allowed_tools.clone(),
-            self.permission_mode,
-            self.provider.clone(),
-            None,
-        )?;
-        self.replace_runtime(runtime)?;
-        buffer.write_all(b"Compaction completed; session details are redacted.\n")?;
         Ok(())
     }
 
@@ -11783,31 +11219,6 @@ impl CliToolExecutor {
     }
 }
 
-/// Receives the tool name, output, and error flag of each completed tool call.
-type ToolResultObserver = Box<dyn Fn(&str, &str, bool)>;
-
-thread_local! {
-    /// Set by the full-screen TUI's turn worker to hear each tool result as it completes.
-    static TOOL_RESULT_OBSERVER: std::cell::RefCell<Option<ToolResultObserver>> =
-        std::cell::RefCell::new(None);
-}
-
-fn set_tool_result_observer(observer: impl Fn(&str, &str, bool) + 'static) {
-    TOOL_RESULT_OBSERVER.with(|slot| *slot.borrow_mut() = Some(Box::new(observer)));
-}
-
-fn clear_tool_result_observer() {
-    TOOL_RESULT_OBSERVER.with(|slot| *slot.borrow_mut() = None);
-}
-
-fn report_tool_result(tool_name: &str, output: &str, is_error: bool) {
-    TOOL_RESULT_OBSERVER.with(|slot| {
-        if let Some(observer) = slot.borrow().as_ref() {
-            observer(tool_name, output, is_error);
-        }
-    });
-}
-
 impl ToolExecutor for CliToolExecutor {
     fn execute(&mut self, tool_name: &str, input: &str) -> Result<String, ToolError> {
         if self
@@ -11832,7 +11243,6 @@ impl ToolExecutor for CliToolExecutor {
         };
         match result {
             Ok(output) => {
-                report_tool_result(tool_name, &output, false);
                 if self.emit_output {
                     let markdown = format_tool_result(tool_name, &output, false);
                     self.renderer
@@ -11842,7 +11252,6 @@ impl ToolExecutor for CliToolExecutor {
                 Ok(output)
             }
             Err(error) => {
-                report_tool_result(tool_name, &error.to_string(), true);
                 if self.emit_output {
                     let markdown = format_tool_result(tool_name, &error.to_string(), true);
                     self.renderer
@@ -12196,10 +11605,6 @@ fn print_help_to(out: &mut impl Write) -> io::Result<()> {
         "  --no-analytics             Do not send product analytics for this run (see docs/ANALYTICS.md)"
     )?;
     writeln!(out, "  --allowedTools TOOLS       Restrict enabled tools (repeatable; comma-separated aliases supported)")?;
-    writeln!(
-        out,
-        "  --repl                     Use the line-based REPL instead of the full-screen TUI"
-    )?;
     writeln!(
         out,
         "  --version, -V              Print version and build information locally"
@@ -12632,7 +12037,6 @@ mod tests {
                 provider: None,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
-                tui: true,
             }
         );
     }
@@ -12979,7 +12383,6 @@ mod tests {
                 provider: None,
                 allowed_tools: None,
                 permission_mode: PermissionMode::ReadOnly,
-                tui: true,
             }
         );
     }
@@ -13009,7 +12412,6 @@ mod tests {
                         .collect()
                 ),
                 permission_mode: crate::default_permission_mode(),
-                tui: true,
             }
         );
     }

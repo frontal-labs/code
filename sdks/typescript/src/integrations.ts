@@ -74,7 +74,11 @@ export class IntegrationClient {
   private readonly baseUrl: string;
 
   constructor(baseUrl: string) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    let normalized = baseUrl;
+    while (normalized.endsWith("/")) {
+      normalized = normalized.slice(0, -1);
+    }
+    this.baseUrl = normalized;
   }
 
   /** List all registered integrations. `GET /v1/integrations` */

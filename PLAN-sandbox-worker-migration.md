@@ -457,10 +457,45 @@ sandbox server.
   (shellcheck + `tofu fmt -check`).
 - `cargo check -p code-server` passes clean.
 
-### Phase 0 — Spike ⏭ (skipped per user instruction)
-- Isolate→VM promotion unvalidated on this macOS box (no QEMU/KVM).
-- R1/R2 risks carried; Linux+QEMU/KVM spike deferred to a follow-up if the user
-  wants promotion confidence before shipping.
+### Phase 0 — Spike ⏳ (in progress)
+
+**Method (user-directed: "Local Mac + Docker/KVM"):** Apple-silicon macOS cannot
+run x86_64 KVM guests (VZ driver is arm64-only), so the spike runs on a local
+**Lima arm64 VM** (Ubuntu 24.04, 8 vCPU / 16 GiB / 100 GiB, `vz` driver).
+Docker-in-VM runs the sandbox repo's linux-dev image (same `--privileged`
+cgroup setup as `docker/run-linux.sh`). Tier 2 VM tests run under **QEMU TCG
+software emulation** — the same `promote_tree` / guest-agent / exec code path as
+KVM, just slower. Real KVM coverage remains via the upstream `vm-kvm.yml` CI
+workflow on the pinned commit (`47a87e9`).
+
+Steps:
+1. ✅ Lima VM `frontal-spike` running; `limactl shell` works; git present.
+2. ✅ Docker installed in-VM (apt was blocked by `unattended-upgrades` on
+   cloud-image boot; stopped+masked the unit). Docker daemon active, server
+   responds.
+3. ✅ Cloned `frontal-labs/sandbox` at `47a87e9` to `~/Desktop/sandbox-spike`.
+4. ⏳ Building linux-dev image; Tier 1: `cargo test -p sandbox-worker` in the
+   `--privileged` container (delegated cgroup at `/sys/fs/cgroup/workers`).
+5. ⏳ Tier 2: build the emulated guest image (`emulated-vm/build-image.sh`,
+   no GUEST_PROGRAMS) then `cargo test -p sandbox-promote --test into_guest --
+   --ignored` with `SANDBOX_VM_IMAGE` + `SANDBOX_VM_ACCEL=tcg`. Exit criteria:
+   a promoted guest session boots the guest agent, `promote_tree` reports the
+   expected dirs/files/bytes, and the file bytes round-trip.
+6. ⏳ Record results; de-risk R1 (promotion path) and R2 (platform dependency).
+
+Known environment gotchas discovered:
+- Lima 2.3.0: `images[].format:` field rejected (non-strict warning, cosmetic
+  on every `limactl` call — removed from `~/.lima/frontal-spike/lima.yaml`);
+  `cloudInit.users` required or the guest drops to a login prompt.
+- Ubuntu cloud image runs `unattended-upgrades` at boot, grabbing apt locks and
+  blocking package installs.
+- Docker socket needs `sudo` in the Lima guest (usermod -aG docker applies only
+  to new shells).
+
+**Scope note:** the full `docker/run-vm-tests.sh` suite also builds the
+CPython WASI artifacts and ffmpeg/chromium into the guest image — too heavy for
+the spike. The minimal `into_guest` test exercises the exact promotion path
+(guest agent boot → `promote_tree` → guest exec) without those extras.
 
 ### Phase 4 — Hardening, docs, infra alignment ✅
 - `docs/design/worker-architecture.md` rewritten to the sandbox transport

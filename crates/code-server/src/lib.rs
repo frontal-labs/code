@@ -60,17 +60,17 @@ use code_tools::{
 };
 use futures_util::{SinkExt, StreamExt};
 mod tracker_reporting;
-use hmac::{Hmac, KeyInit, Mac};
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
-use sha2::Sha256;
-use tokio::sync::broadcast;
 use frontal_sandbox_sdk::Client as SandboxClient;
+use hmac::{Hmac, KeyInit, Mac};
 use sandbox_types::policy::PolicyAction;
 use sandbox_types::{
     ExecEvent, ExecRequest, NetworkPolicy, NetworkPolicyRule, SessionConfig, SessionId,
     SessionStatus, SnapshotId, TierPreference,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
+use sha2::Sha256;
+use tokio::sync::broadcast;
 
 const DEFAULT_EVENT_REPLAY_LIMIT: usize = 100;
 const ORPHANED_WORKER_STATUS: &str = "orphaned";
@@ -3247,7 +3247,7 @@ fn retry_task_lane_internal(
         &mut refreshed_context,
         primary_role,
         primary_description.as_deref(),
-        previous_worker_id,
+        previous_worker_id.as_deref(),
     )?;
     let reloaded = state
         .tasks
@@ -4165,7 +4165,6 @@ impl LaneWorkerTransport for HostedAgentLaneWorkerTransport {
     }
 }
 
-
 /// Per-task state for the sandbox lane transport. The session id doubles as the
 /// lane worker id reported to the lane orchestrator. `snapshot_id` records where
 /// the last run finished: a re-run forks from it so the new session starts from
@@ -4298,19 +4297,19 @@ impl SandboxLaneWorkerTransport {
         request: &LaneExecutionRequest,
         previous: Option<SessionId>,
         checkout_root: Option<&FsPath>,
-        base_commit: Option<String>,
+        base_commit: Option<&str>,
     ) -> Result<(SessionId, usize, String), String> {
         let client = &self.client;
         match previous {
             Some(id) if self.snapshot_of(&id).is_some() => {
                 let snapshot = self.snapshot_of(&id).expect("checked above");
-                let sessions = client
-                    .fork(snapshot, 1)
-                    .await
-                    .map_err(|error| format!("failed to fork sandbox session from snapshot: {error}"))?;
-                let session = sessions.into_iter().next().ok_or_else(|| {
-                    "sandbox server returned no session id for fork".to_string()
+                let sessions = client.fork(snapshot, 1).await.map_err(|error| {
+                    format!("failed to fork sandbox session from snapshot: {error}")
                 })?;
+                let session = sessions
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| "sandbox server returned no session id for fork".to_string())?;
                 // Re-inject the env file so the re-run sees fresh credentials.
                 self.write_session_files(client, session, request, base_commit)
                     .await?;
@@ -4344,8 +4343,13 @@ impl SandboxLaneWorkerTransport {
                                     %error,
                                     "failed to wake sandbox session, starting fresh"
                                 );
-                                self.start_fresh_session(client, request, checkout_root, base_commit)
-                                    .await
+                                self.start_fresh_session(
+                                    client,
+                                    request,
+                                    checkout_root,
+                                    base_commit,
+                                )
+                                .await
                             }
                         }
                     }
@@ -4373,7 +4377,10 @@ impl SandboxLaneWorkerTransport {
                     }
                 }
             }
-            None => self.start_fresh_session(client, request, checkout_root, base_commit).await,
+            None => {
+                self.start_fresh_session(client, request, checkout_root, base_commit)
+                    .await
+            }
         }
     }
 
@@ -4383,7 +4390,7 @@ impl SandboxLaneWorkerTransport {
         client: &SandboxClient,
         request: &LaneExecutionRequest,
         checkout_root: Option<&FsPath>,
-        base_commit: Option<String>,
+        base_commit: Option<&str>,
     ) -> Result<(SessionId, usize, String), String> {
         let session = client
             .create_session(self.session_config())
@@ -4410,7 +4417,7 @@ impl SandboxLaneWorkerTransport {
         client: &SandboxClient,
         session: SessionId,
         request: &LaneExecutionRequest,
-        base_commit: Option<String>,
+        base_commit: Option<&str>,
     ) -> Result<(), String> {
         let token = self
             .worker_access
@@ -4423,12 +4430,9 @@ impl SandboxLaneWorkerTransport {
 
         // The session's env is dropped on wake (ADR 0010), so the env map is
         // written to a file the agent sources.
-        let env_json = serde_json::to_vec_pretty(&Self::sandbox_task_env(
-            &self.server_url,
-            &token,
-            &provider,
-        ))
-        .expect("env map is always serializable");
+        let env_json =
+            serde_json::to_vec_pretty(&Self::sandbox_task_env(&self.server_url, &token, provider))
+                .expect("env map is always serializable");
         client
             .write_file(session, "/workspace/.frontal-code-hosted/env", env_json)
             .await
@@ -4445,8 +4449,8 @@ impl SandboxLaneWorkerTransport {
         Ok(())
     }
 
-    /// Starts the agent inside the session fire-and-forget. Its fine-grained
-    /// events flow back over the control plane via FRONTAL_CODE_SERVER_URL, so
+    /// Starts the agent in the session fire-and-forget. Its fine-grained
+    /// events flow back over the control plane via `FRONTAL_CODE_SERVER_URL`, so
     /// the server does not need to capture its stdout. The thread owns its own
     /// runtime and ends when the command exits. `cancel` destroys the session,
     /// which kills the exec. On a clean exit the session's state is snapshotted
@@ -4477,117 +4481,125 @@ impl SandboxLaneWorkerTransport {
                     "hosted".to_string(),
                     "task".to_string(),
                     "run".to_string(),
-                    task_id.to_string(),
+                    task_id.clone(),
                 ],
                 cwd: Some("/workspace".to_string()),
                 stream: true,
                 ..ExecRequest::default()
             };
-            runtime.block_on(async {
-                let stream = match client.exec_stream(session, &request).await {
-                    Ok(stream) => stream,
-                    Err(error) => {
-                        tracing::error!(
-                            target: "code-server::sandbox",
-                            task_id = %task_id,
-                            %error,
-                            "sandbox exec stream failed to start"
-                        );
-                        return;
-                    }
-                };
-                futures_util::pin_mut!(stream);
-                while let Some(event) = stream.next().await {
-                    match event {
-                        Ok(ExecEvent::Output { data, .. }) => {
-                            tracing::debug!(
-                                target: "code-server::sandbox",
-                                task_id = %task_id,
-                                output = %String::from_utf8_lossy(&data),
-                                "sandbox exec output"
-                            );
-                        }
-                        Ok(ExecEvent::Exit { exit_code, .. }) => {
-                            tracing::info!(
-                                target: "code-server::sandbox",
-                                task_id = %task_id,
-                                exit_code,
-                                "sandbox exec finished"
-                            );
-                            if exit_code == 0 {
-                                // Snapshot the final state so a re-run can fork
-                                // from it; the server may have destroyed the
-                                // session by then, in which case the re-run
-                                // falls back to a fresh session.
-                                match client.snapshot(session).await {
-                                    Ok(snapshot) => {
-                                        if let Ok(mut tasks) = tasks.lock() {
-                                            if let Some(state) = tasks.get_mut(&session.to_string()) {
-                                                state.snapshot_id = Some(snapshot);
-                                            }
-                                        }
-                                    }
-                                    Err(error) => {
-                                        tracing::warn!(
-                                            target: "code-server::sandbox",
-                                            task_id = %task_id,
-                                            %error,
-                                            "failed to snapshot sandbox session after exec"
-                                        );
-                                    }
-                                }
-                            }
-                            return;
-                        }
-                        Ok(ExecEvent::Error { message, .. }) => {
-                            tracing::error!(
-                                target: "code-server::sandbox",
-                                task_id = %task_id,
-                                %message,
-                                "sandbox exec error"
-                            );
-                            return;
-                        }
-                        Err(error) => {
-                            tracing::error!(
-                                target: "code-server::sandbox",
-                                task_id = %task_id,
-                                %error,
-                                "sandbox exec stream error"
-                            );
-                            return;
-                        }
-                    }
-                }
+            runtime.block_on(Self::run_exec_stream(
+                &client, &tasks, &task_id, session, &request,
+            ));
+        });
+    }
+
+    /// Consumes the exec stream for one agent run, logging its fine-grained
+    /// events. On a clean exit it records the session's snapshot so a re-run
+    /// can fork from the final workspace; the server may have destroyed the
+    /// session by then, in which case the re-run falls back to a fresh one.
+    async fn run_exec_stream(
+        client: &SandboxClient,
+        tasks: &Mutex<HashMap<String, SandboxTaskState>>,
+        task_id: &str,
+        session: SessionId,
+        request: &ExecRequest,
+    ) {
+        let stream = match client.exec_stream(session, request).await {
+            Ok(stream) => stream,
+            Err(error) => {
                 tracing::error!(
                     target: "code-server::sandbox",
                     task_id = %task_id,
-                    "sandbox exec stream ended before exit or error"
+                    %error,
+                    "sandbox exec stream failed to start"
                 );
-            });
-        });
+                return;
+            }
+        };
+        futures_util::pin_mut!(stream);
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(ExecEvent::Output { data, .. }) => {
+                    tracing::debug!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        output = %String::from_utf8_lossy(&data),
+                        "sandbox exec output"
+                    );
+                }
+                Ok(ExecEvent::Exit { exit_code, .. }) => {
+                    tracing::info!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        exit_code,
+                        "sandbox exec finished"
+                    );
+                    if exit_code == 0 {
+                        match client.snapshot(session).await {
+                            Ok(snapshot) => {
+                                if let Ok(mut tasks) = tasks.try_lock() {
+                                    if let Some(state) = tasks.get_mut(&session.to_string()) {
+                                        state.snapshot_id = Some(snapshot);
+                                    }
+                                }
+                            }
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "code-server::sandbox",
+                                    task_id = %task_id,
+                                    %error,
+                                    "failed to snapshot sandbox session after exec"
+                                );
+                            }
+                        }
+                    }
+                    return;
+                }
+                Ok(ExecEvent::Error { message, .. }) => {
+                    tracing::error!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        %message,
+                        "sandbox exec error"
+                    );
+                    return;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        %error,
+                        "sandbox exec stream error"
+                    );
+                    return;
+                }
+            }
+        }
+        tracing::error!(
+            target: "code-server::sandbox",
+            task_id = %task_id,
+            "sandbox exec stream ended before exit or error"
+        );
     }
 
     /// Records per-task state, emits the launch audit event, and builds the
     /// bootstrap result shared by `bootstrap` and `resume`.
     fn complete_start(
         &self,
-        request: &LaneExecutionRequest,
+        task_id: &str,
         session: SessionId,
         files: usize,
-        how: String,
-        checkout_root: &FsPath,
+        how: &str,
+        prepared: &PreparedRepo,
         base_commit: Option<String>,
-        active_ref: &str,
-        branch: Option<&str>,
-        source_display: &str,
-    ) -> Result<LaneBootstrapResult, String> {
+    ) -> LaneBootstrapResult {
+        let checkout_root = &prepared.checkout_root;
         self.tasks.lock().unwrap().insert(
             session.to_string(),
             SandboxTaskState {
                 session_id: session,
                 base_commit,
-                checkout_root: checkout_root.to_path_buf(),
+                checkout_root: checkout_root.clone(),
                 snapshot_id: None,
             },
         );
@@ -4595,43 +4607,36 @@ impl SandboxLaneWorkerTransport {
         if let Some(audit) = self.worker_access.audit() {
             audit.emit(
                 "worker.launched",
-                &request.task_id,
+                task_id,
                 &format!("session={session} {how}"),
             );
         }
         let allowlist = Self::server_host_allowlist(&self.server_url);
-        Ok(LaneBootstrapResult {
+        LaneBootstrapResult {
             worker_id: session.to_string(),
             worker_status: WorkerStatus::Running,
             signals: vec![LaneTransportSignal {
                 kind: LaneTransportSignalKind::Running,
-                detail: Some(format!(
-                    "sandbox session {session} {how}",
-                )),
+                detail: Some(format!("sandbox session {session} {how}")),
                 payload: Some(json!({
                     "session_id": session.to_string(),
                     "files_imported": files,
                     "checkout_root": checkout_root.display().to_string(),
-                    "command": ["frontal-code", "hosted", "task", "run", request.task_id.as_str()],
-                    "active_ref": active_ref,
-                    "branch": branch,
-                    "source": source_display,
+                    "command": ["frontal-code", "hosted", "task", "run", task_id],
+                    "source": prepared.source.display().as_str(),
                     "network_allowlist": allowlist,
                 })),
             }],
             artifacts: None,
             checkout_root: Some(checkout_root.display().to_string()),
-        })
+        }
     }
 
     /// The host (and optional port) of a server URL, for the session's network
     /// allowlist. `https://frontal.tools:8443/` -> `frontal.tools:8443`.
     fn server_host_allowlist(server_url: &str) -> String {
         let trimmed = server_url.trim_end_matches('/');
-        let without_scheme = trimmed
-            .split_once("://")
-            .map(|(_, rest)| rest)
-            .unwrap_or(trimmed);
+        let without_scheme = trimmed.split_once("://").map_or(trimmed, |(_, rest)| rest);
         without_scheme
             .split('/')
             .next()
@@ -4647,13 +4652,11 @@ impl SandboxLaneWorkerTransport {
         session: SessionId,
         root: &FsPath,
     ) -> Result<usize, String> {
-        let mut entries: Vec<PathBuf> = Vec::new();
         fn collect(dir: &FsPath, out: &mut Vec<PathBuf>) -> Result<(), String> {
             let read_dir = fs::read_dir(dir)
                 .map_err(|error| format!("failed to read {}: {error}", dir.display()))?;
             for entry in read_dir {
-                let entry = entry
-                    .map_err(|error| format!("failed to read dir entry: {error}"))?;
+                let entry = entry.map_err(|error| format!("failed to read dir entry: {error}"))?;
                 let path = entry.path();
                 if path.is_dir() {
                     // Skip VCS metadata; the worker never needs it.
@@ -4667,15 +4670,15 @@ impl SandboxLaneWorkerTransport {
             }
             Ok(())
         }
-        collect(root, &mut entries).map_err(|error| {
-            format!("failed to walk checkout {}: {error}", root.display())
-        })?;
+        let mut entries: Vec<PathBuf> = Vec::new();
+        collect(root, &mut entries)
+            .map_err(|error| format!("failed to walk checkout {}: {error}", root.display()))?;
 
         let mut count = 0usize;
         for path in &entries {
-            let relative = path.strip_prefix(root).map_err(|error| {
-                format!("failed to strip prefix {}: {error}", root.display())
-            })?;
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|error| format!("failed to strip prefix {}: {error}", root.display()))?;
             let session_path = format!("/workspace/{}", relative.display());
             let bytes = fs::read(path)
                 .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
@@ -4690,13 +4693,12 @@ impl SandboxLaneWorkerTransport {
 
     /// The env map handed to the worker. The session drops its env on wake, so the
     /// agent reads the written file instead of relying on process env vars.
-    fn sandbox_task_env(
-        server_url: &str,
-        token: &str,
-        provider: &str,
-    ) -> BTreeMap<String, String> {
+    fn sandbox_task_env(server_url: &str, token: &str, provider: &str) -> BTreeMap<String, String> {
         let mut task_env = BTreeMap::from([
-            ("FRONTAL_CODE_SERVER_URL".to_string(), server_url.to_string()),
+            (
+                "FRONTAL_CODE_SERVER_URL".to_string(),
+                server_url.to_string(),
+            ),
             ("FRONTAL_CODE_SERVER_API_KEY".to_string(), token.to_string()),
             (
                 "FRONTAL_CODE_HOSTED_TASK_FILE".to_string(),
@@ -4716,10 +4718,7 @@ impl SandboxLaneWorkerTransport {
         task_env
     }
 
-    fn sandbox_task_payload(
-        request: &LaneExecutionRequest,
-        base_commit: Option<String>,
-    ) -> Vec<u8> {
+    fn sandbox_task_payload(request: &LaneExecutionRequest, base_commit: Option<&str>) -> Vec<u8> {
         serde_json::to_vec_pretty(&HostedLaneTaskPayload {
             task_id: request.task_id.clone(),
             prompt: request.prompt.clone(),
@@ -4744,7 +4743,7 @@ impl SandboxLaneWorkerTransport {
                 .iter()
                 .map(|rule| (*rule).to_string())
                 .collect(),
-            base_commit,
+            base_commit: base_commit.map(str::to_string),
         })
         .expect("hosted task payload is always serializable")
     }
@@ -4775,28 +4774,23 @@ impl LaneWorkerTransport for SandboxLaneWorkerTransport {
             .enable_all()
             .build()
             .map_err(|error| format!("failed to build sandbox runtime: {error}"))?;
-        let (session, files, how) = runtime
-            .block_on(self.attach_to_session(
-                request,
-                None,
-                Some(&prepared.checkout_root),
-                base_commit.clone(),
-            ))
-            .map_err(|error| error.to_string())?;
+        let (session, files, how) = runtime.block_on(self.attach_to_session(
+            request,
+            None,
+            Some(&prepared.checkout_root),
+            base_commit.as_deref(),
+        ))?;
 
         self.spawn_exec(session, &request.task_id);
 
-        self.complete_start(
-            request,
+        Ok(self.complete_start(
+            &request.task_id,
             session,
             files,
-            how,
-            &prepared.checkout_root,
+            &how,
+            &prepared,
             base_commit,
-            &prepared.active_ref,
-            prepared.branch.as_deref(),
-            prepared.source.display().as_ref(),
-        )
+        ))
     }
 
     /// Re-runs a task on the workspace its previous run left behind. The
@@ -4836,28 +4830,23 @@ impl LaneWorkerTransport for SandboxLaneWorkerTransport {
             .enable_all()
             .build()
             .map_err(|error| format!("failed to build sandbox runtime: {error}"))?;
-        let (session, files, how) = runtime
-            .block_on(self.attach_to_session(
-                request,
-                previous_session,
-                Some(&prepared.checkout_root),
-                base_commit.clone(),
-            ))
-            .map_err(|error| error.to_string())?;
+        let (session, files, how) = runtime.block_on(self.attach_to_session(
+            request,
+            previous_session,
+            Some(&prepared.checkout_root),
+            base_commit.as_deref(),
+        ))?;
 
         self.spawn_exec(session, &request.task_id);
 
-        self.complete_start(
-            request,
+        Ok(self.complete_start(
+            &request.task_id,
             session,
             files,
-            how,
-            &prepared.checkout_root,
+            &how,
+            &prepared,
             base_commit,
-            &prepared.active_ref,
-            prepared.branch.as_deref(),
-            prepared.source.display().as_ref(),
-        )
+        ))
     }
 
     fn observe_completion(
@@ -4891,9 +4880,8 @@ impl LaneWorkerTransport for SandboxLaneWorkerTransport {
         worker_id: &str,
         _locator: Option<&HostedAgentLocator>,
     ) -> Result<LaneCancellationResult, String> {
-        let session = SessionId::from_str(worker_id).map_err(|error| {
-            format!("invalid sandbox session id `{worker_id}`: {error}")
-        })?;
+        let session = SessionId::from_str(worker_id)
+            .map_err(|error| format!("invalid sandbox session id `{worker_id}`: {error}"))?;
         // Best-effort: a destroyed or already-destroyed session still counts as
         // cancelled from the lane's point of view.
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -5164,8 +5152,11 @@ fn bootstrap_task_lane(
     context: &mut HostedTaskContext,
     primary_role: Option<LaneRole>,
     primary_description: Option<&str>,
-    previous_worker_id: Option<String>,
+    previous_worker_id: Option<&str>,
 ) -> Result<(), AppError> {
+    // The lane transport signals carry their own descriptions; the caller's
+    // primary description is not needed.
+    let _ = primary_description;
     let lane_request = LaneExecutionRequest {
         task_id: task.task_id.clone(),
         prompt: task.prompt.clone(),
@@ -5186,7 +5177,7 @@ fn bootstrap_task_lane(
     match if previous_worker_id.is_some() {
         state
             .lane_transport
-            .resume(&lane_request, previous_worker_id.as_deref())
+            .resume(&lane_request, previous_worker_id)
     } else {
         state.lane_transport.bootstrap(&lane_request)
     } {
@@ -5561,7 +5552,6 @@ mod tests {
         assert!(prepared.repository.is_none());
     }
 
-
     #[test]
     fn lane_transport_parser_accepts_workers_and_refuses_everything_else() {
         use super::{parse_lane_transport_kind, LaneTransportKind};
@@ -5597,7 +5587,7 @@ mod tests {
     #[test]
     fn server_config_reads_sandbox_env_vars() {
         use super::{
-            default_sandbox_base_url, parse_lane_transport_kind, ServerConfig, LaneTransportKind,
+            default_sandbox_base_url, parse_lane_transport_kind, LaneTransportKind, ServerConfig,
         };
         // The sandbox server settings and the lane transport selection must parse
         // out of the environment the way an operator would set them.

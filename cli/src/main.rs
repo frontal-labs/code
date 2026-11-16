@@ -13,6 +13,7 @@ mod analytics;
 mod auth;
 mod init;
 mod input;
+mod integrations;
 mod mentions;
 mod notify;
 mod render;
@@ -255,6 +256,10 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
             args,
             output_format,
         } => LiveCli::print_mcp(args.as_deref(), output_format)?,
+        CliAction::Integrations {
+            args,
+            output_format,
+        } => run_integrations_command(args.as_deref(), output_format)?,
         CliAction::Trust { revoke } => print_workspace_trust(revoke)?,
         CliAction::Skills {
             args,
@@ -334,6 +339,90 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
         } => run_repl_with_provider(model, provider, allowed_tools, permission_mode)?,
         CliAction::HelpTopic(topic) => print_help_topic(topic),
         CliAction::Help { output_format } => print_help(output_format)?,
+    }
+    Ok(())
+}
+
+fn run_integrations_command(
+    args: Option<&str>,
+    output_format: CliOutputFormat,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut tokens = args
+        .map(|value| {
+            value
+                .split_whitespace()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut as_json = matches!(output_format, CliOutputFormat::Json);
+    tokens.retain(|token| {
+        if token == "--json" || token == "--output-format=json" {
+            as_json = true;
+            false
+        } else {
+            true
+        }
+    });
+
+    let Some(subcommand) = tokens.first().map(String::as_str) else {
+        println!("{}", integrations::help_text());
+        return Ok(());
+    };
+
+    match subcommand {
+        "list" => {
+            let registry = integrations::load_registry(&env::current_dir()?);
+            let output = if as_json {
+                integrations::list_integrations_json(&registry)
+            } else {
+                integrations::list_integrations(&registry)
+            };
+            println!("{output}");
+        }
+        "show" | "capabilities" => {
+            let id = tokens
+                .get(1)
+                .and_then(|value| value.split('=').next())
+                .filter(|value| !value.starts_with("--"))
+                .ok_or_else(|| {
+                    "`frontal-code integrations {subcommand}` requires an integration id. \
+                     Use `frontal-code integrations {subcommand} <id>`."
+                        .to_string()
+                })?
+                .to_string();
+            let registry = integrations::load_registry(&env::current_dir()?);
+            let output = match (subcommand, as_json) {
+                ("show", true) => integrations::show_integration_json(&registry, &id),
+                ("show", false) => integrations::show_integration(&registry, &id),
+                ("capabilities", true) => integrations::list_capabilities_json(&registry, &id),
+                _ => integrations::list_capabilities(&registry, &id),
+            }
+            .map_err(Box::<dyn std::error::Error>::from)?;
+            println!("{output}");
+        }
+        "validate" => {
+            let path = tokens
+                .get(1)
+                .filter(|value| !value.starts_with("--"))
+                .ok_or_else(|| {
+                    "`frontal-code integrations validate` requires a manifest file path. \
+                     Use `frontal-code integrations validate <path>`."
+                        .to_string()
+                })?;
+            let path = Path::new(path);
+            let output = if as_json {
+                integrations::validate_manifest_file_json(path)
+            } else {
+                integrations::validate_manifest_file(path)
+            }
+            .map_err(Box::<dyn std::error::Error>::from)?;
+            println!("{output}");
+        }
+        other => {
+            eprintln!("unknown integrations subcommand: {other}");
+            eprintln!("{}", integrations::help_text());
+        }
     }
     Ok(())
 }
@@ -472,6 +561,10 @@ enum CliAction {
         output_format: CliOutputFormat,
     },
     Mcp {
+        args: Option<String>,
+        output_format: CliOutputFormat,
+    },
+    Integrations {
         args: Option<String>,
         output_format: CliOutputFormat,
     },
@@ -1098,6 +1191,10 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             output_format,
         }),
         "mcp" => Ok(CliAction::Mcp {
+            args: join_optional_args(&rest[1..]),
+            output_format,
+        }),
+        "integrations" => Ok(CliAction::Integrations {
             args: join_optional_args(&rest[1..]),
             output_format,
         }),

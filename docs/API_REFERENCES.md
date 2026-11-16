@@ -14,6 +14,7 @@ This comprehensive reference covers the Frontal Code API for programmatic integr
 - [JavaScript API](#javascript-api)
 - [Error Handling](#error-handling)
 - [Rate Limiting](#rate-limiting)
+- [Integrations API](#integrations-api)
 - [Examples](#examples)
 
 ## Overview
@@ -245,6 +246,58 @@ PATCH /v1/config
   }
 }
 ```
+
+#### Integrations
+
+List all registered integrations (built-ins + config overrides).
+
+```http
+GET /v1/integrations
+Authorization: Bearer <API_KEY>
+```
+
+**Response:** `200 OK` — JSON array of integration summaries.
+
+Get a single integration manifest by id.
+
+```http
+GET /v1/integrations/{id}
+Authorization: Bearer <API_KEY>
+```
+
+**Response:** `200 OK` — full `IntegrationManifest`. `404 Not Found` if the id is unknown.
+
+List capabilities for an integration.
+
+```http
+GET /v1/integrations/{id}/capabilities
+Authorization: Bearer <API_KEY>
+```
+
+**Response:** `200 OK` — JSON array of capability summaries. `404` if the id is unknown.
+
+Invoke a capability. Stub in v1 — returns `501 Not Implemented`.
+
+```http
+POST /v1/integrations/{id}/capabilities/{name}/invoke
+Authorization: Bearer <API_KEY>
+Content-Type: application/json
+
+{
+  "input": {}
+}
+```
+
+**Response:** `501 Not Implemented`. MCP dispatch for capabilities is planned for a future release.
+
+List webhook events for an integration.
+
+```http
+GET /v1/integrations/{id}/events
+Authorization: Bearer <API_KEY>
+```
+
+**Response:** `200 OK` — JSON array of event definitions. `404` if the id is unknown.
 
 #### Status
 

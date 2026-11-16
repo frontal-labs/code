@@ -11,39 +11,30 @@ fn default_server_config() {
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8788)
     );
     assert_eq!(config.event_replay_limit, 100);
-    assert_eq!(config.lane_transport_kind, LaneTransportKind::LocalDocker);
+    assert_eq!(config.lane_transport_kind, LaneTransportKind::Sandbox);
     assert!(config.api_key.is_none());
     assert_eq!(config.reconcile_interval, Some(Duration::from_secs(15)));
 }
 
 #[test]
 fn lane_transport_kind_default() {
-    assert_eq!(
-        LaneTransportKind::LocalDocker,
-        LaneTransportKind::LocalDocker
-    );
+    assert_eq!(LaneTransportKind::Sandbox, LaneTransportKind::Sandbox);
     assert_eq!(LaneTransportKind::ToolsAgent, LaneTransportKind::ToolsAgent);
 }
 
 #[test]
 fn lane_transport_kind_debug() {
-    assert_eq!(
-        format!("{:?}", LaneTransportKind::LocalDocker),
-        "LocalDocker"
-    );
+    assert_eq!(format!("{:?}", LaneTransportKind::Sandbox), "Sandbox");
     assert_eq!(format!("{:?}", LaneTransportKind::ToolsAgent), "ToolsAgent");
 }
 
 #[test]
 fn lane_transport_kind_clone_and_eq() {
-    let a = LaneTransportKind::LocalDocker;
+    let a = LaneTransportKind::Sandbox;
     let b = a;
     assert_eq!(a, b);
 
-    let kinds = [
-        LaneTransportKind::LocalDocker,
-        LaneTransportKind::ToolsAgent,
-    ];
+    let kinds = [LaneTransportKind::Sandbox, LaneTransportKind::ToolsAgent];
     for i in 0..kinds.len() {
         for j in 0..kinds.len() {
             if i == j {

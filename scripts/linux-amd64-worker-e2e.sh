@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Runs code-server inside a linux/amd64 container (Rosetta on Apple silicon), with the host Docker
-# daemon driving the worker containers through the mounted socket. Then it submits two Ollama
-# tasks and checks that both finish, publish their branches, and leave no task networks behind.
+# Runs code-server inside a linux/amd64 container (Rosetta on Apple silicon), with the sandbox
+# transport driving worker sessions through the sandbox server. Then it submits two Ollama
+# tasks and checks that both finish and publish their branches.
 #
-# Needs: Docker, the dev services (scripts/dev-services.sh), a local Ollama with the model below,
-# and the worker image (docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .).
+# Needs: Docker, the dev services (scripts/dev-services.sh), a local Ollama with the model
+# below, and a running sandbox server (FRONTAL_SANDBOX_BASE_URL + FRONTAL_SANDBOX_API_KEY).
 #
-#   scripts/linux-amd64-worker-e2e.sh [model]
+#   FRONTAL_SANDBOX_BASE_URL=http://host.docker.internal:8080 \
+#   FRONTAL_SANDBOX_API_KEY=sbx_… \
+#     scripts/linux-amd64-worker-e2e.sh [model]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,7 +23,10 @@ CONTAINER="frontal-linux-server"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/frontal-linux-e2e.XXXXXX")"
 KEY="linux-e2e-$RANDOM$RANDOM"
 
-# Copy the source into a snapshot, and run the containers against that copy. A test that writes or
+: "${FRONTAL_SANDBOX_BASE_URL:?set FRONTAL_SANDBOX_BASE_URL to a running sandbox server}"
+: "${FRONTAL_SANDBOX_API_KEY:?set FRONTAL_SANDBOX_API_KEY to the sandbox server Bearer key}"
+
+# Copy the source into a snapshot, and run the container against that copy. A test that writes or
 # deletes under its working directory then cannot touch the working tree. Build output and VCS
 # metadata stay out of the copy.
 snapshot_source() {
@@ -50,22 +55,22 @@ git -C "$WORK/seed" add . && git -C "$WORK/seed" -c user.name=seed -c user.email
 git -C "$WORK/seed" push -q "$WORK/remote.git" main
 
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-docker rm -f "frontal-code-relay-$PORT" >/dev/null 2>&1 || true
 docker run -d --name "$CONTAINER" --platform linux/amd64 -p "127.0.0.1:$PORT:$PORT" \
   --add-host host.docker.internal:host-gateway \
   -v "$SRC":/src -w /src \
   -v frontal-cargo-registry:/usr/local/cargo/registry -v frontal-target-amd64:/src/target-linux \
-  -v "$WORK":"$WORK" -v /var/run/docker.sock:/var/run/docker.sock -v "$TLS_DIR":/certs:ro \
+  -v "$WORK":"$WORK" -v "$TLS_DIR":/certs:ro \
   -e FRONTAL_CODE_SERVER_HOST=0.0.0.0 -e FRONTAL_CODE_SERVER_PORT="$PORT" \
-  -e FRONTAL_CODE_SERVER_API_KEY="$KEY" -e FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker -e FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS=1 \
-  -e FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local \
-  -e FRONTAL_CODE_SERVER_CALLBACK_URL="http://host.docker.internal:$PORT" \
+  -e FRONTAL_CODE_SERVER_API_KEY="$KEY" -e FRONTAL_CODE_SERVER_LANE_TRANSPORT=sandbox -e FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS=1 \
+  -e FRONTAL_CODE_SERVER_URL="http://host.docker.internal:$PORT" \
   -e FRONTAL_CODE_SERVER_WORKSPACE_ROOT="$WORK/workspaces" \
   -e FRONTAL_CODE_SERVER_STATE_FILE="$WORK/state.json" \
   -e FRONTAL_CODE_SERVER_DATABASE_URL="postgres://frontal:$PG_PASSWORD@host.docker.internal:55433/frontal?sslmode=verify-full" \
   -e FRONTAL_CODE_SERVER_DATABASE_CA_FILE=/certs/ca.crt \
+  -e FRONTAL_SANDBOX_BASE_URL="$FRONTAL_SANDBOX_BASE_URL" \
+  -e FRONTAL_SANDBOX_API_KEY="$FRONTAL_SANDBOX_API_KEY" \
   -e OLLAMA_BASE_URL="http://host.docker.internal:$OLLAMA_PORT" \
-  rust:1.95-bookworm bash -c 'apt-get update -qq && apt-get install -y -qq docker.io >/dev/null 2>&1; CARGO_TARGET_DIR=/src/target-linux cargo build -q -p code-server && exec /src/target-linux/debug/code-server' >/dev/null
+  rust:1.95-bookworm bash -c 'CARGO_TARGET_DIR=/src/target-linux cargo build -q -p code-server && exec /src/target-linux/debug/code-server' >/dev/null
 
 cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -108,14 +113,5 @@ for n in 1 2; do
     failures=$((failures+1))
   fi
 done
-
-sleep 10
-LEFT="$(docker network ls --filter name=frontal-task --format '{{.Name}}')"
-if [ -n "$LEFT" ]; then
-  echo "task networks still present: $LEFT"
-  failures=$((failures+1))
-else
-  echo "task networks: none left"
-fi
 
 if [ "$failures" = "0" ]; then echo "LINUX E2E PASS"; else echo "LINUX E2E FAIL: $failures failure(s)"; docker logs "$CONTAINER" 2>&1 | tail -20; exit 1; fi

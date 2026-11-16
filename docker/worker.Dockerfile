@@ -1,3 +1,6 @@
+# Legacy image definition. The local-docker lane transport was removed in the
+# Frontal Sandbox migration (deploy/sandbox/). This file is kept only as a
+# reference; the default lane transport is now `sandbox`.
 FROM rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 AS builder
 
 RUN apt-get update \

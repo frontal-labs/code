@@ -1,0 +1,22 @@
+# Frontal Sandbox server configuration
+# Installed to /etc/sandbox/config.toml by the deploy script.
+
+[server]
+addr = "0.0.0.0:8080"
+data_dir = "/var/lib/sandbox"
+
+[auth]
+# Set via SANDBOX_AUTH_API_KEY_HASH env var in the systemd unit
+rate_limit_rps = 100
+
+[tls]
+enabled = false
+# When deploying behind a load balancer, terminate TLS there and leave
+# the sandbox server plaintext on a private subnet.
+
+[telemetry]
+metrics_addr = "0.0.0.0:9090"
+service_name = "sandbox-server"
+
+[scheduler]
+address = "0.0.0.0:50051"

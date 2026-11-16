@@ -91,29 +91,32 @@ curl "http://127.0.0.1:8788/v1/policies/orphans?repository=repo-fast-policy&sour
 curl "http://127.0.0.1:8788/v1/policies/orphans?repository=repo-prod&priority=high"
 ```
 
-## Local Docker Worker Mode
+## Sandbox Worker Mode
 
-`FRONTAL_CODE_SERVER_LANE_TRANSPORT` selects how lanes run. The default is `local-docker`.
+`FRONTAL_CODE_SERVER_LANE_TRANSPORT` selects how lanes run. The default is `sandbox`.
 
-- `local-docker` (default): each task runs in its own worker container, built from `docker/worker.Dockerfile`. The container runs `frontal-code hosted task run`. Provider API keys and the server's control-plane key never enter the container. The worker gets a per-task token and a model proxy URL, and the server adds the real provider key when it forwards each request. See `docs/CONTAINERS.md`.
-- `tools-agent`: runs the agent loop inside the server process. Agents have the server's host privileges, so use this only for trusted tasks.
-- There is no simulated transport. Unknown values fail at startup.
+- `sandbox` (default): each task runs in its own Frontal Sandbox session. The session's VFS holds the checkout under `/workspace`. Provider API keys and the server's control-plane key never enter the session. The worker gets a per-task token and a model proxy URL, and the server adds the real provider key when it forwards each request. See `docs/CONTAINERS.md` and `docs/design/worker-architecture.md`.
+- `tools-agent`: runs the agent loop inside the server process. Agents have the server's host privileges, so use this only for trusted tasks. Gated behind `FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1`.
+- Unknown values fail at startup.
 
-For `local-docker`, set:
+For `sandbox`, set:
 
-- `FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`
+- `FRONTAL_CODE_SERVER_LANE_TRANSPORT=sandbox`
 - `FRONTAL_CODE_SERVER_WORKSPACE_ROOT=/path/to/project/.frontal-code/server/workspaces`
-- `FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
-- `FRONTAL_CODE_SERVER_CALLBACK_URL=http://host.docker.internal:8788`
+- `FRONTAL_SANDBOX_BASE_URL=http://localhost:8080` — the sandbox server the server talks to
+- `FRONTAL_SANDBOX_API_KEY=sbx_…` — the Bearer key for the sandbox server
+- `FRONTAL_CODE_SERVER_URL=http://<public-host>:8788` — the address sessions use to call back
+- `FRONTAL_CODE_SERVER_DATABASE_URL=postgres://…` — required (worker tokens are stored in Postgres)
 
 In that mode, the control plane:
 
-1. prepares an isolated repo checkout under `FRONTAL_CODE_SERVER_WORKSPACE_ROOT`
-2. writes `.frontal-code-hosted/task.json` into the checkout
-3. launches `frontal-code hosted task run TASK_ID` inside the worker image
-4. expects the worker container to call `POST /v1/tasks/:task_id/complete` back to the server
+1. creates an isolated sandbox session with a network policy that allowlists the server host
+2. streams the repo checkout into `/workspace` in the session VFS (skipping `.git`)
+3. writes `.frontal-code-hosted/task.json` and `.frontal-code-hosted/env` into the VFS
+4. launches `frontal-code hosted task run TASK_ID` in the session
+5. expects the worker to call `POST /v1/tasks/:task_id/complete` back to the server
 
-For the local hosted stack and worker-image build flow, see `infrastructure/README.md`.
+For the sandbox terraform deployment, see `deploy/sandbox/README.md`.
 
 ## Development
 

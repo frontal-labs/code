@@ -309,7 +309,7 @@ See [`./USAGE.md`](./USAGE.md) for usage examples and run `cargo run -p cli -- -
 - **repo** - repository lifecycle, checkout management, and source tree preparation
 - **runtime** - `ConversationRuntime`, config loading, session persistence, permission policy, MCP client lifecycle, system prompt assembly, usage tracking
 - **sandbox** - filesystem isolation, namespace restrictions, and security policies
-- **server** - hosted task APIs, event streaming, Docker lane execution, and policy-driven recovery
+- **server** - hosted task APIs, event streaming, sandbox-session lane execution, and policy-driven recovery
 - **telemetry** - session trace events, usage analytics, and monitoring infrastructure
 - **tools** - tool specs + execution: Bash, ReadFile, WriteFile, EditFile, GlobSearch, GrepSearch, WebSearch, WebFetch, Agent, TodoWrite, NotebookEdit, Skill, ToolSearch, and runtime-facing tool discovery
 - **training** - style learning, dataset building, profile training, and code adaptation

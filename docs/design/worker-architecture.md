@@ -1,152 +1,386 @@
-# Hosted worker architecture
+# Frontal Code Hosted Worker Architecture
 
-Status: implemented for the `local-docker` lane transport, verified end to end on 2026-11-08.
+## Overview
 
-This document describes how a hosted task runs an agent, where each credential lives, what the worker can reach, and what is still open. Read it before changing the lane transport, the publish path, the token store, or the Docker launch arguments.
+Frontal Code ships with a hosted worker model for long-running agent tasks.
+The control plane is a Rust backend (`code-server`), and the worker itself is a
+headless run of the `frontal-code` CLI inside an isolated Frontal Sandbox
+session. Operators start a backend; users authenticate to it and submit tasks.
+The backend launches a sandbox session, streams the working tree into its VFS,
+runs the CLI against a per-task worker token, and mirrors status, progress,
+and results back into the control plane.
+
+The current design:
+
+- **Control plane**: `code-server` (Rust, axum) — owns task state, worker
+  tokens, event storage, and API surface.
+- **Execution**: a Frontal Sandbox session per task. The session is created
+  by the sandbox server (template/snapshot resolved server-side), the
+  checkout is written into the session's `/workspace`, and the
+  `frontal-code` CLI runs in-stream with `stream=true` as the task runner.
+- **Task runner**: `frontal-code hosted task run <task_id>` — a single CLI
+  mode used by both the in-session run and local development.
+- **Worker credentials**: short-lived per-task worker tokens minted by the
+  server; the CLI calls the server's public endpoints with that token.
+
+This document covers the current architecture, credential flow, task
+lifecycle, isolation guarantees, threat model, and the path to stronger
+isolation.
+
+## Architecture
+
+```text
+                 ┌────────────────────────────────────────────┐
+                 │              code-server (Rust)            │
+                 │                                            │
+ users ─────────▶│  axum API                                  │
+                 │   ├── REST routes (auth, tasks, events)    │
+                 │   ├── token middleware (worker tokens)     │
+                 │   ├── event store (in-memory / Postgres)   │
+                 │   ├── task runner (worker access)          │
+                 │   └── worker access (token mint/verify)    │
+                 │                                            │
+                 │  lane transport: sandbox                   │
+                 │   ├── SandboxSession::create (isolated)    │
+                 │   ├── write_file → /workspace/<path>       │
+                 │   ├── exec: frontal-code hosted task run   │
+                 │   ├── observe_completion (poll)            │
+                 │   └── destroy_session (cancel)             │
+                 └────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                     ┌───────────────────────────────┐
+                     │   Frontal Sandbox (sessions)  │
+                     │                               │
+                     │   template/snapshot           │
+                     │   (resolved by sandbox server)│
+                     │                               │
+                     │   /workspace  (checkout)      │
+                     │   .frontal-code-hosted/       │
+                     │     ├── env                   │
+                     │     └── task.json             │
+                     │                               │
+                     │   frontal-code (CLI, headless)│
+                     │   runs the agent in-stream    │
+                     └───────────────────────────────┘
+```
+
+In this architecture:
+
+- `code-server` is the source of truth for task state, worker tokens, and
+  the public API.
+- Each task runs in a dedicated sandbox **session** (session ID doubles as
+  the worker ID). The session is created from a template/snapshot resolved by
+  the sandbox server (which provides `frontal-code` and the standard
+  tooling); the server talks to the sandbox server over
+  `FRONTAL_SANDBOX_BASE_URL` (auth via `FRONTAL_SANDBOX_API_KEY`).
+- The checkout is streamed file-by-file into `/workspace` inside the
+  session (`.git` is excluded), so the session starts from the same tree
+  the task was submitted against.
+- The `frontal-code` CLI runs inside the session as a headless task runner,
+  with `FRONTAL_CODE_SERVER_API_KEY` set to the per-task worker token.
+
+### Why in-session CLI?
+
+The historical design ran the CLI in a locally spawned Docker container
+and only mirrored task state into Postgres. That split caused:
+
+- Two execution environments that had to be kept in sync.
+- A Postgres requirement even when the operator only needed task storage.
+- Docker-specific plumbing (relayed containers, `host.docker.internal`
+  network exceptions, daemon health) on every host.
+
+Moving execution into a sandbox session removes all of that:
+
+- **Single execution environment**: the task runner runs in the same
+  session that owns the checkout.
+- **Worker tokens survive restarts**: tokens are stored hashed in
+  Postgres (`worker_tokens.rs`), so the sandbox transport requires
+  `FRONTAL_CODE_SERVER_DATABASE_URL`. The server remains the source of
+  truth for tasks, events, and worker tokens; sandbox sessions are the
+  execution boundary.
+- **Session-level isolation**: the sandbox runtime owns the filesystem,
+  process, and network boundary instead of the local Docker daemon.
 
 ## Components
 
-| Component | Where it runs | Holds |
-|---|---|---|
-| `code-server` (control plane) | Host process | Provider keys, `GITHUB_TOKEN`, control-plane API key, Postgres credentials. Publishes branches. |
-| Postgres | Host or private network | Worker tokens (hashed), with expiry and revocation. |
-| ClickHouse | Host or private network | Reserved for analytics and audit events. Not used by worker tokens. |
-| Relay container `frontal-code-relay-<port>` | Docker, on the host bridge and on each task network | Nothing. It forwards one TCP port to the server. One per server port. |
-| Task network `frontal-task-<id>` | Docker, `--internal` | Only the task's worker and the relay. No internet, no host. |
-| Worker container | Docker, one per task | A per-task token and a proxy URL. The checkout, mounted at `/workspace`. |
+### code-server (Rust control plane)
 
-## Credential flow
+`code-server` is the Rust backend that owns:
 
+- Authentication (user API keys, session tokens).
+- Task lifecycle (creation, launch, completion, cancellation).
+- Worker token minting and verification.
+- Event storage and SSE streaming.
+- Worker orchestration through the sandbox session transport.
+
+Relevant modules:
+
+- `lib.rs` — server wiring, lane transport selection, sandbox session
+  transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=sandbox`).
+- `worker_access.rs` — worker token minting/verification and the provider
+  proxy env map injected into each session.
+- `event_store.rs` — in-memory and Postgres event storage.
+
+### Sandbox session transport
+
+When a task is submitted, the sandbox lane transport:
+
+1. Creates an isolated session (template/snapshot resolved by the sandbox
+   server), with a network policy that allowlists only the code-server host
+   (`FRONTAL_CODE_SERVER_URL`).
+2. Writes the checkout into `/workspace` in the session VFS (skipping
+   `.git`).
+3. Writes the task payload (task ID, provider, model, mode) to
+   `/workspace/.frontal-code-hosted/task.json` and the worker environment
+   to `/workspace/.frontal-code-hosted/env`.
+4. Runs `frontal-code hosted task run <task_id>` in the session
+   (working directory `/workspace`, streaming output).
+5. Polls the sandbox server for completion and translates the finish reason
+   into `WorkerStatus::Completed` or `WorkerStatus::Failed`.
+6. On cancellation, destroys the session.
+
+The session ID is the worker ID; the audit event records
+`worker.launched ... session=<id>`.
+
+### frontal-code CLI
+
+The `frontal-code` CLI is the agent binary. In the hosted worker model it is
+invoked in one specific mode:
+
+```text
+frontal-code hosted task run <task_id>
 ```
-              issue token (hashed in Postgres)
-  code-server ───────────────────────────────────► hosted_worker_tokens
-      │
-      │ creates worker container with:
-      │   FRONTAL_CODE_SERVER_API_KEY = task token
-      │   OPENAI_API_KEY (or the matching key var) = task token
-      │   OPENAI_BASE_URL = http://frontal-relay:8788/v1/proxy/openai
-      │   FRONTAL_CODE_SERVER_URL     = http://frontal-relay:8788
-      ▼
-  worker ──► relay ──► code-server /v1/proxy/openai/... ──► provider
-                        (drops the token, adds OPENAI_API_KEY)
-  worker ──► relay ──► code-server /v1/tasks/<id>/publish (patch)
-                        └─► fresh clone, apply, commit, push with GITHUB_TOKEN
+
+The CLI:
+
+- Resolves the task from the server using the worker token
+  (`FRONTAL_CODE_SERVER_API_KEY`).
+- Runs the agent in-stream against the server's endpoints.
+- Streams progress back to the server as events.
+- Emits a final completion marker that the server maps to task status.
+
+## Credential Flow
+
+```text
+┌─────────┐    1. POST /tasks (user auth)     ┌───────────────┐
+│  User   │ ─────────────────────────────────▶│  code-server │
+└─────────┘                                   └───────┬───────┘
+                                                      │
+        2. sandbox session create (isolated)          │
+                                                      ▼
+                                        ┌────────────────────────┐
+                                        │ Frontal Sandbox        │
+                                        │  (session per task)    │
+                                        │                        │
+                                        │  /workspace/…          │
+                                        │  .frontal-code-hosted/ │
+                                        │    env  (token + env)  │
+                                        │    task.json           │
+                                        └───────────┬────────────┘
+                                                    │
+        3. frontal-code hosted task run <task_id>   │  (in session)
+                                                    │
+        4. CLI → /v1/tasks/<id>/* with              │
+           FRONTAL_CODE_SERVER_API_KEY              │
+                                                    ▼
+                                        ┌────────────────────────┐
+                                        │  code-server           │
+                                        │  (worker token auth)   │
+                                        └────────────────────────┘
 ```
 
-What a worker can hold:
+1. The user submits a task to `code-server` with normal user credentials.
+2. `code-server` creates a sandbox session for the task (isolated tier),
+   streams the checkout into `/workspace`, and writes the worker
+   environment and task payload under `.frontal-code-hosted/`.
+3. The CLI runs inside the session with the per-task worker token as
+   `FRONTAL_CODE_SERVER_API_KEY`.
+4. The CLI calls back to `code-server` using the worker token.
+5. `code-server` verifies the token, enforces task scoping, and records
+   events.
 
-- A token that works for that task's endpoints and for the model proxy.
-- The relay address and the proxy URL.
-- The checkout, and the task payload file, which contains the prompt and no keys.
+### Worker token model
 
-What a worker never holds: provider keys, `GITHUB_TOKEN`, the control-plane API key, or Postgres credentials.
+Worker tokens are minted by `code-server` at task launch:
 
-## Token lifecycle
+- One worker token per task.
+- Bound to the task ID and the server.
+- Short-lived: they carry a sliding TTL (`FRONTAL_CODE_WORKER_TOKEN_TTL_SECS`,
+  default 7200) refreshed on use.
+- Verified on every worker callback.
+- Carried by the CLI as `FRONTAL_CODE_SERVER_API_KEY` inside the session.
 
-- **Storage:** Postgres table `hosted_worker_tokens`. The table holds the SHA-256 of the token, never the token. Each row has a task id, an expiry, and an optional revocation time.
-- **Issue:** at bootstrap. A new token for a task revokes that task's previous token.
-- **Use:** on each request. The worker may call only: read the task, read its runtime, read and write its GitHub integration, publish, and complete. Those endpoints are listed in `worker_access.rs`, and everything else returns 401.
-- **Expiry:** an idle timeout. Each successful use pushes the expiry out by `FRONTAL_CODE_WORKER_TOKEN_TTL_SECS` (default 7200), so a task that keeps calling the model keeps its token.
-- **Revoke:** on completion and on cancel, which ends access at once. A token that goes unused past its TTL also stops working.
-- **Restart:** tokens survive a restart because they are in Postgres. A running worker keeps working.
+The token grants access to task-scoped endpoints only:
 
-The server does not hold worker tokens in memory. The Postgres client runs on a dedicated thread, so the synchronous lane transport and the async handlers share one store.
+- Task metadata.
+- Event streaming.
+- Task status updates.
+- Model proxy endpoints (for provider calls).
 
-## Publication
+It does not grant:
 
-The worker never pushes. At the end of a run it computes a patch against the commit the server recorded at bootstrap, excluding its own state directories, and posts it to `/v1/tasks/<id>/publish`. The server then:
+- Task creation.
+- Task cancellation (owner-only).
+- Other users' tasks.
 
-1. Refuses the patch if it is larger than 16 MiB, is empty, or touches `.git`, `.github/workflows`, or `.github/actions`, or creates a symbolic link or submodule.
-2. Refuses the branch unless it starts with `frontal-code/`.
-3. Clones the repository into a scratch directory the worker cannot reach.
-4. Applies the patch with `git apply --index`, so a patch against a different base fails loudly.
-5. Commits with a fixed author, and pushes to that branch.
-6. Opens a pull request if a GitHub integration is configured. Failure here does not undo the push.
-7. Records the branch and commit on the task.
+### Why the env file?
 
-Git runs with `core.hooksPath=/dev/null`, no system or user configuration, and no terminal prompts. The GitHub token reaches git through `GIT_CONFIG_*` environment variables, so it never appears in argv, a URL, or `.git/config`. Error messages are scrubbed of the token.
+Sandbox sessions can sleep and wake; the environment is dropped across that
+boundary. The worker environment (server URL, worker token, provider env) is
+therefore serialized to `/workspace/.frontal-code-hosted/env` in the session
+VFS, where it survives, and re-injected for the in-session run.
 
-Trust boundary: the worker's `.git` directory is never read by the server. The server clones its own copy from the configured repository. A malicious worker can therefore change only the patch, and the patch is checked.
+## Task Lifecycle
 
-## Isolation of the worker
+```text
+            ┌────────────┐
+            │  Created   │  user submits task via API
+            └─────┬──────┘
+                  ▼
+            ┌────────────┐
+            │  Launching │  worker token minted, sandbox session
+            └─────┬──────┘  created, checkout + env streamed
+                  ▼
+            ┌────────────┐
+            │   Running  │  frontal-code in session streams events
+            └─────┬──────┘
+                  ▼
+        ┌─────────┴─────────┐
+        ▼                   ▼
+  ┌────────────┐      ┌────────────┐
+  │ Completed  │      │   Failed   │  session finished with an
+  └────────────┘      └────────────┘  error/failed finish reason
+        ▲
+        │
+  ┌────────────┐
+  │ Cancelled  │  user cancels; session destroyed
+  └────────────┘
+```
 
-Each layer is independent. Removing one does not remove the others.
+State transitions:
 
-1. **Network.** Each task has its own `--internal` network. Containers on it have no route to the internet or to the host. The only peer is the relay, which forwards one port to the server. Inter-container traffic is allowed on task networks, but a task network holds only its own worker and the relay, so workers cannot reach each other.
-2. **Capabilities.** `--cap-drop ALL` and `--security-opt no-new-privileges:true`. The worker runs as the unprivileged `frontal-code` user.
-3. **Filesystem.** `--read-only` root. Writes go to the checkout (the only bind mount) and to two tmpfs mounts for `/tmp` and the home directory, both `nosuid,nodev`.
-4. **Resources.** `--pids-limit 512`, `--memory 4g`, `--cpus 2`, `nofile` limits.
-5. **Credentials.** No `GITHUB_TOKEN`, no provider key, no control-plane key. The environment is passed through a `0600` file that is deleted after `docker run` reads it, so no value appears in the process list.
-6. **Relay.** Read-only, no capabilities, forwards only to `host.docker.internal:<server port>`. It is not a general proxy.
+| From        | To          | Trigger                                    |
+|-------------|-------------|--------------------------------------------|
+| Created     | Launching   | Worker session created.                    |
+| Launching   | Running     | CLI started in session.                    |
+| Running     | Completed   | Finish reason ok.                          |
+| Running     | Failed      | Finish reason error/failed, or launch failure. |
+| Created     | Cancelled   | User cancels before launch.                |
+| Running     | Cancelled   | User cancels; sandbox session destroyed.   |
 
-The Docker daemon socket is never mounted. Containers are never privileged. The host network is never used.
+## Isolation Guarantees
 
-## Permission mode
+The sandbox session provides several isolation properties:
 
-Workers run in `workspace-write` by default. Writes to the checkout are allowed. Shell commands are allowed only when an allow rule grants them: read and build commands such as `ls`, `cat`, `rg`, `git status`, `cargo`, and `npm test`. Network tools, `git push`, `env`, `rm -rf`, and `docker` are denied, and deny rules from the repository apply as well. A task can ask for `danger-full-access` explicitly. The container is the boundary, and the network layer removes the main exfiltration path: a compromised agent cannot reach an arbitrary host. The remaining channels are the model proxy, which the provider receives every prompt through anyway, and the relay, which reaches only the server.
+1. **Session boundary**: each task runs in its own session with its own
+   VFS and process space. There is no shared mutable state between tasks.
+2. **Network policy**: the session's network access is limited to the
+   code-server host (and whatever the sandbox runtime allowlists by
+   default). The worker cannot reach arbitrary internal hosts.
+3. **Worker token scoping**: the token is bound to one task and cannot
+   access other tasks or create new tasks.
+4. **Checkout hygiene**: the checkout is written file-by-file and `.git`
+   is excluded, so credentials or hooks inside `.git/config` are not
+   carried into the session by the transport.
+5. **Reproducible environment**: sessions start from a template/snapshot
+   resolved by the sandbox server, so the execution environment is
+   consistent across tasks.
+6. **Destructive cancellation**: cancelling a task destroys the session,
+   so no state outlives the task except what the server recorded.
 
-The allow list is the constant `WORKER_BASH_ALLOW` in `crates/code-server/src/worker_access.rs`, and the deny list is `WORKER_BASH_DENY`. The CLI applies them to the worker. A repository's own allow rules are replaced by the worker's, so a repository cannot widen what a worker may run.
+### What is NOT isolated
 
-## Threat model
+Be explicit about the limits of the current model:
 
-| Threat | Mitigation |
-|---|---|
-| Agent exfiltrates a provider key | Keys never enter the container. |
-| Agent exfiltrates `GITHUB_TOKEN` | Not in the container, for any task. |
-| Agent uses the worker token against other tasks | The token is scoped to its task, and the endpoint list is fixed. |
-| Agent uses the worker token to cancel or create tasks | Those endpoints are not in the allowed list. |
-| Agent reaches the internet to fetch or send data | No route: the task network is internal. |
-| Agent reaches other workers or the host | Separate task networks. The relay forwards one port. |
-| Agent changes the repository's `.git` to redirect a push | The server never reads the checkout's `.git`. It clones its own copy. |
-| Agent adds a workflow that runs with CI credentials | `.github/workflows` and `.github/actions` are refused. |
-| Agent writes a symlink to read host files on publish | Symlinks and submodules are refused. |
-| Agent pushes to `main` | Only branches under `frontal-code/` are accepted. |
-| Agent consumes all host resources | PID, memory, and CPU limits. |
-| Token database is read by an attacker | Only hashes are stored. |
-| Token replayed after completion | Revoked on completion, cancel, and expiry. |
-| Server restart mid-task | Tokens persist. The task continues. |
+- **The server is trusted**: `code-server` holds the checkout, the worker
+  token, and the event stream. A compromised server can see all task data.
+- **Model proxy is server-mediated**: provider credentials live on the
+  server and the worker calls through the server's proxy endpoints.
+- **Session limits/secrets**: per-session resource limits and secret
+  injection are not implemented on the server yet (501); the session
+  runs under the sandbox server's defaults.
+- **No per-session egress allowlist beyond the server host**: network
+  policy allowlists the code-server host; broader egress rules depend on
+  the sandbox runtime.
 
-## Decisions and remaining limits
+## Threat Model
 
-Resolved:
+### Threat: malicious task content
 
-1. **Permission default.** Workers run in `workspace-write`. Shell commands run only when an allow rule grants them: a list of read and build commands (`WORKER_BASH_ALLOW` in `worker_access.rs`). Network tools, `git push`, `env`, and `rm -rf` are denied (`WORKER_BASH_DENY`). A task can request `danger-full-access` explicitly. The worker's allow rules replace any the repository would set, and deny rules from both sources apply.
-2. **GitHub token scope.** Publishing with a token is refused for any repository not named in `FRONTAL_CODE_GITHUB_ALLOWED_REPOS` (`owner/repo` or `owner/*`), and the check runs before any clone. An empty allowlist with a token set means no GitHub publication. Pull requests use the REST API directly. Use a fine-grained token with only Contents and Pull requests write access on the named repositories.
-3. **Postgres TLS.** Verified TLS by default, against system roots plus `FRONTAL_CODE_SERVER_DATABASE_CA_FILE` for a private CA. Plaintext only to loopback with `sslmode=disable`. Verified against a private-CA Postgres 17 on 2026-11-08.
-4. **Relay image.** Pinned by digest (`DEFAULT_RELAY_IMAGE`). Override with `FRONTAL_CODE_WORKER_RELAY_IMAGE` after reviewing the image.
-5. **ClickHouse audit.** Token issue and revocation, worker launches, refused and failed publications, and publications are written to `frontal_audit_events_v2` as epoch milliseconds. Writes are best effort and never block a request. Verified against a live ClickHouse 26.3.
+A submitted task can contain prompt injection or malicious instructions.
 
-Verified and no longer open:
+**Mitigations**:
 
-- **Full test suite.** The workspace passes on macOS with the live Postgres (verify-full TLS) and ClickHouse services, and on `linux/amd64` under Rosetta: 1794 tests, including the ones that were ignored before, with none ignored now.
-- **Linux container.** code-server runs inside the `linux/amd64` container and drives the host Docker daemon through the socket. Two Ollama tasks completed, both branches were published, and no task networks were left behind.
-- **Parity harness.** The `mock_parity_harness` flake did not reproduce in six parallel runs on macOS, or in the full `linux/amd64` run. The earlier failure is not explained; stderr is reported on failure.
-- **Model access.** Every live run (worker, SDK, and CLI) uses a local Ollama server with `qwen2.5:1.5b`, so there is no quota.
+- The agent runs in a sandbox session, not on the host.
+- Network access is limited by the session network policy.
+- The worker token cannot escape the task boundary.
 
-Still open:
+**Residual risk**:
 
-- **Native Linux Docker host.** `host-gateway` is verified on Docker Desktop only. On a native Linux host it is the real host bridge, so the relay and the callback address need a check there.
-- **Cloud gateways.** The `openai` provider path through a hosted gateway has been verified only against an earlier free-tier model. Nothing in this design depends on it.
+- The agent can still see the full checkout.
+- Prompt injection can influence agent behavior within the session.
 
-## Operating it
+### Threat: malicious agent behavior
 
-Required for `local-docker` lanes:
+The agent can exfiltrate data, install tools, or behave unpredictably.
 
-- `FRONTAL_CODE_SERVER_DATABASE_URL` — Postgres for worker tokens.
-- `FRONTAL_CODE_SERVER_API_KEY` — control-plane key (required unless anonymous mode is set).
-- `FRONTAL_CODE_SERVER_CALLBACK_URL` — the server's address as seen from the host, for example `http://host.docker.internal:8788`. Its port is the relay's port.
+**Mitigations**:
 
-Ollama needs no key. The server forwards `ollama` requests to `OLLAMA_BASE_URL` on the host (default `http://localhost:11434`). The worker receives the proxy URL as its `OLLAMA_BASE_URL`, and its task token as `OLLAMA_API_KEY`, which the proxy reads to identify the task and never forwards. Use a model the host has pulled, for example `qwen2.5:1.5b`. Models below about 1.5B parameters did not emit tool calls in testing.
+- Session-level isolation (VFS, process, network).
+- Destructive cancellation.
+- Event audit trail on the server.
 
-Optional:
+**Residual risk**:
 
-- `FRONTAL_CODE_SERVER_DATABASE_CA_FILE` — CA for a private Postgres certificate
-- `FRONTAL_CODE_SERVER_CLICKHOUSE_URL`, `FRONTAL_CODE_SERVER_CLICKHOUSE_USER`, `FRONTAL_CODE_SERVER_CLICKHOUSE_PASSWORD` — audit events (HTTPS, or loopback)
-- `FRONTAL_CODE_GITHUB_ALLOWED_REPOS` — required when `GITHUB_TOKEN` is set
-- `FRONTAL_CODE_GITHUB_API_BASE` — default `https://api.github.com`
-- `FRONTAL_CODE_WORKER_TOKEN_TTL_SECS` (default 7200)
-- `FRONTAL_CODE_WORKER_RELAY_IMAGE` (default `alpine/socat:latest`)
-- `FRONTAL_CODE_GIT_AUTHOR_NAME`, `FRONTAL_CODE_GIT_AUTHOR_EMAIL` — author of published commits
-- `GITHUB_TOKEN` — server-side only, used to push and open pull requests
+- The agent has the full toolset of `frontal-code` inside the session.
+- Any tool that can reach the network can reach the code-server host.
 
-Verification: `scripts/worker-e2e.sh` runs one task end to end, checks the worker's isolation settings and environment names while it runs, and checks that the branch reached the remote.
+### Threat: server compromise
+
+If `code-server` is compromised, the attacker has:
+
+- All task data.
+- All worker tokens.
+- Provider credentials.
+
+**Mitigations**:
+
+- The server should be deployed with standard security practices
+  (TLS, least-privilege DB access, secret management).
+
+**Residual risk**:
+
+- The current model assumes a trusted server. There is no client-side
+  verification of server integrity.
+
+### Threat: session escape
+
+If the sandbox runtime has an escape vulnerability, a task could reach
+the host.
+
+**Mitigations**:
+
+- The sandbox runtime owns the boundary; keep it updated.
+- The network policy limits what an escaped session can reach.
+
+**Residual risk**:
+
+- Runtime vulnerabilities are outside the scope of this project.
+
+## Still Open
+
+- Per-session resource limits and secret injection (currently 501 on the
+  server side).
+- Broader egress allowlisting (model endpoints, package registries) if
+  tasks need direct provider or package access.
+- Sandbox session telemetry and cost accounting per task.
+- Multi-node sandbox server topology and failover.
+
+## Legacy: tools-agent transport
+
+The `tools-agent` lane transport still exists for operators who want to run
+the `frontal-code` CLI directly on the host. It is gated behind
+`FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1` and is not the recommended
+transport. Hosted tasks on that lane run as a local process with
+`FRONTAL_CODE_HOSTED_WORKER=1` and no sandbox session boundary.

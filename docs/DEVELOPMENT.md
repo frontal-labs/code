@@ -131,10 +131,9 @@ Apple silicon can run the full suite on `linux/amd64` through Rosetta, to catch 
 ```bash
 scripts/linux-amd64-tests.sh               # the whole workspace, including ignored tests
 TEST_FILTER=worker_ scripts/linux-amd64-tests.sh   # only matching tests
-scripts/linux-amd64-worker-e2e.sh          # code-server in the container drives real worker containers
 ```
 
-The worker end-to-end scripts need a local Ollama and the worker image, `docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .`.
+The worker end-to-end path needs a local Ollama and a sandbox server (see `deploy/sandbox/`). The sandbox lane is the default transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=sandbox`), so code-server drives real sandbox worker sessions rather than Docker containers.
 
 ### Mock Parity Tests
 

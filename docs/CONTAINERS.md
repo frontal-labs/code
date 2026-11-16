@@ -181,71 +181,113 @@ docker manifest create frontal-code/cli:multiarch \
 docker manifest push frontal-code/cli:multiarch
 ```
 
-## Hosted Worker Containers
+## Hosted Worker Sessions
 
-`code-server` runs each hosted task in its own worker container, built from `docker/worker.Dockerfile`. The image installs both command names, `frontal-code` and `code`; the hosted task runs `frontal-code hosted task run`. This is the default lane transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker`).
+`code-server` runs each hosted task in its own Frontal Sandbox session. This is
+the default lane transport (`FRONTAL_CODE_SERVER_LANE_TRANSPORT=sandbox`). The
+server talks to a separate sandbox server over HTTP
+(`FRONTAL_SANDBOX_BASE_URL` / `FRONTAL_SANDBOX_API_KEY`) and does not need a
+Docker daemon for hosted tasks.
 
-`FRONTAL_CODE_SERVER_LANE_TRANSPORT=tools-agent` runs agents inside the server process with its privileges. The server refuses it unless `FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1` is set. The managed deploy configs in `deploy/` and `infrastructure/` set that opt-in, because the platform VM or pod is their isolation boundary.
+`FRONTAL_CODE_SERVER_LANE_TRANSPORT=tools-agent` runs agents inside the server
+process with its privileges. The server refuses it unless
+`FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1` is set. The managed deploy configs in
+`deploy/` and `infrastructure/` set that opt-in, because the platform VM or pod
+is their isolation boundary.
 
 ```bash
-# Build the worker image from the workspace (the context is limited by .dockerignore)
-docker build -f docker/worker.Dockerfile -t frontal-code-worker:local .
+# Point the server at a sandbox server (e.g. the one in deploy/sandbox/).
+export FRONTAL_SANDBOX_BASE_URL=http://<sandbox-host>:8080
+export FRONTAL_SANDBOX_API_KEY=sbx_...
 
-# Check the whole path end to end: image, server, worker containers, model calls, branches.
-# Uses a local Ollama server with qwen2.5:1.5b, so no key is needed.
-OLLAMA_BASE_URL=http://127.0.0.1:11434 \
-FRONTAL_CODE_SERVER_DATABASE_URL='postgres://frontal:...@127.0.0.1:55433/frontal?sslmode=verify-full' \
-FRONTAL_CODE_SERVER_DATABASE_CA_FILE=/path/to/ca.crt \
-  scripts/worker-e2e.sh
+# Check the whole path end to end: session, model calls, branches.
+# Uses a local Ollama server with qwen2.5:1.5b, so no provider key is needed.
+OLLAMA_BASE_URL=http://127.0.0.1:11434 scripts/worker-e2e.sh
 ```
 
 ### What a worker can see
 
-The server starts each worker with a small, deliberate environment:
+The server writes a small, deliberate environment into the session before the
+agent starts:
 
 | Variable | Value | Why |
 |---|---|---|
 | `FRONTAL_CODE_SERVER_API_KEY` | A random token for this task only | Authenticates the worker's own calls: read the task and its runtime, read and write its GitHub integration, publish, and complete. |
 | `OPENAI_API_KEY` (or `FRONTAL_API_KEY`, `XAI_API_KEY`, `AZURE_OPENAI_API_KEY`) | The same task token | The CLI's provider client needs a value. Model calls use it to reach the proxy, not the provider. |
-| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `http://frontal-relay:<port>/v1/proxy/<provider>` | Sends model traffic through the server. |
+| `OPENAI_BASE_URL` (or the matching `*_BASE_URL`) | `<server>/v1/proxy/<provider>` | Sends model traffic through the server. |
 | `FRONTAL_CODE_SERVER_URL`, `FRONTAL_CODE_HOSTED_WORKER`, `FRONTAL_CODE_HOSTED_TASK_FILE` | Fixed values | Locate the server and the task file. |
 | `FRONTAL_CODE_MAX_OUTPUT_TOKENS` | Copied from the server, if set | Non-secret tuning. |
 
-**Not present, for any task:** upstream provider keys, `GITHUB_TOKEN`, the server's control-plane key, and Postgres credentials.
+The sandbox drops a session's env on sleep/wake, so the server serializes this
+map to `/workspace/.frontal-code-hosted/env` and the agent sources it at start.
+
+**Not present, for any task:** upstream provider keys, `GITHUB_TOKEN`, the
+server's control-plane key, and sandbox-server credentials.
 
 ### How the worker reaches the server
 
-Each task gets its own internal Docker network. The worker is attached to it, and so is the relay (`frontal-code-relay-<port>`, one per server port, under the alias `frontal-relay`). The relay forwards one TCP port to the server and nothing else. The task network has no route to the internet and no route to the host, so the worker reaches the server and nothing else.
+Each task is its own session. The session's network policy allowlists only the
+code-server host and default-denies everything else, so the worker reaches the
+server and nothing else. The checkout is streamed into the session VFS under
+`/workspace` (minus `.git`), and the agent runs there.
 
 ### How changes are published
 
-The worker does not push. At the end of a run it sends its changes as a patch to `/v1/tasks/<id>/publish`. The server applies the patch to a fresh clone, commits it, and pushes to a branch under `frontal-code/`. The server opens a pull request when a GitHub integration is configured. See [design/worker-architecture.md](design/worker-architecture.md#publication).
+The worker does not push. At the end of a run it sends its changes as a patch to
+`/v1/tasks/<id>/publish`. The server applies the patch to a fresh clone, commits
+it, and pushes to a branch under `frontal-code/`. The server opens a pull
+request when a GitHub integration is configured. See
+[design/worker-architecture.md](design/worker-architecture.md#publication).
 
-The server refuses a patch that changes `.git`, `.github/workflows`, `.github/actions`, `CODEOWNERS`, or `.gitmodules`, in any letter case and at any depth, and it refuses symbolic links and submodules. Only one publish runs per task at a time. A second request gets `409 Conflict` while the first is in progress.
+The server refuses a patch that changes `.git`, `.github/workflows`,
+`.github/actions`, `CODEOWNERS`, or `.gitmodules`, in any letter case and at any
+depth, and it refuses symbolic links and submodules. Only one publish runs per
+task at a time. A second request gets `409 Conflict` while the first is in
+progress.
 
-Repository locations and refs are checked when the task is created and again at publish time:
+Repository locations and refs are checked when the task is created and again at
+publish time:
 
 - A remote URL is always accepted. A path on the server's host is refused unless `FRONTAL_CODE_SERVER_ALLOW_LOCAL_REPOS=1`. Local development and the e2e scripts turn it on. Otherwise a task could clone or push to any repository the server can reach.
 - `base_ref` and `branch` must be valid git ref names. Names that start with `-`, contain spaces or `..`, or end in `.lock` are refused.
 
-### Container hardening
+### Session isolation
 
-Every worker runs with `--cap-drop ALL`, `--security-opt no-new-privileges:true`, a read-only root filesystem, `--pids-limit 512`, `--memory 4g`, and `--cpus 2`. Its only writable mounts are the task checkout and two tmpfs directories. It is never privileged, and it never gets the Docker socket.
+The sandbox provider owns process and filesystem isolation. The server configures
+the session on the isolate tier with auto-promotion to a VM
+(`TierPreference::Auto`). Its network policy allows only the code-server host.
+Cancellation destroys the session, which kills the running exec. Resource
+limits and per-session secrets are not set today: the sandbox server returns 501
+for both.
 
 ### How model calls reach the provider
 
-The worker sends each model request to `/v1/proxy/<provider>` on the server. The proxy:
+The worker sends each model request to `/v1/proxy/<provider>` on the server. The
+proxy:
 
 1. Checks the worker's token. The token must be live (issued for a task that has not completed or been cancelled).
 2. Removes the caller's authorization headers.
 3. Adds the server's key for that provider and forwards the request to the provider's base URL from the server's environment.
 4. Streams the response back to the worker.
 
-A token that is stolen from the container is useful only for model calls and for its own task's endpoints. The proxy forwards only model-call paths (for example `chat/completions`, `responses`, and `v1/messages`) and only `POST`, so a token cannot reach file, fine-tuning, or account endpoints. Tokens are stored as SHA-256 hashes in Postgres, so they survive a server restart. Each successful use extends the token's expiry by the configured TTL (`FRONTAL_CODE_WORKER_TOKEN_TTL_SECS`, default 7200), so the TTL is an idle timeout and a long-running task keeps access. The token is revoked as soon as the task completes or is cancelled.
+A token that is stolen from the session is useful only for model calls and for
+its own task's endpoints. The proxy forwards only model-call paths (for example
+`chat/completions`, `responses`, and `v1/messages`) and only `POST`, so a token
+cannot reach file, fine-tuning, or account endpoints. Each successful use
+extends the token's expiry by the configured TTL
+(`FRONTAL_CODE_WORKER_TOKEN_TTL_SECS`, default 7200), so the TTL is an idle
+timeout and a long-running task keeps access. The token is revoked as soon as the
+task completes or is cancelled.
 
-Bedrock is not proxied: its requests are signed per request and cannot use a static key. A task that asks for `bedrock` is refused.
+Bedrock is not proxied: its requests are signed per request and cannot use a
+static key. A task that asks for `bedrock` is refused.
 
-The worker runs with the `workspace-write` permission mode by default. File edits are confined to its checkout, and shell commands are refused unless an allow rule grants them. Its container runs with no Linux capabilities, `no-new-privileges`, a read-only root filesystem, and its own `--internal` Docker network. That network has no route to the internet and reaches only the relay to the server. A prompt-injected agent can still run the build and test tools it is allowed, and those run project code. The network, not the allow list, is the real boundary. The token limits what a compromised worker can do to model calls and to its own task's endpoints.
+The worker runs with the `workspace-write` permission mode by default. File
+edits are confined to its checkout, and shell commands are refused unless an
+allow rule grants them. The session's network policy, not the allow list, is the
+real boundary: a compromised agent cannot reach an arbitrary host. The token
+limits what a compromised worker can do to model calls and to its own task's
+endpoints.
 
 ## Docker Compose
 
@@ -278,8 +320,8 @@ volumes:
     driver: local
 ```
 
-Only mount `/var/run/docker.sock` when the container must launch sibling Docker workers.
-Keep it off the default development path and add it explicitly for trusted local-docker scenarios.
+Only mount `/var/run/docker.sock` when the container must launch sibling containers for other reasons (for example, building images). Hosted workers no longer need it: they run in sandbox sessions, not Docker.
+Keep the socket off the default development path.
 
 ### Production Environment
 

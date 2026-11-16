@@ -14,12 +14,17 @@
 
 mod code;
 mod config;
+mod integrations;
 mod protocol;
 mod spawn;
 mod thread;
 
 pub use code::FrontalCode;
 pub use config::{config_to_args, flatten_config, merge_config, to_toml_literal};
+pub use integrations::{
+  AuthSpec, CapabilitySummary, EventSummary, IntegrationClient, IntegrationError,
+  IntegrationManifest, IntegrationSummary,
+};
 pub use protocol::{
   FrontalCodeEvent, FrontalCodeOptions, InputEntry, ThreadInput, ThreadItem, ThreadOptions,
   ThreadRunOptions, TurnResult, Usage,

@@ -9,7 +9,8 @@ use serde_json::{from_value, json, Value as JsonValue};
 use std::sync::OnceLock;
 
 /// Permission mode for tools
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PermissionMode {
     ReadOnly,
     WorkspaceWrite,

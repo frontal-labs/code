@@ -15,6 +15,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod audit;
 mod docker_worker;
+mod integrations;
 mod publish;
 mod worker_access;
 mod worker_tokens;
@@ -389,6 +390,7 @@ pub struct ServerState {
     publish_workspace_root: PathBuf,
     // Tasks with a publish in flight. Held so two requests cannot push the same task twice.
     publishing_tasks: Arc<Mutex<HashSet<String>>>,
+    integrations: Arc<integrations::IntegrationsState>,
     // Off unless configured. See `ServerConfig::allow_local_repos`.
     allow_local_repos: bool,
 }
@@ -556,6 +558,7 @@ impl ServerState {
                 .unwrap_or_default(),
             publish_workspace_root: default_server_workspace_root(),
             publishing_tasks: Arc::new(Mutex::new(HashSet::new())),
+            integrations: Arc::new(integrations::IntegrationsState::load_from_env()),
             allow_local_repos: false,
         };
         state.recover_loaded_state();
@@ -1795,6 +1798,7 @@ pub fn app(state: Arc<ServerState>) -> Router {
             post(connector_interaction),
         )
         .route("/v1/connectors/{connector}/events", post(connector_event))
+        .merge(integrations::integrations_routes())
         // Starting a login stores a pending state for the single tenant, so it needs the
         // control-plane key. It is a POST that returns the provider URL as JSON: a browser
         // navigation cannot send the `x-api-key` header, so the caller opens the returned
@@ -5349,6 +5353,13 @@ impl AppError {
     fn internal(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: message.into(),
+        }
+    }
+
+    fn not_implemented(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::NOT_IMPLEMENTED,
             message: message.into(),
         }
     }

@@ -1235,6 +1235,8 @@ name = "frontal-code-sdk"
 version = "0.3.0"
 dependencies = [
  "futures-util",
+ "reqwest",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",

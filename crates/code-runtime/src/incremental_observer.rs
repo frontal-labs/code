@@ -40,12 +40,16 @@ pub fn task_id(rel_path: &str, kind: &str) -> String {
 }
 
 /// Map a terminal task status to the protocol-v1 outcome string.
+///
+/// Accepts both the canonical task statuses (`completed`, `failed`,
+/// `stopped`) and the worker statuses that map onto them, so a finished
+/// worker is recorded with a `pass` outcome rather than `none`.
 #[must_use]
 pub fn outcome_for(status: &str) -> &'static str {
     match status {
-        "completed" => "pass",
+        "completed" | "finished" => "pass",
         "failed" => "fail",
-        "stopped" => "error",
+        "stopped" | "cancelled" => "error",
         _ => "none",
     }
 }
@@ -58,7 +62,10 @@ pub fn outcome_for(status: &str) -> &'static str {
 /// on a fresh worktree does not hit `store_missing`.
 fn open_store(repo_root: &Path) -> Option<Store> {
     let store = Store::open(repo_root).ok()?;
-    store.ensure_initialized();
+    // Belt-and-braces re-init for callers that built the `Store` out-of-band.
+    // `Store::open` already initialized before connecting; a failed re-check
+    // is non-fatal here — observation falls back to "run everything".
+    let _ = store.ensure_initialized();
     Some(store)
 }
 
@@ -117,11 +124,30 @@ pub fn observe_many(repo_root: &Path, observations: &[Value]) {
 /// Advance the store baseline to `to`. Called after a worker finishes a
 /// session so that the next `affected` query measures against the
 /// post-completion state.
+///
+/// The protocol's `advance` requires `expected` to match the store's current
+/// baseline, and `null` before the first advance. Passing `None` always
+/// asserts "no baseline yet", so the first worker to finish after the store
+/// already has a baseline silently fails with `baseline_conflict` and the
+/// baseline is never updated. Read the current baseline and pass it as
+/// `expected`; only treat an absent store baseline as `null`.
 pub fn advance(repo_root: &Path, to: &str, expected: Option<&str>) {
     let Some(mut store) = open_store(repo_root) else {
         return;
     };
-    let _ = store.advance(to, expected);
+    // The store's current baseline is authoritative: `expected` must match
+    // it, and a `None`/`null` expectation is only valid before the first
+    // advance.
+    let current = store
+        .baseline()
+        .ok()
+        .and_then(|v| v.get("baseline").and_then(Value::as_str).map(String::from));
+    let _ = match (current, expected.map(String::from)) {
+        (Some(baseline), _) => store.advance(to, Some(&baseline)),
+        // No baseline yet (or the baseline query failed): the protocol's
+        // `null` expectation is `None`.
+        _ => store.advance(to, None),
+    };
 }
 
 /// Build the observation context for this repo (useful for constructing
@@ -144,7 +170,16 @@ pub fn affected(repo_root: &Path, baseline: &str, changes: &Value) -> Option<Vec
     if plan.is_fallback() {
         return None;
     }
-    Some(plan.tasks.iter().map(|t| t.task_id.clone()).collect())
+    // Include unobserved tasks: they have no skip certificate, so the server
+    // gate must run them rather than skip them. A task with no observation
+    // must never be certified for a skip.
+    Some(
+        plan.tasks
+            .iter()
+            .map(|t| t.task_id.clone())
+            .chain(plan.unobserved.iter().cloned())
+            .collect(),
+    )
 }
 
 #[cfg(test)]
@@ -162,6 +197,9 @@ mod tests {
         assert_eq!(outcome_for("failed"), "fail");
         assert_eq!(outcome_for("stopped"), "error");
         assert_eq!(outcome_for("created"), "none");
+        // Worker statuses that map onto terminal task statuses.
+        assert_eq!(outcome_for("finished"), "pass");
+        assert_eq!(outcome_for("cancelled"), "error");
     }
 
     #[test]

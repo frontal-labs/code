@@ -81,10 +81,13 @@ pub fn resolve() -> EngineBinary {
 
 /// Build-time-baked path to the engine binary, computed relative to the
 /// workspace root (which is two directories above `crates/code-incremental`).
+///
+/// `CARGO_MANIFEST_DIR` is the crate directory itself
+/// (`<root>/crates/code-incremental`), so exactly two `parent()` calls reach
+/// the workspace root: one off the crate dir, one off `crates`.
 fn baked_path() -> Option<PathBuf> {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent() // code-incremental
-        .and_then(|p| p.parent()) // crates
+        .parent() // crates
         .and_then(|p| p.parent()); // workspace root
 
     let triple = target_triple();
@@ -104,9 +107,16 @@ fn which_binary(name: &str) -> bool {
 }
 
 /// The target triple for this platform (e.g. `darwin-arm64`, `linux-x86_64`).
+///
+/// The OS component is normalized to the directory names used under
+/// `third_party/incremental/engine-binaries/`: macOS reports as `macos` to
+/// `env::consts::OS`, but the layout uses `darwin`.
 #[must_use]
 pub fn target_triple() -> String {
-    let os = env::consts::OS;
+    let os = match env::consts::OS {
+        "macos" => "darwin",
+        other => other,
+    };
     let arch = env::consts::ARCH;
     // Normalize arch names to match the directory layout.
     let arch = match arch {
@@ -128,6 +138,51 @@ mod tests {
         assert!(
             triple.contains('-'),
             "triple should contain a dash: {triple}"
+        );
+    }
+
+    #[test]
+    fn baked_path_resolves_within_workspace() {
+        // The baked path must point at the vendored engine location relative
+        // to the workspace root. A wrong parent depth or a raw `macos` triple
+        // would point at a non-existent layout and the integration would
+        // silently degrade to "run everything."
+        //
+        // Only the path shape is asserted (not file existence): the engine
+        // binary is a checked-in artifact that is not present in the Bazel
+        // sandbox, where the crate is tested from a copied workspace that
+        // carries the Rust sources but not the prebuilt binaries.
+        let Some(path) = baked_path() else {
+            panic!("baked path could not be computed from CARGO_MANIFEST_DIR");
+        };
+        let s = path.display().to_string();
+        assert!(
+            s.contains("third_party/incremental/engine-binaries/"),
+            "baked path missing the engine-binaries layout: {s}"
+        );
+        assert!(
+            !s.contains("macos-"),
+            "raw `macos` triple not normalized to `darwin`: {s}"
+        );
+        assert!(
+            s.ends_with("/incremental"),
+            "baked path must end in the engine binary name: {s}"
+        );
+        // The path must resolve relative to the crate's own workspace, i.e.
+        // walking up from the baked path must reach the crate manifest dir.
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut p = path.clone();
+        for _ in 0..7 {
+            // third_party/incremental/engine-binaries/<triple>/incremental
+            if !p.pop() {
+                break;
+            }
+        }
+        assert!(
+            manifest.starts_with(&p),
+            "baked path does not sit under the same workspace as the crate: {} vs {}",
+            path.display(),
+            p.display()
         );
     }
 

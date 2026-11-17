@@ -21,7 +21,7 @@ pub mod context;
 pub mod engine_binary;
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -114,6 +114,33 @@ impl Store {
         let binary = engine.path().ok_or(Error::EngineNotFound)?.to_path_buf();
 
         let store_path = env_store_path(repo_root);
+
+        // Initialize the store before connecting: the pinned engine exits when
+        // `tg.log` is absent, before it can answer the `hello` handshake that
+        // `connect` performs. Running `init` first (idempotent — the engine
+        // skips when the log exists) makes first-use work on a fresh worktree.
+        init_store(&binary, &store_path, repo_root)?;
+
+        // The vendored protocol client (`third_party/incremental`) writes the
+        // request to the engine's stdin *before* it starts the response
+        // deadline, so a write to a stalled engine (pipe buffer full) can
+        // block longer than `timeout`. That is a known limitation of the
+        // vendored binding (CodeRabbit finding on PR #166) that we accept
+        // rather than patch in place:
+        //
+        //   * It is third-party code pinned to a commit; the manifest's
+        //     `sha256_rust_src` is verified against *upstream* bytes and the
+        //     fetch script re-copies those files (clobbering any local patch).
+        //   * The exposure is bounded: requests are small (task ids, change
+        //     lists) and far below the pipe buffer, and the blocking scenario
+        //     requires the engine to already be wedged — in which case the
+        //     next request's `timeout` read deadline fires and the caller
+        //     falls back to "run everything". The whole integration is
+        //     best-effort; a wedged engine degrades to a fallback, never to a
+        //     hard error.
+        //
+        // Revisit this if requests grow past the pipe buffer or the engine
+        // becomes a dependency with its own update cadence.
         let cfg = incremental::Config {
             engine: vec![binary.display().to_string()],
             store: store_path.clone(),
@@ -138,23 +165,18 @@ impl Store {
     /// any missing parents, and an empty log with a header. Safe to call
     /// multiple times (idempotent — the engine skips when the log exists).
     ///
-    /// Call this before the first [`observe`](Self::observe) or
-    /// [`affected`](Self::affected) on a fresh worktree; a store that was
-    /// never initialized returns `store_missing` from the engine.
-    pub fn ensure_initialized(&self) {
+    /// [`Store::open`] already runs this before connecting; this method is
+    /// kept for callers that hold a `Store` and want to re-check. It uses a
+    /// bounded wait and returns `Ok(false)` (rather than blocking or failing
+    /// the caller) when the engine stalls or is unavailable, so callers can
+    /// proceed down the unconditional "run everything" path.
+    #[must_use]
+    pub fn ensure_initialized(&self) -> bool {
         let engine = EngineBinary::resolve();
         let Some(binary) = engine.path() else {
-            return;
+            return false;
         };
-        let _ = std::process::Command::new(binary)
-            .args([
-                "init",
-                "--store",
-                &self.path.to_string_lossy(),
-                "--root",
-                &self.repo_root.to_string_lossy(),
-            ])
-            .status();
+        init_store(binary, &self.path, &self.repo_root).is_ok()
     }
 
     /// The store directory path.
@@ -327,14 +349,20 @@ impl Plan {
     }
 
     /// Deserialize a plan from the engine's raw JSON response.
+    ///
+    /// A plan is never returned partially: if any `tasks` entry is missing a
+    /// string `id` (or `tasks` is not an array), the whole plan is a fallback
+    /// (`invalid_plan`). Silently dropping a malformed entry would let a
+    /// caller treat an unparseable plan as "nothing to re-run" and skip
+    /// affected work.
     #[must_use]
     pub fn from_json(raw: &Value) -> Self {
-        let tasks = raw
-            .get("tasks")
-            .and_then(Value::as_array)
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|t| {
+        let tasks_value = raw.get("tasks");
+        let tasks: Vec<Task> = match tasks_value {
+            Some(Value::Array(arr)) => {
+                let parsed: Vec<Option<Task>> = arr
+                    .iter()
+                    .map(|t| {
                         Some(Task {
                             task_id: t["id"].as_str()?.to_string(),
                             reasons: t
@@ -348,9 +376,16 @@ impl Plan {
                                 .unwrap_or_default(),
                         })
                     })
-                    .collect()
-            })
-            .unwrap_or_default();
+                    .collect();
+                if parsed.iter().any(Option::is_none) {
+                    return Self::fallback("invalid_plan");
+                }
+                parsed.into_iter().flatten().collect()
+            }
+            // No `tasks` key (or a non-array) is only valid on a fallback plan.
+            None | Some(Value::Null) => vec![],
+            Some(_) => return Self::fallback("invalid_plan"),
+        };
 
         let skipped = raw
             .get("skipped")
@@ -451,6 +486,62 @@ fn protocol_err(e: incremental::Error) -> Error {
             code: e.code,
             message: e.message,
         },
+    }
+}
+
+/// Maximum time to wait for the engine's `init` command to finish.
+///
+/// `init` runs as a separate process, so the protocol client's own timeout
+/// does not cover it. A stalled init must not block task transitions or
+/// server requests that call the bridge.
+const INIT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Run the engine's `init` command against `store_path` with a bounded wait.
+///
+/// Returns `Ok(())` when the store is initialized (or already was) and
+/// `Err` when the engine exits non-zero, cannot be spawned, or stalls past
+/// [`INIT_TIMEOUT`] (the child is then terminated and reaped). Callers that
+/// treat init failure as "run everything" should map `Err` to the fallback
+/// path rather than propagating a hard error.
+fn init_store(binary: &Path, store_path: &Path, repo_root: &Path) -> Result<()> {
+    let mut child = std::process::Command::new(binary)
+        .args([
+            "init",
+            "--store",
+            &store_path.to_string_lossy(),
+            "--root",
+            &repo_root.to_string_lossy(),
+        ])
+        .spawn()
+        .map_err(|e| Error::EngineStartup(format!("failed to spawn init: {e}")))?;
+
+    let deadline = Instant::now() + INIT_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if status.success() {
+                    return Ok(());
+                }
+                return Err(Error::EngineStartup(format!(
+                    "engine init exited with {status}"
+                )));
+            }
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(Error::EngineStartup(format!(
+                        "engine init timed out after {INIT_TIMEOUT:?}"
+                    )));
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                return Err(Error::EngineStartup(format!(
+                    "failed to wait for init: {e}"
+                )));
+            }
+        }
     }
 }
 
@@ -582,31 +673,29 @@ mod tests {
     }
 
     /// Build a fresh store on a temp repo, initialized with a baseline.
-    /// Skips (returns `None`) when the engine binary is unavailable.
+    ///
+    /// Returns `None` only when the engine binary is unavailable (a clean
+    /// skip). Once the binary is found, any failure — init, connect, or
+    /// baseline advance — panics with the original error so a broken setup
+    /// fails the test instead of silently passing without exercising
+    /// certified skips or fallback behavior.
     fn fresh_e2e_store(baseline: &str) -> Option<(Store, PathBuf)> {
         let engine = EngineBinary::resolve();
         let engine_path = engine.path()?;
-        // Skip cleanly on platforms without a prebuilt engine binary.
         if !engine_path.exists() {
             return None;
         }
         let repo = e2e_dir("repo");
         std::fs::create_dir_all(&repo).unwrap();
         let store_dir = repo.join(".incremental");
-        std::process::Command::new(engine_path)
-            .args([
-                "init",
-                "--store",
-                &store_dir.to_string_lossy(),
-                "--root",
-                &repo.to_string_lossy(),
-            ])
-            .status()
-            .ok()
-            .filter(std::process::ExitStatus::success)?;
-        let mut store = Store::open(&repo).ok()?;
+        init_store(engine_path, &store_dir, &repo)
+            .unwrap_or_else(|e| panic!("engine setup (init) failed: {e}"));
+        let mut store =
+            Store::open(&repo).unwrap_or_else(|e| panic!("engine setup (open) failed: {e}"));
         // First advance: null → baseline.
-        store.advance(baseline, None).ok()?;
+        store
+            .advance(baseline, None)
+            .unwrap_or_else(|e| panic!("engine setup (advance) failed: {e}"));
         Some((store, repo))
     }
 

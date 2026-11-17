@@ -15,6 +15,7 @@ pub mod core_config;
 mod file_ops;
 pub mod green_contract;
 mod hooks;
+pub mod incremental_observer;
 mod json;
 mod lane_events;
 pub mod lsp_client;
@@ -65,6 +66,35 @@ pub use code_integrations::mcp::stdio::{
 pub use code_integrations::mcp::tool_bridge::{
     McpConnectionStatus, McpServerState, McpToolRegistry,
 };
+/// Returns `true` when the `incremental.enabled` setting is `true` in the
+/// merged runtime settings. Defaults to `false` when the setting is absent.
+///
+/// This is the flag gate for all Incremental engine interactions: when
+/// disabled, no observations are recorded and no baseline advances occur.
+#[must_use]
+pub fn incremental_enabled() -> bool {
+    // The config module is loaded lazily; we check the project-local
+    // settings file directly to avoid a full config load on every call.
+    let path = std::env::current_dir()
+        .ok()
+        .map(|cwd| cwd.join(".frontal-code").join("settings.json"))
+        .filter(|p| p.exists());
+    let Some(path) = path else {
+        return false;
+    };
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    value
+        .get("incremental")
+        .and_then(|v| v.get("enabled"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
 pub use code_integrations::mcp::tools::{
     execute_mcp_tool, mcp_tool_specs, ToolSpec as McpToolSpec,
 };

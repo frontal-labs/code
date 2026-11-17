@@ -272,6 +272,10 @@
     "audit_logging": true,
     "sandbox_mode": false
   },
+  "incremental": {
+    "_comment": "Incremental Compute Engine integration (see tools/incremental). When enabled, task status transitions are observed and the reconcile loop is gated by `affected` queries. Absent or false = disabled.",
+    "enabled": false
+  },
   "tools": {
     "bash": {
       "enabled": true,
@@ -349,6 +353,13 @@
       "bazel_label": "//tools/generators:generators",
       "make_target": "generators",
       "description": "Scaffold crates from templates"
+    },
+    "incremental": {
+      "kind": "rust",
+      "cargo_pkg": "tools-incremental",
+      "bazel_label": "//tools/incremental:incremental",
+      "make_target": "incremental",
+      "description": "Incremental Compute Engine: observe, baseline, affected"
     },
     "remote": {
       "kind": "rust",

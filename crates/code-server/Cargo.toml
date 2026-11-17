@@ -17,6 +17,7 @@ code-orchestrator = { path = "../code-orchestrator" }
 code-repo = { path = "../code-repo" }
 code-types = { path = "../code-types" }
 code-runtime = { path = "../code-runtime" }
+code-incremental = { path = "../code-incremental" }
 code-tools = { path = "../code-tools" }
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true

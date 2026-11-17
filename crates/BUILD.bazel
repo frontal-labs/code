@@ -12,6 +12,7 @@ filegroup(
         "//crates/code-embeddings:srcs",
         "//crates/code-events:srcs",
         "//crates/code-harness:srcs",
+        "//crates/code-incremental:srcs",
         "//crates/code-integrations:srcs",
         "//crates/code-memory:srcs",
         "//crates/code-orchestrator:srcs",

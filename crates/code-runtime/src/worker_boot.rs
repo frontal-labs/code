@@ -144,6 +144,7 @@ pub struct Worker {
 #[derive(Debug, Clone, Default)]
 pub struct WorkerRegistry {
     inner: Arc<Mutex<WorkerRegistryInner>>,
+    repo_root: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Default)]
@@ -156,6 +157,18 @@ impl WorkerRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Return a registry rooted at `repo_root`, so that terminal worker
+    /// transitions advance the Incremental store baseline (flag-gated on
+    /// `incremental.enabled` and best-effort: a missing engine binary is a
+    /// no-op).
+    #[must_use]
+    pub fn with_repo_root(repo_root: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            repo_root: Some(repo_root.into()),
+            ..Self::default()
+        }
     }
 
     #[must_use]
@@ -461,6 +474,7 @@ impl WorkerRegistry {
             .workers
             .get_mut(worker_id)
             .ok_or_else(|| format!("worker not found: {worker_id}"))?;
+        let was_terminal = is_worker_terminal(worker.status);
         worker.status = WorkerStatus::Finished;
         worker.prompt_in_flight = false;
         push_event(
@@ -470,7 +484,12 @@ impl WorkerRegistry {
             Some("worker terminated by control plane".to_string()),
             None,
         );
-        Ok(worker.clone())
+        let result = Ok(worker.clone());
+        drop(inner);
+        if !was_terminal {
+            self.advance_if_enabled(worker_id);
+        }
+        result
     }
 
     /// Classify session completion and transition worker to appropriate terminal state.
@@ -489,6 +508,7 @@ impl WorkerRegistry {
 
         let is_provider_failure =
             (finish_reason == "unknown" && tokens_output == 0) || finish_reason == "error";
+        let was_terminal = is_worker_terminal(worker.status);
 
         if is_provider_failure {
             let message = if finish_reason == "unknown" && tokens_output == 0 {
@@ -526,8 +546,37 @@ impl WorkerRegistry {
             );
         }
 
-        Ok(worker.clone())
+        let result = Ok(worker.clone());
+        drop(inner);
+        if !was_terminal {
+            self.advance_if_enabled(worker_id);
+        }
+        result
     }
+
+    /// Advance the Incremental store baseline if the feature is enabled and
+    /// a repo root was set. Best-effort: a missing engine binary is a no-op.
+    fn advance_if_enabled(&self, worker_id: &str) {
+        let Some(repo_root) = &self.repo_root else {
+            return;
+        };
+        if !crate::incremental_enabled() {
+            return;
+        }
+        let Some(status_str) = self
+            .inner
+            .lock()
+            .ok()
+            .and_then(|inner| inner.workers.get(worker_id).map(|w| w.status.to_string()))
+        else {
+            return;
+        };
+        crate::incremental_observer::advance(repo_root, &status_str, None);
+    }
+}
+
+fn is_worker_terminal(status: WorkerStatus) -> bool {
+    matches!(status, WorkerStatus::Finished | WorkerStatus::Failed)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

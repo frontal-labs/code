@@ -514,20 +514,30 @@ impl ServerState {
                 write_lock: Mutex::new(()),
             })
         });
+        let repo_root = std::env::current_dir().ok();
         let (tasks, contexts, event_history) = persistence
             .as_ref()
             .and_then(|persistence| persistence.load().ok())
             .map_or_else(
                 || {
                     (
-                        TaskRegistry::new(),
+                        match &repo_root {
+                            Some(root) => TaskRegistry::with_repo_root(root.clone()),
+                            None => TaskRegistry::new(),
+                        },
                         HashMap::new(),
                         VecDeque::with_capacity(event_replay_limit.max(1)),
                     )
                 },
                 |snapshot| {
+                    let tasks = match &repo_root {
+                        Some(root) => {
+                            TaskRegistry::from_snapshot_with_repo_root(snapshot.tasks, root.clone())
+                        }
+                        None => TaskRegistry::from_snapshot(snapshot.tasks),
+                    };
                     (
-                        TaskRegistry::from_snapshot(snapshot.tasks),
+                        tasks,
                         snapshot.contexts,
                         trim_event_history(snapshot.event_history, event_replay_limit.max(1)),
                     )
@@ -815,6 +825,54 @@ impl ServerState {
     fn recover_loaded_state(&self) {
         reconcile_active_tasks(self);
     }
+}
+
+/// Returns `true` when the Incremental engine should gate reconcile for
+/// this task. When `false`, the task is reconciled unconditionally.
+///
+/// The gate is best-effort: when the engine is unavailable or the query
+/// falls back, reconcile proceeds as usual (safe default: run everything).
+///
+/// # Task-ID scheme
+///
+/// The stable identity for the Incremental engine is the **server task ID**
+/// (`task_{:08x}_{counter}`), not the ephemeral `work_item_id` (a fresh UUID
+/// regenerated on every `plan_work_item` call). The server task ID is
+/// persisted in the `TaskRegistry` snapshot and survives restarts within a
+/// single server lifetime. Across restarts the counter resets, so a new
+/// task gets a new ID; the engine treats it as unobserved and falls back
+/// (safe default). The `work_item_id` is not suitable because it is
+/// regenerated on replan and multiple work items can map to one task.
+fn incremental_gate_should_skip_reconcile(task_id: &str, repo_root: &std::path::Path) -> bool {
+    if !code_runtime::incremental_enabled() {
+        return false;
+    }
+    let changes = serde_json::json!({
+        "changes": [
+            {
+                "path": format!("{task_id}/artifacts"),
+                "status": "M"
+            }
+        ]
+    });
+    let Some(affected) = code_runtime::incremental_observer::affected(repo_root, "HEAD", &changes)
+    else {
+        // Engine unavailable or fallback — reconcile as usual.
+        return false;
+    };
+    // If the task ID is not in the affected set, skip reconcile.
+    !affected.iter().any(|t| t == task_id)
+}
+
+/// Record a task completion as an Incremental observation and advance
+/// the baseline. Best-effort: a missing engine or disabled flag is a
+/// no-op.
+fn observe_task_completion(task_id: &str, status: &str, repo_root: &std::path::Path) {
+    if !code_runtime::incremental_enabled() {
+        return;
+    }
+    code_runtime::incremental_observer::observe_task(repo_root, task_id, &[], status, false);
+    code_runtime::incremental_observer::advance(repo_root, status, None);
 }
 
 #[derive(Debug)]
@@ -2780,6 +2838,17 @@ fn reconcile_active_tasks(state: &ServerState) {
         .collect::<Vec<_>>();
 
     for task_id in active_task_ids {
+        // Incremental gate: skip reconcile when the engine certifies the
+        // task is unaffected by changes. Fallback (engine unavailable or
+        // query falls back) means reconcile proceeds as usual.
+        if let Some(context) = state.context_for(&task_id) {
+            if let Some(repo) = &context.repository {
+                let repo_root = state.publish_workspace_root.join(repo);
+                if incremental_gate_should_skip_reconcile(&task_id, &repo_root) {
+                    continue;
+                }
+            }
+        }
         let _ = reconcile_task_from_artifacts(state, &task_id);
     }
 }
@@ -3448,6 +3517,14 @@ async fn complete_task(
     context.worker_status = Some(completion.worker_status.to_string());
     state.record_context(&task_id, context.clone());
     let failure_error = request.error.clone().or(completion.error.clone());
+
+    // Record the completion as an Incremental observation (flag-gated,
+    // best-effort). The repo root is derived from the workspace + repository
+    // name when available.
+    if let Some(repo) = &context.repository {
+        let repo_root = state.publish_workspace_root.join(repo);
+        observe_task_completion(&task_id, &completion.worker_status.to_string(), &repo_root);
+    }
 
     match completion.worker_status {
         WorkerStatus::Finished => {

@@ -1,0 +1,15 @@
+[package]
+name = "code-incremental"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+incremental = { path = "../../third_party/incremental/rust" }
+serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
+thiserror = "1"
+
+[lints]
+workspace = true

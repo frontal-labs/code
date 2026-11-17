@@ -66,7 +66,15 @@ fn global_cron_registry() -> &'static CronRegistry {
 fn global_task_registry() -> &'static TaskRegistry {
     use std::sync::OnceLock;
     static REGISTRY: OnceLock<TaskRegistry> = OnceLock::new();
-    REGISTRY.get_or_init(TaskRegistry::new)
+    // Root the registry at the current working directory so terminal task
+    // transitions can be recorded as Incremental observations (flag-gated on
+    // `incremental.enabled`; a no-op when the flag is off or the engine is
+    // missing).
+    REGISTRY.get_or_init(|| {
+        std::env::current_dir()
+            .map(TaskRegistry::with_repo_root)
+            .unwrap_or_default()
+    })
 }
 
 fn global_worker_registry() -> &'static WorkerRegistry {

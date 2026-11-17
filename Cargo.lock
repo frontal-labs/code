@@ -593,6 +593,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "code-incremental"
+version = "0.3.0"
+dependencies = [
+ "incremental",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "code-integrations"
 version = "0.3.0"
 dependencies = [
@@ -668,6 +678,7 @@ name = "code-runtime"
 version = "0.3.0"
 dependencies = [
  "code-core",
+ "code-incremental",
  "code-integrations",
  "code-plugins",
  "code-sandbox",
@@ -697,6 +708,7 @@ version = "0.3.0"
 dependencies = [
  "axum",
  "code-events",
+ "code-incremental",
  "code-integrations",
  "code-orchestrator",
  "code-repo",
@@ -1713,6 +1725,13 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "incremental"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
@@ -2931,6 +2950,8 @@ version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
+ "foldhash",
+ "indexmap",
  "itoa",
  "memchr",
  "serde",
@@ -3531,6 +3552,17 @@ dependencies = [
  "anyhow",
  "clap",
  "handlebars",
+ "serde_json",
+]
+
+[[package]]
+name = "tools-incremental"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "code-incremental",
+ "serde",
  "serde_json",
 ]
 

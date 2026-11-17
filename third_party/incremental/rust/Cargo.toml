@@ -1,0 +1,9 @@
+[package]
+name = "incremental"
+version = "0.1.0"
+edition = "2021"
+description = "Rust client for incremental Protocol v1 (spawns `incremental serve`)"
+publish = false
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }

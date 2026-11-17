@@ -31,6 +31,13 @@ impl std::fmt::Display for TaskStatus {
     }
 }
 
+impl TaskStatus {
+    #[must_use]
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Completed | Self::Failed | Self::Stopped)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub task_id: String,
@@ -55,6 +62,7 @@ pub struct TaskMessage {
 #[derive(Debug, Clone, Default)]
 pub struct TaskRegistry {
     inner: Arc<Mutex<RegistryInner>>,
+    repo_root: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,6 +88,18 @@ impl TaskRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Return a registry rooted at `repo_root`, so that terminal task
+    /// transitions are recorded as Incremental observations (flag-gated on
+    /// `incremental.enabled` and best-effort: a missing engine binary is a
+    /// no-op).
+    #[must_use]
+    pub fn with_repo_root(repo_root: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            repo_root: Some(repo_root.into()),
+            ..Self::default()
+        }
     }
 
     pub fn create(&self, prompt: &str, description: Option<&str>) -> Task {
@@ -203,8 +223,25 @@ impl TaskRegistry {
             .tasks
             .get_mut(task_id)
             .ok_or_else(|| format!("task not found: {task_id}"))?;
+        let was_terminal = task.status.is_terminal();
         task.status = status;
         task.updated_at = now_secs();
+        let terminal = status.is_terminal();
+        drop(inner);
+        // Record the transition as an Incremental observation on the first
+        // terminal status. Best-effort: a missing engine or disabled flag is
+        // a no-op (the safe default is to run everything).
+        if terminal && !was_terminal && crate::incremental_enabled() {
+            if let Some(repo_root) = &self.repo_root {
+                crate::incremental_observer::observe_task(
+                    repo_root,
+                    task_id,
+                    &[],
+                    &status.to_string(),
+                    false,
+                );
+            }
+        }
         Ok(())
     }
 
@@ -235,6 +272,23 @@ impl TaskRegistry {
 
     #[must_use]
     pub fn from_snapshot(snapshot: TaskRegistrySnapshot) -> Self {
+        Self::from_snapshot_inner(snapshot, None)
+    }
+
+    /// Like [`from_snapshot`], but sets a repo root so terminal task
+    /// transitions are recorded as Incremental observations.
+    #[must_use]
+    pub fn from_snapshot_with_repo_root(
+        snapshot: TaskRegistrySnapshot,
+        repo_root: impl Into<std::path::PathBuf>,
+    ) -> Self {
+        Self::from_snapshot_inner(snapshot, Some(repo_root.into()))
+    }
+
+    fn from_snapshot_inner(
+        snapshot: TaskRegistrySnapshot,
+        repo_root: Option<std::path::PathBuf>,
+    ) -> Self {
         let tasks = snapshot
             .tasks
             .into_iter()
@@ -245,6 +299,7 @@ impl TaskRegistry {
                 tasks,
                 counter: snapshot.counter,
             })),
+            repo_root,
         }
     }
 

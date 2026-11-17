@@ -32,6 +32,9 @@ Thumbs.db
 extensions/slack-agent/.bun-cache/
 extensions/slack-agent/node_modules/
 
+# Incremental engine store
+.incremental/
+
 # Bazel (Bzlmod)
 .bazelrc.project
 coverage/

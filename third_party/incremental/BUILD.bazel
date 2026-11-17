@@ -1,0 +1,20 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# Vendored Rust binding source.
+filegroup(
+    name = "rust_src",
+    srcs = glob(
+        ["rust/**/*"],
+        exclude = ["rust/target/**"],
+    ),
+)
+
+# Prebuilt engine binaries per platform.
+filegroup(
+    name = "engine_binary",
+    srcs = [
+        "engine-binaries/darwin-arm64/incremental",
+    ],
+)

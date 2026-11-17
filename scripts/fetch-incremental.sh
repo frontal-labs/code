@@ -27,7 +27,10 @@ fi
 
 COMMIT="$(python3 -c "import json; print(json.load(open('$MANIFEST'))['commit'])")"
 SHA256_RUST="$(python3 -c "import json; print(json.load(open('$MANIFEST'))['sha256_rust_src'])")"
-REPO_URL="$(python3 -c "import json; print(json.load(open('$MANIFEST'))['repo'])")"
+REPO="$(python3 -c "import json; print(json.load(open('$MANIFEST'))['repo'])")"
+# `repo` is the GitHub owner/name; the clone URL is derived from it. A bare
+# "owner/name" is not a URL and `git clone` would fail on the clone path.
+REPO_URL="https://github.com/${REPO}.git"
 
 echo "==> Pinned incremental commit: $COMMIT"
 
@@ -55,11 +58,27 @@ if [[ "$ACTUAL_COMMIT" != "$COMMIT" ]]; then
 fi
 
 # --- verify Rust binding source hash ---
-COMPUTED_HASH="$(cd "$SOURCE_DIR" && tar -cf - \
-  bindings/rust/Cargo.toml \
-  bindings/rust/Cargo.lock \
-  bindings/rust/src/ \
-  2>/dev/null | shasum -a 256 | awk '{print $1}')"
+# The digest is taken over the source bytes in a fixed entry order, not over
+# a tar archive: an ordinary `tar` embeds filesystem metadata (mtimes, uid,
+# entry order) so two checkouts with identical bytes would hash differently.
+# Sorting the paths and hashing each file's bytes in that order makes the
+# digest reproducible across clones. `sha256_rust_src` in the manifest is
+# computed with this same procedure.
+RUST_SRC_PATHS="bindings/rust/Cargo.lock
+bindings/rust/Cargo.toml
+bindings/rust/src/lib.rs"
+
+COMPUTED_HASH="$(cd "$SOURCE_DIR" && python3 -c "
+import hashlib, os, sys
+h = hashlib.sha256()
+paths = '''${RUST_SRC_PATHS}'''.splitlines()
+paths.sort()
+for p in paths:
+    with open(p, 'rb') as f:
+        h.update(p.encode('utf-8'))
+        h.update(f.read())
+print(h.hexdigest())
+")"
 
 if [[ "$COMPUTED_HASH" != "$SHA256_RUST" ]]; then
   echo "error: Rust binding source hash mismatch" >&2
@@ -77,10 +96,27 @@ cp "$SOURCE_DIR/bindings/rust/Cargo.toml" "$DEST/rust/Cargo.toml"
 cp "$SOURCE_DIR/bindings/rust/Cargo.lock" "$DEST/rust/Cargo.lock"
 cp "$SOURCE_DIR/bindings/rust/src/lib.rs" "$DEST/rust/src/lib.rs"
 
+# The upstream Cargo.toml does not declare a license. The vendored copy
+# carries `license = "Apache-2.0"` so that downstream `cargo audit` /
+# license checks can attribute it. Re-apply that line after copying so a
+# re-vendor does not silently drop it.
+LICENSE="$(python3 -c "import json; print(json.load(open('$MANIFEST')).get('license',''))")"
+if [[ -n "$LICENSE" ]]; then
+  if ! grep -q '^license = ' "$DEST/rust/Cargo.toml"; then
+    # Insert after the [package] header line (first `license =` slot).
+    awk -v lic="$LICENSE" '
+      { print }
+      /^[[:space:]]*description[[:space:]]*=/ { print "license = \"" lic "\"" }
+    ' "$DEST/rust/Cargo.toml" > "$DEST/rust/Cargo.toml.tmp" && mv "$DEST/rust/Cargo.toml.tmp" "$DEST/rust/Cargo.toml"
+  fi
+fi
+
 # --- copy engine binary (if present in source) ---
 BIN_SRC="$SOURCE_DIR/core/dist/incremental"
 if [[ -f "$BIN_SRC" ]]; then
-  # Detect the binary's platform triple
+  # Detect the binary's platform triple. The OS component is normalized to
+  # the directory names used under engine-binaries/: Darwin reports as
+  # `darwin` from uname, so no translation is needed, but be explicit.
   OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
   ARCH="$(uname -m)"
   case "$ARCH" in
@@ -89,35 +125,35 @@ if [[ -f "$BIN_SRC" ]]; then
     arm64)   ARCH="arm64" ;;
   esac
   TRIPLE="$OS-$ARCH"
+
+  # Resolve the expected hash from the manifest before touching the
+  # destination, so a mismatch fails without leaving a bad binary in place.
+  EXPECTED_BIN_HASH="$(python3 -c "
+import json
+m = json.load(open('$MANIFEST'))
+h = m.get('sha256_bins', {}).get('$TRIPLE')
+print('NOT_PINNED' if h is None else h)
+")"
+  ACTUAL_BIN_HASH="$(shasum -a 256 "$BIN_SRC" | awk '{print $1}')"
+
+  if [[ "$ACTUAL_BIN_HASH" != "$EXPECTED_BIN_HASH" ]]; then
+    if [[ "$EXPECTED_BIN_HASH" == "NOT_PINNED" ]]; then
+      echo "error: engine binary for $TRIPLE is not pinned in the manifest." >&2
+      echo "  computed: $ACTUAL_BIN_HASH" >&2
+      echo "  Add it to third_party/manifests/incremental.json sha256_bins before vendoring." >&2
+    else
+      echo "error: engine binary hash mismatch for $TRIPLE" >&2
+      echo "  expected: $EXPECTED_BIN_HASH" >&2
+      echo "  computed: $ACTUAL_BIN_HASH" >&2
+    fi
+    exit 1
+  fi
+  echo "==> Engine binary hash verified ($TRIPLE)"
+
   echo "==> Copying engine binary ($TRIPLE) ..."
   mkdir -p "$DEST/engine-binaries/$TRIPLE"
   cp "$BIN_SRC" "$DEST/engine-binaries/$TRIPLE/incremental"
   chmod +x "$DEST/engine-binaries/$TRIPLE/incremental"
-
-  # Verify SHA-256 against the manifest
-  EXPECTED_BIN_HASH="$(python3 -c "
-import json, sys
-m = json.load(open('$MANIFEST'))
-bins = m.get('sha256_bins', {})
-h = bins.get('$TRIPLE')
-if h is None:
-    print('NOT_PINNED')
-else:
-    print(h)
-")"
-  ACTUAL_BIN_HASH="$(shasum -a 256 "$DEST/engine-binaries/$TRIPLE/incremental" | awk '{print $1}')"
-  if [[ "$EXPECTED_BIN_HASH" == "NOT_PINNED" ]]; then
-    echo "==> WARNING: engine binary for $TRIPLE is not pinned in the manifest." >&2
-    echo "==> Computed SHA-256: $ACTUAL_BIN_HASH" >&2
-    echo "==> Add it to third_party/manifests/incremental.json sha256_bins." >&2
-  elif [[ "$ACTUAL_BIN_HASH" != "$EXPECTED_BIN_HASH" ]]; then
-    echo "error: engine binary hash mismatch for $TRIPLE" >&2
-    echo "  expected: $EXPECTED_BIN_HASH" >&2
-    echo "  computed: $ACTUAL_BIN_HASH" >&2
-    exit 1
-  else
-    echo "==> Engine binary hash verified"
-  fi
 else
   echo "==> No engine binary found in source (core/dist/incremental). Skipping." >&2
   echo "==> Build it with: cd incremental && make build" >&2

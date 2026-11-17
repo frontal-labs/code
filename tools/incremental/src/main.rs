@@ -275,17 +275,54 @@ fn git_changeset(baseline: &str, repo_root: &Path) -> Result<Value> {
         );
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let changes: Vec<Value> = stdout
+    let mut changes: Vec<Value> = stdout
         .lines()
         .filter(|line| !line.trim().is_empty())
         .map(|line| {
             let mut parts = line.splitn(2, '\t');
             let status = parts.next().unwrap_or_default();
             let path = parts.next().unwrap_or_default();
-            json!({"path": path, "status": status})
+            json!({"path": path, "status": map_git_status(status)})
         })
         .collect();
+    // `git diff --name-status` never reports untracked files, and the
+    // baseline is a commit, not the working tree: a newly added file that
+    // has not been staged is invisible to the diff above. Without it, tasks
+    // that read such a file would be certified as unaffected. Append the
+    // untracked set so the changeset covers the full working tree.
+    if let Ok(untracked) = std::process::Command::new("git")
+        .args(["ls-files", "--others", "--exclude-standard"])
+        .current_dir(repo_root)
+        .output()
+    {
+        if untracked.status.success() {
+            let list = String::from_utf8_lossy(&untracked.stdout);
+            for line in list.lines() {
+                let path = line.trim();
+                if path.is_empty() {
+                    continue;
+                }
+                changes.push(json!({"path": path, "status": "A"}));
+            }
+        }
+    }
     Ok(json!({"changes": changes}))
+}
+
+/// Map a Git `--name-status` code to the change-status vocabulary the
+/// engine understands.
+///
+/// The engine treats a change as "file is different" when the status is
+/// anything other than `A` (added). A raw Git status of `D` (deleted) or
+/// `R`/`C` (renamed/copied, with the second path in a second column) would
+/// pass through verbatim and be misread. Normalize deletions, renames and
+/// copies to `M` (modified) so they invalidate the tasks that read the
+/// path; `A` and `M` already match the engine vocabulary.
+fn map_git_status(status: &str) -> &'static str {
+    match status {
+        "A" => "A",
+        _ => "M",
+    }
 }
 
 /// Like [`build_context`] but with an explicit lockfile path override.
@@ -299,10 +336,14 @@ fn context_with_lockfile(repo_root: &Path, lockfile: &str, runner: &str, node: &
     };
     let digest = match fs::read(&abs) {
         Ok(bytes) => {
-            // Reuse the same digest scheme as build_context (FNV-1a based).
-            // The exact bytes don't matter as long as they are deterministic
-            // for the same file contents.
-            Some(Value::String(format!("{:x}", fnv1a_64(&bytes, 0))))
+            // Must match the digest scheme in `code_incremental::build_context`
+            // exactly (a 32-byte digest hex-encoded to 64 chars). The engine
+            // compares context lockfile digests across observations and
+            // queries; a different scheme or length here would mismatch and
+            // trigger `context_changed` fallback. The reference is a homegrown
+            // FNV-based digest in `context.rs` (not the `sha2` crate), so
+            // replicate it here to keep both sides byte-identical.
+            Some(Value::String(hex(&digest_32(&bytes))))
         }
         Err(_) => None,
     };
@@ -312,14 +353,39 @@ fn context_with_lockfile(repo_root: &Path, lockfile: &str, runner: &str, node: &
     ctx
 }
 
-/// FNV-1a 64-bit hash (local copy to avoid a new dependency).
-fn fnv1a_64(data: &[u8], offset: u64) -> u64 {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325u64 ^ offset;
-    for &byte in data {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x1000_0000_01b3u64);
+/// The 32-byte lockfile digest scheme used by `code_incremental::build_context`.
+///
+/// Replicated verbatim from `crates/code-incremental/src/context.rs` so the CLI
+/// produces the same digest as the crate for identical lockfile bytes. The
+/// engine compares lockfile digests across observations and queries; a
+/// mismatch (including different length) triggers `context_changed` fallback.
+#[must_use]
+fn digest_32(data: &[u8]) -> [u8; 32] {
+    fn fnv1a_64(data: &[u8], offset: u64) -> u64 {
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325u64 ^ offset;
+        for &byte in data {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x1000_0000_01b3u64);
+        }
+        hash
     }
-    hash
+
+    let mut out = [0u8; 32];
+    for (i, &offset) in [0u64, 1, 2, 3].iter().enumerate() {
+        out[i * 8..(i + 1) * 8].copy_from_slice(&fnv1a_64(data, offset).to_le_bytes());
+    }
+    out
+}
+
+/// Encode a byte slice as a lowercase hex string (same scheme as `context.rs`).
+#[must_use]
+fn hex(data: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut s = String::with_capacity(data.len() * 2);
+    for &byte in data {
+        let _ = write!(s, "{byte:02x}");
+    }
+    s
 }
 
 fn print_raw(format: Format, value: &Value) {

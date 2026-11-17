@@ -1,7 +1,8 @@
 {
   "repo": "frontal-labs/incremental",
   "commit": "5039a33ce9b8ca4160bb9d5c326e6107932b6782",
-  "sha256_rust_src": "acd214ebb81a5678f4885d83e49c4fa1423f1601466c6abfb13bcaceee98b11f",
+  "sha256_rust_src": "266c2c51465e203523b3024f39d1facf9b2a3d0846828cd1dbb26aeffda474ea",
+  "license": "Apache-2.0",
   "sha256_bins": {
     "darwin-arm64": "8a3bd414981961d684dead2d3456b54f27a9b1d9dc21d506fe0d047fadd3dd83"
   }

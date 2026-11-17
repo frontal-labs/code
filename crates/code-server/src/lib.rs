@@ -867,12 +867,40 @@ fn incremental_gate_should_skip_reconcile(task_id: &str, repo_root: &std::path::
 /// Record a task completion as an Incremental observation and advance
 /// the baseline. Best-effort: a missing engine or disabled flag is a
 /// no-op.
-fn observe_task_completion(task_id: &str, status: &str, repo_root: &std::path::Path) {
+///
+/// `worker_status` is the worker's status string (`finished`, `failed`, ...).
+/// It is mapped to the canonical task status before being recorded as an
+/// observation and used as the new baseline, so a successful completion is
+/// recorded with a `pass` outcome rather than `none`.
+fn observe_task_completion(task_id: &str, worker_status: &str, repo_root: &std::path::Path) {
     if !code_runtime::incremental_enabled() {
         return;
     }
-    code_runtime::incremental_observer::observe_task(repo_root, task_id, &[], status, false);
-    code_runtime::incremental_observer::advance(repo_root, status, None);
+    let task_status = match worker_status {
+        "finished" => "completed",
+        "failed" => "failed",
+        other => other,
+    };
+    code_runtime::incremental_observer::observe_task(repo_root, task_id, &[], task_status, false);
+    code_runtime::incremental_observer::advance(repo_root, task_status, None);
+}
+
+/// The repository root for Incremental store operations: the task's checkout
+/// root when it was recorded, falling back to `<workspace>/<repo>`.
+fn repo_root_for_context(
+    context: &HostedTaskContext,
+    publish_workspace_root: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    context
+        .checkout_root
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            context
+                .repository
+                .as_deref()
+                .map(|r| publish_workspace_root.join(r))
+        })
 }
 
 #[derive(Debug)]
@@ -2842,8 +2870,8 @@ fn reconcile_active_tasks(state: &ServerState) {
         // task is unaffected by changes. Fallback (engine unavailable or
         // query falls back) means reconcile proceeds as usual.
         if let Some(context) = state.context_for(&task_id) {
-            if let Some(repo) = &context.repository {
-                let repo_root = state.publish_workspace_root.join(repo);
+            if let Some(repo_root) = repo_root_for_context(&context, &state.publish_workspace_root)
+            {
                 if incremental_gate_should_skip_reconcile(&task_id, &repo_root) {
                     continue;
                 }
@@ -3521,8 +3549,7 @@ async fn complete_task(
     // Record the completion as an Incremental observation (flag-gated,
     // best-effort). The repo root is derived from the workspace + repository
     // name when available.
-    if let Some(repo) = &context.repository {
-        let repo_root = state.publish_workspace_root.join(repo);
+    if let Some(repo_root) = repo_root_for_context(&context, &state.publish_workspace_root) {
         observe_task_completion(&task_id, &completion.worker_status.to_string(), &repo_root);
     }
 

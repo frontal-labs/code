@@ -18,9 +18,8 @@ filegroup(
 
 sh_test(
     name = "test",
-    local = True,
     srcs = ["//tools:cli.sh"],
-    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
+    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore", "//tools:user_env.sh"],
     args = ["test"],
     tags = [
         "test",
@@ -32,7 +31,7 @@ sh_test(
     name = "lint",
     size = "small",
     srcs = ["//tools:cli.sh"],
-    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
+    data = [":srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore", "//tools:user_env.sh"],
     args = ["lint"],
     tags = [
         "lint",
@@ -43,9 +42,9 @@ sh_test(
 sh_test(
     name = "build",
     local = True,
-    timeout = "long",
+    timeout = "eternal",
     srcs = ["//tools:cli.sh"],
-    data = [":srcs", "//:cargo_workspace", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
+    data = [":srcs", "//:cargo_workspace", "//:biome.json", "//:ultracite.json", "//:.gitignore", "//tools:user_env.sh"],
     args = ["build"],
     tags = [
         "build",

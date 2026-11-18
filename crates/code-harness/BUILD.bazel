@@ -50,4 +50,5 @@ sh_test(
         "lint",
         "rust",
     ],
+    timeout = "eternal",
 )

@@ -20,6 +20,7 @@ sh_test(
         "rust",
         "test",
     ],
+    timeout = "eternal",
 )
 
 sh_test(

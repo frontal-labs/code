@@ -19,8 +19,7 @@ filegroup(
 biome_lint(
     name = "lint",
     target = "sdks/typescript",
-    # bunx downloads Biome into a temp directory, which the test sandbox blocks.
-    tags = ["lint", "biome", "typescript", "no-sandbox"],
+    tags = ["lint", "biome", "typescript"],
     data = [":typescript_sdk_srcs", "//:biome.json", "//:ultracite.json", "//:.gitignore"],
 )
 
@@ -28,7 +27,7 @@ biome_lint(
 sh_test(
     name = "typecheck",
     srcs = ["//tools:sdk_ts.sh"],
-    data = [":typescript_sdk_srcs", "//extensions/zod:srcs", "//:biome.json", "//:ultracite.json"],
+    data = [":typescript_sdk_srcs", "//extensions/zod:srcs", "//:biome.json", "//:ultracite.json", "//tools:user_env.sh"],
     args = ["sdks/typescript", "typecheck"],
     tags = ["typescript", "test"],
 )
@@ -36,7 +35,7 @@ sh_test(
 sh_test(
     name = "build",
     srcs = ["//tools:sdk_ts.sh"],
-    data = [":typescript_sdk_srcs", "//extensions/zod:srcs", "//:biome.json", "//:ultracite.json"],
+    data = [":typescript_sdk_srcs", "//extensions/zod:srcs", "//:biome.json", "//:ultracite.json", "//tools:user_env.sh"],
     args = ["sdks/typescript", "build"],
     tags = ["typescript", "build"],
 )
@@ -45,7 +44,7 @@ sh_test(
     name = "test",
     srcs = ["//tools:sdk_ts.sh"],
     # The SDK depends on the zod schemas through a file: link, so the package must be in the sandbox.
-    data = [":typescript_sdk_srcs", "//extensions/zod:srcs"],
+    data = [":typescript_sdk_srcs", "//extensions/zod:srcs", "//tools:user_env.sh"],
     args = ["sdks/typescript", "test"],
     tags = ["typescript", "test"],
 )

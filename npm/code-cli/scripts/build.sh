@@ -27,7 +27,16 @@ case "$OS/$ARCH" in
   *) echo "ERROR: unsupported build platform: $OS/$ARCH" >&2; exit 1 ;;
 esac
 
-SRC="$REPO_ROOT/target/release/code"
+# Respect CARGO_TARGET_DIR (set by tools/user_env.sh under Bazel sandboxes)
+# so the binary is found where cargo actually wrote it. Resolve relative
+# values against REPO_ROOT (cargo's CWD during the build) so the cp finds
+# the same directory cargo wrote to.
+if [[ -n "${CARGO_TARGET_DIR:-}" && "${CARGO_TARGET_DIR:-}" != /* ]]; then
+  TARGET_DIR_CARGO="$REPO_ROOT/${CARGO_TARGET_DIR}"
+else
+  TARGET_DIR_CARGO="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
+fi
+SRC="$TARGET_DIR_CARGO/release/code"
 DEST="$PKG_ROOT/vendor/$TARGET_DIR/bin/frontal-code"
 mkdir -p "$(dirname "$DEST")"
 cp "$SRC" "$DEST"

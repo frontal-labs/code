@@ -10,6 +10,7 @@
     clippy::too_many_arguments
 )]
 mod analytics;
+mod app;
 mod auth;
 mod init;
 mod input;
@@ -17,6 +18,7 @@ mod integrations;
 mod mentions;
 mod notify;
 mod render;
+mod streaming;
 mod thinking;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -336,7 +338,16 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
             provider,
             allowed_tools,
             permission_mode,
-        } => run_repl_with_provider(model, provider, allowed_tools, permission_mode)?,
+            legacy_input,
+        } => {
+            run_repl_with_provider(
+                model,
+                provider,
+                allowed_tools,
+                permission_mode,
+                legacy_input,
+            )?;
+        }
         CliAction::HelpTopic(topic) => print_help_topic(topic),
         CliAction::Help { output_format } => print_help(output_format)?,
     }
@@ -635,6 +646,7 @@ enum CliAction {
         provider: Option<String>,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
+        legacy_input: bool,
     },
     HelpTopic(LocalHelpTopic),
     // prompt-mode formatting is only supported for non-interactive runs
@@ -991,6 +1003,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let mut allowed_tool_values = Vec::new();
     let mut rest = Vec::new();
     let mut dash_p_prompt: Option<String> = None;
+    let mut legacy_input = false;
     let mut index = 0;
 
     while index < args.len() {
@@ -1049,6 +1062,10 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             }
             "--dangerously-skip-permissions" => {
                 permission_mode_override = Some(PermissionMode::DangerFullAccess);
+                index += 1;
+            }
+            "--legacy-input" => {
+                legacy_input = true;
                 index += 1;
             }
             "-p" => {
@@ -1126,6 +1143,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             provider,
             allowed_tools,
             permission_mode,
+            legacy_input,
         });
     }
     if rest.first().map(String::as_str) == Some("--resume") {
@@ -1180,6 +1198,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             provider: provider.clone(),
             allowed_tools,
             permission_mode,
+            legacy_input,
         }),
         "plugins" => Ok(CliAction::Plugins {
             action: rest.get(1).cloned(),
@@ -3963,6 +3982,7 @@ fn run_hosted_task_worker(
         true,
         allowed_tools,
         permission_mode,
+        false,
     )?;
 
     match cli.run_prompt_json_value(&payload.prompt) {
@@ -4968,8 +4988,16 @@ fn run_prompt_action(
             true,
             allowed_tools,
             permission_mode,
+            false,
         )?,
-        None => LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?,
+        None => LiveCli::new_with_provider(
+            model,
+            provider,
+            true,
+            allowed_tools,
+            permission_mode,
+            false,
+        )?,
     };
     if options.stream {
         cli.run_turn_jsonl_stream(prompt)
@@ -5763,8 +5791,16 @@ fn run_repl_with_provider(
     provider: Option<String>,
     allowed_tools: Option<AllowedToolSet>,
     permission_mode: PermissionMode,
+    legacy_input: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let cli = LiveCli::new_with_provider(model, provider, true, allowed_tools, permission_mode)?;
+    let cli = LiveCli::new_with_provider(
+        model,
+        provider,
+        true,
+        allowed_tools,
+        permission_mode,
+        legacy_input,
+    )?;
     drive_repl(cli)
 }
 
@@ -5889,6 +5925,12 @@ struct LiveCli {
     /// interactive callers can build a desktop-notification body. Empty until
     /// a turn succeeds.
     last_turn_text: String,
+    /// When true, turns use the pre-streaming path (plain spinner, no live
+    /// region). Set from `--legacy-input`; the default streams.
+    legacy_input: bool,
+    /// Pure display state for the interactive REPL (message history, turn
+    /// status, permission mode). Fed with [`app::AppEvent`]s during a turn.
+    app: app::App,
 }
 
 struct RuntimePluginState {
@@ -6464,6 +6506,36 @@ impl HookAbortMonitor {
     }
 }
 
+/// `EventSink` that forwards runtime events to both the [`app::App`]
+/// state machine and the terminal's live-region renderer.
+struct AppEventSink<'a> {
+    app: &'a mut app::App,
+    sink: &'a mut streaming::TurnStreamSink,
+}
+
+impl code_runtime::EventSink for AppEventSink<'_> {
+    fn on_event(&mut self, event: &code_runtime::AssistantEvent) -> bool {
+        use code_runtime::AssistantEvent as AE;
+        match event {
+            AE::TextDelta(delta) => {
+                self.app.handle(&app::AppEvent::TextDelta(delta.clone()));
+            }
+            AE::ToolUse { name, .. } => {
+                self.app
+                    .handle(&app::AppEvent::ToolStarted { name: name.clone() });
+            }
+            AE::Usage(usage) => {
+                self.app.handle(&app::AppEvent::Usage(*usage));
+            }
+            AE::PromptCache(_) => {}
+            AE::MessageStop => {
+                self.app.handle(&app::AppEvent::MessageStop);
+            }
+        }
+        self.sink.on_event(event)
+    }
+}
+
 impl LiveCli {
     fn new(
         model: String,
@@ -6471,7 +6543,14 @@ impl LiveCli {
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::new_with_provider(model, None, enable_tools, allowed_tools, permission_mode)
+        Self::new_with_provider(
+            model,
+            None,
+            enable_tools,
+            allowed_tools,
+            permission_mode,
+            false,
+        )
     }
 
     fn new_with_provider(
@@ -6480,6 +6559,7 @@ impl LiveCli {
         enable_tools: bool,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
+        legacy_input: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let system_prompt = build_system_prompt()?;
         let (effective_model, effective_provider) =
@@ -6500,6 +6580,7 @@ impl LiveCli {
             enable_tools,
             allowed_tools,
             permission_mode,
+            legacy_input,
         )
     }
 
@@ -6512,6 +6593,7 @@ impl LiveCli {
         enable_tools: bool,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
+        legacy_input: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let system_prompt = build_system_prompt()?;
         let (effective_model, effective_provider) =
@@ -6527,6 +6609,7 @@ impl LiveCli {
             enable_tools,
             allowed_tools,
             permission_mode,
+            legacy_input,
         )
     }
 
@@ -6540,6 +6623,7 @@ impl LiveCli {
         enable_tools: bool,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
+        legacy_input: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let runtime = build_runtime_with_provider(
             session_state.with_persistence_path(session.path.clone()),
@@ -6554,6 +6638,7 @@ impl LiveCli {
             None,
         )?;
         let cli = Self {
+            app: app::App::new(model.clone(), permission_mode.as_str().to_string()),
             model,
             provider,
             allowed_tools,
@@ -6562,6 +6647,7 @@ impl LiveCli {
             runtime,
             session,
             last_turn_text: String::new(),
+            legacy_input,
         };
         cli.persist_session()?;
         Ok(cli)
@@ -6694,6 +6780,64 @@ impl LiveCli {
     }
 
     fn run_turn(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        if self.legacy_input {
+            return self.run_turn_legacy(input);
+        }
+        let (mut runtime, hook_abort_monitor) = self.prepare_turn_runtime(true)?;
+        // Owns the terminal's "live region" for the duration of the turn: it
+        // renders tool lines, streamed text, and the idle thinking animation,
+        // and clears the region before returning. Safe to create unconditionally —
+        // a no-op when stdout is not a terminal (piped output).
+        let mut stream_sink = streaming::TurnStreamSink::new();
+        let started = Instant::now();
+        let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
+        // Pure state machine: fed with events during the turn so the message
+        // history and turn status are available for rendering and inspection.
+        self.app.handle(&app::AppEvent::TurnStarted);
+        let result = runtime.run_turn_stream(
+            input,
+            Some(&mut permission_prompter),
+            &mut AppEventSink {
+                app: &mut self.app,
+                sink: &mut stream_sink,
+            },
+        );
+        stream_sink.finish();
+        hook_abort_monitor.stop();
+        match result {
+            Ok(summary) => {
+                let tool_calls = collect_tool_uses(&summary).len();
+                self.app
+                    .handle(&app::AppEvent::TurnCompleted(summary.clone()));
+                self.app.stamp_turn_elapsed(started.elapsed().as_secs_f64());
+                self.replace_runtime(runtime)?;
+                println!();
+                println!(
+                    "{}",
+                    format_turn_summary(&summary, &self.model, started.elapsed(), tool_calls)
+                );
+                if let Some(event) = summary.auto_compaction {
+                    println!(
+                        "{}",
+                        format_auto_compaction_notice(event.removed_message_count)
+                    );
+                }
+                self.persist_session()?;
+                self.last_turn_text = final_assistant_text(&summary);
+                Ok(())
+            }
+            Err(error) => {
+                runtime.shutdown_plugins()?;
+                self.app
+                    .handle(&app::AppEvent::TurnFailed(error.to_string()));
+                Err(Box::new(error))
+            }
+        }
+    }
+
+    /// Pre-streaming turn path used by `--legacy-input`: the old thinking
+    /// spinner and non-streaming `run_turn`.
+    fn run_turn_legacy(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
         let (mut runtime, hook_abort_monitor) = self.prepare_turn_runtime(true)?;
         let mut spinner = Spinner::new();
         let mut stdout = io::stdout();
@@ -12134,6 +12278,7 @@ mod tests {
                 provider: None,
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
+                legacy_input: false,
             }
         );
     }
@@ -12480,6 +12625,7 @@ mod tests {
                 provider: None,
                 allowed_tools: None,
                 permission_mode: PermissionMode::ReadOnly,
+                legacy_input: false,
             }
         );
     }
@@ -12509,6 +12655,7 @@ mod tests {
                         .collect()
                 ),
                 permission_mode: crate::default_permission_mode(),
+                legacy_input: false,
             }
         );
     }

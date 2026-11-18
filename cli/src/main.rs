@@ -20,7 +20,6 @@ mod notify;
 mod render;
 mod streaming;
 mod thinking;
-mod tui;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -340,7 +339,6 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
             allowed_tools,
             permission_mode,
             legacy_input,
-            use_tui,
         } => {
             run_repl_with_provider(
                 model,
@@ -348,7 +346,6 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
                 allowed_tools,
                 permission_mode,
                 legacy_input,
-                use_tui,
             )?;
         }
         CliAction::HelpTopic(topic) => print_help_topic(topic),
@@ -650,7 +647,6 @@ enum CliAction {
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
         legacy_input: bool,
-        use_tui: bool,
     },
     HelpTopic(LocalHelpTopic),
     // prompt-mode formatting is only supported for non-interactive runs
@@ -1008,7 +1004,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let mut rest = Vec::new();
     let mut dash_p_prompt: Option<String> = None;
     let mut legacy_input = false;
-    let mut use_tui = false;
     let mut index = 0;
 
     while index < args.len() {
@@ -1071,10 +1066,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             }
             "--legacy-input" => {
                 legacy_input = true;
-                index += 1;
-            }
-            "--tui" => {
-                use_tui = true;
                 index += 1;
             }
             "-p" => {
@@ -1153,7 +1144,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             allowed_tools,
             permission_mode,
             legacy_input,
-            use_tui,
         });
     }
     if rest.first().map(String::as_str) == Some("--resume") {
@@ -1209,7 +1199,6 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             allowed_tools,
             permission_mode,
             legacy_input,
-            use_tui,
         }),
         "plugins" => Ok(CliAction::Plugins {
             action: rest.get(1).cloned(),
@@ -5803,7 +5792,6 @@ fn run_repl_with_provider(
     allowed_tools: Option<AllowedToolSet>,
     permission_mode: PermissionMode,
     legacy_input: bool,
-    use_tui: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cli = LiveCli::new_with_provider(
         model,
@@ -5813,77 +5801,7 @@ fn run_repl_with_provider(
         permission_mode,
         legacy_input,
     )?;
-    if use_tui {
-        drive_repl_tui(cli)
-    } else {
-        drive_repl(cli)
-    }
-}
-
-/// Runs the TUI-based REPL. The `App` state machine lives inside
-/// `LiveCli.app` as an `Arc<RwLock<App>>` shared with the TUI renderer
-/// thread, so `run_turn` can write to it while the TUI reads it.
-///
-/// The turn runs synchronously on the main thread (the runtime is blocking).
-/// While a turn is in flight the `AppEventSink` holds the write lock, so the
-/// TUI renderer's read attempts block until the turn ends — this is fine
-/// because `TurnStreamSink` is also active and paints the live region to
-/// stdout directly. When the turn finishes the lock is released and the TUI
-/// repaints with the new settled messages.
-fn drive_repl_tui(mut cli: LiveCli) -> Result<(), Box<dyn std::error::Error>> {
-    let cwd = env::current_dir()?;
-    let branch = resolve_git_branch_for(&cwd);
-    let dirty = run_git_capture_in(&cwd, &["status", "--porcelain"])
-        .is_some_and(|status| !status.trim().is_empty());
-
-    // Clone the shared Arc so the TUI renderer thread can read the App.
-    let shared_app = std::sync::Arc::clone(&cli.app);
-
-    let config = tui::TuiConfig {
-        model: cli.model.clone(),
-        access_label: cli.access_label(),
-        permission_mode: cli.permission_mode.as_str().to_string(),
-        branch: branch.clone(),
-        dirty,
-        estimated_tokens: 0,
-        show_banner: true,
-    };
-
-    tui::run(shared_app, config, |input: &str| {
-        // Mirror the drive_repl loop body: slash commands, shell commands,
-        // then a streaming turn.
-        let trimmed = input.trim();
-        if trimmed.is_empty() {
-            return;
-        }
-        if matches!(trimmed, "/exit" | "/quit") {
-            // TUI handles /quit itself and exits the loop.
-            return;
-        }
-        if let Some(command) = trimmed.strip_prefix('!') {
-            run_shell_command(command.trim(), &cwd);
-            return;
-        }
-        match SlashCommand::parse(trimmed) {
-            Ok(Some(command)) => match cli.handle_repl_command(command) {
-                Ok(should_quit) => {
-                    if should_quit {
-                        let _ = cli.persist_session();
-                    }
-                }
-                Err(error) => eprintln!("error: {error}"),
-            },
-            _ => {
-                // Streaming turn — AppEventSink writes to shared_app via
-                // self.app (the same Arc the TUI holds).
-                if let Err(error) = cli.run_turn(trimmed) {
-                    eprintln!("error: {error}");
-                }
-            }
-        }
-    })?;
-
-    cli.persist_session()
+    drive_repl(cli)
 }
 
 /// Runs the interactive prompt until the user exits. A failed turn or command is reported
@@ -6012,9 +5930,7 @@ struct LiveCli {
     legacy_input: bool,
     /// Pure display state for the interactive REPL (message history, turn
     /// status, permission mode). Fed with [`app::AppEvent`]s during a turn.
-    /// Shared with the TUI renderer via an `Arc<RwLock<_>>` so the renderer
-    /// thread can read it while the runtime thread writes to it.
-    app: std::sync::Arc<std::sync::RwLock<app::App>>,
+    app: app::App,
 }
 
 struct RuntimePluginState {
@@ -6593,7 +6509,7 @@ impl HookAbortMonitor {
 /// `EventSink` that forwards runtime events to both the [`app::App`]
 /// state machine and the terminal's live-region renderer.
 struct AppEventSink<'a> {
-    app: &'a std::sync::RwLock<app::App>,
+    app: &'a mut app::App,
     sink: &'a mut streaming::TurnStreamSink,
 }
 
@@ -6608,8 +6524,7 @@ impl code_runtime::EventSink for AppEventSink<'_> {
             AE::MessageStop => Some(app::AppEvent::MessageStop),
         };
         if let Some(ae) = app_event {
-            let mut guard = self.app.write().unwrap();
-            guard.handle(&ae);
+            self.app.handle(&ae);
         }
         self.sink.on_event(event)
     }
@@ -6717,10 +6632,7 @@ impl LiveCli {
             None,
         )?;
         let cli = Self {
-            app: std::sync::Arc::new(std::sync::RwLock::new(app::App::new(
-                model.clone(),
-                permission_mode.as_str().to_string(),
-            ))),
+            app: app::App::new(model.clone(), permission_mode.as_str().to_string()),
             model,
             provider,
             allowed_tools,
@@ -6875,15 +6787,12 @@ impl LiveCli {
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
         // Pure state machine: fed with events during the turn so the message
         // history and turn status are available for rendering and inspection.
-        self.app
-            .write()
-            .unwrap()
-            .handle(&app::AppEvent::TurnStarted);
+        self.app.handle(&app::AppEvent::TurnStarted);
         let result = runtime.run_turn_stream(
             input,
             Some(&mut permission_prompter),
             &mut AppEventSink {
-                app: &self.app,
+                app: &mut self.app,
                 sink: &mut stream_sink,
             },
         );
@@ -6892,11 +6801,9 @@ impl LiveCli {
         match result {
             Ok(summary) => {
                 let tool_calls = collect_tool_uses(&summary).len();
-                {
-                    let mut guard = self.app.write().unwrap();
-                    guard.handle(&app::AppEvent::TurnCompleted(summary.clone()));
-                    guard.stamp_turn_elapsed(started.elapsed().as_secs_f64());
-                }
+                self.app
+                    .handle(&app::AppEvent::TurnCompleted(summary.clone()));
+                self.app.stamp_turn_elapsed(started.elapsed().as_secs_f64());
                 self.replace_runtime(runtime)?;
                 println!();
                 println!(
@@ -6916,8 +6823,6 @@ impl LiveCli {
             Err(error) => {
                 runtime.shutdown_plugins()?;
                 self.app
-                    .write()
-                    .unwrap()
                     .handle(&app::AppEvent::TurnFailed(error.to_string()));
                 Err(Box::new(error))
             }
@@ -12368,7 +12273,6 @@ mod tests {
                 allowed_tools: None,
                 permission_mode: crate::default_permission_mode(),
                 legacy_input: false,
-                use_tui: false,
             }
         );
     }
@@ -12716,7 +12620,6 @@ mod tests {
                 allowed_tools: None,
                 permission_mode: PermissionMode::ReadOnly,
                 legacy_input: false,
-                use_tui: false,
             }
         );
     }
@@ -12747,7 +12650,6 @@ mod tests {
                 ),
                 permission_mode: crate::default_permission_mode(),
                 legacy_input: false,
-                use_tui: false,
             }
         );
     }

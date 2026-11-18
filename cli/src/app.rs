@@ -3,16 +3,15 @@
 //! The [`App`] owns all REPL display state: the conversation history, the
 //! current turn's streaming status, and the permission mode. It knows nothing
 //! about the terminal, the runtime, or I/O — it is a pure state machine that
-//! receives [`AppEvent`]s and exposes state a renderer (the raw-ANSI loop now,
-//! ratatui later) can paint.
+//! receives [`AppEvent`]s and exposes state a renderer can paint.
 //!
 //! Why this exists:
 //! - The turn loop in `main.rs` mixes state transitions with terminal writes.
 //!   Extracting the state lets us test the conversation model in isolation and
 //!   swap the renderer without touching the runtime wiring.
 //! - The streaming sink (`streaming.rs`) maintains its own segment model for
-//!   live rendering. The `App`'s message model is the *settled* view that the
-//!   TUI will render as a persistent scrollback, distinct from the live region.
+//!   live rendering. The `App`'s message model is the *settled* view, distinct
+//!   from the live region.
 //!
 //! This module is deliberately framework-free. `main.rs` constructs an `App`,
 //! feeds it events as the turn progresses, and reads the resulting state.

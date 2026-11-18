@@ -46,21 +46,20 @@ pub fn load_registry(cwd: &Path) -> ManifestRegistry {
 
     if let Some(settings) = find_settings_file(cwd) {
         if let Ok(contents) = std::fs::read_to_string(&settings) {
-            let Ok(parsed) = serde_json::from_str::<Value>(&contents) else {
-                return registry;
-            };
-            if let Some(integrations) = parsed
-                .get("mcp")
-                .and_then(|mcp| mcp.get("integrations"))
-                .and_then(|value| value.as_object())
-            {
-                for (_, manifest_json) in integrations {
-                    let Ok(manifest) =
-                        serde_json::from_value::<IntegrationManifest>(manifest_json.clone())
-                    else {
-                        continue;
-                    };
-                    register_or_override(&mut registry, manifest);
+            if let Ok(parsed) = serde_json::from_str::<Value>(&contents) {
+                if let Some(integrations) = parsed
+                    .get("mcp")
+                    .and_then(|mcp| mcp.get("integrations"))
+                    .and_then(|value| value.as_object())
+                {
+                    for (_, manifest_json) in integrations {
+                        let Ok(manifest) =
+                            serde_json::from_value::<IntegrationManifest>(manifest_json.clone())
+                        else {
+                            continue;
+                        };
+                        register_or_override(&mut registry, manifest);
+                    }
                 }
             }
         }
@@ -81,6 +80,11 @@ pub fn load_registry(cwd: &Path) -> ManifestRegistry {
 /// Register a manifest, replacing any existing manifest with the same id so
 /// that project configuration can override a built-in provider.
 fn register_or_override(registry: &mut ManifestRegistry, manifest: IntegrationManifest) {
+    // Validate before replacing so an invalid incoming manifest can never
+    // evict a manifest that is already registered.
+    if manifest.validate().is_err() {
+        return;
+    }
     let id = manifest.id.clone();
     if registry.get(&id).is_some() {
         registry.remove(&id);
@@ -424,8 +428,8 @@ pub fn list_capabilities_json(registry: &ManifestRegistry, id: &str) -> Result<S
 
 /// Parse a file as an [`IntegrationManifest`] and run its validation.
 ///
-/// Returns a human-readable report: `valid` when the manifest passes, or a
-/// list of issues otherwise.
+/// Returns `Ok` with a short confirmation when the manifest is valid, or
+/// `Err` containing a human-readable issue report when it is not.
 pub fn validate_manifest_file(path: &Path) -> Result<String, String> {
     let contents = std::fs::read_to_string(path)
         .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
@@ -438,7 +442,10 @@ pub fn validate_manifest_file(path: &Path) -> Result<String, String> {
             manifest.id,
             manifest.version
         )),
-        Err(issues) => Ok(render_validation_report(path, &manifest, issues)),
+        Err(issues) => {
+            let report = render_validation_report(path, &manifest, issues);
+            Err(report)
+        }
     }
 }
 
@@ -484,8 +491,13 @@ pub fn validate_manifest_file_json(path: &Path) -> Result<String, String> {
             "message": issue.message,
         })).collect::<Vec<_>>(),
     });
-    serde_json::to_string_pretty(&report)
-        .map_err(|error| format!("failed to serialize validation report: {error}"))
+    let output = serde_json::to_string_pretty(&report)
+        .map_err(|error| format!("failed to serialize validation report: {error}"))?;
+    if issues.is_empty() {
+        Ok(output)
+    } else {
+        Err(output)
+    }
 }
 
 #[cfg(test)]
@@ -495,6 +507,32 @@ mod tests {
     /// Guards tests that read `FRONTAL_CODE_INTEGRATIONS_CONFIG`; cargo runs
     /// tests on multiple threads and env vars are process-global.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn minimal_manifest_json(id: &str) -> Value {
+        json!({
+            "id": id,
+            "version": "1.0.0",
+            "display_name": id,
+            "description": format!("{id} integration"),
+            "transport": "stdio",
+            "transport_config": {
+                "kind": "stdio",
+                "command": "mcp-server",
+                "args": ["serve"],
+                "env": {}
+            },
+            "capabilities": [{
+                "name": "noop",
+                "description": "No-op capability",
+                "input_schema": {"type": "object"},
+                "permission_mode": "read_only",
+                "idempotent": true
+            }],
+            "auth": null,
+            "events": [],
+            "context_fields": []
+        })
+    }
 
     fn test_registry() -> ManifestRegistry {
         let manifest = IntegrationManifest {
@@ -601,6 +639,67 @@ mod tests {
         assert!(matches!(linear.auth, Some(AuthSpec::ApiKey { .. })));
         assert!(registry.get("github").is_some());
         assert!(registry.get("sentry").is_some());
+    }
+
+    #[test]
+    fn load_registry_skips_invalid_settings_but_still_loads_env() {
+        let dir = temp_dir("bad-settings-env");
+        let settings_dir = dir.join(".frontal-code");
+        std::fs::create_dir_all(&settings_dir).expect("create settings dir");
+        // Malformed settings JSON: the settings layer must be skipped,
+        // but the env-var layer must still be loaded.
+        std::fs::write(settings_dir.join("settings.json"), "{ not valid json")
+            .expect("write settings");
+
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        let env_value = serde_json::to_string(&vec![minimal_manifest_json("env-integration")])
+            .expect("serialize env manifest");
+        std::env::set_var(ENV_INTEGRATIONS_CONFIG, env_value);
+        let registry = load_registry(&dir);
+        std::env::remove_var(ENV_INTEGRATIONS_CONFIG);
+
+        // Built-ins (4) plus the env-var integration: the invalid settings
+        // layer was skipped, and the env layer was still registered.
+        assert_eq!(registry.list().len(), 5, "got: {:?}", registry.list());
+        assert!(
+            registry.get("env-integration").is_some(),
+            "env integration missing: {:?}",
+            registry.list()
+        );
+        assert!(registry.get("github").is_some());
+    }
+
+    #[test]
+    fn load_registry_invalid_env_manifest_preserves_builtin() {
+        let dir = temp_dir("bad-env-manifest");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        // An env-var manifest with the id "github" but no capabilities: it is
+        // invalid, so `register_or_override` must reject it WITHOUT evicting
+        // the built-in github manifest.
+        let env_value =
+            serde_json::to_string(&vec![minimal_manifest_json("github")]).expect("serialize");
+        let env_value = env_value.replace(
+            r#""capabilities": [{"name": "noop", "description": "No-op capability", "input_schema": {"type": "object"}, "permission_mode": "read_only", "idempotent": true}]"#,
+            r#""capabilities": []"#,
+        );
+        std::env::set_var(ENV_INTEGRATIONS_CONFIG, env_value);
+        let registry = load_registry(&dir);
+        std::env::remove_var(ENV_INTEGRATIONS_CONFIG);
+
+        // The built-in github manifest must still be registered (version
+        // 1.0.0, http transport) — the invalid override was dropped.
+        let github = registry
+            .get("github")
+            .expect("github should still be registered");
+        assert_eq!(github.version, "1.0.0");
+        assert!(
+            !github.capabilities.is_empty(),
+            "built-in github manifest lost its capabilities"
+        );
+        // Total: 4 built-ins, no additions.
+        assert_eq!(registry.list().len(), 4, "got: {:?}", registry.list());
     }
 
     #[test]
@@ -735,13 +834,35 @@ mod tests {
     }
 
     #[test]
-    fn validate_manifest_file_invalid_reports_issues() {
+    fn validate_manifest_file_invalid_reports_issues_and_fails() {
         let dir = temp_dir("validate-invalid");
         let bad = valid_manifest_json().replace("\"github\"", "\"Bad Id!\"");
         let path = write_manifest(&dir, "invalid.json", &bad);
-        let output = validate_manifest_file(&path).expect("parses but is invalid");
-        assert!(output.contains("invalid"), "got: {output}");
-        assert!(output.contains("id"), "got: {output}");
+        let result = validate_manifest_file(&path);
+        assert!(result.is_err(), "invalid manifest should return Err");
+        let error = result.expect_err("invalid manifest returns Err");
+        assert!(error.contains("invalid"), "got: {error}");
+        assert!(error.contains("id"), "got: {error}");
+    }
+
+    #[test]
+    fn validate_manifest_file_json_invalid_reports_issues_and_fails() {
+        let dir = temp_dir("validate-json-invalid");
+        let bad = valid_manifest_json().replace("\"github\"", "\"Bad Id!\"");
+        let path = write_manifest(&dir, "invalid.json", &bad);
+        let result = validate_manifest_file_json(&path);
+        assert!(result.is_err(), "invalid manifest should return Err");
+        let error = result.expect_err("invalid manifest returns Err");
+        let parsed: Value = serde_json::from_str(&error).expect("error is valid JSON report");
+        assert_eq!(
+            parsed.get("valid").and_then(Value::as_bool),
+            Some(false),
+            "report should mark manifest invalid"
+        );
+        assert!(
+            parsed.get("issues").and_then(Value::as_array).is_some(),
+            "report should include issues"
+        );
     }
 
     #[test]

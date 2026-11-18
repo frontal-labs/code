@@ -261,7 +261,7 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
         CliAction::Integrations {
             args,
             output_format,
-        } => run_integrations_command(args.as_deref(), output_format)?,
+        } => run_integrations_command(&args, output_format)?,
         CliAction::Trust { revoke } => print_workspace_trust(revoke)?,
         CliAction::Skills {
             args,
@@ -355,17 +355,10 @@ fn dispatch(action: CliAction) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_integrations_command(
-    args: Option<&str>,
+    args: &[String],
     output_format: CliOutputFormat,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut tokens = args
-        .map(|value| {
-            value
-                .split_whitespace()
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut tokens = args.to_vec();
     let mut as_json = matches!(output_format, CliOutputFormat::Json);
     tokens.retain(|token| {
         if token == "--json" || token == "--output-format=json" {
@@ -576,7 +569,7 @@ enum CliAction {
         output_format: CliOutputFormat,
     },
     Integrations {
-        args: Option<String>,
+        args: Vec<String>,
         output_format: CliOutputFormat,
     },
     Trust {
@@ -1214,7 +1207,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             output_format,
         }),
         "integrations" => Ok(CliAction::Integrations {
-            args: join_optional_args(&rest[1..]),
+            args: rest[1..].to_vec(),
             output_format,
         }),
         "trust" => match rest.get(1).map(String::as_str) {
@@ -15989,7 +15982,7 @@ mod teleport_search_tests {
 
 #[cfg(test)]
 mod sandbox_report_tests {
-    use super::{format_sandbox_report, HookAbortMonitor};
+    use super::{format_sandbox_report, parse_args, CliAction, HookAbortMonitor};
     use code_runtime::HookAbortSignal;
     use std::sync::mpsc;
     use std::time::Duration;
@@ -16040,5 +16033,26 @@ mod sandbox_report_tests {
         monitor.stop();
 
         assert!(abort_signal.is_aborted());
+    }
+
+    #[test]
+    fn parse_integrations_validate_preserves_path_with_spaces() {
+        let path = "/Users/Me/My Documents/integration manifest.json";
+        let action = parse_args(&[
+            "integrations".to_string(),
+            "validate".to_string(),
+            path.to_string(),
+        ])
+        .expect("parse integrations validate");
+        match action {
+            CliAction::Integrations { args, .. } => {
+                assert_eq!(
+                    args,
+                    vec!["validate".to_string(), path.to_string()],
+                    "path with spaces must remain a single argument"
+                );
+            }
+            other => panic!("expected Integrations, got {other:?}"),
+        }
     }
 }

@@ -554,7 +554,9 @@ mod tests {
         a.handle(&AppEvent::TurnCompleted(text_summary("hi")));
         a.stamp_turn_elapsed(3.5);
         match &a.messages[0] {
-            Message::Assistant { elapsed_secs, .. } => assert_eq!(*elapsed_secs, 3.5),
+            Message::Assistant { elapsed_secs, .. } => {
+                assert!((elapsed_secs - 3.5).abs() < f64::EPSILON);
+            }
             Message::User { .. } => panic!("expected Assistant message"),
         }
     }

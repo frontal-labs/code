@@ -170,7 +170,7 @@ Every place a conversation can start, and whether it persists a session today:
 | IDE extensions (VS Code, Cursor) | `extensions/vs-code/extension.js` (spawns the CLI) | Yes, via the CLI |
 | Rust and TypeScript SDKs | `sdks/rust/src/spawn.rs`, `sdks/typescript/src/spawn.ts` (spawn the CLI, `--resume`) | Yes, via the CLI |
 | code-api | `crates/code-api/src/service.rs:404` (spawns the CLI) | Yes, via the CLI |
-| Hosted task, docker worker | `cli/src/main.rs:3710` (`run_hosted_task_worker`) | Yes, but inside a throwaway container |
+| Hosted task, `sandbox` transport (default) | `frontal-code hosted task run <task_id>` inside a sandbox session | Yes, but inside a throwaway session |
 | Hosted task, `tools-agent` transport (Fly default) | `crates/code-server/src/lib.rs:384` → `crates/code-tools/src/lib.rs:4746-4758` (`build_agent_runtime`, `Session::new()`) | **No: in memory only** |
 | Sub-agents (Agent tool) | `crates/code-tools/src/lib.rs:4582` (`execute_agent`), same runtime | **No: in memory only** |
 | Slack bot | `extensions/slack-agent/src/actions.ts:45` → `api-client.ts:323` (`createTask`) | No. It becomes a hosted task. |

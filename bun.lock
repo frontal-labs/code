@@ -18,7 +18,7 @@
     },
     "sdks/typescript": {
       "name": "@frontal-labs/code-sdk",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@frontal-labs/code-zod-schemas": "file:../../extensions/zod",
         "@types/node": "^20.12.0",

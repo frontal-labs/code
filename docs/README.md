@@ -21,8 +21,8 @@ Welcome to the Frontal Code CLI documentation hub. This comprehensive guide cove
 - **[Developer Tools](./TOOLS.md)** - Repo-level dev tooling suite (`tools/`: doctor, coverage, version, …)
 - **[Performance](./PERFORMANCE.md)** - Performance optimization and monitoring
 - **[Security](./SECURITY.md)** - Security features and best practices
-- **[Containers](./CONTAINERS.md)** - Docker and containerization
-- **[Hosted Engineering Plan](https://github.com/frontal-labs/code/issues)** - Implementation plan for the hosted server, worker containers, multi-agent execution, and GitHub automation
+- **[Containers](./CONTAINERS.md)** - Docker, containerization, and hosted worker sessions
+- **[Hosted Engineering Plan](https://github.com/frontal-labs/code/issues)** - Implementation plan for the hosted server, worker sessions, multi-agent execution, and GitHub automation
 
 ### Support
 - **[Troubleshooting](./TROUBLESHOOTING.md)** - Common issues and solutions

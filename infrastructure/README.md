@@ -23,10 +23,9 @@ The configuration is split into:
 ## Layout
 
 - `compose/docker-compose.yml`: opinionated hosted stack
-- `compose/docker-compose.docker-worker.yml`: opt-in override for `local-docker` lanes and the Docker socket
 - `compose/.env.example`: environment template for Compose deployments
 - `../docker/server.Dockerfile`: builds the `code-server` image
-- `../docker/worker.Dockerfile`: builds the worker image used by server-side `local-docker` lanes
+- `../docker/worker.Dockerfile`: legacy worker image (kept for reference; the local-docker lane transport was removed in the Frontal Sandbox migration)
 - `../docker/slack.Dockerfile`: builds the Slack connector image
 - `../docker/cli.Dockerfile`: builds the combined `frontal-code` + `code-server` CLI image (published as `code`/`code-dev` to GHCR)
 - `../docker/dev.Dockerfile`: development image with hot reload (`cargo watch`)
@@ -51,33 +50,29 @@ docker compose --env-file infrastructure/compose/.env -f infrastructure/compose/
 By default the main API is published on `http://127.0.0.1:8788`. Override
 `FRONTAL_CODE_SERVER_PUBLISH_ADDR` in `compose/.env` only when you intentionally need a wider bind.
 
-### Local Docker Worker Mode
+### Sandbox Worker Mode
 
-To run hosted tasks inside sibling Docker worker containers:
+Hosted tasks run in Frontal Sandbox sessions instead of local Docker containers. To point the
+stack at a sandbox server:
 
-1. Set `FRONTAL_CODE_SERVER_LANE_TRANSPORT=local-docker` in `compose/.env`.
-2. If worker callbacks must reach the published port, set `FRONTAL_CODE_SERVER_PUBLISH_ADDR=0.0.0.0`
-   in `compose/.env`.
-3. Build the worker image:
+1. Keep `FRONTAL_CODE_SERVER_LANE_TRANSPORT=sandbox` (the default) in `compose/.env`.
+2. Set `FRONTAL_SANDBOX_BASE_URL` and `FRONTAL_SANDBOX_API_KEY` in `compose/.env` to the
+   sandbox server's address and Bearer key (see `deploy/sandbox/README.md`).
+3. If worker sessions must reach the published port, set
+   `FRONTAL_CODE_SERVER_PUBLISH_ADDR=0.0.0.0` and `FRONTAL_CODE_SERVER_URL` to a public
+   address in `compose/.env`.
+4. Provide `FRONTAL_CODE_SERVER_DATABASE_URL`: the sandbox transport stores worker tokens in
+   Postgres, so the database is required for this transport.
 
 ```bash
-docker compose --env-file infrastructure/compose/.env -f infrastructure/compose/docker-compose.yml --profile worker-image build frontal-code-worker-image
-```
-
-4. Start the main stack with the Docker-worker override:
-
-```bash
-docker compose --env-file infrastructure/compose/.env \
-  -f infrastructure/compose/docker-compose.yml \
-  -f infrastructure/compose/docker-compose.docker-worker.yml \
-  up --build
+docker compose --env-file infrastructure/compose/.env -f infrastructure/compose/docker-compose.yml up --build
 ```
 
 In this mode:
 
-- `code-server` launches worker containers through a Docker socket proxy (`docker-socket-proxy`, pinned by digest) that allows only the API calls the server makes. The raw Docker socket is mounted only into the proxy, not into `code-server`
-- workers default to `FRONTAL_CODE_SERVER_DOCKER_IMAGE=frontal-code-worker:local`
-- workers call back to the server through `FRONTAL_CODE_SERVER_CALLBACK_URL`
+- `code-server` creates a Frontal Sandbox session per task; the session's VFS holds the
+  per-task repo checkout under `/workspace`
+- worker sessions call back to the server through `FRONTAL_CODE_SERVER_URL`
 - per-task repo checkouts live under `FRONTAL_CODE_SERVER_WORKSPACE_ROOT`
 
 ## Kubernetes

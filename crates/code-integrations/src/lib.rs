@@ -4,7 +4,9 @@
 //! including Model Context Protocol (MCP) server management and tool bridging.
 
 pub mod ide;
+pub mod manifest;
 pub mod mcp;
+pub mod providers;
 
 // Re-export commonly used MCP types for convenience
 pub use mcp::{
@@ -16,6 +18,15 @@ pub use mcp::{
     tool_bridge::{McpConnectionStatus, McpServerState, McpToolRegistry},
     tools::{execute_mcp_tool, mcp_tool_specs, ToolSpec},
 };
+
+// Re-export the integration manifest system (the typed plugin contract)
+pub use manifest::{
+    AuthSpec, CapabilitySpec, ContextFieldSpec, EventSpec, IntegrationManifest, ManifestRegistry,
+    SignatureSpec, TransportConfig, ValidationIssue,
+};
+
+// Re-export the built-in provider manifests (GitHub, Linear, PostHog, Sentry)
+pub use providers::{builtin_providers, BUILTIN_PROVIDER_IDS};
 
 #[cfg(test)]
 mod tests {

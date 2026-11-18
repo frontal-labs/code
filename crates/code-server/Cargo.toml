@@ -11,6 +11,8 @@ name = "code-server"
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
 futures-util = "0.3"
+tokio-stream = "0.1"
+tracing = "0.1"
 code-events = { path = "../code-events" }
 code-integrations = { path = "../code-integrations" }
 code-orchestrator = { path = "../code-orchestrator" }
@@ -32,6 +34,8 @@ tokio-postgres-rustls = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-pki-types = "1"
 webpki-roots = "0.26"
+frontal-sandbox-sdk.workspace = true
+sandbox-types.workspace = true
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

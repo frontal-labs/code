@@ -622,7 +622,7 @@ mod tests {
             published_branch: Some("frontal-code/fix-flake".into()),
             pr_url: Some("https://github.com/acme/payments/pull/42".into()),
             pr_number: Some(42),
-            execution_backend: Some("local_docker".into()),
+            execution_backend: Some("sandbox".into()),
             worker_id: Some("worker-1".into()),
             worker_status: Some("running".into()),
             orphan_policy: Some(AppliedOrphanPolicy {
@@ -655,7 +655,7 @@ mod tests {
             "https://github.com/acme/payments/pull/42"
         );
         assert_eq!(serialized["pr_number"], 42);
-        assert_eq!(serialized["execution_backend"], "local_docker");
+        assert_eq!(serialized["execution_backend"], "sandbox");
         assert_eq!(serialized["worker_id"], "worker-1");
         assert_eq!(serialized["worker_status"], "running");
         assert_eq!(serialized["orphan_policy"]["source"], "default");

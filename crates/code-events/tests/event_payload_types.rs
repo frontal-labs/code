@@ -132,7 +132,7 @@ fn hosted_task_event_summary_full() {
         graphite_stack_id: Some("stack-1".into()),
         graphite_head_branch: Some("feature/head".into()),
         graphite_base_branch: Some("main".into()),
-        execution_backend: Some("local_docker".into()),
+        execution_backend: Some("sandbox".into()),
         priority: Some("high".into()),
         plan_id: Some("plan-1".into()),
         plan_kind: Some("feature".into()),

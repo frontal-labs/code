@@ -633,13 +633,18 @@ frontal-code prompt "Use Kubernetes to deploy the application and Docker to buil
 
 This MCP guide provides comprehensive coverage of MCP integration in Frontal Code, from basic usage to advanced custom server development.
 
-## Native Integrations (GitHub, Linear, Graphite, Slack)
+## Native Integrations
 
-Frontal Code has **no hardcoded integrations**. Every external tracker (GitHub PRs, Linear
-issues, Graphite stacks, Slack messages) is reached exclusively through an MCP server.
-The server acts as an **MCP client**: it resolves a logical integration name
-(`github`, `linear`, `graphite`, `slack`) to a configured MCP server and invokes that
-server's tools. Adding a new provider requires **no code changes** — only config.
+Frontal Code integrations are driven by **typed, declarative manifests**
+(`IntegrationManifest`). The server, CLI, and SDKs all consume the same shape.
+Four first-party providers ship as built-ins — `github`, `linear`, `posthog`,
+and `sentry` — and can be overridden per-project via configuration. Adding a
+new provider requires **no code changes** — only a manifest.
+
+Full reference: [docs/INTEGRATIONS.md](./INTEGRATIONS.md).
+
+The legacy MCP-based integration layer (used for Graphite and Slack) remains
+as a deprecated adapter for one release; new code should use the manifest API.
 
 ### Configuration
 

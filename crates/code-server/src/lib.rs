@@ -10,11 +10,12 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path as FsPath;
 use std::path::PathBuf;
 use std::process::Command;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod audit;
-mod docker_worker;
+mod integrations;
 mod publish;
 mod worker_access;
 mod worker_tokens;
@@ -59,7 +60,13 @@ use code_tools::{
 };
 use futures_util::{SinkExt, StreamExt};
 mod tracker_reporting;
+use frontal_sandbox_sdk::Client as SandboxClient;
 use hmac::{Hmac, KeyInit, Mac};
+use sandbox_types::policy::PolicyAction;
+use sandbox_types::{
+    ExecEvent, ExecRequest, NetworkPolicy, NetworkPolicyRule, SessionConfig, SessionId,
+    SessionStatus, SnapshotId, TierPreference,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::Sha256;
@@ -141,10 +148,12 @@ pub struct ServerConfig {
     pub lane_transport_kind: LaneTransportKind,
     pub api_key: Option<String>,
     pub workspace_root: PathBuf,
-    pub docker_image: String,
-    pub docker_server_url: String,
+    /// Base URL of the Frontal Sandbox server the worker sessions run on.
+    pub sandbox_base_url: String,
+    /// Bearer API key (`sbx_…`) the sandbox server requires.
+    pub sandbox_api_key: String,
     pub reconcile_interval: Option<Duration>,
-    /// Postgres holds worker tokens. Required for the `local-docker` lane transport.
+    /// Postgres holds worker tokens. Required for the `sandbox` lane transport.
     pub database_url: Option<String>,
     /// CA file that signed the database certificate, for a private CA. Optional.
     pub database_ca_file: Option<PathBuf>,
@@ -164,8 +173,8 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaneTransportKind {
-    /// Each lane runs in a worker container (`docker/worker.Dockerfile`).
-    LocalDocker,
+    /// Each lane runs in a Frontal Sandbox session (`deploy/sandbox/` infra).
+    Sandbox,
     /// Each lane runs an agent loop inside the server process.
     ToolsAgent,
 }
@@ -174,10 +183,14 @@ pub enum LaneTransportKind {
 /// an unknown value is an error, so a typo cannot silently fake lane execution.
 fn parse_lane_transport_kind(raw: &str) -> Result<LaneTransportKind, String> {
     match raw.trim().to_ascii_lowercase().as_str() {
-        "" | "docker" | "local-docker" | "local_docker" => Ok(LaneTransportKind::LocalDocker),
+        "" | "sandbox" => Ok(LaneTransportKind::Sandbox),
         "tools-agent" | "tools_agent" | "agent" => Ok(LaneTransportKind::ToolsAgent),
+        "docker" | "local-docker" | "local_docker" => Err(
+            "FRONTAL_CODE_SERVER_LANE_TRANSPORT `docker`/`local-docker`/`local_docker` was removed with the Docker worker; use `sandbox` (Frontal Sandbox sessions) or `tools-agent`"
+                .to_string(),
+        ),
         other => Err(format!(
-            "unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT `{other}`; use `local-docker` (worker containers) or `tools-agent`"
+            "unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT `{other}`; use `sandbox` (Frontal Sandbox sessions) or `tools-agent`"
         )),
     }
 }
@@ -185,7 +198,7 @@ fn parse_lane_transport_kind(raw: &str) -> Result<LaneTransportKind, String> {
 /// Refuses `tools-agent` unless the operator opted in with `FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT`.
 fn check_host_agent_opt_in(kind: LaneTransportKind, allowed: bool) -> Result<(), String> {
     if kind == LaneTransportKind::ToolsAgent && !allowed {
-        return Err("FRONTAL_CODE_SERVER_LANE_TRANSPORT=tools-agent runs agents with the server's privileges; set FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1 to allow it, or use local-docker".to_string());
+        return Err("FRONTAL_CODE_SERVER_LANE_TRANSPORT=tools-agent runs agents with the server's privileges; set FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT=1 to allow it, or use sandbox".to_string());
     }
     Ok(())
 }
@@ -195,11 +208,11 @@ impl Default for ServerConfig {
         Self {
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8788),
             event_replay_limit: DEFAULT_EVENT_REPLAY_LIMIT,
-            lane_transport_kind: LaneTransportKind::LocalDocker,
+            lane_transport_kind: LaneTransportKind::Sandbox,
             api_key: None,
             workspace_root: default_server_workspace_root(),
-            docker_image: default_server_docker_image(),
-            docker_server_url: default_server_docker_server_url(),
+            sandbox_base_url: default_sandbox_base_url(),
+            sandbox_api_key: String::new(),
             reconcile_interval: Some(Duration::from_secs(15)),
             database_url: None,
             database_ca_file: None,
@@ -241,7 +254,8 @@ impl ServerConfig {
         }
         // `tools-agent` runs the agent inside the server process with its privileges. It is
         // refused unless the operator opts in, for example because the server already runs
-        // inside an isolated VM. `local-docker` (the default) isolates each task in a container.
+        // inside an isolated VM. `sandbox` (the default) isolates each task in a Frontal
+        // Sandbox session.
         let host_agent_allowed = env::var("FRONTAL_CODE_SERVER_ALLOW_HOST_AGENT")
             .is_ok_and(|value| matches!(value.trim(), "1" | "true"));
         check_host_agent_opt_in(config.lane_transport_kind, host_agent_allowed)?;
@@ -260,17 +274,16 @@ impl ServerConfig {
             }
         }
 
-        if let Ok(image) = env::var("FRONTAL_CODE_SERVER_DOCKER_IMAGE") {
-            let image = image.trim();
-            if !image.is_empty() {
-                config.docker_image = image.to_string();
-            }
-        }
-
-        if let Ok(url) = env::var("FRONTAL_CODE_SERVER_CALLBACK_URL") {
+        if let Ok(url) = env::var("FRONTAL_SANDBOX_BASE_URL") {
             let url = url.trim().trim_end_matches('/');
             if !url.is_empty() {
-                config.docker_server_url = url.to_string();
+                config.sandbox_base_url = url.to_string();
+            }
+        }
+        if let Ok(key) = env::var("FRONTAL_SANDBOX_API_KEY") {
+            let key = key.trim();
+            if !key.is_empty() {
+                config.sandbox_api_key = key.to_string();
             }
         }
 
@@ -389,6 +402,7 @@ pub struct ServerState {
     publish_workspace_root: PathBuf,
     // Tasks with a publish in flight. Held so two requests cannot push the same task twice.
     publishing_tasks: Arc<Mutex<HashSet<String>>>,
+    integrations: Arc<integrations::IntegrationsState>,
     // Off unless configured. See `ServerConfig::allow_local_repos`.
     allow_local_repos: bool,
 }
@@ -445,8 +459,6 @@ impl ServerState {
             None,
             Vec::new(),
             default_server_workspace_root(),
-            default_server_docker_image(),
-            default_server_docker_server_url(),
             WorkerAccess::new(None, 7200),
         )
     }
@@ -463,17 +475,14 @@ impl ServerState {
         orphan_auto_cancel_after: Option<Duration>,
         orphan_policy_rules: Vec<OrphanPolicyRule>,
         workspace_root: PathBuf,
-        docker_image: String,
-        docker_server_url: String,
         worker_access: WorkerAccess,
     ) -> Self {
         let publish_workspace_root = workspace_root.clone();
         let worker_access = Arc::new(worker_access);
         let lane_transport: Arc<dyn LaneWorkerTransport> = match lane_transport_kind {
-            LaneTransportKind::LocalDocker => Arc::new(LocalDockerLaneWorkerTransport::new(
+            LaneTransportKind::Sandbox => Arc::new(SandboxLaneWorkerTransport::new(
                 workspace_root,
-                docker_image,
-                docker_server_url,
+                sandbox_server_url(),
                 worker_access.clone(),
             )),
             LaneTransportKind::ToolsAgent => Arc::new(HostedAgentLaneWorkerTransport),
@@ -566,6 +575,7 @@ impl ServerState {
                 .unwrap_or_default(),
             publish_workspace_root: default_server_workspace_root(),
             publishing_tasks: Arc::new(Mutex::new(HashSet::new())),
+            integrations: Arc::new(integrations::IntegrationsState::load_from_env()),
             allow_local_repos: false,
         };
         state.recover_loaded_state();
@@ -580,7 +590,7 @@ impl ServerState {
     ) -> Self {
         Self::with_lane_transport_kind(
             event_replay_limit,
-            LaneTransportKind::LocalDocker,
+            LaneTransportKind::Sandbox,
             lane_transport,
         )
     }
@@ -643,7 +653,7 @@ impl ServerState {
     ) -> Self {
         Self::build(
             event_replay_limit,
-            LaneTransportKind::LocalDocker,
+            LaneTransportKind::Sandbox,
             lane_transport,
             None,
             Some(state_file),
@@ -666,7 +676,7 @@ impl ServerState {
     ) -> Self {
         Self::build(
             event_replay_limit,
-            LaneTransportKind::LocalDocker,
+            LaneTransportKind::Sandbox,
             lane_transport,
             None,
             None,
@@ -690,7 +700,7 @@ impl ServerState {
     ) -> Self {
         Self::build(
             event_replay_limit,
-            LaneTransportKind::LocalDocker,
+            LaneTransportKind::Sandbox,
             lane_transport,
             None,
             None,
@@ -964,12 +974,20 @@ fn default_server_workspace_root() -> PathBuf {
     )
 }
 
-fn default_server_docker_image() -> String {
-    "frontal-code-worker:local".to_string()
+fn default_sandbox_base_url() -> String {
+    "http://localhost:8080".to_string()
 }
 
-fn default_server_docker_server_url() -> String {
-    "http://host.docker.internal:8788".to_string()
+/// Public address the sandbox guest network uses to reach this server. It is injected into
+/// every session as `FRONTAL_CODE_SERVER_URL` and allowlisted in the session network policy,
+/// so it must be resolvable from the guest network (not `localhost` on a real deployment).
+fn sandbox_server_url() -> String {
+    match env::var("FRONTAL_CODE_SERVER_URL")
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+    {
+        Ok(value) if !value.is_empty() => value,
+        _ => "http://localhost:8788".to_string(),
+    }
 }
 
 fn current_unix_timestamp_secs() -> u64 {
@@ -1356,6 +1374,10 @@ pub struct HostedTaskContext {
     pub worker_manifest_file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worker_output_file: Option<String>,
+    /// The sandbox session id of the last run, so a re-run can fork from the run's
+    /// snapshot instead of re-importing the checkout.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sandbox_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1881,6 +1903,7 @@ pub fn app(state: Arc<ServerState>) -> Router {
             post(connector_interaction),
         )
         .route("/v1/connectors/{connector}/events", post(connector_event))
+        .merge(integrations::integrations_routes())
         // Starting a login stores a pending state for the single tenant, so it needs the
         // control-plane key. It is a POST that returns the provider URL as JSON: a browser
         // navigation cannot send the `x-api-key` header, so the caller opens the returned
@@ -1949,39 +1972,14 @@ fn check_auth_posture(config: &ServerConfig) -> Result<(), String> {
     Ok(())
 }
 
-/// Local Docker workers reach this server through the relay, which forwards to the port in
-/// `docker_server_url`. That port must be the one the server listens on. A URL without a
-/// port, or with another one, would send every worker to the wrong place, so refuse to start.
-fn check_callback_port(config: &ServerConfig) -> Result<(), String> {
-    if config.lane_transport_kind != LaneTransportKind::LocalDocker {
-        return Ok(());
-    }
-    let url = &config.docker_server_url;
-    let authority = url.rsplit("//").next().unwrap_or(url);
-    let explicit = authority
-        .rsplit_once(':')
-        .and_then(|(_, port)| port.parse::<u16>().ok());
-    match explicit {
-        Some(port) if port == config.bind_addr.port() => Ok(()),
-        Some(port) => Err(format!(
-            "FRONTAL_CODE_SERVER_CALLBACK_URL ({url}) names port {port}, but the server listens on {}. Workers would reach the wrong port.",
-            config.bind_addr.port()
-        )),
-        None => Err(format!(
-            "FRONTAL_CODE_SERVER_CALLBACK_URL ({url}) must include the port the server listens on ({}).",
-            config.bind_addr.port()
-        )),
-    }
-}
-
 pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     check_auth_posture(&config)?;
 
     // Worker tokens live in Postgres. Start-up fails if it is unreachable, rather than
-    // running workers that cannot authenticate.
-    let worker_store = if config.lane_transport_kind == LaneTransportKind::LocalDocker {
+    // running sessions that cannot authenticate.
+    let worker_store = if config.lane_transport_kind == LaneTransportKind::Sandbox {
         let url = config.database_url.as_deref().ok_or(
-            "FRONTAL_CODE_SERVER_DATABASE_URL is required for worker lanes (worker tokens are stored in Postgres)",
+            "FRONTAL_CODE_SERVER_DATABASE_URL is required for the sandbox lane transport (worker tokens are stored in Postgres)",
         )?;
         let tls = worker_tokens::tls_mode_for(url, config.database_ca_file.clone())?;
         Some(worker_tokens::WorkerTokenStore::connect(url, tls)?)
@@ -2012,8 +2010,6 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
             config.orphan_auto_cancel_after,
             config.orphan_policy_rules.clone(),
             config.workspace_root.clone(),
-            config.docker_image.clone(),
-            config.docker_server_url.clone(),
             worker_access,
         )
         .with_local_repos_allowed(config.allow_local_repos),
@@ -2039,7 +2035,6 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error
         }
     }
     let app = app(state);
-    check_callback_port(&config)?;
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     println!("code-server listening on http://{}", config.bind_addr);
     axum::serve(listener, app).await?;
@@ -3324,6 +3319,12 @@ fn retry_task_lane_internal(
     let primary_description = refreshed_context.plan_kind.clone();
     let auto_retry_attempted_at = refreshed_context.orphan_auto_retry_attempted_at;
 
+    // A re-run resumes from the previous sandbox session (the worker id), so the
+    // session's workspace is forked from the last run's snapshot.
+    let previous_worker_id = refreshed_context
+        .sandbox_session_id
+        .clone()
+        .or_else(|| refreshed_context.worker_id.clone());
     refreshed_context.worker_status = None;
     refreshed_context.worker_id = None;
     refreshed_context.worker_manifest_file = None;
@@ -3343,6 +3344,7 @@ fn retry_task_lane_internal(
         &mut refreshed_context,
         primary_role,
         primary_description.as_deref(),
+        previous_worker_id.as_deref(),
     )?;
     let reloaded = state
         .tasks
@@ -4012,56 +4014,12 @@ enum LaneTransportSignalKind {
     Failed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DockerLaunchSpec {
-    image: String,
-    checkout_root: PathBuf,
-    task_id: String,
-    /// The task's internal network. The worker can reach only the relay on it.
-    network: String,
-    command: Vec<String>,
-    env: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct HostedDockerTaskPayload {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    base_commit: Option<String>,
-    /// Shell commands the worker may run without asking, as permission rules.
-    bash_allow: Vec<String>,
-    /// Shell commands the worker may never run.
-    bash_deny: Vec<String>,
-    task_id: String,
-    prompt: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    repository: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    repo_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    base_ref: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    branch: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    provider: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    permission_mode: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    allowed_tools: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DockerLaunchResult {
-    container_id: String,
-}
-
 /// Refuses a hosted task whose provider, model, or permission mode the workspace's
 /// project policy does not allow.
 ///
 /// The checkout is the repository being worked on, so its `.frontal-code` settings
-/// are read here, together with this server's user settings. The worker container
-/// applies the full policy when it starts, including auth method rules.
+/// are read here, together with this server's user settings. The worker applies the
+/// full policy when it starts, including auth method rules.
 fn check_hosted_task_policy(
     checkout_root: &FsPath,
     request: &LaneExecutionRequest,
@@ -4104,315 +4062,20 @@ fn ceiling_label(mode: ResolvedPermissionMode) -> &'static str {
     }
 }
 
-trait DockerRunner: Send + Sync + fmt::Debug {
-    fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String>;
-
-    fn stop(&self, container_id: &str) -> Result<(), String>;
-
-    /// Starts the relay that workers use to reach the server. Test runners need nothing.
-    fn ensure_relay(&self, _image: &str, _port: u16) -> Result<(), String> {
-        Ok(())
-    }
-
-    /// Creates a task's internal network and attaches the relay to it.
-    fn prepare_task_network(&self, _network: &str) -> Result<(), String> {
-        Ok(())
-    }
-
-    /// Removes a task network. Best effort: the network may still be in use.
-    fn remove_task_network(&self, _network: &str) {}
-
-    /// Removes task networks that no worker is using.
-    fn sweep_idle_task_networks(&self) {}
-}
-
-#[derive(Debug)]
-struct CliDockerRunner {
-    /// The server port the relay forwards to. It names this server's relay and marks its
-    /// task networks.
-    relay_port: u16,
-}
-
-/// Writes the container environment to a file only this user can read. Passing values
-/// as `--env` would expose them in the process list. Docker reads the file while
-/// creating the container, so the caller deletes the directory right after `docker run`.
-fn write_worker_env_file(env: &BTreeMap<String, String>) -> Result<PathBuf, String> {
-    let mut contents = String::new();
-    for (key, value) in env {
-        if value.contains('\n') || value.contains('\r') {
-            return Err(format!(
-                "worker environment value for {key} contains a newline"
-            ));
-        }
-        contents.push_str(key);
-        contents.push('=');
-        contents.push_str(value);
-        contents.push('\n');
-    }
-
-    let mut bytes = [0_u8; 8];
-    getrandom::fill(&mut bytes).map_err(|error| format!("random source: {error}"))?;
-    let dir = env::temp_dir().join(format!("frontal-code-worker-{}", hex::encode(bytes)));
-    fs::create_dir_all(&dir).map_err(|error| format!("failed to create env dir: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))
-            .map_err(|error| format!("failed to restrict env dir: {error}"))?;
-    }
-    let path = dir.join("worker.env");
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&path)
-        .map_err(|error| format!("failed to create env file: {error}"))?;
-    std::io::Write::write_all(&mut file, contents.as_bytes())
-        .map_err(|error| format!("failed to write env file: {error}"))?;
-    Ok(path)
-}
-
-impl CliDockerRunner {
-    fn docker(args: &[String]) -> Result<String, String> {
-        let output = Command::new("docker")
-            .args(args)
-            .output()
-            .map_err(|error| format!("failed to run docker: {error}"))?;
-        if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
-        }
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
-    }
-
-    fn docker_str(args: &[&str]) -> Result<String, String> {
-        Self::docker(
-            &args
-                .iter()
-                .map(|arg| (*arg).to_string())
-                .collect::<Vec<_>>(),
-        )
-    }
-
-    fn relay_port(port: u16) -> String {
-        port.to_string()
-    }
-}
-
-impl DockerRunner for CliDockerRunner {
-    fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String> {
-        let env_file = write_worker_env_file(&spec.env)?;
-        let env_dir = env_file.parent().map(PathBuf::from);
-        let args = docker_worker::worker_run_args(
-            &spec.network,
-            &spec.checkout_root.display().to_string(),
-            &env_file.display().to_string(),
-            &spec.task_id,
-            &spec.image,
-            &spec.command,
-        );
-        let output = Self::docker(&args);
-        if let Some(dir) = env_dir {
-            let _ = fs::remove_dir_all(dir);
-        }
-        let container_id = output.map_err(|error| format!("docker run failed: {error}"))?;
-        if container_id.is_empty() {
-            return Err("docker run returned an empty container id".to_string());
-        }
-        // Remove the task's network as soon as its worker exits. Without this, a finished
-        // task's network stays until the next sweep.
-        let relay = self.relay_container();
-        let network = spec.network.clone();
-        let waited = container_id.clone();
-        std::thread::spawn(move || {
-            let _ = Self::docker_str(&["wait", &waited]);
-            remove_network_when_free(&relay, &network);
-        });
-        Ok(DockerLaunchResult { container_id })
-    }
-
-    fn stop(&self, container_id: &str) -> Result<(), String> {
-        // Read the task network first: the container's labels are gone once it is removed.
-        let network = Self::docker_str(&[
-            "inspect",
-            "--format",
-            &format!(
-                "{{{{index .Config.Labels \"{}\"}}}}",
-                docker_worker::TASK_NETWORK_CONTAINER_LABEL
-            ),
-            container_id,
-        ])
-        .ok()
-        .filter(|name| !name.is_empty() && name != "<no value>");
-        Self::docker_str(&["stop", container_id])
-            .map_err(|error| format!("docker stop failed: {error}"))?;
-        if let Some(network) = network {
-            self.remove_task_network(&network);
-        }
-        Ok(())
-    }
-
-    fn ensure_relay(&self, image: &str, port: u16) -> Result<(), String> {
-        let relay = docker_worker::relay_container_name(port);
-        let wanted = Self::relay_port(port);
-        let running = Self::docker_str(&["inspect", "--format", "{{.State.Running}}", &relay]);
-        let current_port = Self::docker_str(&[
-            "inspect",
-            "--format",
-            &format!(
-                "{{{{index .Config.Labels \"{}\"}}}}",
-                docker_worker::RELAY_PORT_LABEL
-            ),
-            &relay,
-        ]);
-        if running.as_deref() == Ok("true") && current_port.as_deref() == Ok(wanted.as_str()) {
-            return Ok(());
-        }
-        // Not running, or forwarding a different port: replace it.
-        let _ = Self::docker_str(&["rm", "-f", &relay]);
-        Self::docker(&docker_worker::relay_run_args(image, port))
-            .map(|_| ())
-            .map_err(|error| format!("failed to start the worker relay: {error}"))
-    }
-
-    fn prepare_task_network(&self, network: &str) -> Result<(), String> {
-        let created = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs());
-        let task_label = format!("{}={network}", docker_worker::TASK_NETWORK_LABEL);
-        let port_label = format!(
-            "{}={}",
-            docker_worker::NETWORK_RELAY_PORT_LABEL,
-            self.relay_port
-        );
-        let created_label = format!("{}={created}", docker_worker::NETWORK_CREATED_LABEL);
-        match Self::docker_str(&[
-            "network",
-            "create",
-            "--internal",
-            "--label",
-            &task_label,
-            "--label",
-            &port_label,
-            "--label",
-            &created_label,
-            network,
-        ]) {
-            Ok(_) => {}
-            Err(error) if error.contains("already exists") => {}
-            Err(error) => return Err(format!("failed to create the task network: {error}")),
-        }
-        match Self::docker_str(&[
-            "network",
-            "connect",
-            "--alias",
-            docker_worker::RELAY_ALIAS,
-            network,
-            &self.relay_container(),
-        ]) {
-            Ok(_) => Ok(()),
-            Err(error) if error.contains("already exists") => Ok(()),
-            Err(error) => Err(format!("failed to attach the relay: {error}")),
-        }
-    }
-
-    fn remove_task_network(&self, network: &str) {
-        remove_network_now(&self.relay_container(), network);
-    }
-
-    fn sweep_idle_task_networks(&self) {
-        let task_filter = format!("label={}", docker_worker::TASK_NETWORK_LABEL);
-        let port_filter = format!(
-            "label={}={}",
-            docker_worker::NETWORK_RELAY_PORT_LABEL,
-            self.relay_port
-        );
-        let Ok(names) = Self::docker_str(&[
-            "network",
-            "ls",
-            "--filter",
-            &task_filter,
-            "--filter",
-            &port_filter,
-            "--format",
-            "{{.Name}}",
-        ]) else {
-            return;
-        };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs());
-        for name in names.lines().filter(|name| !name.is_empty()) {
-            // A network younger than this may belong to a launch still in progress.
-            let created = Self::docker_str(&[
-                "network",
-                "inspect",
-                "--format",
-                &format!(
-                    "{{{{index .Labels \"{}\"}}}}",
-                    docker_worker::NETWORK_CREATED_LABEL
-                ),
-                name,
-            ])
-            .ok()
-            .and_then(|value| value.parse::<u64>().ok());
-            if created.is_none_or(|created| now.saturating_sub(created) < SWEEP_MIN_AGE_SECS) {
-                continue;
-            }
-            // An idle task network has nothing attached (a crash before the relay joined) or
-            // only the relay. A worker still attached means its task is running.
-            let attached = Self::docker_str(&[
-                "network",
-                "inspect",
-                "--format",
-                "{{len .Containers}}",
-                name,
-            ]);
-            if matches!(attached.as_deref(), Ok("0" | "1")) {
-                self.remove_task_network(name);
-            }
-        }
-    }
-}
-
-/// Minimum age before a task network without a running worker is treated as abandoned.
-const SWEEP_MIN_AGE_SECS: u64 = 120;
-
-/// Disconnects the relay from a task network and removes it. Ignores errors: a missing
-/// network is already clean, and a sweep retries anything left behind.
-fn remove_network_now(relay: &str, network: &str) {
-    let _ = CliDockerRunner::docker_str(&["network", "disconnect", "-f", network, relay]);
-    let _ = CliDockerRunner::docker_str(&["network", "rm", network]);
-}
-
-/// Removes a task network once its worker has gone. The container's `--rm` removal can
-/// lag the exit by a moment, and Docker refuses to remove a network with endpoints, so
-/// retry briefly.
-fn remove_network_when_free(relay: &str, network: &str) {
-    for _ in 0..30 {
-        remove_network_now(relay, network);
-        let gone =
-            CliDockerRunner::docker_str(&["network", "inspect", "--format", "{{.Id}}", network])
-                .is_err();
-        if gone {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
-}
-
-impl CliDockerRunner {
-    /// The name of this server's relay container.
-    fn relay_container(&self) -> String {
-        docker_worker::relay_container_name(self.relay_port)
-    }
-}
-
 trait LaneWorkerTransport: Send + Sync + fmt::Debug {
     fn bootstrap(&self, request: &LaneExecutionRequest) -> Result<LaneBootstrapResult, String>;
+
+    /// Re-runs a task on the workspace it already has. The default starts from
+    /// scratch (a fresh container per run); transports whose workspace is a
+    /// persistent session (sandbox) override this to wake or fork the previous
+    /// session, re-injecting its env file.
+    fn resume(
+        &self,
+        request: &LaneExecutionRequest,
+        _previous: Option<&str>,
+    ) -> Result<LaneBootstrapResult, String> {
+        self.bootstrap(request)
+    }
 
     fn cancel(
         &self,
@@ -4606,80 +4269,594 @@ impl LaneWorkerTransport for HostedAgentLaneWorkerTransport {
     }
 }
 
+/// Per-task state for the sandbox lane transport. The session id doubles as the
+/// lane worker id reported to the lane orchestrator. `snapshot_id` records where
+/// the last run finished: a re-run forks from it so the new session starts from
+/// the previous run's final state instead of the original import. `checkout_root`
+/// and `base_commit` will be used by the diff the lane orchestrator computes
+/// against the worker's changes (the session VFS is the worker's copy of the
+/// checkout); they are stored now so the state is complete once that lands.
 #[derive(Debug)]
-struct LocalDockerLaneWorkerTransport {
+struct SandboxTaskState {
+    /// The session that ran the task. The map key is also the session id, so
+    /// this field is redundant today; kept for the future diff path.
+    #[allow(dead_code)]
+    session_id: SessionId,
+    /// The local checkout the repository was imported from. Used for the diff
+    /// against the worker's changes (the session VFS is the worker's copy).
+    #[allow(dead_code)]
+    checkout_root: PathBuf,
+    /// The commit the worker's changes are measured against. `None` for a
+    /// scratch workspace without a repository.
+    #[allow(dead_code)]
+    base_commit: Option<String>,
+    /// The snapshot the last run finished on. Set by the exec-drain thread when
+    /// the agent exits cleanly; read by `resume` to decide fork vs wake.
+    snapshot_id: Option<SnapshotId>,
+}
+
+/// The task handoff written to `/workspace/.frontal-code-hosted/task.json` inside a
+/// sandbox session. The worker inside the session reads it to start the agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct HostedLaneTaskPayload {
+    task_id: String,
+    prompt: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repository: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repo_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    permission_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    allowed_tools: Vec<String>,
+    /// Shell commands the worker may run without asking, as permission rules.
+    bash_allow: Vec<String>,
+    /// Shell commands the worker may never run.
+    bash_deny: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_commit: Option<String>,
+}
+
+/// Runs hosted-agent tasks inside a Frontal Sandbox session. The session's network
+/// policy allowlists only this code server, and the per-task worker token is written
+/// to a file inside the session (the session's env is dropped on wake, so env vars
+/// cannot be relied on).
+#[derive(Debug)]
+struct SandboxLaneWorkerTransport {
     workspace_root: PathBuf,
-    image: String,
-    /// The worker's view of the server: the relay, by its alias on the task network.
+    /// The actual code-server URL the sandbox session reaches directly.
     server_url: String,
-    relay_image: String,
-    relay_port: u16,
     worker_access: Arc<WorkerAccess>,
-    docker: Arc<dyn DockerRunner>,
+    client: Arc<SandboxClient>,
+    tasks: Arc<Mutex<HashMap<String, SandboxTaskState>>>,
 }
 
-/// Port a server URL points at, or the default server port.
-fn port_from_server_url(url: &str) -> u16 {
-    url.trim_end_matches('/')
-        .rsplit(':')
-        .next()
-        .and_then(|port| port.parse().ok())
-        .unwrap_or(8788)
-}
-
-/// The relay image, pinned by digest. A tag can move; a digest cannot. Override it with
-/// `FRONTAL_CODE_WORKER_RELAY_IMAGE` after reviewing the image you choose.
-pub(crate) const DEFAULT_RELAY_IMAGE: &str =
-    "alpine/socat@sha256:e8a6e8868a8e6e01d9c2c321a8f8d4474d2d741d962462e5c5a124a8e66a0055";
-
-fn relay_image_from_env() -> String {
-    env::var("FRONTAL_CODE_WORKER_RELAY_IMAGE")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_RELAY_IMAGE.to_string())
-}
-
-impl LocalDockerLaneWorkerTransport {
-    fn new(
-        workspace_root: PathBuf,
-        image: String,
-        server_url: String,
-        worker_access: Arc<WorkerAccess>,
-    ) -> Self {
-        let relay_port = port_from_server_url(&server_url);
-        Self::with_runner(
-            workspace_root,
-            image,
-            server_url,
-            worker_access,
-            Arc::new(CliDockerRunner { relay_port }),
-        )
-    }
-
-    fn with_runner(
-        workspace_root: PathBuf,
-        image: String,
-        server_url: impl AsRef<str>,
-        worker_access: Arc<WorkerAccess>,
-        docker: Arc<dyn DockerRunner>,
-    ) -> Self {
-        let relay_port = port_from_server_url(server_url.as_ref());
+impl SandboxLaneWorkerTransport {
+    /// Builds a client from `FRONTAL_SANDBOX_BASE_URL` / `FRONTAL_SANDBOX_API_KEY`,
+    /// reading both from the environment.
+    fn new(workspace_root: PathBuf, server_url: String, worker_access: Arc<WorkerAccess>) -> Self {
+        let base_url = env::var("FRONTAL_SANDBOX_BASE_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "http://localhost:8080".to_string());
+        let api_key = env::var("FRONTAL_SANDBOX_API_KEY")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
         Self {
             workspace_root,
-            image,
-            server_url: format!("http://{}:{relay_port}", docker_worker::RELAY_ALIAS),
-            relay_image: relay_image_from_env(),
-            relay_port,
+            server_url,
             worker_access,
-            docker,
+            client: Arc::new(SandboxClient::new(base_url, api_key)),
+            tasks: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    /// Looks up the snapshot a task's last run finished on, if one was
+    /// recorded. Used by `resume` to decide between forking from the snapshot
+    /// and waking the previous session.
+    fn snapshot_of(&self, session: &SessionId) -> Option<SnapshotId> {
+        self.tasks
+            .lock()
+            .unwrap()
+            .get(&session.to_string())
+            .and_then(|state| state.snapshot_id)
+    }
+
+    /// Builds the session config used for every task session. The session may
+    /// only reach this code server; everything else is default-deny. Provider
+    /// traffic flows through the server's model proxy.
+    fn session_config(&self) -> SessionConfig {
+        let mut network = NetworkPolicy::default();
+        network.add_rule(NetworkPolicyRule {
+            action: PolicyAction::Allow,
+            host_pattern: Self::server_host_allowlist(&self.server_url),
+            ports: None,
+        });
+        SessionConfig {
+            network,
+            tier_preference: TierPreference::Auto,
+            // `limits` and `secrets` are intentionally left at their defaults:
+            // the sandbox server currently returns 501 for both.
+            ..SessionConfig::default()
+        }
+    }
+
+    /// Starts a session for a task, preferring `previous` when given:
+    /// a snapshot from the last run is forked (the new session starts from the
+    /// previous run's final state, and the old session is left untouched),
+    /// otherwise the previous session is woken and its files restored. When the
+    /// previous session no longer exists the session is created fresh and the
+    /// local checkout is re-imported. The env file is (re)written on every
+    /// start because the session drops its env on wake (ADR 0010).
+    async fn attach_to_session(
+        &self,
+        request: &LaneExecutionRequest,
+        previous: Option<SessionId>,
+        checkout_root: Option<&FsPath>,
+        base_commit: Option<&str>,
+    ) -> Result<(SessionId, usize, String), String> {
+        let client = &self.client;
+        match previous {
+            Some(id) if self.snapshot_of(&id).is_some() => {
+                let snapshot = self.snapshot_of(&id).expect("checked above");
+                let sessions = client.fork(snapshot, 1).await.map_err(|error| {
+                    format!("failed to fork sandbox session from snapshot: {error}")
+                })?;
+                let session = sessions
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| "sandbox server returned no session id for fork".to_string())?;
+                // Re-inject the env file so the re-run sees fresh credentials.
+                self.write_session_files(client, session, request, base_commit)
+                    .await?;
+                Ok((session, 0, "forked from snapshot".to_string()))
+            }
+            Some(id) => {
+                // Probe first: `wake` on an already-awake session is rejected
+                // with InvalidState, so decide based on the session's current
+                // state rather than on the outcome of waking it.
+                match client.get_session(id).await {
+                    Ok(state) if state.status == SessionStatus::Running => {
+                        // Already awake: re-inject env and proceed (ADR 0010).
+                        self.write_session_files(client, id, request, base_commit)
+                            .await?;
+                        Ok((id, 0, "resumed awake session".to_string()))
+                    }
+                    Ok(state) if state.status == SessionStatus::Sleeping => {
+                        match client.wake(id).await {
+                            Ok(_) => {
+                                // Woken sessions come back without env (ADR 0010);
+                                // the workspace files were restored from the
+                                // sleep snapshot, so re-inject the env file.
+                                self.write_session_files(client, id, request, base_commit)
+                                    .await?;
+                                Ok((id, 0, "woken previous session".to_string()))
+                            }
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "code-server::sandbox",
+                                    task_id = %request.task_id,
+                                    %error,
+                                    "failed to wake sandbox session, starting fresh"
+                                );
+                                self.start_fresh_session(
+                                    client,
+                                    request,
+                                    checkout_root,
+                                    base_commit,
+                                )
+                                .await
+                            }
+                        }
+                    }
+                    Ok(state) => {
+                        // Some other state (Promoting, Error, Destroyed): the
+                        // session cannot be used; fall back to a fresh one.
+                        tracing::warn!(
+                            target: "code-server::sandbox",
+                            task_id = %request.task_id,
+                            ?state.status,
+                            "previous sandbox session in unusable state, starting fresh"
+                        );
+                        self.start_fresh_session(client, request, checkout_root, base_commit)
+                            .await
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "code-server::sandbox",
+                            task_id = %request.task_id,
+                            %error,
+                            "previous sandbox session gone, starting fresh"
+                        );
+                        self.start_fresh_session(client, request, checkout_root, base_commit)
+                            .await
+                    }
+                }
+            }
+            None => {
+                self.start_fresh_session(client, request, checkout_root, base_commit)
+                    .await
+            }
+        }
+    }
+
+    /// Creates a brand-new session and imports the local checkout into it.
+    async fn start_fresh_session(
+        &self,
+        client: &SandboxClient,
+        request: &LaneExecutionRequest,
+        checkout_root: Option<&FsPath>,
+        base_commit: Option<&str>,
+    ) -> Result<(SessionId, usize, String), String> {
+        let session = client
+            .create_session(self.session_config())
+            .await
+            .map_err(|error| format!("failed to create sandbox session: {error}"))?;
+
+        let files = if let Some(root) = checkout_root {
+            Self::import_checkout(client, session, root)
+                .await
+                .map_err(|error| format!("failed to import checkout into sandbox: {error}"))?
+        } else {
+            0
+        };
+        self.write_session_files(client, session, request, base_commit)
+            .await?;
+        Ok((session, files, "created new session".to_string()))
+    }
+
+    /// Writes the env file and task payload the agent reads on start. Called on
+    /// every start (fresh, woken, or forked) because env is dropped on wake
+    /// (ADR 0010) and the payload carries the re-run's new prompt.
+    async fn write_session_files(
+        &self,
+        client: &SandboxClient,
+        session: SessionId,
+        request: &LaneExecutionRequest,
+        base_commit: Option<&str>,
+    ) -> Result<(), String> {
+        let token = self
+            .worker_access
+            .issue(&request.task_id)
+            .map_err(|error| format!("failed to issue worker token: {error}"))?;
+        let provider = worker_access::worker_provider_name(
+            request.provider.as_deref(),
+            request.model.as_deref(),
+        )?;
+
+        // The session's env is dropped on wake (ADR 0010), so the env map is
+        // written to a file the agent sources.
+        let env_json =
+            serde_json::to_vec_pretty(&Self::sandbox_task_env(&self.server_url, &token, provider))
+                .expect("env map is always serializable");
+        client
+            .write_file(session, "/workspace/.frontal-code-hosted/env", env_json)
+            .await
+            .map_err(|error| format!("failed to write sandbox env file: {error}"))?;
+
+        client
+            .write_file(
+                session,
+                "/workspace/.frontal-code-hosted/task.json",
+                Self::sandbox_task_payload(request, base_commit),
+            )
+            .await
+            .map_err(|error| format!("failed to write sandbox task payload: {error}"))?;
+        Ok(())
+    }
+
+    /// Starts the agent in the session fire-and-forget. Its fine-grained
+    /// events flow back over the control plane via `FRONTAL_CODE_SERVER_URL`, so
+    /// the server does not need to capture its stdout. The thread owns its own
+    /// runtime and ends when the command exits. `cancel` destroys the session,
+    /// which kills the exec. On a clean exit the session's state is snapshotted
+    /// so a re-run can fork from the final workspace.
+    fn spawn_exec(&self, session: SessionId, task_id: &str) {
+        let client = self.client.clone();
+        let tasks = self.tasks.clone();
+        let task_id = task_id.to_string();
+        std::thread::spawn(move || {
+            let runtime = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    tracing::error!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        %error,
+                        "failed to build sandbox exec runtime"
+                    );
+                    return;
+                }
+            };
+            let request = ExecRequest {
+                argv: vec![
+                    "frontal-code".to_string(),
+                    "hosted".to_string(),
+                    "task".to_string(),
+                    "run".to_string(),
+                    task_id.clone(),
+                ],
+                cwd: Some("/workspace".to_string()),
+                stream: true,
+                ..ExecRequest::default()
+            };
+            runtime.block_on(Self::run_exec_stream(
+                &client, &tasks, &task_id, session, &request,
+            ));
+        });
+    }
+
+    /// Consumes the exec stream for one agent run, logging its fine-grained
+    /// events. On a clean exit it records the session's snapshot so a re-run
+    /// can fork from the final workspace; the server may have destroyed the
+    /// session by then, in which case the re-run falls back to a fresh one.
+    async fn run_exec_stream(
+        client: &SandboxClient,
+        tasks: &Mutex<HashMap<String, SandboxTaskState>>,
+        task_id: &str,
+        session: SessionId,
+        request: &ExecRequest,
+    ) {
+        let stream = match client.exec_stream(session, request).await {
+            Ok(stream) => stream,
+            Err(error) => {
+                tracing::error!(
+                    target: "code-server::sandbox",
+                    task_id = %task_id,
+                    %error,
+                    "sandbox exec stream failed to start"
+                );
+                return;
+            }
+        };
+        futures_util::pin_mut!(stream);
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(ExecEvent::Output { data, .. }) => {
+                    tracing::debug!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        output = %String::from_utf8_lossy(&data),
+                        "sandbox exec output"
+                    );
+                }
+                Ok(ExecEvent::Exit { exit_code, .. }) => {
+                    tracing::info!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        exit_code,
+                        "sandbox exec finished"
+                    );
+                    if exit_code == 0 {
+                        match client.snapshot(session).await {
+                            Ok(snapshot) => {
+                                if let Ok(mut tasks) = tasks.try_lock() {
+                                    if let Some(state) = tasks.get_mut(&session.to_string()) {
+                                        state.snapshot_id = Some(snapshot);
+                                    }
+                                }
+                            }
+                            Err(error) => {
+                                tracing::warn!(
+                                    target: "code-server::sandbox",
+                                    task_id = %task_id,
+                                    %error,
+                                    "failed to snapshot sandbox session after exec"
+                                );
+                            }
+                        }
+                    }
+                    return;
+                }
+                Ok(ExecEvent::Error { message, .. }) => {
+                    tracing::error!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        %message,
+                        "sandbox exec error"
+                    );
+                    return;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        target: "code-server::sandbox",
+                        task_id = %task_id,
+                        %error,
+                        "sandbox exec stream error"
+                    );
+                    return;
+                }
+            }
+        }
+        tracing::error!(
+            target: "code-server::sandbox",
+            task_id = %task_id,
+            "sandbox exec stream ended before exit or error"
+        );
+    }
+
+    /// Records per-task state, emits the launch audit event, and builds the
+    /// bootstrap result shared by `bootstrap` and `resume`.
+    fn complete_start(
+        &self,
+        task_id: &str,
+        session: SessionId,
+        files: usize,
+        how: &str,
+        prepared: &PreparedRepo,
+        base_commit: Option<String>,
+    ) -> LaneBootstrapResult {
+        let checkout_root = &prepared.checkout_root;
+        self.tasks.lock().unwrap().insert(
+            session.to_string(),
+            SandboxTaskState {
+                session_id: session,
+                base_commit,
+                checkout_root: checkout_root.clone(),
+                snapshot_id: None,
+            },
+        );
+
+        if let Some(audit) = self.worker_access.audit() {
+            audit.emit(
+                "worker.launched",
+                task_id,
+                &format!("session={session} {how}"),
+            );
+        }
+        let allowlist = Self::server_host_allowlist(&self.server_url);
+        LaneBootstrapResult {
+            worker_id: session.to_string(),
+            worker_status: WorkerStatus::Running,
+            signals: vec![LaneTransportSignal {
+                kind: LaneTransportSignalKind::Running,
+                detail: Some(format!("sandbox session {session} {how}")),
+                payload: Some(json!({
+                    "session_id": session.to_string(),
+                    "files_imported": files,
+                    "checkout_root": checkout_root.display().to_string(),
+                    "command": ["frontal-code", "hosted", "task", "run", task_id],
+                    "source": prepared.source.display().as_str(),
+                    "network_allowlist": allowlist,
+                })),
+            }],
+            artifacts: None,
+            checkout_root: Some(checkout_root.display().to_string()),
+        }
+    }
+
+    /// The host (and optional port) of a server URL, for the session's network
+    /// allowlist. `https://frontal.tools:8443/` -> `frontal.tools:8443`.
+    fn server_host_allowlist(server_url: &str) -> String {
+        let trimmed = server_url.trim_end_matches('/');
+        let without_scheme = trimmed.split_once("://").map_or(trimmed, |(_, rest)| rest);
+        without_scheme
+            .split('/')
+            .next()
+            .unwrap_or(without_scheme)
+            .to_string()
+    }
+
+    /// Recursively walks `root` and uploads every regular file to the session
+    /// under `/workspace/`, skipping the `.git` directory. Returns the number of
+    /// files written.
+    async fn import_checkout(
+        client: &SandboxClient,
+        session: SessionId,
+        root: &FsPath,
+    ) -> Result<usize, String> {
+        fn collect(dir: &FsPath, out: &mut Vec<PathBuf>) -> Result<(), String> {
+            let read_dir = fs::read_dir(dir)
+                .map_err(|error| format!("failed to read {}: {error}", dir.display()))?;
+            for entry in read_dir {
+                let entry = entry.map_err(|error| format!("failed to read dir entry: {error}"))?;
+                let path = entry.path();
+                if path.is_dir() {
+                    // Skip VCS metadata; the worker never needs it.
+                    if path.file_name().is_some_and(|name| name == ".git") {
+                        continue;
+                    }
+                    collect(&path, out)?;
+                } else if path.is_file() {
+                    out.push(path);
+                }
+            }
+            Ok(())
+        }
+        let mut entries: Vec<PathBuf> = Vec::new();
+        collect(root, &mut entries)
+            .map_err(|error| format!("failed to walk checkout {}: {error}", root.display()))?;
+
+        let mut count = 0usize;
+        for path in &entries {
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|error| format!("failed to strip prefix {}: {error}", root.display()))?;
+            let session_path = format!("/workspace/{}", relative.display());
+            let bytes = fs::read(path)
+                .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+            client
+                .write_file(session, &session_path, bytes)
+                .await
+                .map_err(|error| format!("failed to write {session_path}: {error}"))?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// The env map handed to the worker. The session drops its env on wake, so the
+    /// agent reads the written file instead of relying on process env vars.
+    fn sandbox_task_env(server_url: &str, token: &str, provider: &str) -> BTreeMap<String, String> {
+        let mut task_env = BTreeMap::from([
+            (
+                "FRONTAL_CODE_SERVER_URL".to_string(),
+                server_url.to_string(),
+            ),
+            ("FRONTAL_CODE_SERVER_API_KEY".to_string(), token.to_string()),
+            (
+                "FRONTAL_CODE_HOSTED_TASK_FILE".to_string(),
+                "/workspace/.frontal-code-hosted/task.json".to_string(),
+            ),
+        ]);
+        task_env.insert("FRONTAL_CODE_HOSTED_WORKER".to_string(), "1".to_string());
+        for (key, value) in worker_access::worker_provider_env(provider, server_url, token) {
+            task_env.insert(key, value);
+        }
+        // Non-secret tuning only. Provider keys are never forwarded.
+        if let Ok(value) = env::var("FRONTAL_CODE_MAX_OUTPUT_TOKENS") {
+            if !value.trim().is_empty() {
+                task_env.insert("FRONTAL_CODE_MAX_OUTPUT_TOKENS".to_string(), value);
+            }
+        }
+        task_env
+    }
+
+    fn sandbox_task_payload(request: &LaneExecutionRequest, base_commit: Option<&str>) -> Vec<u8> {
+        serde_json::to_vec_pretty(&HostedLaneTaskPayload {
+            task_id: request.task_id.clone(),
+            prompt: request.prompt.clone(),
+            repository: request.repository.clone(),
+            repo_url: request.repo_url.clone(),
+            base_ref: request.base_ref.clone(),
+            branch: request.branch.clone(),
+            model: request.model.clone(),
+            provider: request.provider.clone(),
+            permission_mode: Some(
+                request
+                    .permission_mode
+                    .clone()
+                    .unwrap_or_else(|| worker_access::WORKER_DEFAULT_PERMISSION_MODE.to_string()),
+            ),
+            allowed_tools: request.allowed_tools.clone(),
+            bash_allow: worker_access::WORKER_BASH_ALLOW
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
+            bash_deny: worker_access::WORKER_BASH_DENY
+                .iter()
+                .map(|rule| (*rule).to_string())
+                .collect(),
+            base_commit: base_commit.map(str::to_string),
+        })
+        .expect("hosted task payload is always serializable")
     }
 }
 
-impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
+impl LaneWorkerTransport for SandboxLaneWorkerTransport {
     fn bootstrap(&self, request: &LaneExecutionRequest) -> Result<LaneBootstrapResult, String> {
-        // A task with a repository gets a checkout on its own branch. A task without one
-        // gets an empty scratch workspace, so a plain prompt can still run in a worker.
+        // A task with a repository gets a checkout on its own branch. A task
+        // without one gets an empty scratch workspace.
         let prepared = match lane_repo_source(request) {
             Some(source) => prepare_checkout(&RepoCheckoutRequest {
                 workspace_root: self.workspace_root.clone(),
@@ -4693,117 +4870,111 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
             None => prepare_scratch_workspace(&self.workspace_root, &request.task_id)?,
         };
         check_hosted_task_policy(&prepared.checkout_root, request)?;
-        // The commit the worker's changes are measured against. The server records it, so the
-        // worker cannot pick its own baseline.
+        // The commit the worker's changes are measured against. The server
+        // records it, so the worker cannot pick its own baseline.
         let base_commit = git_head_commit(&prepared.checkout_root);
-        let task_file =
-            write_local_docker_task_payload(&prepared.checkout_root, request, base_commit)
-                .map_err(|error| format!("failed to write hosted docker task payload: {error}"))?;
-        let image = self.image.clone();
-        // The worker gets a token that works only for this task, plus a proxy URL for
-        // the model provider. No provider key and no control-plane key enter the
-        // container. See worker_access.rs.
-        let token = self
-            .worker_access
-            .issue(&request.task_id)
-            .map_err(|error| format!("failed to issue worker token: {error}"))?;
-        let provider = worker_access::worker_provider_name(
-            request.provider.as_deref(),
-            request.model.as_deref(),
-        )?;
-        let mut container_env = BTreeMap::from([
-            (
-                "FRONTAL_CODE_SERVER_URL".to_string(),
-                self.server_url.clone(),
-            ),
-            ("FRONTAL_CODE_SERVER_API_KEY".to_string(), token.clone()),
-            (
-                "FRONTAL_CODE_HOSTED_TASK_FILE".to_string(),
-                "/workspace/.frontal-code-hosted/task.json".to_string(),
-            ),
-        ]);
-        // Lets the worker CLI accept the cleartext Docker host alias. Set only here.
-        container_env.insert("FRONTAL_CODE_HOSTED_WORKER".to_string(), "1".to_string());
-        for (key, value) in worker_access::worker_provider_env(provider, &self.server_url, &token) {
-            container_env.insert(key, value);
-        }
-        // Non-secret tuning only. Provider keys are never forwarded.
-        if let Ok(value) = env::var("FRONTAL_CODE_MAX_OUTPUT_TOKENS") {
-            if !value.trim().is_empty() {
-                container_env.insert("FRONTAL_CODE_MAX_OUTPUT_TOKENS".to_string(), value);
-            }
-        }
-        // No GitHub credentials enter the container. The server publishes the branch and
-        // opens the pull request from its own environment. See publish.rs.
-        // The relay must be up, and the task must have its own network, before the worker starts.
-        self.docker
-            .ensure_relay(&self.relay_image, self.relay_port)?;
-        self.docker.sweep_idle_task_networks();
-        let network = docker_worker::task_network_name(&request.task_id);
-        self.docker.prepare_task_network(&network)?;
-        let launch = self.docker.launch(&DockerLaunchSpec {
-            image: image.clone(),
-            checkout_root: prepared.checkout_root.clone(),
-            task_id: request.task_id.clone(),
-            network: network.clone(),
-            command: vec![
-                "frontal-code".to_string(),
-                "hosted".to_string(),
-                "task".to_string(),
-                "run".to_string(),
-                request.task_id.clone(),
-            ],
-            env: container_env,
-        })?;
 
-        if let Some(audit) = self.worker_access.audit() {
-            audit.emit(
-                "worker.launched",
-                &request.task_id,
-                &format!("container={}", launch.container_id),
-            );
-        }
-        Ok(LaneBootstrapResult {
-            worker_id: launch.container_id.clone(),
-            worker_status: WorkerStatus::Running,
-            signals: vec![LaneTransportSignal {
-                kind: LaneTransportSignalKind::Running,
-                detail: Some(format!(
-                    "local docker container {} prepared checkout at {}",
-                    launch.container_id,
-                    prepared.checkout_root.display()
-                )),
-                payload: Some(json!({
-                    "container_id": launch.container_id,
-                    "image": image,
-                    "checkout_root": prepared.checkout_root.display().to_string(),
-                    "task_file": task_file.display().to_string(),
-                    "command": ["frontal-code", "hosted", "task", "run", request.task_id.as_str()],
-                    "active_ref": prepared.active_ref,
-                    "branch": prepared.branch,
-                    "source": prepared.source.display(),
-                })),
-            }],
-            artifacts: None,
-            checkout_root: Some(prepared.checkout_root.display().to_string()),
-        })
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| format!("failed to build sandbox runtime: {error}"))?;
+        let (session, files, how) = runtime.block_on(self.attach_to_session(
+            request,
+            None,
+            Some(&prepared.checkout_root),
+            base_commit.as_deref(),
+        ))?;
+
+        self.spawn_exec(session, &request.task_id);
+
+        Ok(self.complete_start(
+            &request.task_id,
+            session,
+            files,
+            &how,
+            &prepared,
+            base_commit,
+        ))
+    }
+
+    /// Re-runs a task on the workspace its previous run left behind. The
+    /// previous worker id is the sandbox session id: if that run finished
+    /// cleanly, its final state was snapshotted and the re-run forks a fresh
+    /// session from it (the old session is left untouched, so a second re-run
+    /// still works); otherwise the previous session is woken and its files are
+    /// restored from the sleep snapshot. Either way the env file is re-written
+    /// (env is dropped on wake, ADR 0010) and the agent is exec'd again with
+    /// the task's current prompt. The local checkout is re-prepared only so the
+    /// re-run's diff is measured against the same baseline; it is not imported
+    /// unless the previous session is gone.
+    fn resume(
+        &self,
+        request: &LaneExecutionRequest,
+        previous: Option<&str>,
+    ) -> Result<LaneBootstrapResult, String> {
+        let prepared = match lane_repo_source(request) {
+            Some(source) => prepare_checkout(&RepoCheckoutRequest {
+                workspace_root: self.workspace_root.clone(),
+                checkout_id: request.task_id.clone(),
+                source,
+                repository: request.repository.clone(),
+                base_ref: request.base_ref.clone(),
+                branch: request.branch.clone(),
+            })
+            .map_err(|error| format!("failed to prepare repo checkout: {error}"))?,
+            None => prepare_scratch_workspace(&self.workspace_root, &request.task_id)?,
+        };
+        check_hosted_task_policy(&prepared.checkout_root, request)?;
+        let base_commit = git_head_commit(&prepared.checkout_root);
+        // The previous worker id is the session id. If the parse fails the
+        // re-run falls back to a fresh session, which re-imports the checkout.
+        let previous_session = previous.and_then(|id| SessionId::from_str(id).ok());
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| format!("failed to build sandbox runtime: {error}"))?;
+        let (session, files, how) = runtime.block_on(self.attach_to_session(
+            request,
+            previous_session,
+            Some(&prepared.checkout_root),
+            base_commit.as_deref(),
+        ))?;
+
+        self.spawn_exec(session, &request.task_id);
+
+        Ok(self.complete_start(
+            &request.task_id,
+            session,
+            files,
+            &how,
+            &prepared,
+            base_commit,
+        ))
     }
 
     fn observe_completion(
         &self,
-        _worker_id: &str,
+        worker_id: &str,
         finish_reason: &str,
         _tokens_output: u64,
     ) -> Result<LaneCompletionResult, String> {
-        let worker_status = if finish_reason.eq_ignore_ascii_case("error")
+        // The session VFS is the worker's checkout, but the lane orchestrator
+        // computes the diff against the local checkout recorded in
+        // `LaneBootstrapResult.checkout_root`. The worker's exit is reported
+        // asynchronously via the control plane (the agent POSTs its terminal
+        // event).
+        if finish_reason.eq_ignore_ascii_case("error")
             || finish_reason.eq_ignore_ascii_case("failed")
         {
-            WorkerStatus::Failed
-        } else {
-            WorkerStatus::Finished
-        };
+            return Ok(LaneCompletionResult {
+                worker_status: WorkerStatus::Failed,
+                error: None,
+            });
+        }
+        let _ = worker_id;
         Ok(LaneCompletionResult {
-            worker_status,
+            worker_status: WorkerStatus::Finished,
             error: None,
         })
     }
@@ -4813,12 +4984,32 @@ impl LaneWorkerTransport for LocalDockerLaneWorkerTransport {
         worker_id: &str,
         _locator: Option<&HostedAgentLocator>,
     ) -> Result<LaneCancellationResult, String> {
-        self.docker.stop(worker_id)?;
-        Ok(LaneCancellationResult {
-            worker_status: Some(WorkerStatus::Finished),
-            clear_worker_status: false,
-            detail: Some(format!("local docker container {worker_id} stopped")),
-        })
+        let session = SessionId::from_str(worker_id)
+            .map_err(|error| format!("invalid sandbox session id `{worker_id}`: {error}"))?;
+        // Best-effort: a destroyed or already-destroyed session still counts as
+        // cancelled from the lane's point of view.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| format!("failed to build sandbox runtime: {error}"))?;
+        let outcome = runtime.block_on(self.client.destroy_session(session));
+        self.tasks.lock().unwrap().remove(worker_id);
+        match outcome {
+            Ok(()) => Ok(LaneCancellationResult {
+                worker_status: Some(WorkerStatus::Finished),
+                clear_worker_status: true,
+                detail: Some(format!("sandbox session {worker_id} destroyed")),
+            }),
+            // Best-effort: even if the API call fails (session already
+            // destroyed, network blip, etc.) the lane treats it as cancelled.
+            Err(error) => Ok(LaneCancellationResult {
+                worker_status: Some(WorkerStatus::Finished),
+                clear_worker_status: true,
+                detail: Some(format!(
+                    "sandbox session {worker_id} destroyed (best-effort: {error})"
+                )),
+            }),
+        }
     }
 }
 
@@ -4880,47 +5071,6 @@ fn git_head_commit(checkout_root: &FsPath) -> Option<String> {
         .success()
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
         .filter(|sha| sha.len() == 40 && sha.chars().all(|c| c.is_ascii_hexdigit()))
-}
-
-fn write_local_docker_task_payload(
-    checkout_root: &FsPath,
-    request: &LaneExecutionRequest,
-    base_commit: Option<String>,
-) -> Result<PathBuf, std::io::Error> {
-    let payload_dir = checkout_root.join(".frontal-code-hosted");
-    std::fs::create_dir_all(&payload_dir)?;
-    let payload_path = payload_dir.join("task.json");
-    std::fs::write(
-        &payload_path,
-        serde_json::to_vec_pretty(&HostedDockerTaskPayload {
-            task_id: request.task_id.clone(),
-            prompt: request.prompt.clone(),
-            repository: request.repository.clone(),
-            repo_url: request.repo_url.clone(),
-            base_ref: request.base_ref.clone(),
-            branch: request.branch.clone(),
-            model: request.model.clone(),
-            provider: request.provider.clone(),
-            permission_mode: Some(
-                request
-                    .permission_mode
-                    .clone()
-                    .unwrap_or_else(|| worker_access::WORKER_DEFAULT_PERMISSION_MODE.to_string()),
-            ),
-            allowed_tools: request.allowed_tools.clone(),
-            bash_allow: worker_access::WORKER_BASH_ALLOW
-                .iter()
-                .map(|rule| (*rule).to_string())
-                .collect(),
-            bash_deny: worker_access::WORKER_BASH_DENY
-                .iter()
-                .map(|rule| (*rule).to_string())
-                .collect(),
-            base_commit,
-        })
-        .map_err(std::io::Error::other)?,
-    )?;
-    Ok(payload_path)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -5091,6 +5241,7 @@ fn create_task_internal(state: &ServerState, request: CreateTaskRequest) -> Resu
         &mut context,
         primary_role,
         primary_description.as_deref(),
+        None,
     )?;
 
     state
@@ -5105,7 +5256,11 @@ fn bootstrap_task_lane(
     context: &mut HostedTaskContext,
     primary_role: Option<LaneRole>,
     primary_description: Option<&str>,
+    previous_worker_id: Option<&str>,
 ) -> Result<(), AppError> {
+    // The lane transport signals carry their own descriptions; the caller's
+    // primary description is not needed.
+    let _ = primary_description;
     let lane_request = LaneExecutionRequest {
         task_id: task.task_id.clone(),
         prompt: task.prompt.clone(),
@@ -5120,11 +5275,16 @@ fn bootstrap_task_lane(
         allowed_tools: context.allowed_tools.clone(),
     };
 
-    match state
-        .lane_transport
-        .bootstrap(&lane_request)
-        .map_err(AppError::internal)
-    {
+    // A re-run: the previous worker id (the sandbox session id) is carried in
+    // by the caller, so ask the transport to resume from it. A fresh run: the
+    // transport creates a new session.
+    match if previous_worker_id.is_some() {
+        state
+            .lane_transport
+            .resume(&lane_request, previous_worker_id)
+    } else {
+        state.lane_transport.bootstrap(&lane_request)
+    } {
         Ok(bootstrap) => {
             context.worker_id = Some(bootstrap.worker_id.clone());
             context.worker_status = Some(bootstrap.worker_status.to_string());
@@ -5140,6 +5300,11 @@ fn bootstrap_task_lane(
             context.orphaned_at = None;
             context.orphaned_approval_requested_at = None;
             context.applied_orphan_policy = None;
+            // The worker id is the sandbox session id; record it so a later
+            // re-run can fork from the run's snapshot instead of re-importing.
+            if state.lane_transport_kind == LaneTransportKind::Sandbox {
+                context.sandbox_session_id = context.worker_id.clone();
+            }
             state.record_context(&task.task_id, context.clone());
 
             emit_lane_transport_signals(
@@ -5172,7 +5337,7 @@ fn bootstrap_task_lane(
                 .map_err(AppError::internal)?;
             state
                 .tasks
-                .append_output(&task.task_id, &error.message)
+                .append_output(&task.task_id, &error)
                 .map_err(AppError::internal)?;
             state.broadcast_event(EventEnvelope::new(
                 HostedEventName::LaneFailed,
@@ -5188,7 +5353,7 @@ fn bootstrap_task_lane(
                     context,
                     Some("failed"),
                     Some(serialize_event_extra(TerminalEventPayload {
-                        error: Some(error.message.clone()),
+                        error: Some(error.clone()),
                         extra: Map::new(),
                         ..TerminalEventPayload::default()
                     })),
@@ -5388,7 +5553,7 @@ fn lane_role_label(role: LaneRole) -> &'static str {
 
 fn lane_transport_kind_label(kind: LaneTransportKind) -> &'static str {
     match kind {
-        LaneTransportKind::LocalDocker => "local_docker",
+        LaneTransportKind::Sandbox => "sandbox",
         LaneTransportKind::ToolsAgent => "tools_agent",
     }
 }
@@ -5456,6 +5621,13 @@ impl AppError {
             message: message.into(),
         }
     }
+
+    fn not_implemented(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::NOT_IMPLEMENTED,
+            message: message.into(),
+        }
+    }
 }
 
 impl IntoResponse for AppError {
@@ -5485,62 +5657,24 @@ mod tests {
     }
 
     #[test]
-    fn worker_payload_defaults_to_full_access_inside_the_container() {
-        use super::{write_local_docker_task_payload, LaneExecutionRequest};
-        let root = temp_test_dir("worker-payload");
-        let request = LaneExecutionRequest {
-            task_id: "task-1".to_string(),
-            prompt: "hello".to_string(),
-            repository: None,
-            repo_url: None,
-            base_ref: None,
-            branch: None,
-            lane_role: None,
-            model: None,
-            provider: None,
-            permission_mode: None,
-            allowed_tools: Vec::new(),
-        };
-        let path = write_local_docker_task_payload(&root, &request, None).expect("payload written");
-        let payload: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
-                .expect("payload json");
-        assert_eq!(payload["permission_mode"], "workspace-write");
-        assert!(payload["bash_allow"]
-            .as_array()
-            .is_some_and(|rules| rules.iter().any(|rule| rule == "bash(cargo:*)")));
-        assert!(payload["bash_deny"]
-            .as_array()
-            .is_some_and(|rules| rules.iter().any(|rule| rule == "bash(curl:*)")));
-
-        let explicit = LaneExecutionRequest {
-            permission_mode: Some("read-only".to_string()),
-            ..request
-        };
-        let path =
-            write_local_docker_task_payload(&root, &explicit, None).expect("payload written");
-        let payload: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).expect("read payload"))
-                .expect("payload json");
-        assert_eq!(payload["permission_mode"], "read-only");
-    }
-
-    #[test]
     fn lane_transport_parser_accepts_workers_and_refuses_everything_else() {
         use super::{parse_lane_transport_kind, LaneTransportKind};
         assert_eq!(
             parse_lane_transport_kind("").unwrap(),
-            LaneTransportKind::LocalDocker
+            LaneTransportKind::Sandbox
         );
         assert_eq!(
-            parse_lane_transport_kind(" Local-Docker ").unwrap(),
-            LaneTransportKind::LocalDocker
+            parse_lane_transport_kind(" sandbox ").unwrap(),
+            LaneTransportKind::Sandbox
         );
         assert_eq!(
             parse_lane_transport_kind("tools-agent").unwrap(),
             LaneTransportKind::ToolsAgent
         );
-        for refused in ["in-memory", "in_memory", "memory", "bogus"] {
+        let error = parse_lane_transport_kind("local-docker")
+            .expect_err("the removed docker transport must be refused");
+        assert!(error.contains("was removed with the Docker worker"));
+        for refused in ["in-memory", "in_memory", "memory", "bogus", "sandbox-2"] {
             let error = parse_lane_transport_kind(refused)
                 .expect_err("the simulator and unknown names must be refused");
             assert!(error.contains("unsupported FRONTAL_CODE_SERVER_LANE_TRANSPORT"));
@@ -5551,7 +5685,32 @@ mod tests {
     fn host_agent_transport_requires_an_explicit_opt_in() {
         assert!(check_host_agent_opt_in(LaneTransportKind::ToolsAgent, false).is_err());
         assert!(check_host_agent_opt_in(LaneTransportKind::ToolsAgent, true).is_ok());
-        assert!(check_host_agent_opt_in(LaneTransportKind::LocalDocker, false).is_ok());
+        assert!(check_host_agent_opt_in(LaneTransportKind::Sandbox, false).is_ok());
+    }
+
+    #[test]
+    fn server_config_reads_sandbox_env_vars() {
+        use super::{
+            default_sandbox_base_url, parse_lane_transport_kind, LaneTransportKind, ServerConfig,
+        };
+        // The sandbox server settings and the lane transport selection must parse
+        // out of the environment the way an operator would set them.
+        assert!(default_sandbox_base_url().ends_with(":8080"));
+        assert_eq!(
+            parse_lane_transport_kind("sandbox").unwrap(),
+            LaneTransportKind::Sandbox
+        );
+        std::env::set_var("FRONTAL_SANDBOX_BASE_URL", "http://sandbox.test:8080/");
+        std::env::set_var("FRONTAL_SANDBOX_API_KEY", "sbx_test-key");
+        std::env::set_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT", "sandbox");
+        let config =
+            ServerConfig::from_env().expect("sandbox env vars should parse into the config");
+        assert_eq!(config.sandbox_base_url, "http://sandbox.test:8080");
+        assert_eq!(config.sandbox_api_key, "sbx_test-key");
+        assert_eq!(config.lane_transport_kind, LaneTransportKind::Sandbox);
+        std::env::remove_var("FRONTAL_SANDBOX_BASE_URL");
+        std::env::remove_var("FRONTAL_SANDBOX_API_KEY");
+        std::env::remove_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT");
     }
 
     use super::*;
@@ -5869,36 +6028,6 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Default)]
-    struct MockDockerRunner {
-        launched: Mutex<Vec<DockerLaunchSpec>>,
-        stopped: Mutex<Vec<String>>,
-        fail_launch: Option<String>,
-    }
-
-    impl DockerRunner for MockDockerRunner {
-        fn launch(&self, spec: &DockerLaunchSpec) -> Result<DockerLaunchResult, String> {
-            if let Some(error) = &self.fail_launch {
-                return Err(error.clone());
-            }
-            self.launched
-                .lock()
-                .expect("mock docker launch lock poisoned")
-                .push(spec.clone());
-            Ok(DockerLaunchResult {
-                container_id: "container-localdocker-1".to_string(),
-            })
-        }
-
-        fn stop(&self, container_id: &str) -> Result<(), String> {
-            self.stopped
-                .lock()
-                .expect("mock docker stop lock poisoned")
-                .push(container_id.to_string());
-            Ok(())
-        }
-    }
-
     fn temp_test_dir(prefix: &str) -> PathBuf {
         // Timestamp alone collides when parallel tests read the same instant.
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -5912,43 +6041,6 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("{prefix}-{unique}-{pid}-{serial}"));
         fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    fn init_git_repo(path: PathBuf) -> PathBuf {
-        fs::create_dir_all(&path).unwrap();
-        run_git(&path, ["init", "-b", "main"]);
-        run_git(&path, ["config", "user.name", "FrontalCode Server Tests"]);
-        run_git(
-            &path,
-            ["config", "user.email", "code-server-tests@example.com"],
-        );
-        path
-    }
-
-    fn commit_file(repo: &std::path::Path, relative_path: &str, contents: &str, message: &str) {
-        let file_path = repo.join(relative_path);
-        if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(file_path, contents).unwrap();
-        run_git(repo, ["add", relative_path]);
-        run_git(repo, ["commit", "-m", message]);
-    }
-
-    fn run_git<const N: usize>(repo: &std::path::Path, args: [&str; N]) {
-        let output = std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "git command failed: git -C {} {}: {}",
-            repo.display(),
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr)
-        );
     }
 
     fn write_hosted_agent_manifest(
@@ -6082,7 +6174,7 @@ mod tests {
         assert_eq!(snapshot["repo_url"], "https://github.com/acme/repo-a.git");
         assert_eq!(snapshot["base_ref"], "main");
         assert_eq!(snapshot["branch"], "frontal-code/investigate-flake");
-        assert_eq!(snapshot["execution_backend"], "local_docker");
+        assert_eq!(snapshot["execution_backend"], "sandbox");
         assert_eq!(snapshot["lane_id"].as_str().map(str::is_empty), Some(false));
         assert_eq!(
             snapshot["plan_kind"].as_str().map(str::is_empty),
@@ -6139,7 +6231,7 @@ mod tests {
                 .payload
                 .as_ref()
                 .and_then(|payload| payload.get("execution_backend")),
-            Some(&json!("local_docker"))
+            Some(&json!("sandbox"))
         );
         assert_eq!(
             created_event
@@ -6194,307 +6286,6 @@ mod tests {
             .and_then(|payload| payload.get("plan_kind"))
             .and_then(|value| value.as_str())
             .is_some());
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock, clippy::too_many_lines)]
-    async fn local_docker_transport_prepares_checkout_workspace_for_task() {
-        let Some(store) = worker_tokens::tests::test_store() else {
-            return;
-        };
-        let dir = temp_test_dir("code-server-local-docker");
-        let source_repo = init_git_repo(dir.join("source"));
-        commit_file(
-            &source_repo,
-            "README.md",
-            "hello from local docker transport\n",
-            "initial commit",
-        );
-        let workspace_root = dir.join("workspaces");
-        let docker = Arc::new(MockDockerRunner::default());
-        let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
-        let state = Arc::new(
-            ServerState::with_lane_transport_kind_and_access(
-                DEFAULT_EVENT_REPLAY_LIMIT,
-                LaneTransportKind::LocalDocker,
-                Arc::new(LocalDockerLaneWorkerTransport::with_runner(
-                    workspace_root.clone(),
-                    "frontal-code-worker:test".to_string(),
-                    "http://host.docker.internal:8788",
-                    access.clone(),
-                    docker.clone(),
-                )),
-                access,
-            )
-            .with_local_repos_allowed(true),
-        );
-        let router = app(state.clone());
-
-        let create_response = router
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/v1/tasks")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::to_vec(&json!({
-                            "prompt": "Prepare checkout before running",
-                            "repository": "acme/local-docker",
-                            "repo_url": source_repo.display().to_string(),
-                            "base_ref": "main",
-                            "branch": "frontal-code/task-123",
-                            "source": "api"
-                        }))
-                        .unwrap(),
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(create_response.status(), StatusCode::OK);
-        let created_body = to_bytes(create_response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let created: serde_json::Value = serde_json::from_slice(&created_body).unwrap();
-        let task_id = created["task_id"].as_str().unwrap().to_string();
-
-        let context = state
-            .context_for(&task_id)
-            .expect("context should be recorded for local docker task");
-        let checkout_root = PathBuf::from(
-            context
-                .checkout_root
-                .clone()
-                .expect("local docker task should record checkout root"),
-        );
-        assert!(checkout_root.starts_with(&workspace_root));
-        assert!(checkout_root.join(".git").exists());
-        assert_eq!(
-            fs::read_to_string(checkout_root.join("README.md")).unwrap(),
-            "hello from local docker transport\n"
-        );
-        assert_eq!(context.execution_backend.as_deref(), Some("local_docker"));
-
-        let get_response = router
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(format!("/v1/tasks/{task_id}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        let body = to_bytes(get_response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let snapshot: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(snapshot["execution_backend"], "local_docker");
-        assert_eq!(snapshot["worker_id"], "container-localdocker-1");
-
-        let started_event = state
-            .replay_events()
-            .into_iter()
-            .find(|event| event.event == HostedEventName::LaneStarted)
-            .expect("lane started event should be emitted");
-        assert_eq!(
-            started_event
-                .payload
-                .as_ref()
-                .and_then(|payload| payload.get("transport"))
-                .and_then(|transport| transport.get("checkout_root")),
-            Some(&json!(checkout_root.display().to_string()))
-        );
-        assert_eq!(
-            started_event
-                .payload
-                .as_ref()
-                .and_then(|payload| payload.get("transport"))
-                .and_then(|transport| transport.get("container_id")),
-            Some(&json!("container-localdocker-1"))
-        );
-
-        let launched = docker
-            .launched
-            .lock()
-            .expect("mock docker launch lock poisoned");
-        assert_eq!(launched.len(), 1);
-        assert_eq!(launched[0].image, "frontal-code-worker:test");
-        assert_eq!(launched[0].task_id, task_id);
-        assert_eq!(launched[0].checkout_root, checkout_root);
-        assert_eq!(
-            launched[0].command,
-            vec![
-                "frontal-code".to_string(),
-                "hosted".to_string(),
-                "task".to_string(),
-                "run".to_string(),
-                task_id.clone(),
-            ]
-        );
-        assert_eq!(
-            launched[0]
-                .env
-                .get("FRONTAL_CODE_SERVER_URL")
-                .map(String::as_str),
-            Some("http://frontal-relay:8788")
-        );
-        assert_eq!(
-            launched[0]
-                .env
-                .get("FRONTAL_CODE_HOSTED_TASK_FILE")
-                .map(String::as_str),
-            Some("/workspace/.frontal-code-hosted/task.json")
-        );
-        // The worker authenticates with a per-task token, never the server's own key.
-        let worker_token = launched[0]
-            .env
-            .get("FRONTAL_CODE_SERVER_API_KEY")
-            .cloned()
-            .expect("worker token");
-        assert_eq!(worker_token.len(), 64);
-        assert!(worker_token.chars().all(|c| c.is_ascii_hexdigit()));
-        // No upstream provider key reaches the container. The model traffic goes to the proxy.
-        assert!(!launched[0].env.keys().any(|key| key.ends_with("_API_KEY")
-            && key != "FRONTAL_CODE_SERVER_API_KEY"
-            && launched[0].env.get(key).map(String::as_str) != Some(worker_token.as_str())));
-        assert_eq!(
-            launched[0]
-                .env
-                .get("FRONTAL_CODE_SERVER_URL")
-                .map(String::as_str),
-            Some("http://frontal-relay:8788")
-        );
-
-        let task_payload: HostedDockerTaskPayload = serde_json::from_slice(
-            &fs::read(checkout_root.join(".frontal-code-hosted").join("task.json")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(task_payload.task_id, task_id);
-        assert_eq!(task_payload.prompt, "Prepare checkout before running");
-        assert_eq!(
-            task_payload.repository.as_deref(),
-            Some("acme/local-docker")
-        );
-        assert_eq!(
-            task_payload.repo_url.as_deref(),
-            Some(source_repo.to_str().unwrap())
-        );
-        assert_eq!(task_payload.base_ref.as_deref(), Some("main"));
-        assert_eq!(
-            task_payload.branch.as_deref(),
-            Some("frontal-code/task-123")
-        );
-        assert_eq!(task_payload.allowed_tools, Vec::<String>::new());
-
-        let complete_response = router
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri(format!("/v1/tasks/{task_id}/complete"))
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::to_vec(&json!({
-                            "finish_reason": "stop",
-                            "tokens_output": 64,
-                            "result": "local docker run completed"
-                        }))
-                        .unwrap(),
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(complete_response.status(), StatusCode::OK);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[tokio::test]
-    async fn local_docker_transport_launch_failure_marks_task_failed() {
-        let Some(store) = worker_tokens::tests::test_store() else {
-            return;
-        };
-        let dir = temp_test_dir("code-server-local-docker-fail");
-        let source_repo = init_git_repo(dir.join("source"));
-        commit_file(
-            &source_repo,
-            "README.md",
-            "failure path\n",
-            "initial commit",
-        );
-        let workspace_root = dir.join("workspaces");
-        let docker = Arc::new(MockDockerRunner {
-            fail_launch: Some("docker launch spec rejected".to_string()),
-            ..MockDockerRunner::default()
-        });
-        let access = Arc::new(WorkerAccess::new(Some(store.clone()), 3600));
-        let state = Arc::new(
-            ServerState::with_lane_transport_kind_and_access(
-                DEFAULT_EVENT_REPLAY_LIMIT,
-                LaneTransportKind::LocalDocker,
-                Arc::new(LocalDockerLaneWorkerTransport::with_runner(
-                    workspace_root,
-                    "frontal-code-worker:test".to_string(),
-                    "http://host.docker.internal:8788",
-                    access.clone(),
-                    docker,
-                )),
-                access,
-            )
-            .with_local_repos_allowed(true),
-        );
-        let router = app(state.clone());
-
-        let create_response = router
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/v1/tasks")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::to_vec(&json!({
-                            "prompt": "Prepare checkout before running",
-                            "repository": "acme/local-docker",
-                            "repo_url": source_repo.display().to_string(),
-                            "base_ref": "main",
-                            "branch": "frontal-code/task-123",
-                            "source": "api"
-                        }))
-                        .unwrap(),
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(create_response.status(), StatusCode::OK);
-        let body = to_bytes(create_response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let snapshot: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(snapshot["status"], "failed");
-        assert_eq!(snapshot["worker_status"], "failed");
-        let task = state
-            .tasks
-            .list(None)
-            .into_iter()
-            .next()
-            .expect("task should still exist after launch failure");
-        assert_eq!(task.status, TaskStatus::Failed);
-        assert!(task.output.contains("docker launch spec rejected"));
-
-        let failed_event = state
-            .replay_events()
-            .into_iter()
-            .find(|event| event.event == HostedEventName::LaneFailed)
-            .expect("lane failed event should be emitted");
-        assert_eq!(failed_event.status, HostedEventStatus::Failed);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[tokio::test]
@@ -7224,7 +7015,7 @@ mod tests {
         let state = Arc::new(
             ServerState::with_lane_transport_kind_and_access(
                 DEFAULT_EVENT_REPLAY_LIMIT,
-                LaneTransportKind::LocalDocker,
+                LaneTransportKind::Sandbox,
                 Arc::new(FakeLaneWorkerTransport::new()),
                 Arc::new(WorkerAccess::new(Some(store), 3600)),
             )
@@ -9493,7 +9284,7 @@ mod tests {
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
-                LaneTransportKind::LocalDocker,
+                LaneTransportKind::Sandbox,
                 None,
                 None,
                 Duration::from_secs(0),
@@ -9501,8 +9292,6 @@ mod tests {
                 None,
                 Vec::new(),
                 default_server_workspace_root(),
-                default_server_docker_image(),
-                default_server_docker_server_url(),
                 WorkerAccess::new(None, 7200),
             ),
         );
@@ -9537,7 +9326,7 @@ mod tests {
         let state = Arc::new(
             ServerState::new_with_transport_kind_state_file_policy_and_workspace_root(
                 10,
-                LaneTransportKind::LocalDocker,
+                LaneTransportKind::Sandbox,
                 None,
                 None,
                 Duration::from_secs(0),
@@ -9545,8 +9334,6 @@ mod tests {
                 None,
                 Vec::new(),
                 default_server_workspace_root(),
-                default_server_docker_image(),
-                default_server_docker_server_url(),
                 WorkerAccess::new(None, 7200),
             ),
         );
@@ -10135,7 +9922,7 @@ mod tests {
 
         let restored = ServerState::new_with_transport_kind_and_state_file(
             DEFAULT_EVENT_REPLAY_LIMIT,
-            LaneTransportKind::LocalDocker,
+            LaneTransportKind::Sandbox,
             Some(state_file),
         );
         let restored_task = restored.tasks.get(&task_id).expect("task should reload");
@@ -10232,7 +10019,7 @@ mod tests {
         );
         assert_eq!(
             restored_context.execution_backend.as_deref(),
-            Some("local_docker")
+            Some("sandbox")
         );
         assert_eq!(restored_context.source.as_deref(), Some("api"));
         assert_eq!(restored_context.worker_status.as_deref(), Some("running"));
@@ -10261,7 +10048,7 @@ mod tests {
         );
         assert_eq!(snapshot["base_ref"], "develop");
         assert_eq!(snapshot["branch"], "frontal-code/persisted-work");
-        assert_eq!(snapshot["execution_backend"], "local_docker");
+        assert_eq!(snapshot["execution_backend"], "sandbox");
         assert_eq!(snapshot["worker_status"], "running");
 
         let _ = fs::remove_dir_all(dir);
@@ -11135,53 +10922,6 @@ mod tests {
     }
 
     #[test]
-    fn server_config_parses_local_docker_lane_transport_kind() {
-        let previous = env::var_os("FRONTAL_CODE_SERVER_LANE_TRANSPORT");
-        let previous_workspace_root = env::var_os("FRONTAL_CODE_SERVER_WORKSPACE_ROOT");
-        let previous_docker_image = env::var_os("FRONTAL_CODE_SERVER_DOCKER_IMAGE");
-        let previous_callback_url = env::var_os("FRONTAL_CODE_SERVER_CALLBACK_URL");
-        env::set_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT", "local-docker");
-        env::set_var(
-            "FRONTAL_CODE_SERVER_WORKSPACE_ROOT",
-            "/tmp/code-server-workspaces",
-        );
-        env::set_var(
-            "FRONTAL_CODE_SERVER_DOCKER_IMAGE",
-            "frontal-code-worker:test",
-        );
-        env::set_var(
-            "FRONTAL_CODE_SERVER_CALLBACK_URL",
-            "http://docker.internal.test:8788/",
-        );
-
-        let config = ServerConfig::from_env().expect("env config should parse");
-        assert_eq!(config.lane_transport_kind, LaneTransportKind::LocalDocker);
-        assert_eq!(
-            config.workspace_root,
-            PathBuf::from("/tmp/code-server-workspaces")
-        );
-        assert_eq!(config.docker_image, "frontal-code-worker:test");
-        assert_eq!(config.docker_server_url, "http://docker.internal.test:8788");
-
-        match previous {
-            Some(value) => env::set_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT", value),
-            None => env::remove_var("FRONTAL_CODE_SERVER_LANE_TRANSPORT"),
-        }
-        match previous_workspace_root {
-            Some(value) => env::set_var("FRONTAL_CODE_SERVER_WORKSPACE_ROOT", value),
-            None => env::remove_var("FRONTAL_CODE_SERVER_WORKSPACE_ROOT"),
-        }
-        match previous_docker_image {
-            Some(value) => env::set_var("FRONTAL_CODE_SERVER_DOCKER_IMAGE", value),
-            None => env::remove_var("FRONTAL_CODE_SERVER_DOCKER_IMAGE"),
-        }
-        match previous_callback_url {
-            Some(value) => env::set_var("FRONTAL_CODE_SERVER_CALLBACK_URL", value),
-            None => env::remove_var("FRONTAL_CODE_SERVER_CALLBACK_URL"),
-        }
-    }
-
-    #[test]
     fn hosted_task_context_builds_repo_checkout_request() {
         let context = HostedTaskContext {
             repository: Some("acme/payments".to_string()),
@@ -11250,47 +10990,5 @@ mod tests {
             Some(&json!("https://github.com/acme/payments/pull/42"))
         );
         assert_eq!(payload.get("pr_number"), Some(&json!(42)));
-    }
-}
-
-#[cfg(test)]
-mod callback_port_tests {
-    use super::*;
-
-    fn config(url: &str, bind_port: u16) -> ServerConfig {
-        ServerConfig {
-            lane_transport_kind: LaneTransportKind::LocalDocker,
-            docker_server_url: url.to_string(),
-            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), bind_port),
-            ..ServerConfig::default()
-        }
-    }
-
-    #[test]
-    fn a_callback_url_on_the_listening_port_is_accepted() {
-        assert!(check_callback_port(&config("http://host.docker.internal:8790", 8790)).is_ok());
-    }
-
-    #[test]
-    fn a_callback_url_without_a_port_is_refused() {
-        let error =
-            check_callback_port(&config("http://host.docker.internal", 8790)).expect_err("no port");
-        assert!(error.contains("must include the port"));
-    }
-
-    #[test]
-    fn a_callback_url_on_another_port_is_refused() {
-        let error = check_callback_port(&config("http://host.docker.internal:9000", 8790))
-            .expect_err("wrong port");
-        assert!(error.contains("names port 9000"));
-    }
-
-    #[test]
-    fn the_check_does_not_apply_to_other_transports() {
-        let config = ServerConfig {
-            lane_transport_kind: LaneTransportKind::ToolsAgent,
-            ..config("http://elsewhere", 8790)
-        };
-        assert!(check_callback_port(&config).is_ok());
     }
 }

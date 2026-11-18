@@ -23,6 +23,7 @@ on:
       - extensions/slack-agent/**
       - scripts/**
       - docs/**
+      - deploy/sandbox/**
       - sdks/rust/**
       - sdks/typescript/**
       - biome.json
@@ -144,3 +145,22 @@ jobs:
           workspaces: . -> target
       - name: Run workspace clippy
         run: cargo clippy --workspace
+
+  sandbox-infra:
+    name: sandbox deploy (shellcheck + fmt)
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - name: Run shellcheck on deploy scripts
+        run: shellcheck deploy/sandbox/scripts/*.sh
+      - name: Install pinned OpenTofu
+        env:
+          TOFU_VERSION: "1.10.5"
+        run: |
+          curl -fsSL -o /tmp/tofu.zip "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip"
+          sudo unzip -q /tmp/tofu.zip -d /usr/local/bin
+          tofu version
+      - name: Check terraform formatting
+        run: tofu fmt -check deploy/sandbox/terraform

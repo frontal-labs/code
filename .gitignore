@@ -44,3 +44,4 @@ bazel-bin
 bazel-out
 bazel-testlogs
 bazel-code
+bazel-*

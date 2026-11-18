@@ -9,7 +9,7 @@ def biome_lint(name, target = ".", data = [], tags = None, **kwargs):
     native.sh_test(
         name = name,
         srcs = ["//tools:lint.sh"],
-        data = data + ["//tools:lint.sh"],
+        data = data + ["//tools:lint.sh", "//tools:user_env.sh"],
         args = [target],
         size = "small",
         tags = tags or ["lint", "biome", "typescript"],
@@ -22,7 +22,7 @@ def rust_lint(name, crate = None, data = [], tags = None, **kwargs):
     native.sh_test(
         name = name,
         srcs = ["//tools:crate.sh"],
-        data = data + ["//:cargo_workspace"],
+        data = data + ["//:cargo_workspace", "//tools:user_env.sh"],
         args = [crate_arg, "clippy"],
         tags = tags or ["lint", "rust"],
         **kwargs
@@ -33,7 +33,7 @@ def rust_format(name, tags = None, **kwargs):
     native.sh_test(
         name = name,
         srcs = ["//tools:format.sh"],
-        data = ["//:cargo_workspace"],
+        data = ["//:cargo_workspace", "//tools:user_env.sh"],
         tags = tags or ["fmt", "rust"],
         **kwargs
     )

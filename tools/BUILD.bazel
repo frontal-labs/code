@@ -23,6 +23,7 @@ exports_files([
     "lint.bzl",
     "sdk_rust.sh",
     "sdk_ts.sh",
+    "user_env.sh",
 ])
 
 # TODO(bazel): once rules_rust + crate_universe land (see docs/bazel/ROADMAP.md),
